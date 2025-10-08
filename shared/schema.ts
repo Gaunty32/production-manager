@@ -31,6 +31,44 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
 }).extend({
   dateReceived: z.string(),
   requiredDispatchDate: z.string(),
+  machineId: z.preprocess(
+    (val) => {
+      if (val === null || val === undefined || val === "") return null;
+      if (typeof val === "string") return parseInt(val, 10);
+      return val;
+    },
+    z.union([z.number().int().min(1).max(5), z.null()])
+  ),
+});
+
+export const updateJobSchema = z.object({
+  customerId: z.string().optional(),
+  jobName: z.string().optional(),
+  poNumber: z.string().optional(),
+  logoApproved: z.coerce.boolean().optional(),
+  quantity: z.coerce.number().optional(),
+  dateReceived: z.preprocess(
+    (val) => val ? new Date(val as string) : undefined,
+    z.date().optional()
+  ),
+  requiredDispatchDate: z.preprocess(
+    (val) => val ? new Date(val as string) : undefined,
+    z.date().optional()
+  ),
+  completedOnTime: z.coerce.boolean().nullable().optional(),
+  machineId: z.preprocess(
+    (val) => {
+      // Keep undefined as undefined so it doesn't overwrite existing values
+      if (val === undefined) return undefined;
+      // Convert null or empty string to null
+      if (val === null || val === "") return null;
+      // Convert string numbers to actual numbers
+      if (typeof val === "string") return parseInt(val, 10);
+      return val;
+    },
+    z.union([z.number().int().min(1).max(5), z.null()]).optional()
+  ),
+  status: z.string().optional(),
 });
 
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;

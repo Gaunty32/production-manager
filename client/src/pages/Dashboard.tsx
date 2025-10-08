@@ -1,98 +1,129 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobRow } from "@/components/JobRow";
-
-//todo: remove mock functionality
-const MOCK_CUSTOMERS = [
-  { id: "1", name: "Acme Corp" },
-  { id: "2", name: "TechStart Inc" },
-  { id: "3", name: "Global Industries" },
-  { id: "4", name: "Premier Manufacturing" },
-  { id: "5", name: "Elite Enterprises" },
-];
-
-//todo: remove mock functionality
-const MOCK_JOBS = [
-  {
-    id: "1",
-    customerName: "Acme Corp",
-    jobName: "Product Labels",
-    poNumber: "PO-2024-001",
-    logoApproved: true,
-    quantity: 5000,
-    dateReceived: new Date("2024-10-01"),
-    requiredDispatchDate: new Date("2024-10-15"),
-    completedOnTime: null,
-    machineId: 1,
-  },
-  {
-    id: "2",
-    customerName: "TechStart Inc",
-    jobName: "Business Cards",
-    poNumber: "PO-2024-002",
-    logoApproved: false,
-    quantity: 1000,
-    dateReceived: new Date("2024-10-05"),
-    requiredDispatchDate: new Date("2024-10-08"),
-    completedOnTime: null,
-    machineId: 2,
-  },
-  {
-    id: "3",
-    customerName: "Global Industries",
-    jobName: "Packaging Materials",
-    poNumber: "PO-2024-003",
-    logoApproved: true,
-    quantity: 10000,
-    dateReceived: new Date("2024-09-28"),
-    requiredDispatchDate: new Date("2024-10-10"),
-    completedOnTime: true,
-    machineId: 3,
-  },
-];
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Customer, Job } from "@shared/schema";
+import { useParams } from "wouter";
 
 export default function Dashboard() {
-  const [jobs, setJobs] = useState(MOCK_JOBS);
+  const { toast } = useToast();
+  const params = useParams();
+  const machineId = params.id ? parseInt(params.id) : null;
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const handleAddJob = (data: any) => {
-    console.log("Add job triggered:", data);
-    const customer = MOCK_CUSTOMERS.find((c) => c.id === data.customerId);
-    const newJob = {
-      id: Date.now().toString(),
-      customerName: customer?.name || "Unknown",
-      jobName: data.jobName,
-      poNumber: data.poNumber,
-      logoApproved: data.logoApproved,
-      quantity: data.quantity,
-      dateReceived: new Date(data.dateReceived),
-      requiredDispatchDate: new Date(data.requiredDispatchDate),
-      completedOnTime: data.completedOnTime,
-      machineId: data.machineId,
-    };
-    setJobs([...jobs, newJob]);
-  };
+  const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
+    queryKey: ["/api/customers"],
+  });
+
+  const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
+    queryKey: machineId ? ["/api/jobs", machineId] : ["/api/jobs"],
+    queryFn: async () => {
+      const url = machineId ? `/api/jobs?machineId=${machineId}` : "/api/jobs";
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Failed to fetch jobs");
+      return response.json();
+    },
+  });
+
+  const createJobMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/jobs", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({
+        title: "Success",
+        description: "Order created successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create order",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteJobMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/jobs/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({
+        title: "Success",
+        description: "Order deleted successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete order",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleEdit = (id: string) => {
     console.log("Edit job:", id);
+    toast({
+      title: "Edit functionality",
+      description: "Edit dialog will be implemented",
+    });
   };
 
   const handleDelete = (id: string) => {
-    console.log("Delete job:", id);
-    setJobs(jobs.filter((job) => job.id !== id));
+    deleteJobMutation.mutate(id);
   };
 
-  const sortedJobs = [...jobs].sort(
-    (a, b) => a.requiredDispatchDate.getTime() - b.requiredDispatchDate.getTime()
+  const jobsWithCustomers = jobs.map((job) => {
+    const customer = customers.find((c) => c.id === job.customerId);
+    return {
+      ...job,
+      customerName: customer?.name || "Unknown",
+    };
+  });
+
+  const filteredJobs = jobsWithCustomers.filter((job) => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      job.customerName.toLowerCase().includes(searchLower) ||
+      job.jobName.toLowerCase().includes(searchLower) ||
+      job.poNumber.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const sortedJobs = [...filteredJobs].sort(
+    (a, b) => new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime()
   );
+
+  const pageTitle = machineId 
+    ? `Machine ${machineId} Orders` 
+    : "Production Queue";
+
+  if (customersLoading || jobsLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-auto">
       <div className="max-w-7xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Production Queue</h1>
+            <h1 className="text-2xl font-semibold text-foreground">{pageTitle}</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Orders sorted by dispatch date
             </p>
@@ -104,9 +135,23 @@ export default function Dashboard() {
                 Add Order
               </Button>
             }
-            customers={MOCK_CUSTOMERS}
-            onSubmit={handleAddJob}
+            customers={customers}
+            onSubmit={(data) => createJobMutation.mutate(data)}
           />
+        </div>
+
+        <div className="mb-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search by customer, job name, or PO number..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+              data-testid="input-search"
+            />
+          </div>
         </div>
 
         <div className="border rounded-md overflow-hidden">
@@ -147,14 +192,26 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="bg-card divide-y divide-border">
-                {sortedJobs.map((job) => (
-                  <JobRow
-                    key={job.id}
-                    job={job}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
-                ))}
+                {sortedJobs.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="py-8 text-center text-muted-foreground">
+                      {searchTerm ? "No orders match your search." : "No orders found. Click 'Add Order' to create one."}
+                    </td>
+                  </tr>
+                ) : (
+                  sortedJobs.map((job) => (
+                    <JobRow
+                      key={job.id}
+                      job={{
+                        ...job,
+                        dateReceived: new Date(job.dateReceived),
+                        requiredDispatchDate: new Date(job.requiredDispatchDate),
+                      }}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                    />
+                  ))
+                )}
               </tbody>
             </table>
           </div>

@@ -42,7 +42,6 @@ const formSchema = insertJobSchema.extend({
   jobName: z.string().min(1, "Job name is required"),
   poNumber: z.string().min(1, "PO number is required"),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
-  machineId: z.coerce.number().min(1).max(5).nullable(),
 });
 
 interface JobFormDialogProps {
@@ -185,8 +184,8 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
                   <FormItem>
                     <FormLabel>Machine</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
-                      defaultValue={field.value?.toString()}
+                      onValueChange={(value) => field.onChange(value === "unassigned" ? null : parseInt(value))}
+                      defaultValue={field.value?.toString() || "unassigned"}
                     >
                       <FormControl>
                         <SelectTrigger data-testid="select-machine">
@@ -194,6 +193,7 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
                         <SelectItem value="1">Machine 1</SelectItem>
                         <SelectItem value="2">Machine 2</SelectItem>
                         <SelectItem value="3">Machine 3</SelectItem>

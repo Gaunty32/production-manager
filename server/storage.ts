@@ -1,66 +1,64 @@
-import { type Customer, type InsertCustomer, type Job, type InsertJob } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { customers, jobs, type Customer, type InsertCustomer, type Job, type InsertJob } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   getCustomers(): Promise<Customer[]>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   getJobs(): Promise<Job[]>;
+  getJobsByMachine(machineId: number): Promise<Job[]>;
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: string, job: Partial<Job>): Promise<Job>;
   deleteJob(id: string): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private customers: Map<string, Customer>;
-  private jobs: Map<string, Job>;
-
-  constructor() {
-    this.customers = new Map();
-    this.jobs = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
   async getCustomers(): Promise<Customer[]> {
-    return Array.from(this.customers.values());
+    return await db.select().from(customers);
   }
 
   async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
-    const id = randomUUID();
-    const customer: Customer = { ...insertCustomer, id };
-    this.customers.set(id, customer);
+    const [customer] = await db
+      .insert(customers)
+      .values(insertCustomer)
+      .returning();
     return customer;
   }
 
   async getJobs(): Promise<Job[]> {
-    return Array.from(this.jobs.values());
+    return await db.select().from(jobs);
+  }
+
+  async getJobsByMachine(machineId: number): Promise<Job[]> {
+    return await db.select().from(jobs).where(eq(jobs.machineId, machineId));
   }
 
   async createJob(insertJob: InsertJob): Promise<Job> {
-    const id = randomUUID();
-    const job: Job = {
-      ...insertJob,
-      id,
-      dateReceived: new Date(insertJob.dateReceived),
-      requiredDispatchDate: new Date(insertJob.requiredDispatchDate),
-      status: insertJob.status || "pending",
-      logoApproved: insertJob.logoApproved || false,
-      completedOnTime: insertJob.completedOnTime || null,
-      machineId: insertJob.machineId || null,
-    };
-    this.jobs.set(id, job);
+    const [job] = await db
+      .insert(jobs)
+      .values({
+        ...insertJob,
+        dateReceived: new Date(insertJob.dateReceived),
+        requiredDispatchDate: new Date(insertJob.requiredDispatchDate),
+      })
+      .returning();
     return job;
   }
 
   async updateJob(id: string, updates: Partial<Job>): Promise<Job> {
-    const job = this.jobs.get(id);
+    const [job] = await db
+      .update(jobs)
+      .set(updates)
+      .where(eq(jobs.id, id))
+      .returning();
+    
     if (!job) throw new Error("Job not found");
-    const updatedJob = { ...job, ...updates };
-    this.jobs.set(id, updatedJob);
-    return updatedJob;
+    return job;
   }
 
   async deleteJob(id: string): Promise<void> {
-    this.jobs.delete(id);
+    await db.delete(jobs).where(eq(jobs.id, id));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

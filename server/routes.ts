@@ -1,15 +1,123 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { insertCustomerSchema, insertJobSchema, updateJobSchema } from "@shared/schema";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
+  // Seed initial customers if database is empty
+  const seedCustomers = async () => {
+    try {
+      const existing = await storage.getCustomers();
+      if (existing.length === 0) {
+        const initialCustomers = [
+          { name: "Acme Corp" },
+          { name: "TechStart Inc" },
+          { name: "Global Industries" },
+          { name: "Premier Manufacturing" },
+          { name: "Elite Enterprises" },
+        ];
+        
+        for (const customer of initialCustomers) {
+          await storage.createCustomer(customer);
+        }
+        console.log("Seeded initial customers");
+      }
+    } catch (error) {
+      console.error("Failed to seed customers:", error);
+    }
+  };
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  // Run seed on startup
+  await seedCustomers();
+
+  // Customer routes
+  app.get("/api/customers", async (req, res) => {
+    try {
+      const customers = await storage.getCustomers();
+      res.json(customers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch customers" });
+    }
+  });
+
+  app.post("/api/customers", async (req, res) => {
+    try {
+      const data = insertCustomerSchema.parse(req.body);
+      const customer = await storage.createCustomer(data);
+      res.json(customer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create customer" });
+      }
+    }
+  });
+
+  // Job routes
+  app.get("/api/jobs", async (req, res) => {
+    try {
+      const { machineId } = req.query;
+      
+      let jobs;
+      if (machineId) {
+        jobs = await storage.getJobsByMachine(parseInt(machineId as string));
+      } else {
+        jobs = await storage.getJobs();
+      }
+      
+      res.json(jobs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch jobs" });
+    }
+  });
+
+  app.post("/api/jobs", async (req, res) => {
+    try {
+      const data = insertJobSchema.parse(req.body);
+      const job = await storage.createJob(data);
+      res.json(job);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create job" });
+      }
+    }
+  });
+
+  app.patch("/api/jobs/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data = updateJobSchema.parse(req.body);
+      
+      // Remove undefined keys from updates
+      const updates = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      );
+      
+      const job = await storage.updateJob(id, updates);
+      res.json(job);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update job" });
+      }
+    }
+  });
+
+  app.delete("/api/jobs/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteJob(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete job" });
+    }
+  });
 
   const httpServer = createServer(app);
-
   return httpServer;
 }
