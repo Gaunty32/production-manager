@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LogOut } from "lucide-react";
 import Dashboard from "@/pages/Dashboard";
+import Customers from "@/pages/Customers";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/orders" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/customers" component={() => <ProtectedRoute component={Customers} />} />
       <Route path="/machine/:id" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route component={NotFound} />
     </Switch>

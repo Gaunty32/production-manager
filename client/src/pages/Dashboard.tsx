@@ -18,7 +18,7 @@ export default function Dashboard() {
   const machineId = params.id ? parseInt(params.id) : null;
   const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: customers = [], isLoading: customersLoading, error: customersError } = useQuery<Customer[]>({
+  const { data: customersData = [], isLoading: customersLoading, error: customersError } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
     queryFn: async () => {
       const response = await fetch("/api/customers");
@@ -29,6 +29,9 @@ export default function Dashboard() {
     },
     retry: false,
   });
+
+  // Sort customers alphabetically by name
+  const customers = [...customersData].sort((a, b) => a.name.localeCompare(b.name));
 
   const { data: jobs = [], isLoading: jobsLoading, error: jobsError } = useQuery<Job[]>({
     queryKey: machineId ? ["/api/jobs", machineId] : ["/api/jobs"],

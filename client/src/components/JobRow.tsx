@@ -5,10 +5,12 @@ import { MachineBadge } from "./MachineBadge";
 import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import { calculateProductionMetrics } from "@shared/machines";
+import { getCustomerColorClasses } from "@shared/colors";
 
 interface JobRowProps {
   job: {
     id: string;
+    customerId: string;
     customerName: string;
     jobName: string;
     poNumber: string;
@@ -34,7 +36,11 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
     <tr
       className={cn(
         "hover-elevate",
+        // Overdue takes priority over customer colors
         isOverdue && "border-l-4 border-l-destructive",
+        // Customer color coding (only if not overdue)
+        !isOverdue && getCustomerColorClasses(job.customerId),
+        // Due today gets yellow background
         isDueToday && "bg-amber-50 dark:bg-amber-950/20"
       )}
       data-testid={`row-job-${job.id}`}

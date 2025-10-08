@@ -78,6 +78,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/customers/:id", optionalAuth, async (req, res) => {
+    try {
+      await storage.deleteCustomer(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof Error && error.message === "Cannot delete customer with existing jobs") {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: "Failed to delete customer" });
+      }
+    }
+  });
+
   // Job routes
   app.get("/api/jobs", optionalAuth, async (req, res) => {
     try {

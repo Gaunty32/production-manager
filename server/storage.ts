@@ -7,6 +7,7 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   getCustomers(): Promise<Customer[]>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
+  deleteCustomer(id: string): Promise<void>;
   getJobs(): Promise<Job[]>;
   getJobsByMachine(machineId: number): Promise<Job[]>;
   createJob(job: InsertJob): Promise<Job>;
@@ -45,6 +46,14 @@ export class DatabaseStorage implements IStorage {
       .values(insertCustomer)
       .returning();
     return customer;
+  }
+
+  async deleteCustomer(id: string): Promise<void> {
+    const customerJobs = await db.select().from(jobs).where(eq(jobs.customerId, id));
+    if (customerJobs.length > 0) {
+      throw new Error("Cannot delete customer with existing jobs");
+    }
+    await db.delete(customers).where(eq(customers.id, id));
   }
 
   async getJobs(): Promise<Job[]> {
