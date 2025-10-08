@@ -83,7 +83,15 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
         <AppSidebar />
         <div className="flex flex-col flex-1">
           <header className="flex items-center justify-between p-4 border-b sticky top-0 bg-background z-10">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <div className="flex items-center gap-3">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <div className="flex items-center gap-2 ml-2" data-testid="app-logo">
+                <div className="h-8 w-8 bg-primary/10 rounded flex items-center justify-center text-primary font-bold" data-testid="logo-icon">
+                  PM
+                </div>
+                <span className="font-semibold hidden sm:inline" data-testid="text-app-name">Production Manager</span>
+              </div>
+            </div>
             <div className="flex items-center gap-3">
               <ThemeToggle />
               <DropdownMenu>

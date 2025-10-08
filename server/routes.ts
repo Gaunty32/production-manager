@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertCustomerSchema, insertJobSchema, updateJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { xeroService } from "./xero";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
@@ -131,6 +132,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete job" });
+    }
+  });
+
+  // Xero integration routes
+  app.get("/api/xero/status", isAuthenticated, async (req, res) => {
+    res.json({ 
+      configured: xeroService.isConfigured(),
+      message: xeroService.isConfigured() 
+        ? "Xero integration is configured" 
+        : "Xero credentials not set. Please configure XERO_CLIENT_ID, XERO_CLIENT_SECRET, and XERO_TENANT_ID environment variables."
+    });
+  });
+
+  app.post("/api/xero/invoice/:jobId", isAuthenticated, async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { unitPrice } = req.body;
+
+      if (!xeroService.isConfigured()) {
+        return res.status(400).json({ 
+          error: "Xero is not configured. Please set up Xero credentials." 
+        });
+      }
+
+      const jobs = await storage.getJobs();
+      const job = jobs.find(j => j.id === jobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const customer = await storage.getCustomers().then(customers => 
+        customers.find(c => c.id === job.customerId)
+      );
+
+      if (!customer) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+
+      const invoice = await xeroService.createInvoice(job, customer, unitPrice || 0);
+      res.json(invoice);
+    } catch (error) {
+      console.error("Xero invoice creation error:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to create invoice in Xero" 
+      });
     }
   });
 

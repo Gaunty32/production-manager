@@ -4,9 +4,35 @@
 
 This is a production management system for tracking customer orders, machine scheduling, and dispatch deadlines. The application helps manage manufacturing workflows by tracking jobs across multiple machines, monitoring deadlines, and ensuring timely completion of customer orders.
 
+**Recent Updates (Oct 8, 2025):**
+- Implemented Replit Auth for user authentication (Google, GitHub, email/password login)
+- Added user management with protected routes and session handling
+- Prepared Xero API integration structure for invoice creation
+- Added logo placeholder to application header (customizable with user's logo)
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+## Xero Integration
+
+The application is set up to integrate with Xero for invoice creation. To enable:
+
+1. Set the following environment variables:
+   - `XERO_CLIENT_ID`: Your Xero app client ID
+   - `XERO_CLIENT_SECRET`: Your Xero app client secret  
+   - `XERO_TENANT_ID`: Your Xero organization tenant ID
+   - `XERO_ACCESS_TOKEN`: Your Xero API access token (or implement OAuth 2.0 flow)
+
+2. **Getting an Access Token:**
+   - Option A: Manually obtain a token from Xero OAuth 2.0 flow and set `XERO_ACCESS_TOKEN`
+   - Option B: Implement OAuth 2.0 callback routes to automatically manage token refresh
+
+3. Once configured, you can create invoices directly from completed jobs
+
+4. Check integration status at `/api/xero/status`
+
+**Note:** The current implementation expects a valid access token. For production use, implement the full OAuth 2.0 flow with token refresh handling.
 
 ## System Architecture
 
@@ -46,11 +72,22 @@ Preferred communication style: Simple, everyday language.
 - Separate build pipeline for client (Vite) and server (esbuild)
 - Environment-based configuration (development vs production)
 
+**Authentication:**
+- Replit Auth using OpenID Connect
+- Session-based authentication with PostgreSQL session store
+- Passport.js for authentication middleware
+- JWT token refresh for extended sessions
+
 **API Structure:**
-- `/api/customers` - Customer CRUD operations
-- `/api/jobs` - Job management with optional machine filtering
+- `/api/auth/user` - Get authenticated user
+- `/api/login` - Initiate login flow
+- `/api/logout` - End session and logout
+- `/api/customers` - Customer CRUD operations (protected)
+- `/api/jobs` - Job management with optional machine filtering (protected)
+- `/api/xero/status` - Check Xero integration status (protected)
+- `/api/xero/invoice/:jobId` - Create invoice in Xero (protected)
 - Request/response validation using Zod schemas
-- Centralized error handling middleware
+- Protected routes require authentication via isAuthenticated middleware
 
 ### Data Storage
 
@@ -60,6 +97,8 @@ Preferred communication style: Simple, everyday language.
 - WebSocket connections for serverless Postgres
 
 **Schema Design:**
+- `sessions` table: Stores user sessions for authentication (Passport.js)
+- `users` table: Stores user accounts with email, names, and profile images
 - `customers` table: Stores customer information with UUID primary keys
 - `jobs` table: Tracks production jobs with relationships to customers and machines
 - Foreign key constraints ensuring referential integrity
@@ -68,6 +107,7 @@ Preferred communication style: Simple, everyday language.
 **Data Access Layer:**
 - Repository pattern implemented through `IStorage` interface
 - `DatabaseStorage` class provides concrete implementation
+- User management methods (upsertUser, getUser) for authentication
 - Abstracted database operations for testability
 
 ### External Dependencies
