@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { MachineBadge } from "./MachineBadge";
 import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
+import { calculateProductionMetrics } from "@shared/machines";
 
 interface JobRowProps {
   job: {
@@ -13,6 +14,7 @@ interface JobRowProps {
     poNumber: string;
     logoApproved: boolean;
     quantity: number;
+    stitchCount: number;
     dateReceived: Date;
     requiredDispatchDate: Date;
     completedOnTime: boolean | null;
@@ -25,6 +27,8 @@ interface JobRowProps {
 export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
   const isOverdue = isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = isToday(job.requiredDispatchDate);
+  
+  const metrics = calculateProductionMetrics(job.quantity, job.stitchCount, job.machineId);
 
   return (
     <tr
@@ -42,11 +46,20 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
         <StatusBadge status={job.logoApproved} type="logo" />
       </td>
       <td className="py-3 px-4 text-sm font-mono">{job.quantity}</td>
-      <td className="py-3 px-4 text-sm font-mono">{format(job.dateReceived, "PP")}</td>
-      <td className="py-3 px-4 text-sm font-mono">{format(job.requiredDispatchDate, "PP")}</td>
+      <td className="py-3 px-4 text-sm font-mono">{job.stitchCount.toLocaleString()}</td>
       <td className="py-3 px-4">
         <MachineBadge machineId={job.machineId} />
       </td>
+      <td className="py-3 px-4 text-sm font-mono">
+        {metrics ? metrics.runs : "-"}
+      </td>
+      <td className="py-3 px-4 text-sm font-mono">
+        {metrics ? `${metrics.timePerRunMinutes}m` : "-"}
+      </td>
+      <td className="py-3 px-4 text-sm font-mono">
+        {metrics ? `${metrics.totalTimeMinutes}m` : "-"}
+      </td>
+      <td className="py-3 px-4 text-sm font-mono">{format(job.requiredDispatchDate, "PP")}</td>
       <td className="py-3 px-4">
         <StatusBadge status={job.completedOnTime} type="ontime" />
       </td>

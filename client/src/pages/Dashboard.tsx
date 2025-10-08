@@ -181,19 +181,28 @@ export default function Dashboard() {
                     PO Number
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Logo Approved
+                    Logo
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Quantity
+                    Qty
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Date Received
-                  </th>
-                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Dispatch Date
+                    Stitches
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Machine
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Runs
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Time/Run
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Total Time
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Dispatch
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     On Time
@@ -206,7 +215,7 @@ export default function Dashboard() {
               <tbody className="bg-card divide-y divide-border">
                 {sortedJobs.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={13} className="py-8 text-center text-muted-foreground">
                       {searchTerm ? "No orders match your search." : "No orders found. Click 'Add Order' to create one."}
                     </td>
                   </tr>
