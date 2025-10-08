@@ -54,6 +54,10 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
 export const insertJobSchema = createInsertSchema(jobs).omit({
   id: true,
 }).extend({
+  poNumber: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
   dateReceived: z.string(),
   requiredDispatchDate: z.string(),
   machineId: z.preprocess(
