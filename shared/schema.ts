@@ -40,6 +40,7 @@ export const jobs = pgTable("jobs", {
   stitchCount: integer("stitch_count").notNull(),
   dateReceived: timestamp("date_received").notNull(),
   requiredDispatchDate: timestamp("required_dispatch_date").notNull(),
+  completed: boolean("completed").notNull().default(false),
   completedOnTime: boolean("completed_on_time"),
   machineId: integer("machine_id"),
   status: text("status").notNull().default("pending"),
@@ -80,6 +81,7 @@ export const updateJobSchema = z.object({
     (val) => val ? new Date(val as string) : undefined,
     z.date().optional()
   ),
+  completed: z.coerce.boolean().optional(),
   completedOnTime: z.coerce.boolean().nullable().optional(),
   machineId: z.preprocess(
     (val) => {
