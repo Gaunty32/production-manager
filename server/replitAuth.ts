@@ -84,8 +84,26 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  for (const domain of process.env
-    .REPLIT_DOMAINS!.split(",")) {
+  // Register strategies for all domain variants
+  // Replit uses different domain extensions (.replit.dev, .repl.co, etc.)
+  const domains = process.env.REPLIT_DOMAINS!.split(",");
+  const allDomainVariants: string[] = [];
+  
+  for (const domain of domains) {
+    allDomainVariants.push(domain);
+    // Also register for .repl.co variant if it's .replit.dev
+    if (domain.endsWith('.replit.dev')) {
+      const replCoVariant = domain.replace('.replit.dev', '.repl.co');
+      allDomainVariants.push(replCoVariant);
+    }
+    // Also register for .replit.dev variant if it's .repl.co
+    if (domain.endsWith('.repl.co')) {
+      const replitDevVariant = domain.replace('.repl.co', '.replit.dev');
+      allDomainVariants.push(replitDevVariant);
+    }
+  }
+
+  for (const domain of allDomainVariants) {
     const strategy = new Strategy(
       {
         name: `replitauth:${domain}`,
@@ -101,32 +119,15 @@ export async function setupAuth(app: Express) {
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
-  // Helper function to extract base domain from Replit hostname
-  // Replit domains have format: [uuid]-[hash].domain.repl.co
-  // We need to extract just domain.repl.co
-  const getBaseDomain = (hostname: string): string => {
-    const domains = process.env.REPLIT_DOMAINS!.split(",");
-    // Try to find a matching registered domain
-    for (const domain of domains) {
-      if (hostname.endsWith(domain)) {
-        return domain;
-      }
-    }
-    // If no match, return the hostname as-is
-    return hostname;
-  };
-
   app.get("/api/login", (req, res, next) => {
-    const baseDomain = getBaseDomain(req.hostname);
-    passport.authenticate(`replitauth:${baseDomain}`, {
+    passport.authenticate(`replitauth:${req.hostname}`, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
-    const baseDomain = getBaseDomain(req.hostname);
-    passport.authenticate(`replitauth:${baseDomain}`, {
+    passport.authenticate(`replitauth:${req.hostname}`, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
     })(req, res, next);
