@@ -7,15 +7,39 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { LogOut } from "lucide-react";
 import Dashboard from "@/pages/Dashboard";
+import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
+import { useAuth } from "@/hooks/useAuth";
+
+function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Landing />;
+  }
+
+  return <Component />;
+}
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/orders" component={Dashboard} />
-      <Route path="/machine/:id" component={Dashboard} />
+      <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/orders" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/machine/:id" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -30,23 +54,66 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider>
-          <SidebarProvider style={style as React.CSSProperties}>
-            <div className="flex h-screen w-full">
-              <AppSidebar />
-              <div className="flex flex-col flex-1">
-                <header className="flex items-center justify-between p-4 border-b sticky top-0 bg-background z-10">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
-                  <ThemeToggle />
-                </header>
-                <main className="flex-1 overflow-hidden">
-                  <Router />
-                </main>
-              </div>
-            </div>
-          </SidebarProvider>
+          <AuthenticatedApp style={style} />
           <Toaster />
         </ThemeProvider>
       </TooltipProvider>
     </QueryClientProvider>
+  );
+}
+
+function AuthenticatedApp({ style }: { style: Record<string, string> }) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Router />;
+  }
+
+  return (
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar />
+        <div className="flex flex-col flex-1">
+          <header className="flex items-center justify-between p-4 border-b sticky top-0 bg-background z-10">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="button-user-menu">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={user?.profileImageUrl || undefined} />
+                      <AvatarFallback>
+                        {user?.email?.[0]?.toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem 
+                    onClick={() => window.location.href = "/api/logout"}
+                    data-testid="button-logout"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </header>
+          <main className="flex-1 overflow-hidden">
+            <Router />
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }

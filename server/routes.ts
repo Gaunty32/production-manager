@@ -3,8 +3,24 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertCustomerSchema, insertJobSchema, updateJobSchema } from "@shared/schema";
 import { z } from "zod";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup authentication
+  await setupAuth(app);
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
     try {
@@ -31,8 +47,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Run seed on startup
   await seedCustomers();
 
-  // Customer routes
-  app.get("/api/customers", async (req, res) => {
+  // Customer routes (protected)
+  app.get("/api/customers", isAuthenticated, async (req, res) => {
     try {
       const customers = await storage.getCustomers();
       res.json(customers);
@@ -41,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/customers", async (req, res) => {
+  app.post("/api/customers", isAuthenticated, async (req, res) => {
     try {
       const data = insertCustomerSchema.parse(req.body);
       const customer = await storage.createCustomer(data);
@@ -55,8 +71,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Job routes
-  app.get("/api/jobs", async (req, res) => {
+  // Job routes (protected)
+  app.get("/api/jobs", isAuthenticated, async (req, res) => {
     try {
       const { machineId } = req.query;
       
@@ -73,7 +89,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/jobs", async (req, res) => {
+  app.post("/api/jobs", isAuthenticated, async (req, res) => {
     try {
       const data = insertJobSchema.parse(req.body);
       const job = await storage.createJob(data);
@@ -87,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/jobs/:id", async (req, res) => {
+  app.patch("/api/jobs/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const data = updateJobSchema.parse(req.body);
@@ -108,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/jobs/:id", async (req, res) => {
+  app.delete("/api/jobs/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteJob(id);
