@@ -5,14 +5,45 @@
 This is a production management system for tracking customer orders, machine scheduling, and dispatch deadlines. The application helps manage manufacturing workflows by tracking jobs across multiple machines, monitoring deadlines, and ensuring timely completion of customer orders.
 
 **Recent Updates (Oct 8, 2025):**
-- Implemented Replit Auth for user authentication (Google, GitHub, email/password login)
-- Added user management with protected routes and session handling
+- Implemented embroidery production metrics system with time calculations
+- Added stitch count field to job tracking (required field)
+- Machine specifications: Velocity (8 heads), others (6 heads each) @ 750 stitches/min
+- Production calculations: runs, time per run, total time with 3-min changeover
+- Implemented Replit Auth for user authentication (currently bypassed with guest access)
 - Prepared Xero API integration structure for invoice creation
 - Added Select Uniforms company logo to application header
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+## Embroidery Production Metrics
+
+The application calculates production time based on embroidery specifications:
+
+**Machine Specifications:**
+- **Velocity (Machine 1):** 8 heads - Best machine for high-volume orders
+- **Momentum (Machine 2):** 6 heads - Second tier machine
+- **Apex (Machine 3):** 6 heads - Second tier machine
+- **Surge (Machine 4):** 6 heads - Third tier machine
+- **Pinnacle (Machine 5):** 6 heads - Third tier machine
+- All machines operate at 750 stitches per minute
+
+**Production Calculations:**
+- **Runs:** Number of production cycles = ceil(quantity / machine_heads)
+  - Example: 50 garments on Velocity (8 heads) = 7 runs
+- **Embroidery Time:** stitch_count / 750 stitches per minute
+  - Example: 5000 stitches = 6.67 minutes embroidery time
+- **Time Per Run:** embroidery_time + 3 minutes changeover
+  - Example: 6.67 + 3 = 9.67 minutes per run
+- **Total Time:** runs × time_per_run
+  - Example: 7 runs × 9.67 = 67.69 minutes total
+
+**Implementation:**
+- Calculation functions in `shared/machines.ts`
+- Production metrics displayed in dashboard table (Runs, Time/Run, Total Time)
+- Jobs without assigned machines show "-" for production metrics
+- Form includes stitch count field with default value of 5000
 
 ## Xero Integration
 
