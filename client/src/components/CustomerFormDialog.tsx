@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -52,6 +53,9 @@ export function CustomerFormDialog({ trigger, onSubmit }: CustomerFormDialogProp
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Add Customer</DialogTitle>
+          <DialogDescription>
+            Add a new customer to the system
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">

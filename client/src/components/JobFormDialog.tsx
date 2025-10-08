@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -86,6 +87,9 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Production Order</DialogTitle>
+          <DialogDescription>
+            Create a new production order for embroidery work
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
