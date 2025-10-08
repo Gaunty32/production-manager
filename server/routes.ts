@@ -22,6 +22,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Optional auth middleware - allows both authenticated and guest access
+  const optionalAuth = (req: any, res: any, next: any) => {
+    // Skip authentication check, allow all requests
+    next();
+  };
+
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
     try {
@@ -48,8 +54,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Run seed on startup
   await seedCustomers();
 
-  // Customer routes (protected)
-  app.get("/api/customers", isAuthenticated, async (req, res) => {
+  // Customer routes
+  app.get("/api/customers", optionalAuth, async (req, res) => {
     try {
       const customers = await storage.getCustomers();
       res.json(customers);
@@ -58,7 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/customers", isAuthenticated, async (req, res) => {
+  app.post("/api/customers", optionalAuth, async (req, res) => {
     try {
       const data = insertCustomerSchema.parse(req.body);
       const customer = await storage.createCustomer(data);
@@ -72,8 +78,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Job routes (protected)
-  app.get("/api/jobs", isAuthenticated, async (req, res) => {
+  // Job routes
+  app.get("/api/jobs", optionalAuth, async (req, res) => {
     try {
       const { machineId } = req.query;
       
@@ -90,7 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/jobs", isAuthenticated, async (req, res) => {
+  app.post("/api/jobs", optionalAuth, async (req, res) => {
     try {
       const data = insertJobSchema.parse(req.body);
       const job = await storage.createJob(data);
@@ -104,7 +110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/jobs/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/jobs/:id", optionalAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const data = updateJobSchema.parse(req.body);
@@ -125,7 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/jobs/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/jobs/:id", optionalAuth, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteJob(id);
@@ -136,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Xero integration routes
-  app.get("/api/xero/status", isAuthenticated, async (req, res) => {
+  app.get("/api/xero/status", optionalAuth, async (req, res) => {
     res.json({ 
       configured: xeroService.isConfigured(),
       message: xeroService.isConfigured() 
@@ -145,7 +151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/xero/invoice/:jobId", isAuthenticated, async (req, res) => {
+  app.post("/api/xero/invoice/:jobId", optionalAuth, async (req, res) => {
     try {
       const { jobId } = req.params;
       const { unitPrice } = req.body;
