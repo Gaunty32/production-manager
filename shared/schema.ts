@@ -34,7 +34,7 @@ export const jobs = pgTable("jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   jobName: text("job_name").notNull(),
-  poNumber: text("po_number").notNull(),
+  poNumber: text("po_number"),
   logoApproved: boolean("logo_approved").notNull().default(false),
   quantity: integer("quantity").notNull(),
   stitchCount: integer("stitch_count").notNull(),
@@ -69,7 +69,10 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
 export const updateJobSchema = z.object({
   customerId: z.string().optional(),
   jobName: z.string().optional(),
-  poNumber: z.string().optional(),
+  poNumber: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
   logoApproved: z.coerce.boolean().optional(),
   quantity: z.coerce.number().optional(),
   stitchCount: z.coerce.number().optional(),
