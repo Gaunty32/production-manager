@@ -37,6 +37,7 @@ export const jobs = pgTable("jobs", {
   poNumber: text("po_number").notNull(),
   logoApproved: boolean("logo_approved").notNull().default(false),
   quantity: integer("quantity").notNull(),
+  stitchCount: integer("stitch_count").notNull(),
   dateReceived: timestamp("date_received").notNull(),
   requiredDispatchDate: timestamp("required_dispatch_date").notNull(),
   completedOnTime: boolean("completed_on_time"),
@@ -69,6 +70,7 @@ export const updateJobSchema = z.object({
   poNumber: z.string().optional(),
   logoApproved: z.coerce.boolean().optional(),
   quantity: z.coerce.number().optional(),
+  stitchCount: z.coerce.number().optional(),
   dateReceived: z.preprocess(
     (val) => val ? new Date(val as string) : undefined,
     z.date().optional()
