@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -70,6 +71,7 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
       requiredDispatchDate: new Date().toISOString(),
       machineId: null,
       status: "pending",
+      completed: false,
       completedOnTime: null,
       notes: "",
     },
@@ -196,6 +198,25 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
                       </SelectContent>
                     </Select>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="completed"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-completed"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Order Completed</FormLabel>
+                    </div>
                   </FormItem>
                 )}
               />
