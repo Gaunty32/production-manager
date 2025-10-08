@@ -42,7 +42,10 @@ import { cn } from "@/lib/utils";
 const formSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
   jobName: z.string().min(1, "Job name is required"),
-  poNumber: z.string().min(1, "PO number is required"),
+  poNumber: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
   stitchCount: z.coerce.number().min(1, "Stitch count must be at least 1"),
   logoApproved: z.boolean(),
@@ -61,7 +64,7 @@ interface JobEditDialogProps {
     id: string;
     customerId: string;
     jobName: string;
-    poNumber: string;
+    poNumber: string | null;
     logoApproved: boolean;
     quantity: number;
     stitchCount: number;
@@ -100,7 +103,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, onSubmit }: 
       form.reset({
         customerId: job.customerId,
         jobName: job.jobName,
-        poNumber: job.poNumber,
+        poNumber: job.poNumber || "",
         logoApproved: job.logoApproved,
         quantity: job.quantity,
         stitchCount: job.stitchCount,

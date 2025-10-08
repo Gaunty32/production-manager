@@ -44,7 +44,10 @@ import { cn } from "@/lib/utils";
 const formSchema = insertJobSchema.extend({
   customerId: z.string().min(1, "Customer is required"),
   jobName: z.string().min(1, "Job name is required"),
-  poNumber: z.string().min(1, "PO number is required"),
+  poNumber: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
   stitchCount: z.coerce.number().min(1, "Stitch count must be at least 1"),
 });
