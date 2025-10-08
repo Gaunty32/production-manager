@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { JobFormDialog } from "@/components/JobFormDialog";
+import { JobEditDialog } from "@/components/JobEditDialog";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { JobRow } from "@/components/JobRow";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const params = useParams();
   const machineId = params.id ? parseInt(params.id) : null;
   const [searchTerm, setSearchTerm] = useState("");
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
 
   const { data: customersData = [], isLoading: customersLoading, error: customersError } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -109,12 +111,33 @@ export default function Dashboard() {
     },
   });
 
+  const updateJobMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/jobs/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      setEditingJob(null);
+      toast({
+        title: "Success",
+        description: "Order updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: "Failed to update order",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleEdit = (id: string) => {
-    console.log("Edit job:", id);
-    toast({
-      title: "Edit functionality",
-      description: "Edit dialog will be implemented",
-    });
+    const job = jobs.find((j) => j.id === id);
+    if (job) {
+      setEditingJob(job);
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -273,6 +296,18 @@ export default function Dashboard() {
             </table>
           </div>
         </div>
+
+        <JobEditDialog
+          open={editingJob !== null}
+          onOpenChange={(open) => !open && setEditingJob(null)}
+          job={editingJob ? {
+            ...editingJob,
+            dateReceived: new Date(editingJob.dateReceived),
+            requiredDispatchDate: new Date(editingJob.requiredDispatchDate),
+          } : null}
+          customers={customers}
+          onSubmit={(id, data) => updateJobMutation.mutate({ id, data })}
+        />
       </div>
     </div>
   );

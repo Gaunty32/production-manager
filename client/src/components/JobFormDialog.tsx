@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -69,6 +70,7 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
       machineId: null,
       status: "pending",
       completedOnTime: null,
+      notes: "",
     },
   });
 
@@ -295,6 +297,26 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      {...field}
+                      value={field.value || ""}
+                      placeholder="Add any additional notes about this order..."
+                      className="resize-none min-h-[100px]"
+                      data-testid="input-notes" 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)} data-testid="button-cancel">
