@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -48,6 +49,7 @@ const formSchema = z.object({
   dateReceived: z.string(),
   requiredDispatchDate: z.string(),
   machineId: z.number().nullable(),
+  completed: z.boolean(),
   completedOnTime: z.boolean().nullable(),
   notes: z.string().optional(),
 });
@@ -66,6 +68,7 @@ interface JobEditDialogProps {
     dateReceived: Date;
     requiredDispatchDate: Date;
     machineId: number | null;
+    completed: boolean;
     completedOnTime: boolean | null;
     notes?: string | null;
   } | null;
@@ -86,6 +89,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, onSubmit }: 
       dateReceived: new Date().toISOString(),
       requiredDispatchDate: new Date().toISOString(),
       machineId: null,
+      completed: false,
       completedOnTime: null,
       notes: "",
     },
@@ -103,6 +107,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, onSubmit }: 
         dateReceived: job.dateReceived.toISOString(),
         requiredDispatchDate: job.requiredDispatchDate.toISOString(),
         machineId: job.machineId,
+        completed: job.completed,
         completedOnTime: job.completedOnTime,
         notes: job.notes || "",
       });
@@ -232,6 +237,25 @@ export function JobEditDialog({ open, onOpenChange, job, customers, onSubmit }: 
                       </SelectContent>
                     </Select>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="completed"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-edit-completed"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Order Completed</FormLabel>
+                    </div>
                   </FormItem>
                 )}
               />
