@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { JobFormDialog } from "@/components/JobFormDialog";
+import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { JobRow } from "@/components/JobRow";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +41,27 @@ export default function Dashboard() {
       return response.json();
     },
     retry: false,
+  });
+
+  const createCustomerMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/customers", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      toast({
+        title: "Success",
+        description: "Customer added successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: "Failed to add customer",
+        variant: "destructive",
+      });
+    },
   });
 
   const createJobMutation = useMutation({
@@ -140,16 +162,27 @@ export default function Dashboard() {
               Orders sorted by dispatch date
             </p>
           </div>
-          <JobFormDialog
-            trigger={
-              <Button data-testid="button-add-order">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Order
-              </Button>
-            }
-            customers={customers}
-            onSubmit={(data) => createJobMutation.mutate(data)}
-          />
+          <div className="flex gap-2">
+            <CustomerFormDialog
+              trigger={
+                <Button variant="outline" data-testid="button-add-customer">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Customer
+                </Button>
+              }
+              onSubmit={(data) => createCustomerMutation.mutate(data)}
+            />
+            <JobFormDialog
+              trigger={
+                <Button data-testid="button-add-order">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Order
+                </Button>
+              }
+              customers={customers}
+              onSubmit={(data) => createJobMutation.mutate(data)}
+            />
+          </div>
         </div>
 
         <div className="mb-4">
