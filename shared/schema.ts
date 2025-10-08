@@ -43,6 +43,7 @@ export const jobs = pgTable("jobs", {
   completedOnTime: boolean("completed_on_time"),
   machineId: integer("machine_id"),
   status: text("status").notNull().default("pending"),
+  notes: text("notes"),
 });
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
@@ -93,6 +94,7 @@ export const updateJobSchema = z.object({
     z.union([z.number().int().min(1).max(5), z.null()]).optional()
   ),
   status: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 export type UpsertUser = typeof users.$inferInsert;
