@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Factory, Calendar, Users, TrendingUp } from "lucide-react";
+import logoImage from "@assets/Selectuniforms960_1759932224049.jpg";
 
 export default function Landing() {
   return (
@@ -8,8 +9,12 @@ export default function Landing() {
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Factory className="h-6 w-6" />
-            <h1 className="text-xl font-semibold">Production Manager</h1>
+            <img 
+              src={logoImage} 
+              alt="Select Uniforms" 
+              className="h-8 object-contain"
+              data-testid="logo-icon"
+            />
           </div>
           <Button onClick={() => window.location.href = "/api/login"} data-testid="button-login">
             Sign In
