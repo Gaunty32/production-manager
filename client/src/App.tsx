@@ -15,6 +15,7 @@ import Dashboard from "@/pages/Dashboard";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
+import logoImage from "@assets/Selectuniforms960_1759932224049.jpg";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -86,10 +87,12 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
             <div className="flex items-center gap-3">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               <div className="flex items-center gap-2 ml-2" data-testid="app-logo">
-                <div className="h-8 w-8 bg-primary/10 rounded flex items-center justify-center text-primary font-bold" data-testid="logo-icon">
-                  PM
-                </div>
-                <span className="font-semibold hidden sm:inline" data-testid="text-app-name">Production Manager</span>
+                <img 
+                  src={logoImage} 
+                  alt="Select Uniforms" 
+                  className="h-8 object-contain"
+                  data-testid="logo-icon"
+                />
               </div>
             </div>
             <div className="flex items-center gap-3">

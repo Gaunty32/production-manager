@@ -8,7 +8,7 @@ This is a production management system for tracking customer orders, machine sch
 - Implemented Replit Auth for user authentication (Google, GitHub, email/password login)
 - Added user management with protected routes and session handling
 - Prepared Xero API integration structure for invoice creation
-- Added logo placeholder to application header (customizable with user's logo)
+- Added Select Uniforms company logo to application header
 
 ## User Preferences
 
