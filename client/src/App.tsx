@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -39,6 +39,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/dashboard" component={Dashboard} />
       <Route path="/orders" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/machine/:id" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route component={NotFound} />
@@ -65,6 +66,7 @@ export default function App() {
 
 function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const [location] = useLocation();
 
   if (isLoading) {
     return (
@@ -74,10 +76,12 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
     );
   }
 
-  if (!isAuthenticated) {
+  // Show landing page for unauthenticated users on root path only
+  if (!isAuthenticated && location === "/") {
     return <Router />;
   }
 
+  // For /dashboard route or other routes, show the full app even without auth
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
@@ -97,27 +101,37 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
             </div>
             <div className="flex items-center gap-3">
               <ThemeToggle />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-user-menu">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={user?.profileImageUrl || undefined} />
-                      <AvatarFallback>
-                        {user?.email?.[0]?.toUpperCase() || "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem 
-                    onClick={() => window.location.href = "/api/logout"}
-                    data-testid="button-logout"
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {isAuthenticated ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" data-testid="button-user-menu">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user?.profileImageUrl || undefined} />
+                        <AvatarFallback>
+                          {user?.email?.[0]?.toUpperCase() || "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem 
+                      onClick={() => window.location.href = "/api/logout"}
+                      data-testid="button-logout"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  onClick={() => window.location.href = "/api/login"}
+                  data-testid="button-login-header"
+                >
+                  Sign In
+                </Button>
+              )}
             </div>
           </header>
           <main className="flex-1 overflow-hidden">

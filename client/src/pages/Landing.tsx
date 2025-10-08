@@ -2,8 +2,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Factory, Calendar, Users, TrendingUp } from "lucide-react";
 import logoImage from "@assets/Selectuniforms960_1759932224049.jpg";
+import { useLocation } from "wouter";
 
 export default function Landing() {
+  const [, setLocation] = useLocation();
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b">
@@ -16,9 +19,18 @@ export default function Landing() {
               data-testid="logo-icon"
             />
           </div>
-          <Button onClick={() => window.location.href = "/api/login"} data-testid="button-login">
-            Sign In
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setLocation("/dashboard")}
+              data-testid="button-skip-login"
+            >
+              Continue Without Login
+            </Button>
+            <Button onClick={() => window.location.href = "/api/login"} data-testid="button-login">
+              Sign In
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -31,7 +43,15 @@ export default function Landing() {
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Track customer orders, manage machine schedules, and ensure on-time delivery with our comprehensive production management system.
             </p>
-            <div className="pt-4">
+            <div className="pt-4 flex gap-3 justify-center">
+              <Button 
+                size="lg" 
+                variant="outline"
+                onClick={() => setLocation("/dashboard")}
+                data-testid="button-continue-guest"
+              >
+                Continue as Guest
+              </Button>
               <Button 
                 size="lg" 
                 onClick={() => window.location.href = "/api/login"}
