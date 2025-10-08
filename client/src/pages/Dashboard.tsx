@@ -7,39 +7,20 @@ import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobRow } from "@/components/JobRow";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { isUnauthorizedError } from "@/lib/authUtils";
-import { useAuth } from "@/hooks/useAuth";
 import type { Customer, Job } from "@shared/schema";
 import { useParams } from "wouter";
 
 export default function Dashboard() {
   const { toast } = useToast();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const params = useParams();
   const machineId = params.id ? parseInt(params.id) : null;
   const [searchTerm, setSearchTerm] = useState("");
-
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-    }
-  }, [isAuthenticated, authLoading, toast]);
 
   const { data: customers = [], isLoading: customersLoading, error: customersError } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
     queryFn: async () => {
       const response = await fetch("/api/customers");
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error(`401: Unauthorized`);
-        }
         throw new Error("Failed to fetch customers");
       }
       return response.json();
@@ -47,49 +28,18 @@ export default function Dashboard() {
     retry: false,
   });
 
-  useEffect(() => {
-    if (customersError && isUnauthorizedError(customersError as Error)) {
-      queryClient.removeQueries({ queryKey: ["/api/auth/user"] });
-      toast({
-        title: "Session expired",
-        description: "Redirecting to login...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-    }
-  }, [customersError, toast]);
-
   const { data: jobs = [], isLoading: jobsLoading, error: jobsError } = useQuery<Job[]>({
     queryKey: machineId ? ["/api/jobs", machineId] : ["/api/jobs"],
     queryFn: async () => {
       const url = machineId ? `/api/jobs?machineId=${machineId}` : "/api/jobs";
       const response = await fetch(url);
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error(`401: Unauthorized`);
-        }
         throw new Error("Failed to fetch jobs");
       }
       return response.json();
     },
     retry: false,
   });
-
-  useEffect(() => {
-    if (jobsError && isUnauthorizedError(jobsError as Error)) {
-      queryClient.removeQueries({ queryKey: ["/api/auth/user"] });
-      toast({
-        title: "Session expired",
-        description: "Redirecting to login...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-    }
-  }, [jobsError, toast]);
 
   const createJobMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -104,18 +54,6 @@ export default function Dashboard() {
       });
     },
     onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        queryClient.removeQueries({ queryKey: ["/api/auth/user"] });
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
       toast({
         title: "Error",
         description: "Failed to create order",
@@ -137,18 +75,6 @@ export default function Dashboard() {
       });
     },
     onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        queryClient.removeQueries({ queryKey: ["/api/auth/user"] });
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
       toast({
         title: "Error",
         description: "Failed to delete order",
@@ -194,15 +120,6 @@ export default function Dashboard() {
   const pageTitle = machineId 
     ? `Machine ${machineId} Orders` 
     : "Production Queue";
-
-  if ((customersError && isUnauthorizedError(customersError as Error)) || 
-      (jobsError && isUnauthorizedError(jobsError as Error))) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-muted-foreground">Redirecting to login...</p>
-      </div>
-    );
-  }
 
   if (customersLoading || jobsLoading) {
     return (
