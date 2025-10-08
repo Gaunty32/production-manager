@@ -14,6 +14,9 @@ This is a production management system for tracking customer orders, machine sch
 - Added Select Uniforms company logo to application header
 - **Customer color coding**: Each customer's jobs display with unique light pastel colors for easy visual differentiation
 - **Alphabetical sorting**: Customers automatically sorted by name in both Customers page and job form dropdown
+- **Notes field**: Added optional notes textarea to job creation and editing for special instructions
+- **Job editing**: Full edit functionality with JobEditDialog component and PATCH endpoint for updating jobs
+- **Accessibility improvements**: Added DialogDescription to all dialog components for screen reader support
 
 ## User Preferences
 
