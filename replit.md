@@ -12,10 +12,34 @@ This is a production management system for tracking customer orders, machine sch
 - Implemented Replit Auth for user authentication (currently bypassed with guest access)
 - Prepared Xero API integration structure for invoice creation
 - Added Select Uniforms company logo to application header
+- **Customer color coding**: Each customer's jobs display with unique light pastel colors for easy visual differentiation
+- **Alphabetical sorting**: Customers automatically sorted by name in both Customers page and job form dropdown
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+## Customer Color Coding
+
+The application uses a visual color coding system to help quickly identify which customer each job belongs to:
+
+**Color System:**
+- Each customer is automatically assigned a unique light pastel color
+- Colors are generated using a hash function based on the customer ID, ensuring consistency
+- 12 different color options available (blue, purple, pink, green, yellow, orange, teal, cyan, indigo, rose, emerald, amber)
+- All colors work in both light and dark modes
+- Color coding is displayed as a colored left border (4px) and light pastel background on job rows
+
+**Visual Priority:**
+When multiple visual indicators apply to a job, they are layered in this priority:
+1. **Overdue jobs** (highest): Red border-left overrides customer colors
+2. **Customer colors**: Pastel background + colored border-left
+3. **Due today jobs** (lowest): Amber ring accent augments customer colors without replacing them
+
+**Implementation:**
+- Color utility functions in `shared/colors.ts`
+- Applied automatically to all job rows in Dashboard and machine views
+- Customer colors are preserved when jobs are due today (amber ring adds accent)
 
 ## Embroidery Production Metrics
 
