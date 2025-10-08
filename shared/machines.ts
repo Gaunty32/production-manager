@@ -38,7 +38,7 @@ export function calculateProductionMetrics(
   stitchCount: number,
   machineId: number | null
 ): ProductionMetrics | null {
-  if (!machineId || !stitchCount || !quantity) {
+  if (machineId === null || !stitchCount || !quantity) {
     return null;
   }
 
