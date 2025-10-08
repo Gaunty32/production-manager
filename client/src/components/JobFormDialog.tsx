@@ -43,6 +43,7 @@ const formSchema = insertJobSchema.extend({
   jobName: z.string().min(1, "Job name is required"),
   poNumber: z.string().min(1, "PO number is required"),
   quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
+  stitchCount: z.coerce.number().min(1, "Stitch count must be at least 1"),
 });
 
 interface JobFormDialogProps {
@@ -62,6 +63,7 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
       poNumber: "",
       logoApproved: false,
       quantity: 1,
+      stitchCount: 5000,
       dateReceived: new Date().toISOString(),
       requiredDispatchDate: new Date().toISOString(),
       machineId: null,
@@ -147,6 +149,20 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
                     <FormLabel>Quantity</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} className="font-mono" data-testid="input-quantity" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="stitchCount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Stitch Count</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} className="font-mono" data-testid="input-stitch-count" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
