@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { getMachineName } from "@shared/machines";
 
 const MACHINE_STYLES = [
   "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300",
@@ -27,7 +28,7 @@ export function MachineBadge({ machineId }: MachineBadgeProps) {
 
   return (
     <Badge className={cn("font-mono text-xs no-default-hover-elevate no-default-active-elevate", colorClass)}>
-      Machine {machineId}
+      {getMachineName(machineId)}
     </Badge>
   );
 }

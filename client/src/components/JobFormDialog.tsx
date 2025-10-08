@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema } from "@shared/schema";
+import { MACHINE_NAMES } from "@shared/machines";
 import { z } from "zod";
 import {
   Dialog,
@@ -194,11 +195,11 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="unassigned">Unassigned</SelectItem>
-                        <SelectItem value="1">Machine 1</SelectItem>
-                        <SelectItem value="2">Machine 2</SelectItem>
-                        <SelectItem value="3">Machine 3</SelectItem>
-                        <SelectItem value="4">Machine 4</SelectItem>
-                        <SelectItem value="5">Machine 5</SelectItem>
+                        <SelectItem value="1">{MACHINE_NAMES[1]}</SelectItem>
+                        <SelectItem value="2">{MACHINE_NAMES[2]}</SelectItem>
+                        <SelectItem value="3">{MACHINE_NAMES[3]}</SelectItem>
+                        <SelectItem value="4">{MACHINE_NAMES[4]}</SelectItem>
+                        <SelectItem value="5">{MACHINE_NAMES[5]}</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

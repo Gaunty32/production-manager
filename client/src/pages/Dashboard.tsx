@@ -7,6 +7,7 @@ import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobRow } from "@/components/JobRow";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getMachineName } from "@shared/machines";
 import type { Customer, Job } from "@shared/schema";
 import { useParams } from "wouter";
 
@@ -118,7 +119,7 @@ export default function Dashboard() {
   );
 
   const pageTitle = machineId 
-    ? `Machine ${machineId} Orders` 
+    ? `${getMachineName(machineId)} Orders` 
     : "Production Queue";
 
   if (customersLoading || jobsLoading) {

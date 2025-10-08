@@ -10,6 +10,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
+import { MACHINE_NAMES } from "@shared/machines";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
@@ -17,11 +18,11 @@ const menuItems = [
 ];
 
 const machineItems = [
-  { title: "Machine 1", url: "/machine/1", icon: Cog },
-  { title: "Machine 2", url: "/machine/2", icon: Cog },
-  { title: "Machine 3", url: "/machine/3", icon: Cog },
-  { title: "Machine 4", url: "/machine/4", icon: Cog },
-  { title: "Machine 5", url: "/machine/5", icon: Cog },
+  { title: MACHINE_NAMES[1], url: "/machine/1", icon: Cog },
+  { title: MACHINE_NAMES[2], url: "/machine/2", icon: Cog },
+  { title: MACHINE_NAMES[3], url: "/machine/3", icon: Cog },
+  { title: MACHINE_NAMES[4], url: "/machine/4", icon: Cog },
+  { title: MACHINE_NAMES[5], url: "/machine/5", icon: Cog },
 ];
 
 export function AppSidebar() {
