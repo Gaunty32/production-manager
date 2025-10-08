@@ -36,12 +36,12 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
     <tr
       className={cn(
         "hover-elevate",
-        // Overdue takes priority over customer colors
+        // Overdue takes priority over everything
         isOverdue && "border-l-4 border-l-destructive",
         // Customer color coding (only if not overdue)
         !isOverdue && getCustomerColorClasses(job.customerId),
-        // Due today gets yellow background
-        isDueToday && "bg-amber-50 dark:bg-amber-950/20"
+        // Due today adds amber ring accent (augments customer colors, doesn't replace)
+        isDueToday && !isOverdue && "ring-2 ring-inset ring-amber-400 dark:ring-amber-600"
       )}
       data-testid={`row-job-${job.id}`}
     >

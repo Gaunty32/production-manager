@@ -19,7 +19,7 @@ import { useAuth } from "@/hooks/useAuth";
 import logoImage from "@assets/Selectuniforms960_1759932224049.jpg";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -29,10 +29,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     );
   }
 
-  if (!isAuthenticated) {
-    return <Landing />;
-  }
-
+  // Allow guest access - no authentication required
   return <Component />;
 }
 
