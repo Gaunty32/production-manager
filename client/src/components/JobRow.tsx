@@ -52,50 +52,50 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
       )}
       data-testid={`row-job-${job.id}`}
     >
-      <td className="py-3 px-4 text-sm">{job.customerName}</td>
-      <td className="py-3 px-4 text-sm">{job.jobName}</td>
-      <td className="py-3 px-4 text-sm font-mono">{job.poNumber}</td>
-      <td className="py-3 px-4">
+      <td className="py-2 px-3">{job.customerName}</td>
+      <td className="py-2 px-3">{job.jobName}</td>
+      <td className="py-2 px-3 font-mono">{job.poNumber}</td>
+      <td className="py-2 px-3">
         <StatusBadge status={job.logoApproved} type="logo" />
       </td>
-      <td className="py-3 px-4 text-sm font-mono">{job.quantity}</td>
-      <td className="py-3 px-4 text-sm font-mono">{job.stitchCount.toLocaleString()}</td>
-      <td className="py-3 px-4">
+      <td className="py-2 px-3 font-mono">{job.quantity}</td>
+      <td className="py-2 px-3 font-mono">{job.stitchCount.toLocaleString()}</td>
+      <td className="py-2 px-3">
         <MachineBadge machineId={job.machineId} />
       </td>
-      <td className="py-3 px-4 text-sm font-mono">
+      <td className="py-2 px-3 font-mono">
         {metrics ? metrics.runs : "-"}
       </td>
-      <td className="py-3 px-4 text-sm font-mono">
+      <td className="py-2 px-3 font-mono">
         {metrics ? `${metrics.timePerRunMinutes}m` : "-"}
       </td>
-      <td className="py-3 px-4 text-sm font-mono">
+      <td className="py-2 px-3 font-mono">
         {metrics ? `${metrics.totalTimeMinutes}m` : "-"}
       </td>
-      <td className="py-3 px-4 text-sm font-mono">{format(job.requiredDispatchDate, "PP")}</td>
-      <td className="py-3 px-4">
+      <td className="py-2 px-3 font-mono whitespace-nowrap">{format(job.requiredDispatchDate, "PP")}</td>
+      <td className="py-2 px-3">
         <StatusBadge status={job.completedOnTime} type="ontime" />
       </td>
-      <td className="py-3 px-4 text-sm">{job.completedByName || "-"}</td>
-      <td className="py-3 px-4">
+      <td className="py-2 px-3">{job.completedByName || "-"}</td>
+      <td className="py-2 px-3">
         <div className="flex gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-7 w-7"
             onClick={() => onEdit(job.id)}
             data-testid={`button-edit-${job.id}`}
           >
-            <Pencil className="h-4 w-4" />
+            <Pencil className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-7 w-7"
             onClick={() => onDelete(job.id)}
             data-testid={`button-delete-${job.id}`}
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
       </td>
