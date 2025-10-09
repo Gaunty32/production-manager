@@ -26,12 +26,18 @@ export default function StaffPage() {
   });
 
   // Sort staff alphabetically by name
-  const staff = [...staffData].sort((a, b) => a.name.localeCompare(b.name));
+  const staff = [...staffData].sort((a, b) => {
+    if (!a.name || !b.name) return 0;
+    return a.name.localeCompare(b.name);
+  });
 
   const createStaffMutation = useMutation({
     mutationFn: async (data: any) => {
+      console.log("Creating staff with data:", data);
       const res = await apiRequest("POST", "/api/staff", data);
-      return res.json();
+      const result = await res.json();
+      console.log("Staff created:", result);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff"] });
@@ -41,6 +47,7 @@ export default function StaffPage() {
       });
     },
     onError: (error: Error) => {
+      console.error("Staff creation error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to add staff member",
