@@ -1,6 +1,28 @@
-import { customers, jobs, users, staff, type Customer, type InsertCustomer, type Job, type InsertJob, type User, type UpsertUser, type Staff, type InsertStaff } from "@shared/schema";
+import { 
+  customers, 
+  jobs, 
+  users, 
+  staff,
+  staffShifts,
+  machineScheduleBlocks,
+  jobSchedule,
+  type Customer, 
+  type InsertCustomer, 
+  type Job, 
+  type InsertJob, 
+  type User, 
+  type UpsertUser, 
+  type Staff, 
+  type InsertStaff,
+  type StaffShift,
+  type InsertStaffShift,
+  type MachineScheduleBlock,
+  type InsertMachineScheduleBlock,
+  type JobSchedule,
+  type InsertJobSchedule
+} from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -18,6 +40,21 @@ export interface IStorage {
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: string, job: Partial<Job>): Promise<Job>;
   deleteJob(id: string): Promise<void>;
+  
+  getStaffShifts(staffId?: string, startDate?: Date, endDate?: Date): Promise<StaffShift[]>;
+  createStaffShift(shift: InsertStaffShift): Promise<StaffShift>;
+  updateStaffShift(id: string, shift: Partial<StaffShift>): Promise<StaffShift>;
+  deleteStaffShift(id: string): Promise<void>;
+  
+  getMachineScheduleBlocks(machineId?: number, startDate?: Date, endDate?: Date): Promise<MachineScheduleBlock[]>;
+  createMachineScheduleBlock(block: InsertMachineScheduleBlock): Promise<MachineScheduleBlock>;
+  updateMachineScheduleBlock(id: string, block: Partial<MachineScheduleBlock>): Promise<MachineScheduleBlock>;
+  deleteMachineScheduleBlock(id: string): Promise<void>;
+  
+  getJobSchedules(jobId?: string, startDate?: Date, endDate?: Date): Promise<JobSchedule[]>;
+  createJobSchedule(schedule: InsertJobSchedule): Promise<JobSchedule>;
+  updateJobSchedule(id: string, schedule: Partial<JobSchedule>): Promise<JobSchedule>;
+  deleteJobSchedule(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -133,6 +170,135 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<void> {
     await db.delete(jobs).where(eq(jobs.id, id));
+  }
+
+  async getStaffShifts(staffId?: string, startDate?: Date, endDate?: Date): Promise<StaffShift[]> {
+    const conditions = [];
+    if (staffId) {
+      conditions.push(eq(staffShifts.staffId, staffId));
+    }
+    if (startDate) {
+      conditions.push(gte(staffShifts.date, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(staffShifts.date, endDate));
+    }
+    
+    if (conditions.length === 0) {
+      return await db.select().from(staffShifts);
+    }
+    return await db.select().from(staffShifts).where(and(...conditions));
+  }
+
+  async createStaffShift(insertShift: InsertStaffShift): Promise<StaffShift> {
+    const [shift] = await db
+      .insert(staffShifts)
+      .values({
+        ...insertShift,
+        date: new Date(insertShift.date),
+      })
+      .returning();
+    return shift;
+  }
+
+  async updateStaffShift(id: string, updates: Partial<StaffShift>): Promise<StaffShift> {
+    const [shift] = await db
+      .update(staffShifts)
+      .set(updates)
+      .where(eq(staffShifts.id, id))
+      .returning();
+    if (!shift) throw new Error("Shift not found");
+    return shift;
+  }
+
+  async deleteStaffShift(id: string): Promise<void> {
+    await db.delete(staffShifts).where(eq(staffShifts.id, id));
+  }
+
+  async getMachineScheduleBlocks(machineId?: number, startDate?: Date, endDate?: Date): Promise<MachineScheduleBlock[]> {
+    const conditions = [];
+    if (machineId) {
+      conditions.push(eq(machineScheduleBlocks.machineId, machineId));
+    }
+    if (startDate) {
+      conditions.push(gte(machineScheduleBlocks.date, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(machineScheduleBlocks.date, endDate));
+    }
+    
+    if (conditions.length === 0) {
+      return await db.select().from(machineScheduleBlocks);
+    }
+    return await db.select().from(machineScheduleBlocks).where(and(...conditions));
+  }
+
+  async createMachineScheduleBlock(insertBlock: InsertMachineScheduleBlock): Promise<MachineScheduleBlock> {
+    const [block] = await db
+      .insert(machineScheduleBlocks)
+      .values({
+        ...insertBlock,
+        date: new Date(insertBlock.date),
+      })
+      .returning();
+    return block;
+  }
+
+  async updateMachineScheduleBlock(id: string, updates: Partial<MachineScheduleBlock>): Promise<MachineScheduleBlock> {
+    const [block] = await db
+      .update(machineScheduleBlocks)
+      .set(updates)
+      .where(eq(machineScheduleBlocks.id, id))
+      .returning();
+    if (!block) throw new Error("Schedule block not found");
+    return block;
+  }
+
+  async deleteMachineScheduleBlock(id: string): Promise<void> {
+    await db.delete(machineScheduleBlocks).where(eq(machineScheduleBlocks.id, id));
+  }
+
+  async getJobSchedules(jobId?: string, startDate?: Date, endDate?: Date): Promise<JobSchedule[]> {
+    const conditions = [];
+    if (jobId) {
+      conditions.push(eq(jobSchedule.jobId, jobId));
+    }
+    if (startDate) {
+      conditions.push(gte(jobSchedule.scheduledDate, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(jobSchedule.scheduledDate, endDate));
+    }
+    
+    if (conditions.length === 0) {
+      return await db.select().from(jobSchedule);
+    }
+    return await db.select().from(jobSchedule).where(and(...conditions));
+  }
+
+  async createJobSchedule(insertSchedule: InsertJobSchedule): Promise<JobSchedule> {
+    const [schedule] = await db
+      .insert(jobSchedule)
+      .values({
+        ...insertSchedule,
+        scheduledDate: new Date(insertSchedule.scheduledDate),
+      })
+      .returning();
+    return schedule;
+  }
+
+  async updateJobSchedule(id: string, updates: Partial<JobSchedule>): Promise<JobSchedule> {
+    const [schedule] = await db
+      .update(jobSchedule)
+      .set(updates)
+      .where(eq(jobSchedule.id, id))
+      .returning();
+    if (!schedule) throw new Error("Job schedule not found");
+    return schedule;
+  }
+
+  async deleteJobSchedule(id: string): Promise<void> {
+    await db.delete(jobSchedule).where(eq(jobSchedule.id, id));
   }
 }
 

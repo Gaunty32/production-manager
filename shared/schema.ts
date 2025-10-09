@@ -57,6 +57,38 @@ export const jobs = pgTable("jobs", {
   notes: text("notes"),
 });
 
+export const staffShifts = pgTable("staff_shifts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  staffId: varchar("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
+  date: timestamp("date").notNull(),
+  startTime: integer("start_time").notNull(),
+  endTime: integer("end_time").notNull(),
+  isRecurring: boolean("is_recurring").notNull().default(false),
+  recurringDayOfWeek: integer("recurring_day_of_week"),
+});
+
+export const machineScheduleBlocks = pgTable("machine_schedule_blocks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  machineId: integer("machine_id").notNull(),
+  date: timestamp("date").notNull(),
+  startTime: integer("start_time").notNull(),
+  endTime: integer("end_time").notNull(),
+  blockType: text("block_type").notNull(),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "cascade" }),
+  notes: text("notes"),
+});
+
+export const jobSchedule = pgTable("job_schedule", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  machineId: integer("machine_id").notNull(),
+  staffId: varchar("staff_id").notNull().references(() => staff.id),
+  scheduledDate: timestamp("scheduled_date").notNull(),
+  startTime: integer("start_time").notNull(),
+  endTime: integer("end_time").notNull(),
+  status: text("status").notNull().default("scheduled"),
+});
+
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
 });
@@ -136,6 +168,119 @@ export const updateJobSchema = z.object({
   ),
 });
 
+export const insertStaffShiftSchema = createInsertSchema(staffShifts).omit({
+  id: true,
+}).extend({
+  date: z.string(),
+  startTime: z.number().int().min(0).max(1440),
+  endTime: z.number().int().min(0).max(1440),
+  isRecurring: z.boolean().default(false),
+  recurringDayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
+}).refine(
+  (data) => data.endTime > data.startTime,
+  { message: "End time must be after start time" }
+).refine(
+  (data) => !data.isRecurring || (data.recurringDayOfWeek !== null && data.recurringDayOfWeek !== undefined),
+  { message: "Recurring day of week is required for recurring shifts" }
+);
+
+export const insertMachineScheduleBlockSchema = createInsertSchema(machineScheduleBlocks).omit({
+  id: true,
+}).extend({
+  date: z.string(),
+  machineId: z.number().int().min(1).max(4),
+  startTime: z.number().int().min(0).max(1440),
+  endTime: z.number().int().min(0).max(1440),
+  blockType: z.enum(["job", "maintenance", "blocked"]),
+  jobId: z.string().nullable().optional(),
+}).refine(
+  (data) => data.endTime > data.startTime,
+  { message: "End time must be after start time" }
+);
+
+export const insertJobScheduleSchema = createInsertSchema(jobSchedule).omit({
+  id: true,
+}).extend({
+  scheduledDate: z.string(),
+  machineId: z.number().int().min(1).max(4),
+  startTime: z.number().int().min(0).max(1440),
+  endTime: z.number().int().min(0).max(1440),
+  status: z.enum(["scheduled", "in_progress", "completed", "cancelled"]).default("scheduled"),
+}).refine(
+  (data) => data.endTime > data.startTime,
+  { message: "End time must be after start time" }
+);
+
+export const updateStaffShiftSchema = z.object({
+  staffId: z.string().optional(),
+  date: z.preprocess(
+    (val) => val ? new Date(val as string) : undefined,
+    z.date().optional()
+  ),
+  startTime: z.number().int().min(0).max(1440).optional(),
+  endTime: z.number().int().min(0).max(1440).optional(),
+  isRecurring: z.boolean().optional(),
+  recurringDayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
+}).refine(
+  (data) => {
+    if (data.startTime !== undefined && data.endTime !== undefined) {
+      return data.endTime > data.startTime;
+    }
+    return true;
+  },
+  { message: "End time must be after start time" }
+).refine(
+  (data) => {
+    if (data.isRecurring === true) {
+      return data.recurringDayOfWeek !== null && data.recurringDayOfWeek !== undefined;
+    }
+    return true;
+  },
+  { message: "Recurring day of week is required for recurring shifts" }
+);
+
+export const updateMachineScheduleBlockSchema = z.object({
+  machineId: z.number().int().min(1).max(4).optional(),
+  date: z.preprocess(
+    (val) => val ? new Date(val as string) : undefined,
+    z.date().optional()
+  ),
+  startTime: z.number().int().min(0).max(1440).optional(),
+  endTime: z.number().int().min(0).max(1440).optional(),
+  blockType: z.enum(["job", "maintenance", "blocked"]).optional(),
+  jobId: z.string().nullable().optional(),
+  notes: z.string().optional(),
+}).refine(
+  (data) => {
+    if (data.startTime !== undefined && data.endTime !== undefined) {
+      return data.endTime > data.startTime;
+    }
+    return true;
+  },
+  { message: "End time must be after start time" }
+);
+
+export const updateJobScheduleSchema = z.object({
+  jobId: z.string().optional(),
+  machineId: z.number().int().min(1).max(4).optional(),
+  staffId: z.string().optional(),
+  scheduledDate: z.preprocess(
+    (val) => val ? new Date(val as string) : undefined,
+    z.date().optional()
+  ),
+  startTime: z.number().int().min(0).max(1440).optional(),
+  endTime: z.number().int().min(0).max(1440).optional(),
+  status: z.enum(["scheduled", "in_progress", "completed", "cancelled"]).optional(),
+}).refine(
+  (data) => {
+    if (data.startTime !== undefined && data.endTime !== undefined) {
+      return data.endTime > data.startTime;
+    }
+    return true;
+  },
+  { message: "End time must be after start time" }
+);
+
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
@@ -144,3 +289,9 @@ export type InsertStaff = z.infer<typeof insertStaffSchema>;
 export type Staff = typeof staff.$inferSelect;
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Job = typeof jobs.$inferSelect;
+export type InsertStaffShift = z.infer<typeof insertStaffShiftSchema>;
+export type StaffShift = typeof staffShifts.$inferSelect;
+export type InsertMachineScheduleBlock = z.infer<typeof insertMachineScheduleBlockSchema>;
+export type MachineScheduleBlock = typeof machineScheduleBlocks.$inferSelect;
+export type InsertJobSchedule = z.infer<typeof insertJobScheduleSchema>;
+export type JobSchedule = typeof jobSchedule.$inferSelect;
