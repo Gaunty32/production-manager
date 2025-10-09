@@ -71,10 +71,10 @@ The application calculates production time based on embroidery specifications:
   - Example: 50 garments on Barudan 8 (8 heads) = 7 runs
 - **Embroidery Time:** stitch_count / 750 stitches per minute
   - Example: 5000 stitches = 6.67 minutes embroidery time
-- **Time Per Run:** embroidery_time + 3 minutes changeover
-  - Example: 6.67 + 3 = 9.67 minutes per run
-- **Total Time:** runs × time_per_run
-  - Example: 7 runs × 9.67 = 67.69 minutes total
+- **Time Per Run:** embroidery_time + 3 minutes changeover, rounded UP to nearest minute
+  - Example: 6.67 + 3 = 9.67 → rounds up to 10 minutes
+- **Total Time:** runs × time_per_run, rounded UP to next 10 minutes
+  - Example: 7 runs × 9.67 = 67.69 → rounds up to 70 minutes
 
 **Implementation:**
 - Calculation functions in `shared/machines.ts`

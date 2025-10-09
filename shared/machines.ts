@@ -48,7 +48,7 @@ export function calculateProductionMetrics(
 
   return {
     runs,
-    timePerRunMinutes: Math.round(timePerRunMinutes * 10) / 10,
-    totalTimeMinutes: Math.round(totalTimeMinutes * 10) / 10,
+    timePerRunMinutes: Math.ceil(timePerRunMinutes),
+    totalTimeMinutes: Math.ceil(totalTimeMinutes / 10) * 10,
   };
 }
