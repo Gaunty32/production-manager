@@ -200,7 +200,9 @@ export default function Schedule() {
               </div>
             </div>
 
-            {MACHINES.map((machineId) => {
+            {MACHINES.filter(machineId => 
+              selectedMachine === "all" || machineId === selectedMachine
+            ).map((machineId) => {
               const machineSchedules = getSchedulesForMachine(machineId);
               
               return (

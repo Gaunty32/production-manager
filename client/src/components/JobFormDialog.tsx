@@ -91,7 +91,12 @@ export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDi
   const handleSuggestSchedule = async () => {
     const values = form.getValues();
     
-    if (!values.machineId || !values.quantity || !values.stitchCount || !values.requiredDispatchDate) {
+    const machineId = values.machineId ? Number(values.machineId) : null;
+    const quantity = Number(values.quantity) || 0;
+    const stitchCount = Number(values.stitchCount) || 0;
+    const requiredDispatchDate = values.requiredDispatchDate;
+    
+    if (!machineId || quantity <= 0 || stitchCount <= 0 || !requiredDispatchDate) {
       toast({
         title: "Missing Information",
         description: "Please fill in Machine, Quantity, Stitch Count, and Required Dispatch Date first",
@@ -103,10 +108,10 @@ export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDi
     setLoadingSuggestion(true);
     try {
       const response: any = await apiRequest("POST", "/api/suggest-schedule", {
-        machineId: values.machineId,
-        quantity: values.quantity,
-        stitchCount: values.stitchCount,
-        requiredDispatchDate: values.requiredDispatchDate,
+        machineId,
+        quantity,
+        stitchCount,
+        requiredDispatchDate,
       });
       
       if (response.available) {
