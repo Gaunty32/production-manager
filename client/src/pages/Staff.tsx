@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { StaffFormDialog } from "@/components/StaffFormDialog";
@@ -20,6 +20,7 @@ import { useState } from "react";
 export default function StaffPage() {
   const { toast } = useToast();
   const [staffToDelete, setStaffToDelete] = useState<string | null>(null);
+  const [staffToEdit, setStaffToEdit] = useState<Staff | null>(null);
 
   const { data: staffData = [], isLoading } = useQuery<Staff[]>({
     queryKey: ["/api/staff"],
@@ -47,6 +48,28 @@ export default function StaffPage() {
       toast({
         title: "Error",
         description: error.message || "Failed to add staff member",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateStaffMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/staff/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff"] });
+      toast({
+        title: "Success",
+        description: "Staff member updated successfully",
+      });
+      setStaffToEdit(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update staff member",
         variant: "destructive",
       });
     },
@@ -139,15 +162,26 @@ export default function StaffPage() {
                     <tr key={staffMember.id} className="hover-elevate" data-testid={`row-staff-${staffMember.id}`}>
                       <td className="py-3 px-4 text-sm">{staffMember.name}</td>
                       <td className="py-3 px-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleDelete(staffMember.id)}
-                          data-testid={`button-delete-staff-${staffMember.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setStaffToEdit(staffMember)}
+                            data-testid={`button-edit-staff-${staffMember.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleDelete(staffMember.id)}
+                            data-testid={`button-delete-staff-${staffMember.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -178,6 +212,15 @@ export default function StaffPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {staffToEdit && (
+          <StaffFormDialog
+            open={true}
+            onOpenChange={(open) => !open && setStaffToEdit(null)}
+            staff={staffToEdit}
+            onSubmit={(data) => updateStaffMutation.mutate({ id: staffToEdit.id, data })}
+          />
+        )}
       </div>
     </div>
   );
