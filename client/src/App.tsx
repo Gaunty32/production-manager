@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { LogOut } from "lucide-react";
 import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
+import StaffPage from "@/pages/Staff";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
@@ -40,6 +41,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/orders" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={Customers} />} />
+      <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/machine/:id" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route component={NotFound} />
     </Switch>

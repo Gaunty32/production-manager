@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -16,6 +16,7 @@ const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "All Orders", url: "/orders", icon: ClipboardList },
   { title: "Customers", url: "/customers", icon: Users },
+  { title: "Staff", url: "/staff", icon: UserCog },
 ];
 
 const machineItems = [
@@ -23,7 +24,6 @@ const machineItems = [
   { title: MACHINE_NAMES[2], url: "/machine/2", icon: Cog },
   { title: MACHINE_NAMES[3], url: "/machine/3", icon: Cog },
   { title: MACHINE_NAMES[4], url: "/machine/4", icon: Cog },
-  { title: MACHINE_NAMES[5], url: "/machine/5", icon: Cog },
 ];
 
 export function AppSidebar() {
