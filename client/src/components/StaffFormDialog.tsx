@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,19 +20,25 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { insertStaffSchema } from "@shared/schema";
+import { insertStaffSchema, type Staff } from "@shared/schema";
 
 const formSchema = insertStaffSchema.extend({
   name: z.string().min(1, "Staff name is required"),
 });
 
 interface StaffFormDialogProps {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
+  staff?: Staff;
   onSubmit: (data: z.infer<typeof formSchema>) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function StaffFormDialog({ trigger, onSubmit }: StaffFormDialogProps) {
-  const [open, setOpen] = useState(false);
+export function StaffFormDialog({ trigger, staff, onSubmit, open: controlledOpen, onOpenChange }: StaffFormDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = onOpenChange || setInternalOpen;
+  const isEditMode = !!staff;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -41,20 +47,31 @@ export function StaffFormDialog({ trigger, onSubmit }: StaffFormDialogProps) {
     },
   });
 
+  useEffect(() => {
+    if (staff && open) {
+      form.reset({
+        name: staff.name,
+      });
+    } else if (!open) {
+      form.reset({
+        name: "",
+      });
+    }
+  }, [staff, open, form]);
+
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
     onSubmit(data);
     setOpen(false);
-    form.reset();
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Staff Member</DialogTitle>
+          <DialogTitle>{isEditMode ? "Edit Staff Member" : "Add Staff Member"}</DialogTitle>
           <DialogDescription>
-            Add a new staff member to the system
+            {isEditMode ? "Update staff member information" : "Add a new staff member to the system"}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -77,7 +94,7 @@ export function StaffFormDialog({ trigger, onSubmit }: StaffFormDialogProps) {
                 Cancel
               </Button>
               <Button type="submit" data-testid="button-submit-staff">
-                Add Staff Member
+                {isEditMode ? "Update Staff Member" : "Add Staff Member"}
               </Button>
             </div>
           </form>
