@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertStaffSchema, insertJobSchema, updateJobSchema } from "@shared/schema";
+import { insertCustomerSchema, updateCustomerSchema, insertStaffSchema, insertJobSchema, updateJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { xeroService } from "./xero";
@@ -74,6 +74,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: error.errors });
       } else {
         res.status(500).json({ error: "Failed to create customer" });
+      }
+    }
+  });
+
+  app.patch("/api/customers/:id", optionalAuth, async (req, res) => {
+    try {
+      const data = updateCustomerSchema.parse(req.body);
+      const customer = await storage.updateCustomer(req.params.id, data);
+      res.json(customer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : "Failed to update customer" 
+        });
       }
     }
   });
