@@ -1,0 +1,354 @@
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Staff, StaffShift } from "@shared/schema";
+import { Clock } from "lucide-react";
+
+const DAYS_OF_WEEK = [
+  { value: 0, label: "Sunday" },
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+];
+
+const shiftFormSchema = z.object({
+  staffId: z.string().min(1, "Please select a staff member"),
+  date: z.string().min(1, "Date is required"),
+  startTime: z.string().regex(/^\d{1,4}$/, "Start time must be in minutes (0-1439)"),
+  endTime: z.string().regex(/^\d{1,4}$/, "End time must be in minutes (0-1439)"),
+  isRecurring: z.boolean().default(false),
+  recurringDayOfWeek: z.string().optional(),
+}).refine(
+  (data) => {
+    const start = parseInt(data.startTime);
+    const end = parseInt(data.endTime);
+    return start < end && start >= 0 && end <= 1439;
+  },
+  {
+    message: "End time must be after start time and within 0-1439 minutes",
+    path: ["endTime"],
+  }
+).refine(
+  (data) => {
+    if (data.isRecurring && !data.recurringDayOfWeek) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: "Day of week is required for recurring shifts",
+    path: ["recurringDayOfWeek"],
+  }
+);
+
+type ShiftFormValues = z.infer<typeof shiftFormSchema>;
+
+interface StaffShiftDialogProps {
+  trigger?: React.ReactNode;
+  shift?: StaffShift;
+  onSuccess?: () => void;
+}
+
+export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialogProps) {
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+
+  const { data: staff = [] } = useQuery<Staff[]>({
+    queryKey: ["/api/staff"],
+  });
+
+  const form = useForm<ShiftFormValues>({
+    resolver: zodResolver(shiftFormSchema),
+    defaultValues: shift
+      ? {
+          staffId: shift.staffId,
+          date: new Date(shift.date).toISOString().split('T')[0],
+          startTime: shift.startTime.toString(),
+          endTime: shift.endTime.toString(),
+          isRecurring: shift.isRecurring,
+          recurringDayOfWeek: shift.recurringDayOfWeek?.toString() || undefined,
+        }
+      : {
+          staffId: "",
+          date: new Date().toISOString().split('T')[0],
+          startTime: "540",
+          endTime: "1020",
+          isRecurring: false,
+          recurringDayOfWeek: undefined,
+        },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/staff-shifts", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-shifts"] });
+      setOpen(false);
+      form.reset();
+      toast({
+        title: "Success",
+        description: "Staff shift created successfully",
+      });
+      onSuccess?.();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create shift",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("PATCH", `/api/staff-shifts/${shift?.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-shifts"] });
+      setOpen(false);
+      toast({
+        title: "Success",
+        description: "Staff shift updated successfully",
+      });
+      onSuccess?.();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update shift",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (values: ShiftFormValues) => {
+    const data = {
+      staffId: values.staffId,
+      date: values.date,
+      startTime: parseInt(values.startTime),
+      endTime: parseInt(values.endTime),
+      isRecurring: values.isRecurring,
+      recurringDayOfWeek: values.isRecurring && values.recurringDayOfWeek 
+        ? parseInt(values.recurringDayOfWeek) 
+        : null,
+    };
+
+    if (shift) {
+      updateMutation.mutate(data);
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
+  const formatTime = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  };
+
+  const isRecurring = form.watch("isRecurring");
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {trigger || (
+          <Button variant="outline" data-testid="button-add-shift">
+            <Clock className="mr-2 h-4 w-4" />
+            Add Shift
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="max-w-md" data-testid="dialog-staff-shift">
+        <DialogHeader>
+          <DialogTitle>{shift ? "Edit" : "Add"} Staff Shift</DialogTitle>
+          <DialogDescription>
+            {shift ? "Update" : "Create"} a working shift for a staff member. Time is in minutes from midnight (e.g., 540 = 9:00 AM).
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="staffId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Staff Member</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-staff">
+                        <SelectValue placeholder="Select staff member" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {staff.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} data-testid="input-date" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startTime"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start Time (minutes)</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" min="0" max="1439" data-testid="input-start-time" />
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      {field.value && formatTime(parseInt(field.value))}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="endTime"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>End Time (minutes)</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" min="0" max="1439" data-testid="input-end-time" />
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      {field.value && formatTime(parseInt(field.value))}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="isRecurring"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <FormLabel>Recurring Shift</FormLabel>
+                    <FormDescription>
+                      Repeat this shift every week
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="switch-recurring"
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            {isRecurring && (
+              <FormField
+                control={form.control}
+                name="recurringDayOfWeek"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Day of Week</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-day-of-week">
+                          <SelectValue placeholder="Select day" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {DAYS_OF_WEEK.map((day) => (
+                          <SelectItem key={day.value} value={day.value.toString()}>
+                            {day.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                data-testid="button-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || updateMutation.isPending}
+                data-testid="button-save"
+              >
+                {shift ? "Update" : "Create"} Shift
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}

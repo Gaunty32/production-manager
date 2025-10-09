@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, addDays, startOfDay } from "date-fns";
 import { MACHINE_NAMES } from "@shared/machines";
 import { cn } from "@/lib/utils";
+import { ShiftsManagement } from "@/components/ShiftsManagement";
+import { MachineBlocksManagement } from "@/components/MachineBlocksManagement";
 import type { JobSchedule, Staff, Job } from "@shared/schema";
 
 const MACHINES = [1, 2, 3, 4];
@@ -69,12 +72,16 @@ export default function Schedule() {
   return (
     <div className="h-full flex flex-col bg-background">
       <div className="border-b p-4 bg-card">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold" data-testid="text-page-title">Job Schedule</h1>
-          </div>
-          
-          <div className="flex items-center gap-3 flex-wrap">
+        <h1 className="text-2xl font-semibold mb-4" data-testid="text-page-title">Schedule Management</h1>
+        <Tabs defaultValue="timeline" className="w-full">
+          <TabsList data-testid="tabs-schedule">
+            <TabsTrigger value="timeline" data-testid="tab-timeline">Timeline</TabsTrigger>
+            <TabsTrigger value="shifts" data-testid="tab-shifts">Staff Shifts</TabsTrigger>
+            <TabsTrigger value="blocks" data-testid="tab-blocks">Machine Blocks</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="timeline" className="mt-4">
+            <div className="flex items-center gap-3 flex-wrap mb-4">
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -123,10 +130,8 @@ export default function Schedule() {
               </SelectContent>
             </Select>
           </div>
-        </div>
-      </div>
 
-      <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-auto p-4 -mx-4 -mb-4">
         <Card className="p-4">
           <div className="space-y-1">
             <div className="flex gap-2">
@@ -268,6 +273,17 @@ export default function Schedule() {
             </div>
           </Card>
         </div>
+          </div>
+          </TabsContent>
+
+          <TabsContent value="shifts" className="mt-4">
+            <ShiftsManagement />
+          </TabsContent>
+
+          <TabsContent value="blocks" className="mt-4">
+            <MachineBlocksManagement />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
