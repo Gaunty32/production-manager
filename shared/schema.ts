@@ -73,6 +73,10 @@ export const insertStaffSchema = createInsertSchema(staff).omit({
   id: true,
 });
 
+export const updateStaffSchema = z.object({
+  name: z.string().optional(),
+});
+
 export const insertJobSchema = createInsertSchema(jobs).omit({
   id: true,
 }).extend({
