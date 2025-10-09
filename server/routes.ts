@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, insertJobSchema, updateJobSchema } from "@shared/schema";
+import { insertCustomerSchema, insertStaffSchema, insertJobSchema, updateJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { xeroService } from "./xero";
@@ -87,6 +87,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: error.message });
       } else {
         res.status(500).json({ error: "Failed to delete customer" });
+      }
+    }
+  });
+
+  // Staff routes
+  app.get("/api/staff", optionalAuth, async (req, res) => {
+    try {
+      const staff = await storage.getStaff();
+      res.json(staff);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch staff" });
+    }
+  });
+
+  app.post("/api/staff", optionalAuth, async (req, res) => {
+    try {
+      const data = insertStaffSchema.parse(req.body);
+      const staffMember = await storage.createStaff(data);
+      res.json(staffMember);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create staff member" });
+      }
+    }
+  });
+
+  app.delete("/api/staff/:id", optionalAuth, async (req, res) => {
+    try {
+      await storage.deleteStaff(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof Error && error.message === "Cannot delete staff member with completed jobs") {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: "Failed to delete staff member" });
       }
     }
   });
