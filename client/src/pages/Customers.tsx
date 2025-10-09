@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
@@ -20,6 +20,7 @@ import { useState } from "react";
 export default function Customers() {
   const { toast } = useToast();
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
+  const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
 
   const { data: customersData = [], isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -44,6 +45,28 @@ export default function Customers() {
       toast({
         title: "Error",
         description: error.message || "Failed to add customer",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateCustomerMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/customers/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      toast({
+        title: "Success",
+        description: "Customer updated successfully",
+      });
+      setCustomerToEdit(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update customer",
         variant: "destructive",
       });
     },
@@ -120,6 +143,18 @@ export default function Customers() {
                     Customer Name
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Contact Name
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Email
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Telephone
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Address
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Actions
                   </th>
                 </tr>
@@ -127,7 +162,7 @@ export default function Customers() {
               <tbody className="bg-card divide-y divide-border">
                 {customers.length === 0 ? (
                   <tr>
-                    <td colSpan={2} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
                       No customers found. Click 'Add Customer' to create one.
                     </td>
                   </tr>
@@ -135,16 +170,31 @@ export default function Customers() {
                   customers.map((customer) => (
                     <tr key={customer.id} className="hover-elevate" data-testid={`row-customer-${customer.id}`}>
                       <td className="py-3 px-4 text-sm">{customer.name}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">{customer.contactName || "-"}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">{customer.email || "-"}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">{customer.telephone || "-"}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">{customer.address || "-"}</td>
                       <td className="py-3 px-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleDelete(customer.id)}
-                          data-testid={`button-delete-customer-${customer.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setCustomerToEdit(customer)}
+                            data-testid={`button-edit-customer-${customer.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleDelete(customer.id)}
+                            data-testid={`button-delete-customer-${customer.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -175,6 +225,15 @@ export default function Customers() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {customerToEdit && (
+          <CustomerFormDialog
+            open={true}
+            onOpenChange={(open) => !open && setCustomerToEdit(null)}
+            customer={customerToEdit}
+            onSubmit={(data) => updateCustomerMutation.mutate({ id: customerToEdit.id, data })}
+          />
+        )}
       </div>
     </div>
   );

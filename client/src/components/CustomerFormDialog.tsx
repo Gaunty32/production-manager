@@ -32,13 +32,17 @@ const formSchema = insertCustomerSchema.extend({
 });
 
 interface CustomerFormDialogProps {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   customer?: Customer;
   onSubmit: (data: z.infer<typeof formSchema>) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function CustomerFormDialog({ trigger, customer, onSubmit }: CustomerFormDialogProps) {
-  const [open, setOpen] = useState(false);
+export function CustomerFormDialog({ trigger, customer, onSubmit, open: controlledOpen, onOpenChange }: CustomerFormDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = onOpenChange || setInternalOpen;
   const isEditMode = !!customer;
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -79,7 +83,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit }: CustomerForm
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{isEditMode ? "Edit Customer" : "Add Customer"}</DialogTitle>
