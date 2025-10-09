@@ -5,6 +5,7 @@
 This is a production management system for tracking customer orders, machine scheduling, and dispatch deadlines. The application helps manage manufacturing workflows by tracking jobs across multiple machines, monitoring deadlines, and ensuring timely completion of customer orders.
 
 **Recent Updates (Oct 9, 2025):**
+- **Notes tooltip on hover**: Job notes now display in a tooltip when hovering over job rows in the production queue
 - **PO Number optional**: PO number field is now optional and can be left empty when creating/editing jobs
 - **Machine renaming**: Updated to real machine names - Barudan 8 (8 heads), Barudan, SWF, SWF (6 heads each)
 - **Machine count reduced**: Removed Machine 5, now tracking 4 machines total
