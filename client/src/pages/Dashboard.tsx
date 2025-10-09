@@ -227,17 +227,12 @@ export default function Dashboard() {
                   </h3>
                 </div>
                 <div className="space-y-2">
-                  {overdueOrders.slice(0, 3).map((job) => (
+                  {overdueOrders.map((job) => (
                     <div key={job.id} className="text-sm" data-testid={`overdue-summary-${job.id}`}>
                       <span className="font-medium">{job.customerName}</span>
                       <span className="text-muted-foreground"> - {job.jobName}</span>
                     </div>
                   ))}
-                  {overdueOrders.length > 3 && (
-                    <p className="text-sm text-muted-foreground">
-                      +{overdueOrders.length - 3} more overdue
-                    </p>
-                  )}
                 </div>
               </div>
             )}
@@ -252,17 +247,12 @@ export default function Dashboard() {
                   </h3>
                 </div>
                 <div className="space-y-2">
-                  {dueTodayOrders.slice(0, 3).map((job) => (
+                  {dueTodayOrders.map((job) => (
                     <div key={job.id} className="text-sm" data-testid={`due-today-summary-${job.id}`}>
                       <span className="font-medium">{job.customerName}</span>
                       <span className="text-muted-foreground"> - {job.jobName}</span>
                     </div>
                   ))}
-                  {dueTodayOrders.length > 3 && (
-                    <p className="text-sm text-muted-foreground">
-                      +{dueTodayOrders.length - 3} more due today
-                    </p>
-                  )}
                 </div>
               </div>
             )}
