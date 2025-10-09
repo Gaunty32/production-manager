@@ -413,6 +413,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Schedule suggestion route
+  app.post("/api/suggest-schedule", optionalAuth, async (req, res) => {
+    try {
+      const { machineId, quantity, stitchCount, requiredDispatchDate } = req.body;
+      
+      if (!machineId || !quantity || !stitchCount || !requiredDispatchDate) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      // Import scheduling utilities
+      const { findEarliestSlot, calculateJobDuration } = await import("@shared/scheduling");
+      
+      // Calculate job duration
+      const duration = calculateJobDuration(quantity, stitchCount, machineId);
+      
+      if (duration === 0) {
+        return res.status(400).json({ error: "Invalid job parameters" });
+      }
+      
+      // Get all scheduling data
+      const staffMembers = await storage.getStaff();
+      const shifts = await storage.getStaffShifts();
+      const blocks = await storage.getMachineScheduleBlocks();
+      const schedules = await storage.getJobSchedules();
+      
+      // Search from today until the dispatch date
+      const startDate = new Date();
+      const endDate = new Date(requiredDispatchDate);
+      
+      // Try to find earliest slot across all staff members
+      let earliestSuggestion = null;
+      
+      for (const staffMember of staffMembers) {
+        const suggestion = findEarliestSlot(
+          startDate,
+          endDate,
+          machineId,
+          staffMember.id,
+          duration,
+          blocks,
+          shifts,
+          schedules
+        );
+        
+        if (suggestion) {
+          if (!earliestSuggestion || 
+              suggestion.date < earliestSuggestion.date ||
+              (suggestion.date.getTime() === earliestSuggestion.date.getTime() && 
+               suggestion.startTime < earliestSuggestion.startTime)) {
+            earliestSuggestion = suggestion;
+          }
+        }
+      }
+      
+      if (!earliestSuggestion) {
+        return res.json({ 
+          available: false, 
+          message: "No available time slot found before dispatch date" 
+        });
+      }
+      
+      // Get staff member name
+      const staffMember = staffMembers.find(s => s.id === earliestSuggestion.staffId);
+      
+      res.json({
+        available: true,
+        suggestion: {
+          date: earliestSuggestion.date,
+          startTime: earliestSuggestion.startTime,
+          endTime: earliestSuggestion.endTime,
+          machineId: earliestSuggestion.machineId,
+          staffId: earliestSuggestion.staffId,
+          staffName: staffMember?.name || "Unknown",
+          duration
+        }
+      });
+    } catch (error) {
+      console.error("Error suggesting schedule:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to suggest schedule" 
+      });
+    }
+  });
+
   // Xero integration routes
   app.get("/api/xero/status", optionalAuth, async (req, res) => {
     res.json({ 

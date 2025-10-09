@@ -3,7 +3,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema } from "@shared/schema";
 import { MACHINE_NAMES } from "@shared/machines";
+import { minutesToTime } from "@shared/scheduling";
 import { z } from "zod";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -61,6 +64,9 @@ interface JobFormDialogProps {
 
 export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDialogProps) {
   const [open, setOpen] = useState(false);
+  const [scheduleSuggestion, setScheduleSuggestion] = useState<any>(null);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+  const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -82,14 +88,68 @@ export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDi
     },
   });
 
+  const handleSuggestSchedule = async () => {
+    const values = form.getValues();
+    
+    if (!values.machineId || !values.quantity || !values.stitchCount || !values.requiredDispatchDate) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in Machine, Quantity, Stitch Count, and Required Dispatch Date first",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setLoadingSuggestion(true);
+    try {
+      const response: any = await apiRequest("POST", "/api/suggest-schedule", {
+        machineId: values.machineId,
+        quantity: values.quantity,
+        stitchCount: values.stitchCount,
+        requiredDispatchDate: values.requiredDispatchDate,
+      });
+      
+      if (response.available) {
+        setScheduleSuggestion(response.suggestion);
+        toast({
+          title: "Schedule Found",
+          description: `Earliest available slot found for ${response.suggestion.staffName}`,
+        });
+      } else {
+        setScheduleSuggestion(null);
+        toast({
+          title: "No Slots Available",
+          description: response.message || "No available time slot found",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to suggest schedule",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingSuggestion(false);
+    }
+  };
+
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
     onSubmit(data);
     setOpen(false);
     form.reset();
+    setScheduleSuggestion(null);
+  };
+
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen);
+    if (!newOpen) {
+      setScheduleSuggestion(null);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -354,6 +414,48 @@ export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDi
                   </FormItem>
                 )}
               />
+            </div>
+
+            {/* Schedule Suggestion Section */}
+            <div className="border rounded-md p-4 space-y-3 bg-muted/30">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">Schedule Suggestion</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSuggestSchedule}
+                  disabled={loadingSuggestion}
+                  data-testid="button-suggest-schedule"
+                >
+                  {loadingSuggestion ? "Finding Slot..." : "Find Earliest Slot"}
+                </Button>
+              </div>
+              
+              {scheduleSuggestion && (
+                <div className="space-y-2 text-sm" data-testid="schedule-suggestion-result">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Suggested Date:</span>
+                    <span className="font-medium">
+                      {format(new Date(scheduleSuggestion.date), "PPP")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Time Slot:</span>
+                    <span className="font-medium">
+                      {minutesToTime(scheduleSuggestion.startTime)} - {minutesToTime(scheduleSuggestion.endTime)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Staff Member:</span>
+                    <span className="font-medium">{scheduleSuggestion.staffName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Duration:</span>
+                    <span className="font-medium">{scheduleSuggestion.duration} minutes</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <FormField
