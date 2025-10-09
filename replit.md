@@ -5,6 +5,14 @@
 This is a production management system for tracking customer orders, machine scheduling, and dispatch deadlines. The application helps manage manufacturing workflows by tracking jobs across multiple machines, monitoring deadlines, and ensuring timely completion of customer orders.
 
 **Recent Updates (Oct 9, 2025):**
+- **Job Scheduling Infrastructure (Backend Complete)**: Comprehensive scheduling system to allocate jobs by combining machine availability with staff working hours
+  - Database tables: staff_shifts (working hours), machine_schedule_blocks (maintenance/downtime), job_schedule (scheduled jobs)
+  - Scheduling logic: Intersects machine and staff availability, prevents double-booking of either resource
+  - Conflict detection: Checks EITHER machine OR staff conflicts to prevent overlapping bookings
+  - Smart slot finding: Calculates earliest available time slot based on job duration and resource availability
+  - Recurring shifts: Supports weekly recurring staff schedules with day-of-week matching
+  - API routes: Full CRUD operations for shifts, machine blocks, and job schedules with date range filtering
+  - UI implementation pending (tasks 5-10)
 - **Customer editing**: Full CRUD operations for customers including contact details (name, email, telephone, address)
   - Edit button on Customers page allows updating all customer information
   - CustomerFormDialog supports both create and edit modes
