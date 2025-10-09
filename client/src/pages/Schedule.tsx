@@ -10,6 +10,8 @@ import { MACHINE_NAMES } from "@shared/machines";
 import { cn } from "@/lib/utils";
 import { ShiftsManagement } from "@/components/ShiftsManagement";
 import { MachineBlocksManagement } from "@/components/MachineBlocksManagement";
+import { JobScheduleDialog } from "@/components/JobScheduleDialog";
+import { UnscheduledJobs } from "@/components/UnscheduledJobs";
 import type { JobSchedule, Staff, Job } from "@shared/schema";
 
 const MACHINES = [1, 2, 3, 4];
@@ -129,8 +131,13 @@ export default function Schedule() {
                 ))}
               </SelectContent>
             </Select>
+
+            <JobScheduleDialog 
+              preselectedDate={format(selectedDate, 'yyyy-MM-dd')}
+            />
           </div>
 
+          <div className="flex gap-4 flex-1 overflow-hidden">
           <div className="flex-1 overflow-auto p-4 -mx-4 -mb-4">
         <Card className="p-4">
           <div className="space-y-1">
@@ -273,6 +280,11 @@ export default function Schedule() {
             </div>
           </Card>
         </div>
+          </div>
+          
+          <div className="w-80 shrink-0 overflow-auto p-4">
+            <UnscheduledJobs />
+          </div>
           </div>
           </TabsContent>
 
