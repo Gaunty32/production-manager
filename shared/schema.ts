@@ -28,6 +28,10 @@ export const users = pgTable("users", {
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
+  contactName: text("contact_name"),
+  email: text("email"),
+  telephone: text("telephone"),
+  address: text("address"),
 });
 
 export const staff = pgTable("staff", {
@@ -55,6 +59,14 @@ export const jobs = pgTable("jobs", {
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
+});
+
+export const updateCustomerSchema = z.object({
+  name: z.string().optional(),
+  contactName: z.string().optional(),
+  email: z.string().email().optional().or(z.literal("")),
+  telephone: z.string().optional(),
+  address: z.string().optional(),
 });
 
 export const insertStaffSchema = createInsertSchema(staff).omit({
