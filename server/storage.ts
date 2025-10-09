@@ -72,10 +72,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteStaff(id: string): Promise<void> {
-    const staffJobs = await db.select().from(jobs).where(eq(jobs.completedById, id));
-    if (staffJobs.length > 0) {
-      throw new Error("Cannot delete staff member with completed jobs");
-    }
+    await db
+      .update(jobs)
+      .set({ completedById: null })
+      .where(eq(jobs.completedById, id));
+    
     await db.delete(staff).where(eq(staff.id, id));
   }
 

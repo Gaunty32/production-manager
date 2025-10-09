@@ -160,7 +160,7 @@ export default function StaffPage() {
               <AlertDialogTitle>Delete Staff Member</AlertDialogTitle>
               <AlertDialogDescription>
                 Are you sure you want to delete this staff member? This action cannot be undone.
-                {" "}Note: You cannot delete staff members with completed jobs.
+                Any jobs assigned to this staff member will be unassigned.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

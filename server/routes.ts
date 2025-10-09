@@ -120,11 +120,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteStaff(req.params.id);
       res.json({ success: true });
     } catch (error) {
-      if (error instanceof Error && error.message === "Cannot delete staff member with completed jobs") {
-        res.status(400).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: "Failed to delete staff member" });
-      }
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to delete staff member" 
+      });
     }
   });
 

@@ -5,6 +5,14 @@
 This is a production management system for tracking customer orders, machine scheduling, and dispatch deadlines. The application helps manage manufacturing workflows by tracking jobs across multiple machines, monitoring deadlines, and ensuring timely completion of customer orders.
 
 **Recent Updates (Oct 9, 2025):**
+- **Staff management system**: Full CRUD operations for managing staff members who complete orders
+  - Staff deletion automatically unassigns all jobs (sets completedById to NULL) before removing the staff member
+  - Jobs remain in system and show "N/A" in Completed By column when unassigned
+- **Completed By tracking**: Added dropdown field to job creation/editing for selecting which staff member completed the order
+- **Staff display in production queue**: Added "Completed By" column showing staff member names (or "N/A" if unassigned)
+- **Staff page**: Dedicated /staff route with alphabetically sorted staff list and management interface
+- **Query optimization**: Standardized all queries to use default queryFn pattern for consistent error handling
+- **Error message surfacing**: All mutations now display actual server error messages instead of generic fallback messages
 - **Notes tooltip on hover**: Job notes now display in a tooltip when hovering over job rows in the production queue
 - **PO Number optional**: PO number field is now optional and can be left empty when creating/editing jobs
 - **Machine renaming**: Updated to real machine names - Barudan 8 (8 heads), Barudan, SWF, SWF (6 heads each)
@@ -144,6 +152,7 @@ The application is set up to integrate with Xero for invoice creation. To enable
 - `/api/logout` - End session and logout
 - `/api/customers` - Customer CRUD operations (protected)
 - `/api/jobs` - Job management with optional machine filtering (protected)
+- `/api/staff` - Staff management CRUD operations (protected)
 - `/api/xero/status` - Check Xero integration status (protected)
 - `/api/xero/invoice/:jobId` - Create invoice in Xero (protected)
 - Request/response validation using Zod schemas
@@ -160,9 +169,11 @@ The application is set up to integrate with Xero for invoice creation. To enable
 - `sessions` table: Stores user sessions for authentication (Passport.js)
 - `users` table: Stores user accounts with email, names, and profile images
 - `customers` table: Stores customer information with UUID primary keys
-- `jobs` table: Tracks production jobs with relationships to customers and machines
+- `staff` table: Stores staff member names with UUID primary keys
+- `jobs` table: Tracks production jobs with relationships to customers, machines, and staff members
 - Foreign key constraints ensuring referential integrity
 - Boolean flags for tracking logo approval and on-time completion status
+- Optional staff assignment to jobs via `completedById` field
 
 **Data Access Layer:**
 - Repository pattern implemented through `IStorage` interface
