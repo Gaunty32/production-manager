@@ -158,7 +158,7 @@ export default function Dashboard() {
     return (
       job.customerName.toLowerCase().includes(searchLower) ||
       job.jobName.toLowerCase().includes(searchLower) ||
-      job.poNumber.toLowerCase().includes(searchLower)
+      (job.poNumber && job.poNumber.toLowerCase().includes(searchLower))
     );
   });
 

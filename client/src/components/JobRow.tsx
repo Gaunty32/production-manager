@@ -1,6 +1,11 @@
 import { format, isPast, isToday } from "date-fns";
 import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { MachineBadge } from "./MachineBadge";
 import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
@@ -13,7 +18,7 @@ interface JobRowProps {
     customerId: string;
     customerName: string;
     jobName: string;
-    poNumber: string;
+    poNumber: string | null;
     logoApproved: boolean;
     quantity: number;
     stitchCount: number;
@@ -21,6 +26,7 @@ interface JobRowProps {
     requiredDispatchDate: Date;
     completedOnTime: boolean | null;
     machineId: number | null;
+    notes: string | null;
   };
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
@@ -32,7 +38,7 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
   
   const metrics = calculateProductionMetrics(job.quantity, job.stitchCount, job.machineId);
 
-  return (
+  const rowContent = (
     <tr
       className={cn(
         "hover-elevate",
@@ -93,4 +99,27 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
       </td>
     </tr>
   );
+
+  // Only show tooltip if notes exist
+  if (job.notes && job.notes.trim()) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {rowContent}
+        </TooltipTrigger>
+        <TooltipContent 
+          side="top" 
+          className="max-w-md whitespace-pre-wrap"
+          data-testid={`tooltip-notes-${job.id}`}
+        >
+          <div className="space-y-1">
+            <p className="font-semibold text-xs">Notes:</p>
+            <p className="text-sm">{job.notes}</p>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return rowContent;
 }
