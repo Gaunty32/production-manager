@@ -4,10 +4,12 @@
 
 This is a production management system for tracking customer orders, machine scheduling, and dispatch deadlines. The application helps manage manufacturing workflows by tracking jobs across multiple machines, monitoring deadlines, and ensuring timely completion of customer orders.
 
-**Recent Updates (Oct 8, 2025):**
+**Recent Updates (Oct 9, 2025):**
+- **PO Number optional**: PO number field is now optional and can be left empty when creating/editing jobs
+- **Machine renaming**: Updated to real machine names - Barudan 8 (8 heads), Barudan, SWF, SWF (6 heads each)
+- **Machine count reduced**: Removed Machine 5, now tracking 4 machines total
 - Implemented embroidery production metrics system with time calculations
 - Added stitch count field to job tracking (required field)
-- Machine specifications: Velocity (8 heads), others (6 heads each) @ 750 stitches/min
 - Production calculations: runs, time per run, total time with 3-min changeover
 - Implemented Replit Auth for user authentication (currently bypassed with guest access)
 - Prepared Xero API integration structure for invoice creation
@@ -49,16 +51,15 @@ When multiple visual indicators apply to a job, they are layered in this priorit
 The application calculates production time based on embroidery specifications:
 
 **Machine Specifications:**
-- **Velocity (Machine 1):** 8 heads - Best machine for high-volume orders
-- **Momentum (Machine 2):** 6 heads - Second tier machine
-- **Apex (Machine 3):** 6 heads - Second tier machine
-- **Surge (Machine 4):** 6 heads - Third tier machine
-- **Pinnacle (Machine 5):** 6 heads - Third tier machine
+- **Barudan 8 (Machine 1):** 8 heads - Best machine for high-volume orders
+- **Barudan (Machine 2):** 6 heads
+- **SWF (Machine 3):** 6 heads
+- **SWF (Machine 4):** 6 heads
 - All machines operate at 750 stitches per minute
 
 **Production Calculations:**
 - **Runs:** Number of production cycles = ceil(quantity / machine_heads)
-  - Example: 50 garments on Velocity (8 heads) = 7 runs
+  - Example: 50 garments on Barudan 8 (8 heads) = 7 runs
 - **Embroidery Time:** stitch_count / 750 stitches per minute
   - Example: 5000 stitches = 6.67 minutes embroidery time
 - **Time Per Run:** embroidery_time + 3 minutes changeover
