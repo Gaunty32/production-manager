@@ -5,6 +5,12 @@
 This is a production management system for tracking customer orders, machine scheduling, and dispatch deadlines. The application helps manage manufacturing workflows by tracking jobs across multiple machines, monitoring deadlines, and ensuring timely completion of customer orders.
 
 **Recent Updates (Oct 9, 2025):**
+- **Urgent Orders Summary**: Added visual summary sections at top of dashboard highlighting time-sensitive orders
+  - Overdue Orders section (red/destructive styling) shows orders past dispatch date
+  - Orders Due Today section (amber/yellow styling) shows orders due for dispatch today
+  - Each section displays up to 3 orders with customer and job name, plus count of additional orders
+  - Sections only appear when relevant orders exist (conditional rendering)
+- **Compact table layout**: Reduced padding and optimized spacing in production queue for better screen fit
 - **Sidebar navigation fix**: Always displays sidebar with menu toggle for all users (guest access enabled)
 - **Staff management system**: Full CRUD operations for managing staff members who complete orders
   - Staff deletion automatically unassigns all jobs (sets completedById to NULL) before removing the staff member
