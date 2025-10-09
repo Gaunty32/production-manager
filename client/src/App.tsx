@@ -67,7 +67,6 @@ export default function App() {
 
 function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   const { isAuthenticated, isLoading, user } = useAuth();
-  const [location] = useLocation();
 
   if (isLoading) {
     return (
@@ -77,12 +76,7 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
     );
   }
 
-  // Show landing page for unauthenticated users on root path only
-  if (!isAuthenticated && location === "/") {
-    return <Router />;
-  }
-
-  // For /dashboard route or other routes, show the full app even without auth
+  // Always show the full app with sidebar (guest access enabled)
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
