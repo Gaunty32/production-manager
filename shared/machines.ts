@@ -1,17 +1,15 @@
 export const MACHINE_NAMES: Record<number, string> = {
-  1: "Velocity",
-  2: "Momentum",
-  3: "Apex",
-  4: "Surge",
-  5: "Pinnacle",
+  1: "Barudan 8",
+  2: "Barudan",
+  3: "SWF",
+  4: "SWF",
 };
 
 export const MACHINE_HEADS: Record<number, number> = {
-  1: 8,  // Velocity - Best machine with 8 heads
-  2: 6,  // Momentum - Second tier with 6 heads
-  3: 6,  // Apex - Second tier with 6 heads
-  4: 6,  // Surge - Third tier with 6 heads
-  5: 6,  // Pinnacle - Third tier with 6 heads
+  1: 8,  // Barudan 8 - Best machine with 8 heads
+  2: 6,  // Barudan - 6 heads
+  3: 6,  // SWF - 6 heads
+  4: 6,  // SWF - 6 heads
 };
 
 export const STITCHES_PER_MINUTE = 750;

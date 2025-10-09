@@ -66,7 +66,7 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
       if (typeof val === "string") return parseInt(val, 10);
       return val;
     },
-    z.union([z.number().int().min(1).max(5), z.null()])
+    z.union([z.number().int().min(1).max(4), z.null()])
   ),
 });
 
@@ -100,7 +100,7 @@ export const updateJobSchema = z.object({
       if (typeof val === "string") return parseInt(val, 10);
       return val;
     },
-    z.union([z.number().int().min(1).max(5), z.null()]).optional()
+    z.union([z.number().int().min(1).max(4), z.null()]).optional()
   ),
   status: z.string().optional(),
   notes: z.string().optional(),
