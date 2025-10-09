@@ -1,4 +1,4 @@
-import { customers, jobs, users, type Customer, type InsertCustomer, type Job, type InsertJob, type User, type UpsertUser } from "@shared/schema";
+import { customers, jobs, users, staff, type Customer, type InsertCustomer, type Job, type InsertJob, type User, type UpsertUser, type Staff, type InsertStaff } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -8,6 +8,9 @@ export interface IStorage {
   getCustomers(): Promise<Customer[]>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   deleteCustomer(id: string): Promise<void>;
+  getStaff(): Promise<Staff[]>;
+  createStaff(staffMember: InsertStaff): Promise<Staff>;
+  deleteStaff(id: string): Promise<void>;
   getJobs(): Promise<Job[]>;
   getJobsByMachine(machineId: number): Promise<Job[]>;
   createJob(job: InsertJob): Promise<Job>;
@@ -54,6 +57,26 @@ export class DatabaseStorage implements IStorage {
       throw new Error("Cannot delete customer with existing jobs");
     }
     await db.delete(customers).where(eq(customers.id, id));
+  }
+
+  async getStaff(): Promise<Staff[]> {
+    return await db.select().from(staff);
+  }
+
+  async createStaff(insertStaff: InsertStaff): Promise<Staff> {
+    const [staffMember] = await db
+      .insert(staff)
+      .values(insertStaff)
+      .returning();
+    return staffMember;
+  }
+
+  async deleteStaff(id: string): Promise<void> {
+    const staffJobs = await db.select().from(jobs).where(eq(jobs.completedById, id));
+    if (staffJobs.length > 0) {
+      throw new Error("Cannot delete staff member with completed jobs");
+    }
+    await db.delete(staff).where(eq(staff.id, id));
   }
 
   async getJobs(): Promise<Job[]> {

@@ -30,6 +30,11 @@ export const customers = pgTable("customers", {
   name: text("name").notNull().unique(),
 });
 
+export const staff = pgTable("staff", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+});
+
 export const jobs = pgTable("jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
@@ -42,12 +47,17 @@ export const jobs = pgTable("jobs", {
   requiredDispatchDate: timestamp("required_dispatch_date").notNull(),
   completed: boolean("completed").notNull().default(false),
   completedOnTime: boolean("completed_on_time"),
+  completedById: varchar("completed_by_id").references(() => staff.id),
   machineId: integer("machine_id"),
   status: text("status").notNull().default("pending"),
   notes: text("notes"),
 });
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
+  id: true,
+});
+
+export const insertStaffSchema = createInsertSchema(staff).omit({
   id: true,
 });
 
@@ -104,11 +114,17 @@ export const updateJobSchema = z.object({
   ),
   status: z.string().optional(),
   notes: z.string().optional(),
+  completedById: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
 });
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
+export type InsertStaff = z.infer<typeof insertStaffSchema>;
+export type Staff = typeof staff.$inferSelect;
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Job = typeof jobs.$inferSelect;
