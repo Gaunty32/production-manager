@@ -54,6 +54,7 @@ const formSchema = z.object({
   machineId: z.number().nullable(),
   completed: z.boolean(),
   completedOnTime: z.boolean().nullable(),
+  completedById: z.string().nullable(),
   notes: z.string().optional(),
 });
 
@@ -73,13 +74,15 @@ interface JobEditDialogProps {
     machineId: number | null;
     completed: boolean;
     completedOnTime: boolean | null;
+    completedById: string | null;
     notes?: string | null;
   } | null;
   customers: Array<{ id: string; name: string }>;
+  staff: Array<{ id: string; name: string }>;
   onSubmit: (id: string, data: z.infer<typeof formSchema>) => void;
 }
 
-export function JobEditDialog({ open, onOpenChange, job, customers, onSubmit }: JobEditDialogProps) {
+export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSubmit }: JobEditDialogProps) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -94,6 +97,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, onSubmit }: 
       machineId: null,
       completed: false,
       completedOnTime: null,
+      completedById: null,
       notes: "",
     },
   });
@@ -112,6 +116,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, onSubmit }: 
         machineId: job.machineId,
         completed: job.completed,
         completedOnTime: job.completedOnTime,
+        completedById: job.completedById,
         notes: job.notes || "",
       });
     }
@@ -184,7 +189,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, onSubmit }: 
                   <FormItem>
                     <FormLabel>PO Number</FormLabel>
                     <FormControl>
-                      <Input {...field} className="font-mono" data-testid="input-edit-po-number" />
+                      <Input {...field} value={field.value || ""} className="font-mono" data-testid="input-edit-po-number" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -265,6 +270,35 @@ export function JobEditDialog({ open, onOpenChange, job, customers, onSubmit }: 
 
               <FormField
                 control={form.control}
+                name="completedById"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Completed By</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "unassigned" ? null : value)}
+                      value={field.value || "unassigned"}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-completed-by">
+                          <SelectValue placeholder="Select staff member" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Not assigned</SelectItem>
+                        {staff.map((staffMember) => (
+                          <SelectItem key={staffMember.id} value={staffMember.id}>
+                            {staffMember.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="machineId"
                 render={({ field }) => (
                   <FormItem>
@@ -284,7 +318,6 @@ export function JobEditDialog({ open, onOpenChange, job, customers, onSubmit }: 
                         <SelectItem value="2">{MACHINE_NAMES[2]}</SelectItem>
                         <SelectItem value="3">{MACHINE_NAMES[3]}</SelectItem>
                         <SelectItem value="4">{MACHINE_NAMES[4]}</SelectItem>
-                        <SelectItem value="5">{MACHINE_NAMES[5]}</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

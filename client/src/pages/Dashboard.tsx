@@ -10,7 +10,7 @@ import { JobRow } from "@/components/JobRow";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
-import type { Customer, Job } from "@shared/schema";
+import type { Customer, Job, Staff } from "@shared/schema";
 import { useParams } from "wouter";
 
 export default function Dashboard() {
@@ -20,32 +20,22 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingJob, setEditingJob] = useState<Job | null>(null);
 
-  const { data: customersData = [], isLoading: customersLoading, error: customersError } = useQuery<Customer[]>({
+  const { data: customersData = [], isLoading: customersLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
-    queryFn: async () => {
-      const response = await fetch("/api/customers");
-      if (!response.ok) {
-        throw new Error("Failed to fetch customers");
-      }
-      return response.json();
-    },
-    retry: false,
   });
 
   // Sort customers alphabetically by name
   const customers = [...customersData].sort((a, b) => a.name.localeCompare(b.name));
 
-  const { data: jobs = [], isLoading: jobsLoading, error: jobsError } = useQuery<Job[]>({
-    queryKey: machineId ? ["/api/jobs", machineId] : ["/api/jobs"],
-    queryFn: async () => {
-      const url = machineId ? `/api/jobs?machineId=${machineId}` : "/api/jobs";
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error("Failed to fetch jobs");
-      }
-      return response.json();
-    },
-    retry: false,
+  const { data: staffData = [], isLoading: staffLoading } = useQuery<Staff[]>({
+    queryKey: ["/api/staff"],
+  });
+
+  // Sort staff alphabetically by name
+  const staff = [...staffData].sort((a, b) => a.name.localeCompare(b.name));
+
+  const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
+    queryKey: machineId ? ["/api/jobs", `?machineId=${machineId}`] : ["/api/jobs"],
   });
 
   const createCustomerMutation = useMutation({
@@ -63,7 +53,7 @@ export default function Dashboard() {
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to add customer",
+        description: error.message || "Failed to add customer",
         variant: "destructive",
       });
     },
@@ -84,7 +74,7 @@ export default function Dashboard() {
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to create order",
+        description: error.message || "Failed to create order",
         variant: "destructive",
       });
     },
@@ -105,7 +95,7 @@ export default function Dashboard() {
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to delete order",
+        description: error.message || "Failed to delete order",
         variant: "destructive",
       });
     },
@@ -127,7 +117,7 @@ export default function Dashboard() {
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to update order",
+        description: error.message || "Failed to update order",
         variant: "destructive",
       });
     },
@@ -146,9 +136,11 @@ export default function Dashboard() {
 
   const jobsWithCustomers = jobs.map((job) => {
     const customer = customers.find((c) => c.id === job.customerId);
+    const staffMember = staff.find((s) => s.id === job.completedById);
     return {
       ...job,
       customerName: customer?.name || "Unknown",
+      completedByName: staffMember?.name || null,
     };
   });
 
@@ -170,7 +162,7 @@ export default function Dashboard() {
     ? `${getMachineName(machineId)} Orders` 
     : "Production Queue";
 
-  if (customersLoading || jobsLoading) {
+  if (customersLoading || jobsLoading || staffLoading) {
     return (
       <div className="h-full flex items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
@@ -206,6 +198,7 @@ export default function Dashboard() {
                 </Button>
               }
               customers={customers}
+              staff={staff}
               onSubmit={(data) => createJobMutation.mutate(data)}
             />
           </div>
@@ -267,6 +260,9 @@ export default function Dashboard() {
                     On Time
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Completed By
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Actions
                   </th>
                 </tr>
@@ -274,7 +270,7 @@ export default function Dashboard() {
               <tbody className="bg-card divide-y divide-border">
                 {sortedJobs.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={14} className="py-8 text-center text-muted-foreground">
                       {searchTerm ? "No orders match your search." : "No orders found. Click 'Add Order' to create one."}
                     </td>
                   </tr>
@@ -306,6 +302,7 @@ export default function Dashboard() {
             requiredDispatchDate: new Date(editingJob.requiredDispatchDate),
           } : null}
           customers={customers}
+          staff={staff}
           onSubmit={(id, data) => updateJobMutation.mutate({ id, data })}
         />
       </div>

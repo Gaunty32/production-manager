@@ -55,10 +55,11 @@ const formSchema = insertJobSchema.extend({
 interface JobFormDialogProps {
   trigger: React.ReactNode;
   customers: Array<{ id: string; name: string }>;
+  staff: Array<{ id: string; name: string }>;
   onSubmit: (data: z.infer<typeof formSchema>) => void;
 }
 
-export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogProps) {
+export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDialogProps) {
   const [open, setOpen] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -76,6 +77,7 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
       status: "pending",
       completed: false,
       completedOnTime: null,
+      completedById: null,
       notes: "",
     },
   });
@@ -145,7 +147,7 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
                   <FormItem>
                     <FormLabel>PO Number</FormLabel>
                     <FormControl>
-                      <Input {...field} className="font-mono" data-testid="input-po-number" />
+                      <Input {...field} value={field.value || ""} className="font-mono" data-testid="input-po-number" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -226,6 +228,35 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
 
               <FormField
                 control={form.control}
+                name="completedById"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Completed By</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "unassigned" ? null : value)}
+                      defaultValue={field.value || "unassigned"}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-completed-by">
+                          <SelectValue placeholder="Select staff member" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Not assigned</SelectItem>
+                        {staff.map((staffMember) => (
+                          <SelectItem key={staffMember.id} value={staffMember.id}>
+                            {staffMember.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="machineId"
                 render={({ field }) => (
                   <FormItem>
@@ -245,7 +276,6 @@ export function JobFormDialog({ trigger, customers, onSubmit }: JobFormDialogPro
                         <SelectItem value="2">{MACHINE_NAMES[2]}</SelectItem>
                         <SelectItem value="3">{MACHINE_NAMES[3]}</SelectItem>
                         <SelectItem value="4">{MACHINE_NAMES[4]}</SelectItem>
-                        <SelectItem value="5">{MACHINE_NAMES[5]}</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

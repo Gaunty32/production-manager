@@ -23,7 +23,6 @@ export default function Customers() {
 
   const { data: customersData = [], isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
-    retry: false,
   });
 
   // Sort customers alphabetically by name
@@ -44,7 +43,7 @@ export default function Customers() {
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to add customer",
+        description: error.message || "Failed to add customer",
         variant: "destructive",
       });
     },
@@ -53,10 +52,6 @@ export default function Customers() {
   const deleteCustomerMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("DELETE", `/api/customers/${id}`);
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Failed to delete customer");
-      }
       return res.json();
     },
     onSuccess: () => {

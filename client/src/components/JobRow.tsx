@@ -25,6 +25,7 @@ interface JobRowProps {
     dateReceived: Date;
     requiredDispatchDate: Date;
     completedOnTime: boolean | null;
+    completedByName: string | null;
     machineId: number | null;
     notes: string | null;
   };
@@ -75,6 +76,7 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
       <td className="py-3 px-4">
         <StatusBadge status={job.completedOnTime} type="ontime" />
       </td>
+      <td className="py-3 px-4 text-sm">{job.completedByName || "-"}</td>
       <td className="py-3 px-4">
         <div className="flex gap-1">
           <Button

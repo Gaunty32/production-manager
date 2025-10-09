@@ -23,7 +23,6 @@ export default function StaffPage() {
 
   const { data: staffData = [], isLoading } = useQuery<Staff[]>({
     queryKey: ["/api/staff"],
-    retry: false,
   });
 
   // Sort staff alphabetically by name
@@ -44,7 +43,7 @@ export default function StaffPage() {
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to add staff member",
+        description: error.message || "Failed to add staff member",
         variant: "destructive",
       });
     },
@@ -53,10 +52,6 @@ export default function StaffPage() {
   const deleteStaffMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("DELETE", `/api/staff/${id}`);
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Failed to delete staff member");
-      }
       return res.json();
     },
     onSuccess: () => {
