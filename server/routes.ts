@@ -1,7 +1,20 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCustomerSchema, updateCustomerSchema, insertStaffSchema, updateStaffSchema, insertJobSchema, updateJobSchema } from "@shared/schema";
+import { 
+  insertCustomerSchema, 
+  updateCustomerSchema, 
+  insertStaffSchema, 
+  updateStaffSchema, 
+  insertJobSchema, 
+  updateJobSchema,
+  insertStaffShiftSchema,
+  updateStaffShiftSchema,
+  insertMachineScheduleBlockSchema,
+  updateMachineScheduleBlockSchema,
+  insertJobScheduleSchema,
+  updateJobScheduleSchema
+} from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { xeroService } from "./xero";
@@ -218,6 +231,185 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete job" });
+    }
+  });
+
+  // Staff shift routes
+  app.get("/api/staff-shifts", optionalAuth, async (req, res) => {
+    try {
+      const { staffId, startDate, endDate } = req.query;
+      const shifts = await storage.getStaffShifts(
+        staffId as string | undefined,
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+      res.json(shifts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch staff shifts" });
+    }
+  });
+
+  app.post("/api/staff-shifts", optionalAuth, async (req, res) => {
+    try {
+      const data = insertStaffShiftSchema.parse(req.body);
+      const shift = await storage.createStaffShift(data);
+      res.json(shift);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create staff shift" });
+      }
+    }
+  });
+
+  app.patch("/api/staff-shifts/:id", optionalAuth, async (req, res) => {
+    try {
+      const data = updateStaffShiftSchema.parse(req.body);
+      const updates = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      );
+      const shift = await storage.updateStaffShift(req.params.id, updates);
+      res.json(shift);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : "Failed to update staff shift" 
+        });
+      }
+    }
+  });
+
+  app.delete("/api/staff-shifts/:id", optionalAuth, async (req, res) => {
+    try {
+      await storage.deleteStaffShift(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to delete staff shift" 
+      });
+    }
+  });
+
+  // Machine schedule block routes
+  app.get("/api/machine-schedule-blocks", optionalAuth, async (req, res) => {
+    try {
+      const { machineId, startDate, endDate } = req.query;
+      const blocks = await storage.getMachineScheduleBlocks(
+        machineId ? parseInt(machineId as string) : undefined,
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+      res.json(blocks);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch machine schedule blocks" });
+    }
+  });
+
+  app.post("/api/machine-schedule-blocks", optionalAuth, async (req, res) => {
+    try {
+      const data = insertMachineScheduleBlockSchema.parse(req.body);
+      const block = await storage.createMachineScheduleBlock(data);
+      res.json(block);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create machine schedule block" });
+      }
+    }
+  });
+
+  app.patch("/api/machine-schedule-blocks/:id", optionalAuth, async (req, res) => {
+    try {
+      const data = updateMachineScheduleBlockSchema.parse(req.body);
+      const updates = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      );
+      const block = await storage.updateMachineScheduleBlock(req.params.id, updates);
+      res.json(block);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : "Failed to update machine schedule block" 
+        });
+      }
+    }
+  });
+
+  app.delete("/api/machine-schedule-blocks/:id", optionalAuth, async (req, res) => {
+    try {
+      await storage.deleteMachineScheduleBlock(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to delete machine schedule block" 
+      });
+    }
+  });
+
+  // Job schedule routes
+  app.get("/api/job-schedules", optionalAuth, async (req, res) => {
+    try {
+      const { jobId, machineId, staffId, startDate, endDate } = req.query;
+      const schedules = await storage.getJobSchedules(
+        jobId as string | undefined,
+        machineId ? parseInt(machineId as string) : undefined,
+        staffId as string | undefined,
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+      res.json(schedules);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch job schedules" });
+    }
+  });
+
+  app.post("/api/job-schedules", optionalAuth, async (req, res) => {
+    try {
+      const data = insertJobScheduleSchema.parse(req.body);
+      const schedule = await storage.createJobSchedule(data);
+      res.json(schedule);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create job schedule" });
+      }
+    }
+  });
+
+  app.patch("/api/job-schedules/:id", optionalAuth, async (req, res) => {
+    try {
+      const data = updateJobScheduleSchema.parse(req.body);
+      const updates = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      );
+      const schedule = await storage.updateJobSchedule(req.params.id, updates);
+      res.json(schedule);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : "Failed to update job schedule" 
+        });
+      }
+    }
+  });
+
+  app.delete("/api/job-schedules/:id", optionalAuth, async (req, res) => {
+    try {
+      await storage.deleteJobSchedule(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to delete job schedule" 
+      });
     }
   });
 

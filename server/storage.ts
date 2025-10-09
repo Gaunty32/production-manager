@@ -51,7 +51,7 @@ export interface IStorage {
   updateMachineScheduleBlock(id: string, block: Partial<MachineScheduleBlock>): Promise<MachineScheduleBlock>;
   deleteMachineScheduleBlock(id: string): Promise<void>;
   
-  getJobSchedules(jobId?: string, startDate?: Date, endDate?: Date): Promise<JobSchedule[]>;
+  getJobSchedules(jobId?: string, machineId?: number, staffId?: string, startDate?: Date, endDate?: Date): Promise<JobSchedule[]>;
   createJobSchedule(schedule: InsertJobSchedule): Promise<JobSchedule>;
   updateJobSchedule(id: string, schedule: Partial<JobSchedule>): Promise<JobSchedule>;
   deleteJobSchedule(id: string): Promise<void>;
@@ -258,10 +258,16 @@ export class DatabaseStorage implements IStorage {
     await db.delete(machineScheduleBlocks).where(eq(machineScheduleBlocks.id, id));
   }
 
-  async getJobSchedules(jobId?: string, startDate?: Date, endDate?: Date): Promise<JobSchedule[]> {
+  async getJobSchedules(jobId?: string, machineId?: number, staffId?: string, startDate?: Date, endDate?: Date): Promise<JobSchedule[]> {
     const conditions = [];
     if (jobId) {
       conditions.push(eq(jobSchedule.jobId, jobId));
+    }
+    if (machineId) {
+      conditions.push(eq(jobSchedule.machineId, machineId));
+    }
+    if (staffId) {
+      conditions.push(eq(jobSchedule.staffId, staffId));
     }
     if (startDate) {
       conditions.push(gte(jobSchedule.scheduledDate, startDate));
