@@ -33,11 +33,8 @@ export default function StaffPage() {
 
   const createStaffMutation = useMutation({
     mutationFn: async (data: any) => {
-      console.log("Creating staff with data:", data);
       const res = await apiRequest("POST", "/api/staff", data);
-      const result = await res.json();
-      console.log("Staff created:", result);
-      return result;
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff"] });
@@ -47,7 +44,6 @@ export default function StaffPage() {
       });
     },
     onError: (error: Error) => {
-      console.error("Staff creation error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to add staff member",
