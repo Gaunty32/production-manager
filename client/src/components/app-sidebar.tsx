@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -15,6 +15,7 @@ import { MACHINE_NAMES } from "@shared/machines";
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "All Orders", url: "/orders", icon: ClipboardList },
+  { title: "Schedule", url: "/schedule", icon: Calendar },
   { title: "Customers", url: "/customers", icon: Users },
   { title: "Staff", url: "/staff", icon: UserCog },
 ];
@@ -55,7 +56,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {machineItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
+                <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton asChild isActive={location === item.url}>
                     <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
                       <item.icon className="h-4 w-4" />
