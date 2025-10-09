@@ -12,6 +12,7 @@ import { ShiftsManagement } from "@/components/ShiftsManagement";
 import { MachineBlocksManagement } from "@/components/MachineBlocksManagement";
 import { JobScheduleDialog } from "@/components/JobScheduleDialog";
 import { UnscheduledJobs } from "@/components/UnscheduledJobs";
+import { AvailabilitySummary } from "@/components/AvailabilitySummary";
 import type { JobSchedule, Staff, Job } from "@shared/schema";
 
 const MACHINES = [1, 2, 3, 4];
@@ -20,6 +21,8 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 export default function Schedule() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedStaff, setSelectedStaff] = useState<string | "all">("all");
+  const [selectedMachine, setSelectedMachine] = useState<number | "all">("all");
+  const [selectedStatus, setSelectedStatus] = useState<string | "all">("all");
 
   const { data: staff = [] } = useQuery<Staff[]>({
     queryKey: ["/api/staff"],
@@ -33,9 +36,19 @@ export default function Schedule() {
     queryKey: [`/api/job-schedules?date=${format(selectedDate, 'yyyy-MM-dd')}`],
   });
 
-  const filteredSchedules = selectedStaff === "all" 
-    ? schedules 
-    : schedules.filter(s => s.staffId === selectedStaff);
+  let filteredSchedules = schedules;
+  
+  if (selectedStaff !== "all") {
+    filteredSchedules = filteredSchedules.filter(s => s.staffId === selectedStaff);
+  }
+  
+  if (selectedMachine !== "all") {
+    filteredSchedules = filteredSchedules.filter(s => s.machineId === selectedMachine);
+  }
+  
+  if (selectedStatus !== "all") {
+    filteredSchedules = filteredSchedules.filter(s => s.status === selectedStatus);
+  }
 
   const getSchedulesForMachine = (machineId: number) => {
     return filteredSchedules.filter(s => s.machineId === machineId);
@@ -129,6 +142,36 @@ export default function Schedule() {
                     {s.name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+
+            <Select 
+              value={selectedMachine === "all" ? "all" : selectedMachine.toString()} 
+              onValueChange={(value) => setSelectedMachine(value === "all" ? "all" : parseInt(value))}
+            >
+              <SelectTrigger className="w-48" data-testid="select-machine-filter">
+                <SelectValue placeholder="Filter by machine" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Machines</SelectItem>
+                {Object.entries(MACHINE_NAMES).map(([id, name]) => (
+                  <SelectItem key={id} value={id}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger className="w-48" data-testid="select-status-filter">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
 
@@ -282,7 +325,8 @@ export default function Schedule() {
         </div>
           </div>
           
-          <div className="w-80 shrink-0 overflow-auto p-4">
+          <div className="w-80 shrink-0 overflow-auto p-4 space-y-4">
+            <AvailabilitySummary selectedDate={selectedDate} />
             <UnscheduledJobs />
           </div>
           </div>
