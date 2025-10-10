@@ -302,6 +302,9 @@ export default function Dashboard() {
                     Total
                   </th>
                   <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                    Price
+                  </th>
+                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
                     Dispatch
                   </th>
                   <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
@@ -318,23 +321,27 @@ export default function Dashboard() {
               <tbody className="bg-card divide-y divide-border">
                 {sortedJobs.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={13} className="py-8 text-center text-muted-foreground">
                       {searchTerm ? "No orders match your search." : "No orders found. Click 'Add Embroidery Order' to create one."}
                     </td>
                   </tr>
                 ) : (
-                  sortedJobs.map((job) => (
-                    <JobRow
-                      key={job.id}
-                      job={{
-                        ...job,
-                        dateReceived: new Date(job.dateReceived),
-                        requiredDispatchDate: new Date(job.requiredDispatchDate),
-                      }}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                    />
-                  ))
+                  sortedJobs.map((job) => {
+                    const customer = customers.find(c => c.id === job.customerId);
+                    return (
+                      <JobRow
+                        key={job.id}
+                        job={{
+                          ...job,
+                          dateReceived: new Date(job.dateReceived),
+                          requiredDispatchDate: new Date(job.requiredDispatchDate),
+                        }}
+                        customer={customer}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                      />
+                    );
+                  })
                 )}
               </tbody>
             </table>

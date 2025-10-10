@@ -11,7 +11,8 @@ import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import { calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
 import { getCustomerColorClasses } from "@shared/colors";
-import type { JobLineItem } from "@shared/schema";
+import { calculateJobPrice, formatPrice } from "@shared/pricing";
+import type { JobLineItem, Customer } from "@shared/schema";
 
 interface JobRowProps {
   job: {
@@ -29,11 +30,12 @@ interface JobRowProps {
     notes: string | null;
     lineItems?: JobLineItem[];
   };
+  customer?: Customer;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
+export function JobRow({ job, customer, onEdit, onDelete }: JobRowProps) {
   const isOverdue = isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = isToday(job.requiredDispatchDate);
   
@@ -46,6 +48,13 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
     : 0;
   
   const metrics = calculateProductionMetrics(job.quantity, weightedStitchCount, job.machineId);
+  
+  // Calculate job price
+  const jobPrice = customer && job.lineItems && job.lineItems.length > 0 ? (() => {
+    const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
+    if (!pricingTable) return null;
+    return calculateJobPrice(job.lineItems, pricingTable);
+  })() : null;
 
   return (
     <tr
@@ -136,6 +145,9 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
       </td>
       <td className="py-2 px-3 font-mono">
         {metrics ? formatTimeDisplay(metrics.totalTimeMinutes) : "-"}
+      </td>
+      <td className="py-2 px-3 font-mono whitespace-nowrap">
+        {jobPrice ? formatPrice(jobPrice.totalPrice) : <span className="text-muted-foreground">-</span>}
       </td>
       <td className="py-2 px-3 font-mono whitespace-nowrap">{format(job.requiredDispatchDate, "PP")}</td>
       <td className="py-2 px-3">
