@@ -89,6 +89,13 @@ export const jobSchedule = pgTable("job_schedule", {
   status: text("status").notNull().default("scheduled"),
 });
 
+export const jobLineItems = pgTable("job_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  quantity: integer("quantity").notNull(),
+  description: text("description"),
+});
+
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
 });
@@ -295,3 +302,10 @@ export type InsertMachineScheduleBlock = z.infer<typeof insertMachineScheduleBlo
 export type MachineScheduleBlock = typeof machineScheduleBlocks.$inferSelect;
 export type InsertJobSchedule = z.infer<typeof insertJobScheduleSchema>;
 export type JobSchedule = typeof jobSchedule.$inferSelect;
+
+export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
+  id: true,
+});
+
+export type InsertJobLineItem = z.infer<typeof insertJobLineItemSchema>;
+export type JobLineItem = typeof jobLineItems.$inferSelect;
