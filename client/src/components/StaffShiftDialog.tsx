@@ -49,19 +49,21 @@ const DAYS_OF_WEEK = [
 const shiftFormSchema = z.object({
   staffId: z.string().min(1, "Please select a staff member"),
   date: z.string().min(1, "Date is required"),
-  startTime: z.string().regex(/^\d{1,4}$/, "Start time must be in minutes (0-1439)"),
-  endTime: z.string().regex(/^\d{1,4}$/, "End time must be in minutes (0-1439)"),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Start time must be in HH:MM format"),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, "End time must be in HH:MM format"),
   isRecurring: z.boolean().default(false),
   recurringDayOfWeek: z.string().optional(),
   replicateDays: z.array(z.number()).default([]),
 }).refine(
   (data) => {
-    const start = parseInt(data.startTime);
-    const end = parseInt(data.endTime);
-    return start < end && start >= 0 && end <= 1439;
+    const [startHours, startMins] = data.startTime.split(':').map(Number);
+    const [endHours, endMins] = data.endTime.split(':').map(Number);
+    const startMinutes = startHours * 60 + startMins;
+    const endMinutes = endHours * 60 + endMins;
+    return startMinutes < endMinutes;
   },
   {
-    message: "End time must be after start time and within 0-1439 minutes",
+    message: "End time must be after start time",
     path: ["endTime"],
   }
 ).refine(
@@ -93,14 +95,25 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
     queryKey: ["/api/staff"],
   });
 
+  const minutesToTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  };
+
+  const timeToMinutes = (time: string): number => {
+    const [hours, mins] = time.split(':').map(Number);
+    return hours * 60 + mins;
+  };
+
   const form = useForm<ShiftFormValues>({
     resolver: zodResolver(shiftFormSchema),
     defaultValues: shift
       ? {
           staffId: shift.staffId,
           date: new Date(shift.date).toISOString().split('T')[0],
-          startTime: shift.startTime.toString(),
-          endTime: shift.endTime.toString(),
+          startTime: minutesToTime(shift.startTime),
+          endTime: minutesToTime(shift.endTime),
           isRecurring: shift.isRecurring,
           recurringDayOfWeek: shift.recurringDayOfWeek?.toString() || undefined,
           replicateDays: [],
@@ -108,8 +121,8 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
       : {
           staffId: "",
           date: new Date().toISOString().split('T')[0],
-          startTime: "540",
-          endTime: "1020",
+          startTime: "09:00",
+          endTime: "17:00",
           isRecurring: false,
           recurringDayOfWeek: undefined,
           replicateDays: [],
@@ -169,8 +182,8 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
       const data = {
         staffId: values.staffId,
         date: values.date,
-        startTime: parseInt(values.startTime),
-        endTime: parseInt(values.endTime),
+        startTime: timeToMinutes(values.startTime),
+        endTime: timeToMinutes(values.endTime),
         isRecurring: values.isRecurring,
         recurringDayOfWeek: values.isRecurring && values.recurringDayOfWeek 
           ? parseInt(values.recurringDayOfWeek) 
@@ -196,8 +209,8 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
         shifts.push({
           staffId: values.staffId,
           date: shiftDate.toISOString().split('T')[0],
-          startTime: parseInt(values.startTime),
-          endTime: parseInt(values.endTime),
+          startTime: timeToMinutes(values.startTime),
+          endTime: timeToMinutes(values.endTime),
           isRecurring: values.isRecurring,
           recurringDayOfWeek: values.isRecurring 
             ? targetDay
@@ -228,8 +241,8 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
       const data = {
         staffId: values.staffId,
         date: values.date,
-        startTime: parseInt(values.startTime),
-        endTime: parseInt(values.endTime),
+        startTime: timeToMinutes(values.startTime),
+        endTime: timeToMinutes(values.endTime),
         isRecurring: values.isRecurring,
         recurringDayOfWeek: values.isRecurring && values.recurringDayOfWeek 
           ? parseInt(values.recurringDayOfWeek) 
@@ -283,7 +296,7 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
         <DialogHeader>
           <DialogTitle>{shift ? "Edit" : "Add"} Staff Shift</DialogTitle>
           <DialogDescription>
-            {shift ? "Update" : "Create"} a working shift for a staff member. Time is in minutes from midnight (e.g., 540 = 9:00 AM).
+            {shift ? "Update" : "Create"} a working shift for a staff member
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -333,13 +346,10 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
                 name="startTime"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Time (minutes)</FormLabel>
+                    <FormLabel>Start Time</FormLabel>
                     <FormControl>
-                      <Input {...field} type="number" min="0" max="1439" data-testid="input-start-time" />
+                      <Input {...field} type="time" data-testid="input-start-time" />
                     </FormControl>
-                    <FormDescription className="text-xs">
-                      {field.value && formatTime(parseInt(field.value))}
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -350,13 +360,10 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
                 name="endTime"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>End Time (minutes)</FormLabel>
+                    <FormLabel>End Time</FormLabel>
                     <FormControl>
-                      <Input {...field} type="number" min="0" max="1439" data-testid="input-end-time" />
+                      <Input {...field} type="time" data-testid="input-end-time" />
                     </FormControl>
-                    <FormDescription className="text-xs">
-                      {field.value && formatTime(parseInt(field.value))}
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
