@@ -58,8 +58,6 @@ const formSchema = insertJobSchema.extend({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
-  quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
-  stitchCount: z.coerce.number().min(1, "Stitch count must be at least 1"),
 });
 
 interface JobFormDialogProps {
@@ -81,9 +79,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       customerId: "",
       jobName: "",
       poNumber: "",
-      logoApproved: false,
       quantity: 1,
-      stitchCount: 5000,
       dateReceived: new Date().toISOString(),
       requiredDispatchDate: new Date().toISOString(),
       machineId: null,
@@ -120,13 +116,18 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
     
     const machineId = values.machineId ? Number(values.machineId) : null;
     const totalQuantity = getTotalQuantity();
-    const stitchCount = Number(values.stitchCount) || 0;
+    
+    // Calculate weighted average stitch count from line items
+    const weightedStitchCount = lineItems.reduce((sum, item) => 
+      sum + (item.stitchCount * item.quantity), 0
+    ) / Math.max(totalQuantity, 1);
+    
     const requiredDispatchDate = values.requiredDispatchDate;
     
-    if (!machineId || totalQuantity <= 0 || stitchCount <= 0 || !requiredDispatchDate) {
+    if (!machineId || totalQuantity <= 0 || weightedStitchCount <= 0 || !requiredDispatchDate) {
       toast({
         title: "Missing Information",
-        description: "Please fill in Machine, Line Items, Stitch Count, and Required Dispatch Date first",
+        description: "Please fill in Machine, Line Items (with stitch counts), and Required Dispatch Date first",
         variant: "destructive",
       });
       return;
@@ -137,7 +138,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       const suggestResponse = await apiRequest("POST", "/api/suggest-schedule", {
         machineId,
         quantity: totalQuantity,
-        stitchCount,
+        stitchCount: Math.round(weightedStitchCount),
         requiredDispatchDate,
       });
       const response: any = await suggestResponse.json();
@@ -375,45 +376,6 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   </p>
                 </div>
               </div>
-
-              <FormField
-                control={form.control}
-                name="stitchCount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Stitch Count</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} className="font-mono" data-testid="input-stitch-count" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="logoApproved"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Logo Approved</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value === "true")}
-                      defaultValue={field.value ? "true" : "false"}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-logo-approved">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="true">Yes</SelectItem>
-                        <SelectItem value="false">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               <FormField
                 control={form.control}

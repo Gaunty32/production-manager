@@ -44,9 +44,7 @@ export const jobs = pgTable("jobs", {
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   jobName: text("job_name").notNull(),
   poNumber: text("po_number"),
-  logoApproved: boolean("logo_approved").notNull().default(false),
   quantity: integer("quantity").notNull(),
-  stitchCount: integer("stitch_count").notNull(),
   dateReceived: timestamp("date_received").notNull(),
   requiredDispatchDate: timestamp("required_dispatch_date").notNull(),
   completed: boolean("completed").notNull().default(false),
@@ -135,6 +133,7 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
     },
     z.union([z.number().int().min(1).max(4), z.null()])
   ),
+  quantity: z.coerce.number().int().min(1),
 });
 
 export const updateJobSchema = z.object({
@@ -144,9 +143,7 @@ export const updateJobSchema = z.object({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
-  logoApproved: z.coerce.boolean().optional(),
-  quantity: z.coerce.number().optional(),
-  stitchCount: z.coerce.number().optional(),
+  quantity: z.coerce.number().int().min(1).optional(),
   dateReceived: z.preprocess(
     (val) => val ? new Date(val as string) : undefined,
     z.date().optional()
