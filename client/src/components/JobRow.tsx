@@ -9,7 +9,7 @@ import {
 import { MachineBadge } from "./MachineBadge";
 import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
-import { calculateProductionMetrics } from "@shared/machines";
+import { calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
 import { getCustomerColorClasses } from "@shared/colors";
 
 interface JobRowProps {
@@ -70,7 +70,7 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
         {metrics ? `${metrics.timePerRunMinutes}m` : "-"}
       </td>
       <td className="py-2 px-3 font-mono">
-        {metrics ? `${metrics.totalTimeMinutes}m` : "-"}
+        {metrics ? formatTimeDisplay(metrics.totalTimeMinutes) : "-"}
       </td>
       <td className="py-2 px-3 font-mono whitespace-nowrap">{format(job.requiredDispatchDate, "PP")}</td>
       <td className="py-2 px-3">
