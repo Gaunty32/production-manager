@@ -111,9 +111,9 @@ export function getPrice(
     throw new Error(`No pricing tier found for quantity ${quantity}`);
   }
 
-  // Find the stitch count price
+  // Find the stitch count price (strict less than for upper bounds)
   const priceEntry = tier.prices.find(
-    (p) => p.maxStitches === null || stitchCount <= p.maxStitches
+    (p) => p.maxStitches === null || stitchCount < p.maxStitches
   );
 
   if (!priceEntry) {
