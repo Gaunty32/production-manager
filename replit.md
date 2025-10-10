@@ -66,6 +66,24 @@ The application uses PostgreSQL (Neon serverless database) with Drizzle ORM for 
 - Now correctly displays comma-separated recurring days (e.g., "Monday, Tuesday, Wednesday")
 - Uses `recurringDaysOfWeek` array from schema instead of singular property
 
+### Staff Machine Allocations System
+- New `staffMachineAllocations` table for tracking staff assignments to specific machines
+- Supports recurring allocations with day-of-week selection (similar to staff shifts)
+- UI features day checkboxes with Mon-Fri/Mon-Sat quick select buttons
+- Added "Staff Allocations" tab to Schedule Management page
+- Full CRUD operations: create, edit, delete staff machine allocations
+- Backend validation ensures recurring allocations have at least one day selected
+- Enables tracking which staff members operate which machines on specific days
+
+### Dashboard Pricing Display
+- Added "Price" column to production queue dashboard
+- Displays calculated job prices based on customer's pricing table (2025/2026)
+- Shows £X.XX format for standard pricing
+- Shows "-" when customer has no pricing table configured
+- Shows "POA" for Price on Application cases (50,000+ stitches)
+- Pricing calculated using weighted stitch counts from all line items
+- Provides at-a-glance cost visibility for all jobs in the queue
+
 ## External Dependencies
 
 - **Database Service**: Neon Serverless PostgreSQL (@neondatabase/serverless)
