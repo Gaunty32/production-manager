@@ -52,7 +52,6 @@ const shiftFormSchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "Start time must be in HH:MM format"),
   endTime: z.string().regex(/^\d{2}:\d{2}$/, "End time must be in HH:MM format"),
   isRecurring: z.boolean().default(false),
-  recurringDayOfWeek: z.string().optional(),
   replicateDays: z.array(z.number()).default([]),
 }).refine(
   (data) => {
@@ -65,17 +64,6 @@ const shiftFormSchema = z.object({
   {
     message: "End time must be after start time",
     path: ["endTime"],
-  }
-).refine(
-  (data) => {
-    if (data.isRecurring && !data.recurringDayOfWeek) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "Day of week is required for recurring shifts",
-    path: ["recurringDayOfWeek"],
   }
 );
 
@@ -115,7 +103,6 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
           startTime: minutesToTime(shift.startTime),
           endTime: minutesToTime(shift.endTime),
           isRecurring: shift.isRecurring,
-          recurringDayOfWeek: shift.recurringDayOfWeek?.toString() || undefined,
           replicateDays: [],
         }
       : {
@@ -124,7 +111,6 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
           startTime: "09:00",
           endTime: "17:00",
           isRecurring: false,
-          recurringDayOfWeek: undefined,
           replicateDays: [],
         },
   });
@@ -178,15 +164,15 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
 
   const onSubmit = async (values: ShiftFormValues) => {
     if (shift) {
-      // Update existing shift
+      // Update existing shift - keep the existing recurringDayOfWeek
       const data = {
         staffId: values.staffId,
         date: values.date,
         startTime: timeToMinutes(values.startTime),
         endTime: timeToMinutes(values.endTime),
         isRecurring: values.isRecurring,
-        recurringDayOfWeek: values.isRecurring && values.recurringDayOfWeek 
-          ? parseInt(values.recurringDayOfWeek) 
+        recurringDayOfWeek: values.isRecurring && shift.recurringDayOfWeek 
+          ? shift.recurringDayOfWeek 
           : null,
       };
       updateMutation.mutate(data);
@@ -237,16 +223,15 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
         });
       }
     } else {
-      // Create single shift
+      // Create single shift - use the day of week from the selected date if recurring
+      const shiftDate = new Date(values.date);
       const data = {
         staffId: values.staffId,
         date: values.date,
         startTime: timeToMinutes(values.startTime),
         endTime: timeToMinutes(values.endTime),
         isRecurring: values.isRecurring,
-        recurringDayOfWeek: values.isRecurring && values.recurringDayOfWeek 
-          ? parseInt(values.recurringDayOfWeek) 
-          : null,
+        recurringDayOfWeek: values.isRecurring ? shiftDate.getDay() : null,
       };
       createMutation.mutate(data);
     }
@@ -370,61 +355,12 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="isRecurring"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Recurring Shift</FormLabel>
-                    <FormDescription>
-                      Repeat this shift every week
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      data-testid="switch-recurring"
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {isRecurring && (
-              <FormField
-                control={form.control}
-                name="recurringDayOfWeek"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Day of Week</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-day-of-week">
-                          <SelectValue placeholder="Select day" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {DAYS_OF_WEEK.map((day) => (
-                          <SelectItem key={day.value} value={day.value.toString()}>
-                            {day.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
             {!shift && (
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <FormLabel>Replicate to Multiple Days</FormLabel>
+                  <FormLabel>Select Days of Week</FormLabel>
                   <FormDescription className="text-xs">
-                    Select days of the week to create this shift pattern
+                    Choose which days this shift should be created for
                   </FormDescription>
                 </div>
                 
@@ -476,6 +412,28 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
                     </div>
                   ))}
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="isRecurring"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel>Make Recurring</FormLabel>
+                        <FormDescription>
+                          Repeat these shifts every week on the selected days
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-recurring"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
               </div>
             )}
 
