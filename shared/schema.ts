@@ -98,6 +98,17 @@ export const jobLineItems = pgTable("job_line_items", {
   logoApproved: boolean("logo_approved").notNull().default(false),
 });
 
+export const staffMachineAllocations = pgTable("staff_machine_allocations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  staffId: varchar("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
+  machineId: integer("machine_id").notNull(),
+  date: timestamp("date").notNull(),
+  startTime: integer("start_time").notNull(),
+  endTime: integer("end_time").notNull(),
+  isRecurring: boolean("is_recurring").notNull().default(false),
+  recurringDaysOfWeek: integer("recurring_days_of_week").array(),
+});
+
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
 });
@@ -336,3 +347,57 @@ export type JobLineItem = typeof jobLineItems.$inferSelect;
 export type JobWithLineItems = Job & {
   lineItems: JobLineItem[];
 };
+
+export const insertStaffMachineAllocationSchema = createInsertSchema(staffMachineAllocations).omit({
+  id: true,
+}).extend({
+  date: z.string(),
+  machineId: z.number().int().min(1).max(4),
+  startTime: z.number().int().min(0).max(1440),
+  endTime: z.number().int().min(0).max(1440),
+  isRecurring: z.boolean().default(false),
+  recurringDaysOfWeek: z.array(z.number().int().min(0).max(6)).nullable().optional(),
+}).refine(
+  (data) => data.endTime > data.startTime,
+  { message: "End time must be after start time" }
+).refine(
+  (data) => {
+    if (data.isRecurring) {
+      return data.recurringDaysOfWeek && data.recurringDaysOfWeek.length > 0;
+    }
+    return true;
+  },
+  { message: "At least one day must be selected for recurring allocations" }
+);
+
+export const updateStaffMachineAllocationSchema = z.object({
+  staffId: z.string().optional(),
+  machineId: z.number().int().min(1).max(4).optional(),
+  date: z.preprocess(
+    (val) => val ? new Date(val as string) : undefined,
+    z.date().optional()
+  ),
+  startTime: z.number().int().min(0).max(1440).optional(),
+  endTime: z.number().int().min(0).max(1440).optional(),
+  isRecurring: z.boolean().optional(),
+  recurringDaysOfWeek: z.array(z.number().int().min(0).max(6)).nullable().optional(),
+}).refine(
+  (data) => {
+    if (data.startTime !== undefined && data.endTime !== undefined) {
+      return data.endTime > data.startTime;
+    }
+    return true;
+  },
+  { message: "End time must be after start time" }
+).refine(
+  (data) => {
+    if (data.isRecurring === true) {
+      return data.recurringDaysOfWeek && data.recurringDaysOfWeek.length > 0;
+    }
+    return true;
+  },
+  { message: "At least one day must be selected for recurring allocations" }
+);
+
+export type InsertStaffMachineAllocation = z.infer<typeof insertStaffMachineAllocationSchema>;
+export type StaffMachineAllocation = typeof staffMachineAllocations.$inferSelect;

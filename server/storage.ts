@@ -7,6 +7,7 @@ import {
   machineScheduleBlocks,
   jobSchedule,
   jobLineItems,
+  staffMachineAllocations,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -22,7 +23,9 @@ import {
   type JobSchedule,
   type InsertJobSchedule,
   type JobLineItem,
-  type InsertJobLineItem
+  type InsertJobLineItem,
+  type StaffMachineAllocation,
+  type InsertStaffMachineAllocation
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte } from "drizzle-orm";
@@ -64,6 +67,11 @@ export interface IStorage {
   createJobLineItem(lineItem: InsertJobLineItem): Promise<JobLineItem>;
   updateJobLineItem(id: string, lineItem: Partial<JobLineItem>): Promise<JobLineItem>;
   deleteJobLineItem(id: string): Promise<void>;
+  
+  getStaffMachineAllocations(staffId?: string, machineId?: number, startDate?: Date, endDate?: Date): Promise<StaffMachineAllocation[]>;
+  createStaffMachineAllocation(allocation: InsertStaffMachineAllocation): Promise<StaffMachineAllocation>;
+  updateStaffMachineAllocation(id: string, allocation: Partial<StaffMachineAllocation>): Promise<StaffMachineAllocation>;
+  deleteStaffMachineAllocation(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -345,6 +353,52 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobLineItem(id: string): Promise<void> {
     await db.delete(jobLineItems).where(eq(jobLineItems.id, id));
+  }
+
+  async getStaffMachineAllocations(staffId?: string, machineId?: number, startDate?: Date, endDate?: Date): Promise<StaffMachineAllocation[]> {
+    const conditions = [];
+    if (staffId) {
+      conditions.push(eq(staffMachineAllocations.staffId, staffId));
+    }
+    if (machineId) {
+      conditions.push(eq(staffMachineAllocations.machineId, machineId));
+    }
+    if (startDate) {
+      conditions.push(gte(staffMachineAllocations.date, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(staffMachineAllocations.date, endDate));
+    }
+    
+    if (conditions.length === 0) {
+      return await db.select().from(staffMachineAllocations);
+    }
+    return await db.select().from(staffMachineAllocations).where(and(...conditions));
+  }
+
+  async createStaffMachineAllocation(insertAllocation: InsertStaffMachineAllocation): Promise<StaffMachineAllocation> {
+    const [allocation] = await db
+      .insert(staffMachineAllocations)
+      .values({
+        ...insertAllocation,
+        date: new Date(insertAllocation.date),
+      })
+      .returning();
+    return allocation;
+  }
+
+  async updateStaffMachineAllocation(id: string, updates: Partial<StaffMachineAllocation>): Promise<StaffMachineAllocation> {
+    const [allocation] = await db
+      .update(staffMachineAllocations)
+      .set(updates)
+      .where(eq(staffMachineAllocations.id, id))
+      .returning();
+    if (!allocation) throw new Error("Staff machine allocation not found");
+    return allocation;
+  }
+
+  async deleteStaffMachineAllocation(id: string): Promise<void> {
+    await db.delete(staffMachineAllocations).where(eq(staffMachineAllocations.id, id));
   }
 }
 

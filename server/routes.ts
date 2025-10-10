@@ -15,7 +15,9 @@ import {
   insertJobScheduleSchema,
   updateJobScheduleSchema,
   insertJobLineItemSchema,
-  updateJobLineItemSchema
+  updateJobLineItemSchema,
+  insertStaffMachineAllocationSchema,
+  updateStaffMachineAllocationSchema
 } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
@@ -573,6 +575,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: error instanceof Error ? error.message : "Failed to suggest schedule" 
       });
+    }
+  });
+
+  // Staff machine allocation routes
+  app.get("/api/staff-machine-allocations", optionalAuth, async (req, res) => {
+    try {
+      const { staffId, machineId, startDate, endDate } = req.query;
+      const allocations = await storage.getStaffMachineAllocations(
+        staffId as string | undefined,
+        machineId ? parseInt(machineId as string) : undefined,
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+      res.json(allocations);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch staff machine allocations" });
+    }
+  });
+
+  app.post("/api/staff-machine-allocations", optionalAuth, async (req, res) => {
+    try {
+      const data = insertStaffMachineAllocationSchema.parse(req.body);
+      const allocation = await storage.createStaffMachineAllocation(data);
+      res.json(allocation);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create staff machine allocation" });
+      }
+    }
+  });
+
+  app.patch("/api/staff-machine-allocations/:id", optionalAuth, async (req, res) => {
+    try {
+      const data = updateStaffMachineAllocationSchema.parse(req.body);
+      const allocation = await storage.updateStaffMachineAllocation(req.params.id, data);
+      res.json(allocation);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : "Failed to update staff machine allocation" 
+        });
+      }
+    }
+  });
+
+  app.delete("/api/staff-machine-allocations/:id", optionalAuth, async (req, res) => {
+    try {
+      await storage.deleteStaffMachineAllocation(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete staff machine allocation" });
     }
   });
 
