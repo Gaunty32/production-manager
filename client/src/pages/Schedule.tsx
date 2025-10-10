@@ -10,6 +10,7 @@ import { MACHINE_NAMES } from "@shared/machines";
 import { cn } from "@/lib/utils";
 import { ShiftsManagement } from "@/components/ShiftsManagement";
 import { MachineBlocksManagement } from "@/components/MachineBlocksManagement";
+import { StaffMachineAllocations } from "@/components/StaffMachineAllocations";
 import { JobScheduleDialog } from "@/components/JobScheduleDialog";
 import { UnscheduledJobs } from "@/components/UnscheduledJobs";
 import { AvailabilitySummary } from "@/components/AvailabilitySummary";
@@ -93,6 +94,7 @@ export default function Schedule() {
             <TabsTrigger value="timeline" data-testid="tab-timeline">Timeline</TabsTrigger>
             <TabsTrigger value="shifts" data-testid="tab-shifts">Staff Shifts</TabsTrigger>
             <TabsTrigger value="blocks" data-testid="tab-blocks">Machine Blocks</TabsTrigger>
+            <TabsTrigger value="allocations" data-testid="tab-allocations">Staff Allocations</TabsTrigger>
           </TabsList>
 
           <TabsContent value="timeline" className="mt-4">
@@ -340,6 +342,10 @@ export default function Schedule() {
 
           <TabsContent value="blocks" className="mt-4">
             <MachineBlocksManagement />
+          </TabsContent>
+
+          <TabsContent value="allocations" className="mt-4">
+            <StaffMachineAllocations />
           </TabsContent>
         </Tabs>
       </div>
