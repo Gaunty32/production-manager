@@ -10,7 +10,7 @@ import { JobRow } from "@/components/JobRow";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
-import type { Customer, Job, Staff } from "@shared/schema";
+import type { Customer, Job, JobWithLineItems, Staff } from "@shared/schema";
 import { useParams } from "wouter";
 import { isPast, isToday } from "date-fns";
 
@@ -35,7 +35,7 @@ export default function Dashboard() {
   // Sort staff alphabetically by name
   const staff = [...staffData].sort((a, b) => a.name.localeCompare(b.name));
 
-  const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
+  const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithLineItems[]>({
     queryKey: machineId ? ["/api/jobs", `?machineId=${machineId}`] : ["/api/jobs"],
   });
 

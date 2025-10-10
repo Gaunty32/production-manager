@@ -185,7 +185,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobs = await storage.getJobs();
       }
       
-      res.json(jobs);
+      // Enrich each job with its line items
+      const jobsWithLineItems = await Promise.all(
+        jobs.map(async (job) => ({
+          ...job,
+          lineItems: await storage.getJobLineItems(job.id),
+        }))
+      );
+      
+      res.json(jobsWithLineItems);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch jobs" });
     }

@@ -314,3 +314,7 @@ export const updateJobLineItemSchema = z.object({
 
 export type InsertJobLineItem = z.infer<typeof insertJobLineItemSchema>;
 export type JobLineItem = typeof jobLineItems.$inferSelect;
+
+export type JobWithLineItems = Job & {
+  lineItems: JobLineItem[];
+};

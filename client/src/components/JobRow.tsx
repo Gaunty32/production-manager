@@ -1,5 +1,5 @@
 import { format, isPast, isToday } from "date-fns";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -11,6 +11,7 @@ import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import { calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
 import { getCustomerColorClasses } from "@shared/colors";
+import type { JobLineItem } from "@shared/schema";
 
 interface JobRowProps {
   job: {
@@ -28,6 +29,7 @@ interface JobRowProps {
     completedByName: string | null;
     machineId: number | null;
     notes: string | null;
+    lineItems?: JobLineItem[];
   };
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
@@ -39,7 +41,7 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
   
   const metrics = calculateProductionMetrics(job.quantity, job.stitchCount, job.machineId);
 
-  const rowContent = (
+  return (
     <tr
       className={cn(
         "hover-elevate",
@@ -53,12 +55,67 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
       data-testid={`row-job-${job.id}`}
     >
       <td className="py-2 px-3">{job.customerName}</td>
-      <td className="py-2 px-3">{job.jobName}</td>
+      <td className="py-2 px-3">
+        <div className="flex items-center gap-2">
+          <span>{job.jobName}</span>
+          {job.notes && job.notes.trim() && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button 
+                  className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
+                  aria-label="View notes"
+                  data-testid={`button-notes-${job.id}`}
+                >
+                  <StickyNote className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent 
+                side="top" 
+                className="max-w-md whitespace-pre-wrap"
+                data-testid={`tooltip-notes-${job.id}`}
+              >
+                <div className="space-y-1">
+                  <p className="font-semibold text-xs">Notes:</p>
+                  <p className="text-sm">{job.notes}</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </td>
       <td className="py-2 px-3 font-mono">{job.poNumber}</td>
       <td className="py-2 px-3">
         <StatusBadge status={job.logoApproved} type="logo" />
       </td>
-      <td className="py-2 px-3 font-mono">{job.quantity}</td>
+      <td className="py-2 px-3 font-mono">
+        {job.lineItems && job.lineItems.length > 0 ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button 
+                className="inline-flex items-center gap-1 text-left font-mono hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm px-1 -mx-1"
+                aria-label={`View line items breakdown for ${job.quantity} total items`}
+                data-testid={`button-quantity-${job.id}`}
+              >
+                <span>{job.quantity}</span>
+                {job.lineItems.length > 1 && <span className="text-muted-foreground">({job.lineItems.length} items)</span>}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-sm">
+              <div className="space-y-1">
+                <p className="font-semibold text-xs">Line Items:</p>
+                {job.lineItems.map((item, idx) => (
+                  <div key={item.id} className="text-sm flex justify-between gap-3">
+                    <span>{item.description || `Item ${idx + 1}`}</span>
+                    <span className="font-mono">{item.quantity}</span>
+                  </div>
+                ))}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <span data-testid={`text-quantity-${job.id}`}>{job.quantity}</span>
+        )}
+      </td>
       <td className="py-2 px-3 font-mono">{job.stitchCount.toLocaleString()}</td>
       <td className="py-2 px-3">
         <MachineBadge machineId={job.machineId} />
@@ -101,27 +158,4 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
       </td>
     </tr>
   );
-
-  // Only show tooltip if notes exist
-  if (job.notes && job.notes.trim()) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          {rowContent}
-        </TooltipTrigger>
-        <TooltipContent 
-          side="top" 
-          className="max-w-md whitespace-pre-wrap"
-          data-testid={`tooltip-notes-${job.id}`}
-        >
-          <div className="space-y-1">
-            <p className="font-semibold text-xs">Notes:</p>
-            <p className="text-sm">{job.notes}</p>
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  return rowContent;
 }
