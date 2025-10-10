@@ -231,9 +231,9 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Production Order</DialogTitle>
+          <DialogTitle>Add Embroidery Order</DialogTitle>
           <DialogDescription>
-            Create a new production order for embroidery work
+            Create a new embroidery order for production
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -601,7 +601,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                 }}
                 data-testid="button-create-order"
               >
-                Add Order
+                Add Embroidery Order
               </Button>
             </div>
           </form>
