@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
 import { MACHINE_NAMES } from "@shared/machines";
 import { z } from "zod";
 import {
@@ -35,9 +36,18 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Plus, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
+
+type LineItem = {
+  id?: string;
+  quantity: number;
+  description: string;
+  stitchCount: number;
+  logoApproved: boolean;
+};
 
 const formSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
@@ -77,6 +87,9 @@ interface JobEditDialogProps {
 }
 
 export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSubmit }: JobEditDialogProps) {
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [deletedLineItemIds, setDeletedLineItemIds] = useState<string[]>([]);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -91,6 +104,18 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       completedById: null,
       notes: "",
     },
+  });
+
+  // Fetch line items for the job
+  const { data: fetchedLineItems } = useQuery<Array<{
+    id: string;
+    quantity: number;
+    description: string | null;
+    stitchCount: number;
+    logoApproved: boolean;
+  }>>({
+    queryKey: ['/api/jobs', job?.id, 'line-items'],
+    enabled: !!job?.id && open,
   });
 
   useEffect(() => {
@@ -110,9 +135,77 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     }
   }, [job, form]);
 
-  const handleSubmit = (data: z.infer<typeof formSchema>) => {
+  useEffect(() => {
+    if (fetchedLineItems && open) {
+      setLineItems(fetchedLineItems.map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+        description: item.description || "",
+        stitchCount: item.stitchCount,
+        logoApproved: item.logoApproved,
+      })));
+      setDeletedLineItemIds([]);
+    }
+  }, [fetchedLineItems, open]);
+
+  const addLineItem = () => {
+    setLineItems([...lineItems, { quantity: 1, description: "", stitchCount: 5000, logoApproved: false }]);
+  };
+
+  const removeLineItem = (index: number) => {
+    const item = lineItems[index];
+    if (item.id) {
+      setDeletedLineItemIds([...deletedLineItemIds, item.id]);
+    }
+    setLineItems(lineItems.filter((_, i) => i !== index));
+  };
+
+  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean) => {
+    const updated = [...lineItems];
+    updated[index] = { ...updated[index], [field]: value };
+    setLineItems(updated);
+  };
+
+  const getTotalQuantity = () => {
+    return lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  };
+
+  const handleSubmit = async (data: z.infer<typeof formSchema>) => {
     if (job) {
+      // Update the main job
       onSubmit(job.id, data);
+
+      // Handle line item updates
+      try {
+        // Delete removed line items
+        for (const id of deletedLineItemIds) {
+          await apiRequest("DELETE", `/api/job-line-items/${id}`);
+        }
+
+        // Create or update line items
+        for (const item of lineItems) {
+          if (item.id) {
+            // Update existing line item
+            await apiRequest("PATCH", `/api/job-line-items/${item.id}`, {
+              quantity: item.quantity,
+              description: item.description || null,
+              stitchCount: item.stitchCount,
+              logoApproved: item.logoApproved,
+            });
+          } else {
+            // Create new line item
+            await apiRequest("POST", `/api/jobs/${job.id}/line-items`, {
+              quantity: item.quantity,
+              description: item.description || null,
+              stitchCount: item.stitchCount,
+              logoApproved: item.logoApproved,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error updating line items:', error);
+      }
+
       onOpenChange(false);
     }
   };
@@ -183,6 +276,92 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                   </FormItem>
                 )}
               />
+
+              <div className="md:col-span-2">
+                <FormLabel>Line Items</FormLabel>
+                <div className="space-y-3 mt-2">
+                  {lineItems.map((item, index) => (
+                    <div key={index} className="border rounded-md p-3 space-y-2">
+                      <div className="flex gap-2 items-start">
+                        <div className="flex-1">
+                          <label className="text-xs text-muted-foreground">Quantity</label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              updateLineItem(index, 'quantity', Math.max(1, val));
+                            }}
+                            placeholder="Quantity"
+                            className="font-mono mt-1"
+                            data-testid={`input-edit-line-item-quantity-${index}`}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-xs text-muted-foreground">Stitch Count</label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={item.stitchCount}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              updateLineItem(index, 'stitchCount', Math.max(1, val));
+                            }}
+                            placeholder="Stitch count"
+                            className="font-mono mt-1"
+                            data-testid={`input-edit-line-item-stitch-count-${index}`}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 pt-5">
+                          <Checkbox
+                            id={`edit-logo-approved-${index}`}
+                            checked={item.logoApproved}
+                            onCheckedChange={(checked) => updateLineItem(index, 'logoApproved', checked === true)}
+                            data-testid={`checkbox-edit-line-item-logo-approved-${index}`}
+                          />
+                          <label htmlFor={`edit-logo-approved-${index}`} className="text-sm cursor-pointer">Logo Approved</label>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeLineItem(index)}
+                          disabled={lineItems.length === 1}
+                          data-testid={`button-edit-remove-line-item-${index}`}
+                          className="mt-5"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">Description</label>
+                        <Input
+                          value={item.description}
+                          onChange={(e) => updateLineItem(index, 'description', e.target.value)}
+                          placeholder="Description (e.g., Size M, Color Red)"
+                          className="mt-1"
+                          data-testid={`input-edit-line-item-description-${index}`}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addLineItem}
+                    className="w-full"
+                    data-testid="button-edit-add-line-item"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Line Item
+                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    Total Quantity: <span className="font-mono font-semibold">{getTotalQuantity()}</span>
+                  </p>
+                </div>
+              </div>
 
               <FormField
                 control={form.control}
