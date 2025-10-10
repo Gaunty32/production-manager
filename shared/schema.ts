@@ -311,7 +311,7 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
     (val) => val === true || val === 'true' || val === 1 || val === '1',
     z.boolean()
   ).default(false),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
 });
 
 export const updateJobLineItemSchema = z.object({
