@@ -35,6 +35,8 @@ The application uses PostgreSQL (Neon serverless database) with Drizzle ORM for 
 
 - **Multi-Line Item Jobs**: Supports multiple line items per job, each with its own quantity, stitch count, and logo approval status. Line items are immutable post-creation.
 - **Job Scheduling System**: Combines machine availability and staff shifts to schedule jobs, preventing double-bookings and finding optimal slots. Includes UI for managing shifts and machine downtime.
+- **Simplified Staff Shift System**: Staff shifts redesigned for efficiency - ONE shift record can now apply to multiple days via a `recurringDaysOfWeek` array (e.g., [1,2,3,4,5] for Mon-Fri). This eliminates duplicate shift records and simplifies management. The UI features day checkboxes with Mon-Fri/Mon-Sat quick select buttons and a recurring toggle. Backend and frontend validation ensures recurring shifts must have at least one day selected.
+- **Customer Pricing Tables**: Customers can be marked with 2025 or 2026 pricing tables for accurate quote generation based on stitch count and quantity.
 - **Staff and Customer Management**: Full CRUD operations for staff members and customers, including contact details.
 - **Production Calculations**: Calculates production runs, time per run (including changeover), and total production time based on stitch count and machine specifications.
 - **Optional Fields**: PO Number is optional; job notes are supported.
