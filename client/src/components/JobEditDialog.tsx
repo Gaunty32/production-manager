@@ -39,7 +39,8 @@ import {
 import { CalendarIcon, Plus, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 type LineItem = {
   id?: string;
@@ -87,6 +88,7 @@ interface JobEditDialogProps {
 }
 
 export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSubmit }: JobEditDialogProps) {
+  const { toast } = useToast();
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [deletedLineItemIds, setDeletedLineItemIds] = useState<string[]>([]);
 
@@ -116,6 +118,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }>>({
     queryKey: ['/api/jobs', job?.id, 'line-items'],
     enabled: !!job?.id && open,
+    refetchOnMount: 'always',
   });
 
   useEffect(() => {
@@ -172,11 +175,11 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
 
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
     if (job) {
-      // Update the main job
-      onSubmit(job.id, data);
-
-      // Handle line item updates
       try {
+        // Update the main job first
+        await apiRequest("PATCH", `/api/jobs/${job.id}`, data);
+
+        // Handle line item updates
         // Delete removed line items
         for (const id of deletedLineItemIds) {
           await apiRequest("DELETE", `/api/job-line-items/${id}`);
@@ -202,11 +205,25 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
             });
           }
         }
-      } catch (error) {
-        console.error('Error updating line items:', error);
-      }
 
-      onOpenChange(false);
+        // All updates successful, remove cached data to force refetch
+        await queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+        await queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'line-items'] });
+        
+        toast({
+          title: "Success",
+          description: "Order updated successfully",
+        });
+        
+        onOpenChange(false);
+      } catch (error) {
+        console.error('Error updating job or line items:', error);
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to update order",
+          variant: "destructive",
+        });
+      }
     }
   };
 
