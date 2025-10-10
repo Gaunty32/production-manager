@@ -43,12 +43,14 @@ The application uses PostgreSQL (Neon serverless database) with Drizzle ORM for 
 
 ## Recent Changes (October 10, 2025)
 
-### 2026 Pricing Table Integration
-- Implemented complete 2026 pricing data structure in `shared/pricing.ts`
-- Pricing logic based on quantity tiers (1-6, 7-99, 100-299, 300-599, 600-999) and stitch count ranges
+### Pricing Tables Integration (2025 & 2026)
+- Implemented both 2025 and 2026 pricing data structures in `shared/pricing.ts`
+- **2025 Pricing**: Quantity tiers (1-15, 16-99, 100-299, 300-599, 600-999) with stitch ranges including <3000
+- **2026 Pricing**: Quantity tiers (1-6, 7-99, 100-299, 300-599, 600-999) with expanded stitch ranges up to 50,000
 - Supports POA (Price on Application) for high stitch counts (50,000+)
 - Functions: `getPrice()`, `calculateJobPrice()`, `formatPrice()`
 - Boundary-tested with strict `<` comparisons for accurate tier matching
+- Customers can be marked with their pricing table (2025 or 2026) for accurate quote generation
 
 ## External Dependencies
 

@@ -9,6 +9,84 @@ export interface PricingTier {
   }[];
 }
 
+export const PRICING_2025: PricingTier[] = [
+  {
+    minQty: 1,
+    maxQty: 15,
+    prices: [
+      { maxStitches: 3000, price: 1.25 },
+      { maxStitches: 5000, price: 1.35 },
+      { maxStitches: 7500, price: 1.45 },
+      { maxStitches: 10000, price: 1.55 },
+      { maxStitches: 15000, price: 1.75 },
+      { maxStitches: 20000, price: 1.95 },
+      { maxStitches: 25000, price: 2.50 },
+      { maxStitches: 50000, price: 5.00 },
+      { maxStitches: null, price: "POA" },
+    ],
+  },
+  {
+    minQty: 16,
+    maxQty: 99,
+    prices: [
+      { maxStitches: 3000, price: 1.15 },
+      { maxStitches: 5000, price: 1.25 },
+      { maxStitches: 7500, price: 1.35 },
+      { maxStitches: 10000, price: 1.45 },
+      { maxStitches: 15000, price: 1.65 },
+      { maxStitches: 20000, price: 1.75 },
+      { maxStitches: 25000, price: 1.95 },
+      { maxStitches: 50000, price: 5.00 },
+      { maxStitches: null, price: "POA" },
+    ],
+  },
+  {
+    minQty: 100,
+    maxQty: 299,
+    prices: [
+      { maxStitches: 3000, price: 1.05 },
+      { maxStitches: 5000, price: 1.15 },
+      { maxStitches: 7500, price: 1.25 },
+      { maxStitches: 10000, price: 1.35 },
+      { maxStitches: 15000, price: 1.55 },
+      { maxStitches: 20000, price: 1.65 },
+      { maxStitches: 25000, price: 1.75 },
+      { maxStitches: 50000, price: 5.00 },
+      { maxStitches: null, price: "POA" },
+    ],
+  },
+  {
+    minQty: 300,
+    maxQty: 599,
+    prices: [
+      { maxStitches: 3000, price: 0.95 },
+      { maxStitches: 5000, price: 1.05 },
+      { maxStitches: 7500, price: 1.15 },
+      { maxStitches: 10000, price: 1.25 },
+      { maxStitches: 15000, price: 1.45 },
+      { maxStitches: 20000, price: 1.55 },
+      { maxStitches: 25000, price: 1.65 },
+      { maxStitches: 50000, price: 5.00 },
+      { maxStitches: null, price: "POA" },
+    ],
+  },
+  {
+    minQty: 600,
+    maxQty: 999,
+    prices: [
+      { maxStitches: 3000, price: 0.85 },
+      { maxStitches: 5000, price: 0.95 },
+      { maxStitches: 7500, price: 1.05 },
+      { maxStitches: 10000, price: 1.15 },
+      { maxStitches: 15000, price: 1.35 },
+      { maxStitches: 20000, price: 1.45 },
+      { maxStitches: 25000, price: 1.55 },
+      { maxStitches: 50000, price: 5.00 },
+      { maxStitches: null, price: "POA" },
+    ],
+  },
+];
+
 export const PRICING_2026: PricingTier[] = [
   {
     minQty: 1,
@@ -99,8 +177,7 @@ export function getPrice(
   stitchCount: number,
   pricingTable: PricingTable = "2026"
 ): PriceLookupResult {
-  // For now, we only have 2026 pricing
-  const tiers = pricingTable === "2026" ? PRICING_2026 : PRICING_2026;
+  const tiers = pricingTable === "2026" ? PRICING_2026 : PRICING_2025;
 
   // Find the quantity tier
   const tier = tiers.find(
