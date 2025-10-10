@@ -185,13 +185,10 @@ export const insertStaffShiftSchema = createInsertSchema(staffShifts).omit({
   startTime: z.number().int().min(0).max(1440),
   endTime: z.number().int().min(0).max(1440),
   isRecurring: z.boolean().default(false),
-  recurringDayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
+  recurringDaysOfWeek: z.array(z.number().int().min(0).max(6)).nullable().optional(),
 }).refine(
   (data) => data.endTime > data.startTime,
   { message: "End time must be after start time" }
-).refine(
-  (data) => !data.isRecurring || (data.recurringDayOfWeek !== null && data.recurringDayOfWeek !== undefined),
-  { message: "Recurring day of week is required for recurring shifts" }
 );
 
 export const insertMachineScheduleBlockSchema = createInsertSchema(machineScheduleBlocks).omit({
@@ -230,7 +227,7 @@ export const updateStaffShiftSchema = z.object({
   startTime: z.number().int().min(0).max(1440).optional(),
   endTime: z.number().int().min(0).max(1440).optional(),
   isRecurring: z.boolean().optional(),
-  recurringDayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
+  recurringDaysOfWeek: z.array(z.number().int().min(0).max(6)).nullable().optional(),
 }).refine(
   (data) => {
     if (data.startTime !== undefined && data.endTime !== undefined) {
@@ -239,14 +236,6 @@ export const updateStaffShiftSchema = z.object({
     return true;
   },
   { message: "End time must be after start time" }
-).refine(
-  (data) => {
-    if (data.isRecurring === true) {
-      return data.recurringDayOfWeek !== null && data.recurringDayOfWeek !== undefined;
-    }
-    return true;
-  },
-  { message: "Recurring day of week is required for recurring shifts" }
 );
 
 export const updateMachineScheduleBlockSchema = z.object({

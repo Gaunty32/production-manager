@@ -52,7 +52,7 @@ const shiftFormSchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "Start time must be in HH:MM format"),
   endTime: z.string().regex(/^\d{2}:\d{2}$/, "End time must be in HH:MM format"),
   isRecurring: z.boolean().default(false),
-  replicateDays: z.array(z.number()).default([]),
+  selectedDays: z.array(z.number()).default([]),
 }).refine(
   (data) => {
     const [startHours, startMins] = data.startTime.split(':').map(Number);
@@ -103,7 +103,7 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
           startTime: minutesToTime(shift.startTime),
           endTime: minutesToTime(shift.endTime),
           isRecurring: shift.isRecurring,
-          replicateDays: [],
+          selectedDays: shift.recurringDaysOfWeek || [],
         }
       : {
           staffId: "",
@@ -111,7 +111,7 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
           startTime: "09:00",
           endTime: "17:00",
           isRecurring: false,
-          replicateDays: [],
+          selectedDays: [],
         },
   });
 
@@ -163,76 +163,20 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
   });
 
   const onSubmit = async (values: ShiftFormValues) => {
+    const data = {
+      staffId: values.staffId,
+      date: values.date,
+      startTime: timeToMinutes(values.startTime),
+      endTime: timeToMinutes(values.endTime),
+      isRecurring: values.isRecurring,
+      recurringDaysOfWeek: values.isRecurring && values.selectedDays.length > 0 
+        ? values.selectedDays 
+        : null,
+    };
+
     if (shift) {
-      // Update existing shift - keep the existing recurringDayOfWeek
-      const data = {
-        staffId: values.staffId,
-        date: values.date,
-        startTime: timeToMinutes(values.startTime),
-        endTime: timeToMinutes(values.endTime),
-        isRecurring: values.isRecurring,
-        recurringDayOfWeek: values.isRecurring && shift.recurringDayOfWeek 
-          ? shift.recurringDayOfWeek 
-          : null,
-      };
       updateMutation.mutate(data);
-    } else if (values.replicateDays.length > 0) {
-      // Create shifts for selected days of the week
-      const baseDate = new Date(values.date);
-      const shifts = [];
-      
-      // Get the day of week for the selected date
-      const selectedDayOfWeek = baseDate.getDay();
-      
-      for (const targetDay of values.replicateDays) {
-        const shiftDate = new Date(baseDate);
-        // Calculate days to add to reach target day
-        let daysToAdd = targetDay - selectedDayOfWeek;
-        if (daysToAdd < 0) daysToAdd += 7; // If target day is earlier in week, go to next week
-        
-        shiftDate.setDate(baseDate.getDate() + daysToAdd);
-        
-        shifts.push({
-          staffId: values.staffId,
-          date: shiftDate.toISOString().split('T')[0],
-          startTime: timeToMinutes(values.startTime),
-          endTime: timeToMinutes(values.endTime),
-          isRecurring: values.isRecurring,
-          recurringDayOfWeek: values.isRecurring 
-            ? targetDay
-            : null,
-        });
-      }
-      
-      try {
-        for (const shiftData of shifts) {
-          await apiRequest("POST", "/api/staff-shifts", shiftData);
-        }
-        queryClient.invalidateQueries({ queryKey: ["/api/staff-shifts"] });
-        setOpen(false);
-        form.reset();
-        toast({
-          title: "Success",
-          description: `Created ${shifts.length} shift${shifts.length > 1 ? 's' : ''} for selected days`,
-        });
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : "Failed to create shifts",
-          variant: "destructive",
-        });
-      }
     } else {
-      // Create single shift - use the day of week from the selected date if recurring
-      const shiftDate = new Date(values.date);
-      const data = {
-        staffId: values.staffId,
-        date: values.date,
-        startTime: timeToMinutes(values.startTime),
-        endTime: timeToMinutes(values.endTime),
-        isRecurring: values.isRecurring,
-        recurringDayOfWeek: values.isRecurring ? shiftDate.getDay() : null,
-      };
       createMutation.mutate(data);
     }
   };
@@ -244,27 +188,27 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
   };
 
   const isRecurring = form.watch("isRecurring");
-  const replicateDays = form.watch("replicateDays");
+  const selectedDays = form.watch("selectedDays");
 
   const toggleDay = (dayValue: number) => {
-    const currentDays = form.getValues("replicateDays");
+    const currentDays = form.getValues("selectedDays");
     if (currentDays.includes(dayValue)) {
-      form.setValue("replicateDays", currentDays.filter(d => d !== dayValue));
+      form.setValue("selectedDays", currentDays.filter(d => d !== dayValue));
     } else {
-      form.setValue("replicateDays", [...currentDays, dayValue].sort());
+      form.setValue("selectedDays", [...currentDays, dayValue].sort());
     }
   };
 
   const selectWeekdays = () => {
-    form.setValue("replicateDays", [1, 2, 3, 4, 5]); // Mon-Fri
+    form.setValue("selectedDays", [1, 2, 3, 4, 5]); // Mon-Fri
   };
 
   const selectWeekdaysAndSaturday = () => {
-    form.setValue("replicateDays", [1, 2, 3, 4, 5, 6]); // Mon-Sat
+    form.setValue("selectedDays", [1, 2, 3, 4, 5, 6]); // Mon-Sat
   };
 
   const clearDays = () => {
-    form.setValue("replicateDays", []);
+    form.setValue("selectedDays", []);
   };
 
   return (
@@ -355,87 +299,85 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
               />
             </div>
 
-            {!shift && (
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <FormLabel>Select Days of Week</FormLabel>
-                  <FormDescription className="text-xs">
-                    Choose which days this shift should be created for
-                  </FormDescription>
-                </div>
-                
-                <div className="flex gap-2 flex-wrap">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={selectWeekdays}
-                    data-testid="button-select-weekdays"
-                  >
-                    Mon-Fri
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={selectWeekdaysAndSaturday}
-                    data-testid="button-select-weekdays-sat"
-                  >
-                    Mon-Sat
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={clearDays}
-                    data-testid="button-clear-days"
-                  >
-                    Clear
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-7 gap-2">
-                  {DAYS_OF_WEEK.map((day) => (
-                    <div key={day.value} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`day-${day.value}`}
-                        checked={replicateDays.includes(day.value)}
-                        onCheckedChange={() => toggleDay(day.value)}
-                        data-testid={`checkbox-day-${day.value}`}
-                      />
-                      <label
-                        htmlFor={`day-${day.value}`}
-                        className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        {day.label.substring(0, 3)}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="isRecurring"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <FormLabel>Make Recurring</FormLabel>
-                        <FormDescription>
-                          Repeat these shifts every week on the selected days
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="switch-recurring"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <FormLabel>Working Days</FormLabel>
+                <FormDescription className="text-xs">
+                  Select which days of the week this shift applies to
+                </FormDescription>
               </div>
-            )}
+              
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={selectWeekdays}
+                  data-testid="button-select-weekdays"
+                >
+                  Mon-Fri
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={selectWeekdaysAndSaturday}
+                  data-testid="button-select-weekdays-sat"
+                >
+                  Mon-Sat
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={clearDays}
+                  data-testid="button-clear-days"
+                >
+                  Clear
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-2">
+                {DAYS_OF_WEEK.map((day) => (
+                  <div key={day.value} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`day-${day.value}`}
+                      checked={selectedDays.includes(day.value)}
+                      onCheckedChange={() => toggleDay(day.value)}
+                      data-testid={`checkbox-day-${day.value}`}
+                    />
+                    <label
+                      htmlFor={`day-${day.value}`}
+                      className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      {day.label.substring(0, 3)}
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+              <FormField
+                control={form.control}
+                name="isRecurring"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Recurring Shift</FormLabel>
+                      <FormDescription>
+                        Repeat this shift every week on the selected days
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="switch-recurring"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="flex justify-end gap-3 pt-4">
               <Button
