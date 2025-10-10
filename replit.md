@@ -52,6 +52,20 @@ The application uses PostgreSQL (Neon serverless database) with Drizzle ORM for 
 - Boundary-tested with strict `<` comparisons for accurate tier matching
 - Customers can be marked with their pricing table (2025 or 2026) for accurate quote generation
 
+### Job Creation Pricing Integration
+- Added real-time pricing calculation to job creation workflow
+- Pricing automatically displays based on selected customer's pricing table
+- Shows per-line-item pricing (unit price and total) for each line item
+- Calculates and displays total job price with POA handling
+- Warning message when customer has no pricing table configured
+- Pricing updates automatically when line items are modified
+- All prices formatted as £X.XX currency
+
+### Staff Shifts Display Fix
+- Fixed day of week column in schedule management showing empty values
+- Now correctly displays comma-separated recurring days (e.g., "Monday, Tuesday, Wednesday")
+- Uses `recurringDaysOfWeek` array from schema instead of singular property
+
 ## External Dependencies
 
 - **Database Service**: Neon Serverless PostgreSQL (@neondatabase/serverless)
