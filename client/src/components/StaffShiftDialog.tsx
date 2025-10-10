@@ -52,6 +52,7 @@ const shiftFormSchema = z.object({
   endTime: z.string().regex(/^\d{1,4}$/, "End time must be in minutes (0-1439)"),
   isRecurring: z.boolean().default(false),
   recurringDayOfWeek: z.string().optional(),
+  replicateToAllDays: z.boolean().default(false),
 }).refine(
   (data) => {
     const start = parseInt(data.startTime);
@@ -101,6 +102,7 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
           endTime: shift.endTime.toString(),
           isRecurring: shift.isRecurring,
           recurringDayOfWeek: shift.recurringDayOfWeek?.toString() || undefined,
+          replicateToAllDays: false,
         }
       : {
           staffId: "",
@@ -109,6 +111,7 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
           endTime: "1020",
           isRecurring: false,
           recurringDayOfWeek: undefined,
+          replicateToAllDays: false,
         },
   });
 
@@ -159,21 +162,71 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
     },
   });
 
-  const onSubmit = (values: ShiftFormValues) => {
-    const data = {
-      staffId: values.staffId,
-      date: values.date,
-      startTime: parseInt(values.startTime),
-      endTime: parseInt(values.endTime),
-      isRecurring: values.isRecurring,
-      recurringDayOfWeek: values.isRecurring && values.recurringDayOfWeek 
-        ? parseInt(values.recurringDayOfWeek) 
-        : null,
-    };
-
+  const onSubmit = async (values: ShiftFormValues) => {
     if (shift) {
+      // Update existing shift
+      const data = {
+        staffId: values.staffId,
+        date: values.date,
+        startTime: parseInt(values.startTime),
+        endTime: parseInt(values.endTime),
+        isRecurring: values.isRecurring,
+        recurringDayOfWeek: values.isRecurring && values.recurringDayOfWeek 
+          ? parseInt(values.recurringDayOfWeek) 
+          : null,
+      };
       updateMutation.mutate(data);
+    } else if (values.replicateToAllDays) {
+      // Create shifts for all 7 days
+      const baseDate = new Date(values.date);
+      const shifts = [];
+      
+      for (let i = 0; i < 7; i++) {
+        const shiftDate = new Date(baseDate);
+        shiftDate.setDate(baseDate.getDate() + i);
+        
+        shifts.push({
+          staffId: values.staffId,
+          date: shiftDate.toISOString().split('T')[0],
+          startTime: parseInt(values.startTime),
+          endTime: parseInt(values.endTime),
+          isRecurring: values.isRecurring,
+          recurringDayOfWeek: values.isRecurring 
+            ? shiftDate.getDay()
+            : null,
+        });
+      }
+      
+      try {
+        for (const shiftData of shifts) {
+          await apiRequest("POST", "/api/staff-shifts", shiftData);
+        }
+        queryClient.invalidateQueries({ queryKey: ["/api/staff-shifts"] });
+        setOpen(false);
+        form.reset();
+        toast({
+          title: "Success",
+          description: `Created ${shifts.length} shifts for all days of the week`,
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to create shifts",
+          variant: "destructive",
+        });
+      }
     } else {
+      // Create single shift
+      const data = {
+        staffId: values.staffId,
+        date: values.date,
+        startTime: parseInt(values.startTime),
+        endTime: parseInt(values.endTime),
+        isRecurring: values.isRecurring,
+        recurringDayOfWeek: values.isRecurring && values.recurringDayOfWeek 
+          ? parseInt(values.recurringDayOfWeek) 
+          : null,
+      };
       createMutation.mutate(data);
     }
   };
@@ -185,6 +238,7 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
   };
 
   const isRecurring = form.watch("isRecurring");
+  const replicateToAllDays = form.watch("replicateToAllDays");
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -324,6 +378,30 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
                       </SelectContent>
                     </Select>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {!shift && (
+              <FormField
+                control={form.control}
+                name="replicateToAllDays"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Replicate to All Days</FormLabel>
+                      <FormDescription>
+                        Create this shift for 7 consecutive days starting from selected date
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="switch-replicate-all-days"
+                      />
+                    </FormControl>
                   </FormItem>
                 )}
               />
