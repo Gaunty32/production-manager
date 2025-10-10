@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
 
 const formSchema = insertCustomerSchema.extend({
@@ -29,6 +30,8 @@ const formSchema = insertCustomerSchema.extend({
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   telephone: z.string().optional(),
   address: z.string().optional(),
+  pricingTable2025: z.boolean().default(false),
+  pricingTable2026: z.boolean().default(false),
 });
 
 interface CustomerFormDialogProps {
@@ -53,6 +56,8 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
       email: "",
       telephone: "",
       address: "",
+      pricingTable2025: false,
+      pricingTable2026: false,
     },
   });
 
@@ -64,6 +69,8 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         email: customer.email || "",
         telephone: customer.telephone || "",
         address: customer.address || "",
+        pricingTable2025: customer.pricingTable2025 || false,
+        pricingTable2026: customer.pricingTable2026 || false,
       });
     } else if (!open) {
       form.reset({
@@ -72,6 +79,8 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         email: "",
         telephone: "",
         address: "",
+        pricingTable2025: false,
+        pricingTable2026: false,
       });
     }
   }, [customer, open, form]);
@@ -158,6 +167,47 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                 </FormItem>
               )}
             />
+            
+            <div className="space-y-3 pt-2 border-t">
+              <div className="text-sm font-medium">Pricing Tables</div>
+              <FormField
+                control={form.control}
+                name="pricingTable2025"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2 space-y-0">
+                    <FormControl>
+                      <Checkbox 
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-pricing-2025"
+                      />
+                    </FormControl>
+                    <FormLabel className="font-normal cursor-pointer">
+                      Pricing Table 2025
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="pricingTable2026"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2 space-y-0">
+                    <FormControl>
+                      <Checkbox 
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-pricing-2026"
+                      />
+                    </FormControl>
+                    <FormLabel className="font-normal cursor-pointer">
+                      Pricing Table 2026
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel

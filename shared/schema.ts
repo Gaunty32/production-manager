@@ -32,6 +32,8 @@ export const customers = pgTable("customers", {
   email: text("email"),
   telephone: text("telephone"),
   address: text("address"),
+  pricingTable2025: boolean("pricing_table_2025").notNull().default(false),
+  pricingTable2026: boolean("pricing_table_2026").notNull().default(false),
 });
 
 export const staff = pgTable("staff", {
@@ -106,6 +108,8 @@ export const updateCustomerSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   telephone: z.string().optional(),
   address: z.string().optional(),
+  pricingTable2025: z.boolean().optional(),
+  pricingTable2026: z.boolean().optional(),
 });
 
 export const insertStaffSchema = createInsertSchema(staff).omit({
