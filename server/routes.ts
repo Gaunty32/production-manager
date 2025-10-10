@@ -273,13 +273,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/jobs/:jobId/line-items", optionalAuth, async (req, res) => {
     try {
       const { jobId } = req.params;
+      console.log("Received line item data:", JSON.stringify(req.body, null, 2));
       const data = insertJobLineItemSchema.parse({ ...req.body, jobId });
       const lineItem = await storage.createJobLineItem(data);
       res.json(lineItem);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Validation error:", JSON.stringify(error.errors, null, 2));
         res.status(400).json({ error: error.errors });
       } else {
+        console.error("Line item creation error:", error);
         res.status(500).json({ error: "Failed to create line item" });
       }
     }
