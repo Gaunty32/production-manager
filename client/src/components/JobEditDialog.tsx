@@ -46,9 +46,6 @@ const formSchema = z.object({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
-  quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
-  stitchCount: z.coerce.number().min(1, "Stitch count must be at least 1"),
-  logoApproved: z.boolean(),
   dateReceived: z.string(),
   requiredDispatchDate: z.string(),
   machineId: z.number().nullable(),
@@ -66,9 +63,6 @@ interface JobEditDialogProps {
     customerId: string;
     jobName: string;
     poNumber: string | null;
-    logoApproved: boolean;
-    quantity: number;
-    stitchCount: number;
     dateReceived: Date;
     requiredDispatchDate: Date;
     machineId: number | null;
@@ -89,9 +83,6 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       customerId: "",
       jobName: "",
       poNumber: "",
-      logoApproved: false,
-      quantity: 1,
-      stitchCount: 5000,
       dateReceived: new Date().toISOString(),
       requiredDispatchDate: new Date().toISOString(),
       machineId: null,
@@ -108,9 +99,6 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         customerId: job.customerId,
         jobName: job.jobName,
         poNumber: job.poNumber || "",
-        logoApproved: job.logoApproved,
-        quantity: job.quantity,
-        stitchCount: job.stitchCount,
         dateReceived: job.dateReceived.toISOString(),
         requiredDispatchDate: job.requiredDispatchDate.toISOString(),
         machineId: job.machineId,
@@ -191,59 +179,6 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                     <FormControl>
                       <Input {...field} value={field.value || ""} className="font-mono" data-testid="input-edit-po-number" />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Quantity</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} className="font-mono" data-testid="input-edit-quantity" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="stitchCount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Stitch Count</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} className="font-mono" data-testid="input-edit-stitch-count" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="logoApproved"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Logo Approved</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value === "true")}
-                      value={field.value ? "true" : "false"}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-edit-logo-approved">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="true">Yes</SelectItem>
-                        <SelectItem value="false">No</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
