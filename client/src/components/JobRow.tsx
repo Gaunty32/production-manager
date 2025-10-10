@@ -20,9 +20,7 @@ interface JobRowProps {
     customerName: string;
     jobName: string;
     poNumber: string | null;
-    logoApproved: boolean;
     quantity: number;
-    stitchCount: number;
     dateReceived: Date;
     requiredDispatchDate: Date;
     completedOnTime: boolean | null;
@@ -39,7 +37,15 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
   const isOverdue = isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = isToday(job.requiredDispatchDate);
   
-  const metrics = calculateProductionMetrics(job.quantity, job.stitchCount, job.machineId);
+  // Calculate weighted average stitch count from line items
+  const weightedStitchCount = job.lineItems && job.lineItems.length > 0
+    ? Math.round(
+        job.lineItems.reduce((sum, item) => sum + (item.stitchCount * item.quantity), 0) / 
+        Math.max(job.quantity, 1)
+      )
+    : 0;
+  
+  const metrics = calculateProductionMetrics(job.quantity, weightedStitchCount, job.machineId);
 
   return (
     <tr
@@ -84,9 +90,6 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
         </div>
       </td>
       <td className="py-2 px-3 font-mono">{job.poNumber}</td>
-      <td className="py-2 px-3">
-        <StatusBadge status={job.logoApproved} type="logo" />
-      </td>
       <td className="py-2 px-3 font-mono">
         {job.lineItems && job.lineItems.length > 0 ? (
           <Tooltip>
@@ -104,9 +107,15 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
               <div className="space-y-1">
                 <p className="font-semibold text-xs">Line Items:</p>
                 {job.lineItems.map((item, idx) => (
-                  <div key={item.id} className="text-sm flex justify-between gap-3">
-                    <span>{item.description || `Item ${idx + 1}`}</span>
-                    <span className="font-mono">{item.quantity}</span>
+                  <div key={item.id} className="text-sm space-y-0.5">
+                    <div className="flex justify-between gap-3">
+                      <span>{item.description || `Item ${idx + 1}`}</span>
+                      <span className="font-mono">Qty: {item.quantity}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground flex justify-between gap-3">
+                      <span>Stitches: {item.stitchCount.toLocaleString()}</span>
+                      <span>{item.logoApproved ? "Logo: Approved" : "Logo: Pending"}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -116,7 +125,6 @@ export function JobRow({ job, onEdit, onDelete }: JobRowProps) {
           <span data-testid={`text-quantity-${job.id}`}>{job.quantity}</span>
         )}
       </td>
-      <td className="py-2 px-3 font-mono">{job.stitchCount.toLocaleString()}</td>
       <td className="py-2 px-3">
         <MachineBadge machineId={job.machineId} />
       </td>

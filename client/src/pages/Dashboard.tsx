@@ -287,13 +287,7 @@ export default function Dashboard() {
                     PO #
                   </th>
                   <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Logo
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
                     Qty
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Stitches
                   </th>
                   <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
                     Machine
@@ -324,7 +318,7 @@ export default function Dashboard() {
               <tbody className="bg-card divide-y divide-border">
                 {sortedJobs.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={12} className="py-8 text-center text-muted-foreground">
                       {searchTerm ? "No orders match your search." : "No orders found. Click 'Add Order' to create one."}
                     </td>
                   </tr>
