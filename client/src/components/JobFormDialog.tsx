@@ -47,6 +47,8 @@ import { cn } from "@/lib/utils";
 type LineItem = {
   quantity: number;
   description: string;
+  stitchCount: number;
+  logoApproved: boolean;
 };
 
 const formSchema = insertJobSchema.extend({
@@ -70,7 +72,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   const [open, setOpen] = useState(false);
   const [scheduleSuggestion, setScheduleSuggestion] = useState<any>(null);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ quantity: 1, description: "" }]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ quantity: 1, description: "", stitchCount: 5000, logoApproved: false }]);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -94,7 +96,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   });
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { quantity: 1, description: "" }]);
+    setLineItems([...lineItems, { quantity: 1, description: "", stitchCount: 5000, logoApproved: false }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -103,7 +105,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
     }
   };
 
-  const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
+  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean) => {
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
     setLineItems(updated);
@@ -191,6 +193,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
           await apiRequest("POST", `/api/jobs/${createdJob.id}/line-items`, {
             quantity: lineItem.quantity,
             description: lineItem.description || null,
+            stitchCount: lineItem.stitchCount,
+            logoApproved: lineItem.logoApproved,
           });
         }
       }
@@ -203,7 +207,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setOpen(false);
       form.reset();
-      setLineItems([{ quantity: 1, description: "" }]);
+      setLineItems([{ quantity: 1, description: "", stitchCount: 5000, logoApproved: false }]);
       setScheduleSuggestion(null);
     } catch (error) {
       toast({
@@ -289,41 +293,70 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
 
               <div className="md:col-span-2">
                 <FormLabel>Line Items</FormLabel>
-                <div className="space-y-2 mt-2">
+                <div className="space-y-3 mt-2">
                   {lineItems.map((item, index) => (
-                    <div key={index} className="flex gap-2 items-start">
-                      <div className="flex-1">
-                        <Input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value) || 0;
-                            updateLineItem(index, 'quantity', Math.max(1, val));
-                          }}
-                          placeholder="Quantity"
-                          className="font-mono"
-                          data-testid={`input-line-item-quantity-${index}`}
-                        />
+                    <div key={index} className="border rounded-md p-3 space-y-2">
+                      <div className="flex gap-2 items-start">
+                        <div className="flex-1">
+                          <label className="text-xs text-muted-foreground">Quantity</label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              updateLineItem(index, 'quantity', Math.max(1, val));
+                            }}
+                            placeholder="Quantity"
+                            className="font-mono mt-1"
+                            data-testid={`input-line-item-quantity-${index}`}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-xs text-muted-foreground">Stitch Count</label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={item.stitchCount}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              updateLineItem(index, 'stitchCount', Math.max(1, val));
+                            }}
+                            placeholder="Stitch count"
+                            className="font-mono mt-1"
+                            data-testid={`input-line-item-stitch-count-${index}`}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 pt-5">
+                          <Checkbox
+                            checked={item.logoApproved}
+                            onCheckedChange={(checked) => updateLineItem(index, 'logoApproved', checked === true)}
+                            data-testid={`checkbox-line-item-logo-approved-${index}`}
+                          />
+                          <label className="text-sm">Logo Approved</label>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeLineItem(index)}
+                          disabled={lineItems.length === 1}
+                          data-testid={`button-remove-line-item-${index}`}
+                          className="mt-5"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <div className="flex-[2]">
+                      <div>
+                        <label className="text-xs text-muted-foreground">Description</label>
                         <Input
                           value={item.description}
                           onChange={(e) => updateLineItem(index, 'description', e.target.value)}
                           placeholder="Description (e.g., Size M, Color Red)"
+                          className="mt-1"
                           data-testid={`input-line-item-description-${index}`}
                         />
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeLineItem(index)}
-                        disabled={lineItems.length === 1}
-                        data-testid={`button-remove-line-item-${index}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
                     </div>
                   ))}
                   <Button
