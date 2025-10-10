@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Staff, StaffShift } from "@shared/schema";
@@ -52,7 +53,7 @@ const shiftFormSchema = z.object({
   endTime: z.string().regex(/^\d{1,4}$/, "End time must be in minutes (0-1439)"),
   isRecurring: z.boolean().default(false),
   recurringDayOfWeek: z.string().optional(),
-  replicateToAllDays: z.boolean().default(false),
+  replicateDays: z.array(z.number()).default([]),
 }).refine(
   (data) => {
     const start = parseInt(data.startTime);
@@ -102,7 +103,7 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
           endTime: shift.endTime.toString(),
           isRecurring: shift.isRecurring,
           recurringDayOfWeek: shift.recurringDayOfWeek?.toString() || undefined,
-          replicateToAllDays: false,
+          replicateDays: [],
         }
       : {
           staffId: "",
@@ -111,7 +112,7 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
           endTime: "1020",
           isRecurring: false,
           recurringDayOfWeek: undefined,
-          replicateToAllDays: false,
+          replicateDays: [],
         },
   });
 
@@ -176,14 +177,21 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
           : null,
       };
       updateMutation.mutate(data);
-    } else if (values.replicateToAllDays) {
-      // Create shifts for all 7 days
+    } else if (values.replicateDays.length > 0) {
+      // Create shifts for selected days of the week
       const baseDate = new Date(values.date);
       const shifts = [];
       
-      for (let i = 0; i < 7; i++) {
+      // Get the day of week for the selected date
+      const selectedDayOfWeek = baseDate.getDay();
+      
+      for (const targetDay of values.replicateDays) {
         const shiftDate = new Date(baseDate);
-        shiftDate.setDate(baseDate.getDate() + i);
+        // Calculate days to add to reach target day
+        let daysToAdd = targetDay - selectedDayOfWeek;
+        if (daysToAdd < 0) daysToAdd += 7; // If target day is earlier in week, go to next week
+        
+        shiftDate.setDate(baseDate.getDate() + daysToAdd);
         
         shifts.push({
           staffId: values.staffId,
@@ -192,7 +200,7 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
           endTime: parseInt(values.endTime),
           isRecurring: values.isRecurring,
           recurringDayOfWeek: values.isRecurring 
-            ? shiftDate.getDay()
+            ? targetDay
             : null,
         });
       }
@@ -206,7 +214,7 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
         form.reset();
         toast({
           title: "Success",
-          description: `Created ${shifts.length} shifts for all days of the week`,
+          description: `Created ${shifts.length} shift${shifts.length > 1 ? 's' : ''} for selected days`,
         });
       } catch (error) {
         toast({
@@ -238,7 +246,28 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
   };
 
   const isRecurring = form.watch("isRecurring");
-  const replicateToAllDays = form.watch("replicateToAllDays");
+  const replicateDays = form.watch("replicateDays");
+
+  const toggleDay = (dayValue: number) => {
+    const currentDays = form.getValues("replicateDays");
+    if (currentDays.includes(dayValue)) {
+      form.setValue("replicateDays", currentDays.filter(d => d !== dayValue));
+    } else {
+      form.setValue("replicateDays", [...currentDays, dayValue].sort());
+    }
+  };
+
+  const selectWeekdays = () => {
+    form.setValue("replicateDays", [1, 2, 3, 4, 5]); // Mon-Fri
+  };
+
+  const selectWeekdaysAndSaturday = () => {
+    form.setValue("replicateDays", [1, 2, 3, 4, 5, 6]); // Mon-Sat
+  };
+
+  const clearDays = () => {
+    form.setValue("replicateDays", []);
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -384,27 +413,63 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
             )}
 
             {!shift && (
-              <FormField
-                control={form.control}
-                name="replicateToAllDays"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Replicate to All Days</FormLabel>
-                      <FormDescription>
-                        Create this shift for 7 consecutive days starting from selected date
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="switch-replicate-all-days"
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <FormLabel>Replicate to Multiple Days</FormLabel>
+                  <FormDescription className="text-xs">
+                    Select days of the week to create this shift pattern
+                  </FormDescription>
+                </div>
+                
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={selectWeekdays}
+                    data-testid="button-select-weekdays"
+                  >
+                    Mon-Fri
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={selectWeekdaysAndSaturday}
+                    data-testid="button-select-weekdays-sat"
+                  >
+                    Mon-Sat
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={clearDays}
+                    data-testid="button-clear-days"
+                  >
+                    Clear
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-7 gap-2">
+                  {DAYS_OF_WEEK.map((day) => (
+                    <div key={day.value} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`day-${day.value}`}
+                        checked={replicateDays.includes(day.value)}
+                        onCheckedChange={() => toggleDay(day.value)}
+                        data-testid={`checkbox-day-${day.value}`}
                       />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+                      <label
+                        htmlFor={`day-${day.value}`}
+                        className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {day.label.substring(0, 3)}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             <div className="flex justify-end gap-3 pt-4">
