@@ -209,7 +209,6 @@ export default function Dashboard() {
               }
               customers={customers}
               staff={staff}
-              onSubmit={(data) => createJobMutation.mutate(data)}
             />
           </div>
         </div>

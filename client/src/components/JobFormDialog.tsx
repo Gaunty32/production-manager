@@ -5,7 +5,7 @@ import { insertJobSchema } from "@shared/schema";
 import { MACHINE_NAMES } from "@shared/machines";
 import { minutesToTime } from "@shared/scheduling";
 import { z } from "zod";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -40,9 +40,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Plus, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+
+type LineItem = {
+  quantity: number;
+  description: string;
+};
 
 const formSchema = insertJobSchema.extend({
   customerId: z.string().min(1, "Customer is required"),
@@ -59,13 +64,13 @@ interface JobFormDialogProps {
   trigger: React.ReactNode;
   customers: Array<{ id: string; name: string }>;
   staff: Array<{ id: string; name: string }>;
-  onSubmit: (data: z.infer<typeof formSchema>) => void;
 }
 
-export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDialogProps) {
+export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps) {
   const [open, setOpen] = useState(false);
   const [scheduleSuggestion, setScheduleSuggestion] = useState<any>(null);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ quantity: 1, description: "" }]);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -88,18 +93,38 @@ export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDi
     },
   });
 
+  const addLineItem = () => {
+    setLineItems([...lineItems, { quantity: 1, description: "" }]);
+  };
+
+  const removeLineItem = (index: number) => {
+    if (lineItems.length > 1) {
+      setLineItems(lineItems.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
+    const updated = [...lineItems];
+    updated[index] = { ...updated[index], [field]: value };
+    setLineItems(updated);
+  };
+
+  const getTotalQuantity = () => {
+    return lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  };
+
   const handleSuggestSchedule = async () => {
     const values = form.getValues();
     
     const machineId = values.machineId ? Number(values.machineId) : null;
-    const quantity = Number(values.quantity) || 0;
+    const totalQuantity = getTotalQuantity();
     const stitchCount = Number(values.stitchCount) || 0;
     const requiredDispatchDate = values.requiredDispatchDate;
     
-    if (!machineId || quantity <= 0 || stitchCount <= 0 || !requiredDispatchDate) {
+    if (!machineId || totalQuantity <= 0 || stitchCount <= 0 || !requiredDispatchDate) {
       toast({
         title: "Missing Information",
-        description: "Please fill in Machine, Quantity, Stitch Count, and Required Dispatch Date first",
+        description: "Please fill in Machine, Line Items, Stitch Count, and Required Dispatch Date first",
         variant: "destructive",
       });
       return;
@@ -107,12 +132,13 @@ export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDi
     
     setLoadingSuggestion(true);
     try {
-      const response: any = await apiRequest("POST", "/api/suggest-schedule", {
+      const suggestResponse = await apiRequest("POST", "/api/suggest-schedule", {
         machineId,
-        quantity,
+        quantity: totalQuantity,
         stitchCount,
         requiredDispatchDate,
       });
+      const response: any = await suggestResponse.json();
       
       if (response.available) {
         setScheduleSuggestion(response.suggestion);
@@ -139,11 +165,53 @@ export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDi
     }
   };
 
-  const handleSubmit = (data: z.infer<typeof formSchema>) => {
-    onSubmit(data);
-    setOpen(false);
-    form.reset();
-    setScheduleSuggestion(null);
+  const handleSubmit = async (data: z.infer<typeof formSchema>) => {
+    try {
+      const totalQuantity = getTotalQuantity();
+      
+      if (totalQuantity <= 0) {
+        toast({
+          title: "Invalid Quantity",
+          description: "Please add at least one line item with quantity greater than 0",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const jobData = {
+        ...data,
+        quantity: totalQuantity,
+      };
+      
+      const jobResponse = await apiRequest("POST", "/api/jobs", jobData);
+      const createdJob: any = await jobResponse.json();
+      
+      for (const lineItem of lineItems) {
+        if (lineItem.quantity > 0) {
+          await apiRequest("POST", `/api/jobs/${createdJob.id}/line-items`, {
+            quantity: lineItem.quantity,
+            description: lineItem.description || null,
+          });
+        }
+      }
+      
+      toast({
+        title: "Success",
+        description: "Order created successfully with line items",
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      setOpen(false);
+      form.reset();
+      setLineItems([{ quantity: 1, description: "" }]);
+      setScheduleSuggestion(null);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create order",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -219,19 +287,61 @@ export function JobFormDialog({ trigger, customers, staff, onSubmit }: JobFormDi
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Quantity</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} className="font-mono" data-testid="input-quantity" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="md:col-span-2">
+                <FormLabel>Line Items</FormLabel>
+                <div className="space-y-2 mt-2">
+                  {lineItems.map((item, index) => (
+                    <div key={index} className="flex gap-2 items-start">
+                      <div className="flex-1">
+                        <Input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            updateLineItem(index, 'quantity', Math.max(1, val));
+                          }}
+                          placeholder="Quantity"
+                          className="font-mono"
+                          data-testid={`input-line-item-quantity-${index}`}
+                        />
+                      </div>
+                      <div className="flex-[2]">
+                        <Input
+                          value={item.description}
+                          onChange={(e) => updateLineItem(index, 'description', e.target.value)}
+                          placeholder="Description (e.g., Size M, Color Red)"
+                          data-testid={`input-line-item-description-${index}`}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeLineItem(index)}
+                        disabled={lineItems.length === 1}
+                        data-testid={`button-remove-line-item-${index}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addLineItem}
+                    className="w-full"
+                    data-testid="button-add-line-item"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Line Item
+                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    Total Quantity: <span className="font-mono font-semibold">{getTotalQuantity()}</span>
+                  </p>
+                </div>
+              </div>
 
               <FormField
                 control={form.control}
