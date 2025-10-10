@@ -189,6 +189,14 @@ export const insertStaffShiftSchema = createInsertSchema(staffShifts).omit({
 }).refine(
   (data) => data.endTime > data.startTime,
   { message: "End time must be after start time" }
+).refine(
+  (data) => {
+    if (data.isRecurring) {
+      return data.recurringDaysOfWeek && data.recurringDaysOfWeek.length > 0;
+    }
+    return true;
+  },
+  { message: "At least one day must be selected for recurring shifts" }
 );
 
 export const insertMachineScheduleBlockSchema = createInsertSchema(machineScheduleBlocks).omit({
@@ -236,6 +244,14 @@ export const updateStaffShiftSchema = z.object({
     return true;
   },
   { message: "End time must be after start time" }
+).refine(
+  (data) => {
+    if (data.isRecurring === true) {
+      return data.recurringDaysOfWeek && data.recurringDaysOfWeek.length > 0;
+    }
+    return true;
+  },
+  { message: "At least one day must be selected for recurring shifts" }
 );
 
 export const updateMachineScheduleBlockSchema = z.object({

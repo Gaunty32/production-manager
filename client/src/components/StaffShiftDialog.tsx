@@ -65,6 +65,17 @@ const shiftFormSchema = z.object({
     message: "End time must be after start time",
     path: ["endTime"],
   }
+).refine(
+  (data) => {
+    if (data.isRecurring) {
+      return data.selectedDays.length > 0;
+    }
+    return true;
+  },
+  {
+    message: "At least one day must be selected for recurring shifts",
+    path: ["selectedDays"],
+  }
 );
 
 type ShiftFormValues = z.infer<typeof shiftFormSchema>;
@@ -299,85 +310,94 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
               />
             </div>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <FormLabel>Working Days</FormLabel>
-                <FormDescription className="text-xs">
-                  Select which days of the week this shift applies to
-                </FormDescription>
-              </div>
-              
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={selectWeekdays}
-                  data-testid="button-select-weekdays"
-                >
-                  Mon-Fri
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={selectWeekdaysAndSaturday}
-                  data-testid="button-select-weekdays-sat"
-                >
-                  Mon-Sat
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={clearDays}
-                  data-testid="button-clear-days"
-                >
-                  Clear
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-7 gap-2">
-                {DAYS_OF_WEEK.map((day) => (
-                  <div key={day.value} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`day-${day.value}`}
-                      checked={selectedDays.includes(day.value)}
-                      onCheckedChange={() => toggleDay(day.value)}
-                      data-testid={`checkbox-day-${day.value}`}
-                    />
-                    <label
-                      htmlFor={`day-${day.value}`}
-                      className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    >
-                      {day.label.substring(0, 3)}
-                    </label>
-                  </div>
-                ))}
-              </div>
-
-              <FormField
-                control={form.control}
-                name="isRecurring"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Recurring Shift</FormLabel>
-                      <FormDescription>
-                        Repeat this shift every week on the selected days
+            <FormField
+              control={form.control}
+              name="selectedDays"
+              render={() => (
+                <FormItem>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <FormLabel>Working Days</FormLabel>
+                      <FormDescription className="text-xs">
+                        Select which days of the week this shift applies to
                       </FormDescription>
                     </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="switch-recurring"
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
+                    
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={selectWeekdays}
+                        data-testid="button-select-weekdays"
+                      >
+                        Mon-Fri
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={selectWeekdaysAndSaturday}
+                        data-testid="button-select-weekdays-sat"
+                      >
+                        Mon-Sat
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={clearDays}
+                        data-testid="button-clear-days"
+                      >
+                        Clear
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-2">
+                      {DAYS_OF_WEEK.map((day) => (
+                        <div key={day.value} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`day-${day.value}`}
+                            checked={selectedDays.includes(day.value)}
+                            onCheckedChange={() => toggleDay(day.value)}
+                            data-testid={`checkbox-day-${day.value}`}
+                          />
+                          <label
+                            htmlFor={`day-${day.value}`}
+                            className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                          >
+                            {day.label.substring(0, 3)}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    <FormMessage />
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="isRecurring"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <FormLabel>Recurring Shift</FormLabel>
+                    <FormDescription>
+                      Repeat this shift every week on the selected days
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="switch-recurring"
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
 
             <div className="flex justify-end gap-3 pt-4">
               <Button
