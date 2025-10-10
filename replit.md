@@ -4,7 +4,19 @@
 
 This is a production management system for tracking customer orders, machine scheduling, and dispatch deadlines. The application helps manage manufacturing workflows by tracking jobs across multiple machines, monitoring deadlines, and ensuring timely completion of customer orders.
 
-**Recent Updates (Oct 9, 2025):**
+**Recent Updates (Oct 10, 2025):**
+- **Multiple Line Items per Job**: Full support for jobs with multiple quantities/sizes
+  - **Database**: New job_line_items table with quantity and optional description fields (CASCADE delete)
+  - **Job Creation**: JobFormDialog allows adding/removing multiple line items with inline validation
+  - **Display**: Production queue shows total quantity with item count indicator (e.g., "45 (3 items)")
+  - **Line Items Tooltip**: Hover over quantity to see breakdown with descriptions (keyboard accessible)
+  - **Notes Indicator**: StickyNote icon next to job name shows notes in separate tooltip
+  - **Accessibility**: Both tooltips are keyboard accessible with proper ARIA labels and focus rings
+  - **API Enhancement**: GET /api/jobs includes lineItems array for each job
+  - **Metrics Calculation**: Production metrics use summed quantity from all line items
+  - **End-to-End Tested**: Comprehensive test coverage confirms all features working correctly
+
+**Previous Updates (Oct 9, 2025):**
 - **Complete Job Scheduling System**: Fully implemented scheduling system combining machine availability with staff working hours
   - **Backend**: Database tables (staff_shifts, machine_schedule_blocks, job_schedule) with comprehensive scheduling logic
   - **Scheduling Algorithm**: Intersects machine and staff availability, prevents double-booking, finds earliest available slots
