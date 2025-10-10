@@ -307,7 +307,10 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
 }).extend({
   quantity: z.coerce.number().int().min(1),
   stitchCount: z.coerce.number().int().min(1),
-  logoApproved: z.coerce.boolean().default(false),
+  logoApproved: z.preprocess(
+    (val) => val === true || val === 'true' || val === 1 || val === '1',
+    z.boolean()
+  ).default(false),
   description: z.string().optional(),
 });
 

@@ -38,6 +38,7 @@ export interface IStorage {
   createStaff(staffMember: InsertStaff): Promise<Staff>;
   updateStaff(id: string, staffMember: Partial<Staff>): Promise<Staff>;
   deleteStaff(id: string): Promise<void>;
+  getJob(id: string): Promise<Job | undefined>;
   getJobs(): Promise<Job[]>;
   getJobsByMachine(machineId: number): Promise<Job[]>;
   createJob(job: InsertJob): Promise<Job>;
@@ -143,6 +144,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(jobs.completedById, id));
     
     await db.delete(staff).where(eq(staff.id, id));
+  }
+
+  async getJob(id: string): Promise<Job | undefined> {
+    const [job] = await db.select().from(jobs).where(eq(jobs.id, id));
+    return job;
   }
 
   async getJobs(): Promise<Job[]> {

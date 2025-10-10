@@ -174,6 +174,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Job routes
+  app.get("/api/jobs/:id", optionalAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const job = await storage.getJob(id);
+      if (!job) {
+        res.status(404).json({ error: "Job not found" });
+        return;
+      }
+      const lineItems = await storage.getJobLineItems(id);
+      res.json({ ...job, lineItems });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch job" });
+    }
+  });
+
   app.get("/api/jobs", optionalAuth, async (req, res) => {
     try {
       const { machineId } = req.query;

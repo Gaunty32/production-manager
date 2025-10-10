@@ -330,11 +330,12 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                         </div>
                         <div className="flex items-center gap-2 pt-5">
                           <Checkbox
+                            id={`logo-approved-${index}`}
                             checked={item.logoApproved}
                             onCheckedChange={(checked) => updateLineItem(index, 'logoApproved', checked === true)}
                             data-testid={`checkbox-line-item-logo-approved-${index}`}
                           />
-                          <label className="text-sm">Logo Approved</label>
+                          <label htmlFor={`logo-approved-${index}`} className="text-sm cursor-pointer">Logo Approved</label>
                         </div>
                         <Button
                           type="button"
@@ -592,7 +593,14 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
               <Button type="button" variant="outline" onClick={() => setOpen(false)} data-testid="button-cancel">
                 Cancel
               </Button>
-              <Button type="submit" data-testid="button-submit">
+              <Button 
+                type="submit" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  form.handleSubmit(handleSubmit)();
+                }}
+                data-testid="button-create-order"
+              >
                 Add Order
               </Button>
             </div>
