@@ -64,7 +64,7 @@ export const staffShifts = pgTable("staff_shifts", {
   startTime: integer("start_time").notNull(),
   endTime: integer("end_time").notNull(),
   isRecurring: boolean("is_recurring").notNull().default(false),
-  recurringDayOfWeek: integer("recurring_day_of_week"),
+  recurringDaysOfWeek: integer("recurring_days_of_week").array(),
 });
 
 export const machineScheduleBlocks = pgTable("machine_schedule_blocks", {
