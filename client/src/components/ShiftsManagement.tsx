@@ -111,8 +111,11 @@ export function ShiftsManagement() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {shift.recurringDayOfWeek !== null && shift.recurringDayOfWeek !== undefined
-                      ? DAYS_OF_WEEK[shift.recurringDayOfWeek]
+                    {shift.recurringDaysOfWeek && shift.recurringDaysOfWeek.length > 0
+                      ? shift.recurringDaysOfWeek
+                          .sort((a, b) => a - b)
+                          .map(day => DAYS_OF_WEEK[day])
+                          .join(", ")
                       : "-"}
                   </TableCell>
                   <TableCell className="text-right">

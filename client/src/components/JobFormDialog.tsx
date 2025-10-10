@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertJobSchema } from "@shared/schema";
+import { insertJobSchema, type Customer } from "@shared/schema";
 import { MACHINE_NAMES } from "@shared/machines";
 import { minutesToTime } from "@shared/scheduling";
+import { getPrice, formatPrice, type PricingTable } from "@shared/pricing";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -62,7 +63,7 @@ const formSchema = insertJobSchema.extend({
 
 interface JobFormDialogProps {
   trigger: React.ReactNode;
-  customers: Array<{ id: string; name: string }>;
+  customers: Customer[];
   staff: Array<{ id: string; name: string }>;
 }
 
@@ -110,6 +111,63 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   const getTotalQuantity = () => {
     return lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
   };
+
+  // Calculate pricing based on selected customer and line items
+  const pricingData = useMemo(() => {
+    const customerId = form.watch("customerId");
+    const selectedCustomer = customers.find(c => c.id === customerId);
+    
+    if (!selectedCustomer) {
+      return null;
+    }
+
+    // Determine pricing table
+    let pricingTable: PricingTable;
+    if (selectedCustomer.pricingTable2026) {
+      pricingTable = "2026";
+    } else if (selectedCustomer.pricingTable2025) {
+      pricingTable = "2025";
+    } else {
+      // No pricing table selected
+      return null;
+    }
+
+    // Calculate pricing for each line item
+    const lineItemPricing = lineItems.map(item => {
+      try {
+        const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
+        return {
+          ...pricing,
+          lineTotal: pricing.totalPrice as number | "POA",
+        };
+      } catch (error) {
+        return null;
+      }
+    });
+
+    // Calculate job total
+    let jobTotal: number | "POA" = 0;
+    let hasPOA = false;
+    
+    for (const pricing of lineItemPricing) {
+      if (!pricing) continue;
+      if (pricing.lineTotal === "POA") {
+        hasPOA = true;
+        break;
+      }
+      jobTotal = (jobTotal as number) + (pricing.lineTotal as number);
+    }
+
+    if (hasPOA) {
+      jobTotal = "POA";
+    }
+
+    return {
+      pricingTable,
+      lineItemPricing,
+      jobTotal,
+    };
+  }, [form.watch("customerId"), lineItems, customers]);
 
   const handleSuggestSchedule = async () => {
     const values = form.getValues();
@@ -375,6 +433,53 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   <p className="text-sm text-muted-foreground">
                     Total Quantity: <span className="font-mono font-semibold">{getTotalQuantity()}</span>
                   </p>
+
+                  {/* Pricing Display */}
+                  {pricingData && (
+                    <div className="border rounded-md p-3 bg-muted/30 space-y-2" data-testid="pricing-summary">
+                      <div className="flex justify-between items-center mb-2">
+                        <h4 className="text-sm font-medium">Pricing ({pricingData.pricingTable} Table)</h4>
+                      </div>
+                      
+                      {lineItems.map((item, index) => {
+                        const pricing = pricingData.lineItemPricing[index];
+                        if (!pricing) return null;
+                        
+                        return (
+                          <div key={index} className="text-xs space-y-1 pb-2 border-b last:border-b-0 last:pb-0">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                Line {index + 1}: {item.quantity} × {item.stitchCount.toLocaleString()} stitches
+                              </span>
+                            </div>
+                            <div className="flex justify-between font-mono">
+                              <span className="text-muted-foreground">
+                                {formatPrice(pricing.unitPrice)}/unit
+                              </span>
+                              <span className="font-semibold" data-testid={`line-item-price-${index}`}>
+                                {formatPrice(pricing.lineTotal)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      
+                      <div className="flex justify-between items-center pt-2 border-t">
+                        <span className="font-medium">Total Price:</span>
+                        <span className="font-mono font-bold text-lg" data-testid="total-price">
+                          {formatPrice(pricingData.jobTotal)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {!pricingData && form.watch("customerId") && (
+                    <div className="border border-amber-500/50 rounded-md p-3 bg-amber-500/5">
+                      <p className="text-sm text-amber-600 dark:text-amber-500">
+                        No pricing table selected for this customer. Please update customer settings.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
