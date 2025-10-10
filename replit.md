@@ -41,6 +41,15 @@ The application uses PostgreSQL (Neon serverless database) with Drizzle ORM for 
 - **Production Calculations**: Calculates production runs, time per run (including changeover), and total production time based on stitch count and machine specifications.
 - **Optional Fields**: PO Number is optional; job notes are supported.
 
+## Recent Changes (October 10, 2025)
+
+### 2026 Pricing Table Integration
+- Implemented complete 2026 pricing data structure in `shared/pricing.ts`
+- Pricing logic based on quantity tiers (1-6, 7-99, 100-299, 300-599, 600-999) and stitch count ranges
+- Supports POA (Price on Application) for high stitch counts (50,000+)
+- Functions: `getPrice()`, `calculateJobPrice()`, `formatPrice()`
+- Boundary-tested with strict `<` comparisons for accurate tier matching
+
 ## External Dependencies
 
 - **Database Service**: Neon Serverless PostgreSQL (@neondatabase/serverless)
