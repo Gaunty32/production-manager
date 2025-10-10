@@ -94,6 +94,8 @@ export const jobLineItems = pgTable("job_line_items", {
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
   quantity: integer("quantity").notNull(),
   description: text("description"),
+  stitchCount: integer("stitch_count").notNull(),
+  logoApproved: boolean("logo_approved").notNull().default(false),
 });
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
@@ -305,11 +307,18 @@ export type JobSchedule = typeof jobSchedule.$inferSelect;
 
 export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
   id: true,
+}).extend({
+  quantity: z.coerce.number().int().min(1),
+  stitchCount: z.coerce.number().int().min(1),
+  logoApproved: z.coerce.boolean().default(false),
+  description: z.string().optional(),
 });
 
 export const updateJobLineItemSchema = z.object({
-  quantity: z.coerce.number().optional(),
+  quantity: z.coerce.number().int().min(1).optional(),
   description: z.string().optional(),
+  stitchCount: z.coerce.number().int().min(1).optional(),
+  logoApproved: z.coerce.boolean().optional(),
 });
 
 export type InsertJobLineItem = z.infer<typeof insertJobLineItemSchema>;
