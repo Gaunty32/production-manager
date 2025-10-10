@@ -307,5 +307,10 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
   id: true,
 });
 
+export const updateJobLineItemSchema = z.object({
+  quantity: z.coerce.number().optional(),
+  description: z.string().optional(),
+});
+
 export type InsertJobLineItem = z.infer<typeof insertJobLineItemSchema>;
 export type JobLineItem = typeof jobLineItems.$inferSelect;

@@ -13,7 +13,9 @@ import {
   insertMachineScheduleBlockSchema,
   updateMachineScheduleBlockSchema,
   insertJobScheduleSchema,
-  updateJobScheduleSchema
+  updateJobScheduleSchema,
+  insertJobLineItemSchema,
+  updateJobLineItemSchema
 } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
@@ -231,6 +233,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete job" });
+    }
+  });
+
+  // Job line item routes
+  app.get("/api/jobs/:jobId/line-items", optionalAuth, async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const lineItems = await storage.getJobLineItems(jobId);
+      res.json(lineItems);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch line items" });
+    }
+  });
+
+  app.post("/api/jobs/:jobId/line-items", optionalAuth, async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const data = insertJobLineItemSchema.parse({ ...req.body, jobId });
+      const lineItem = await storage.createJobLineItem(data);
+      res.json(lineItem);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create line item" });
+      }
+    }
+  });
+
+  app.patch("/api/job-line-items/:id", optionalAuth, async (req, res) => {
+    try {
+      const data = updateJobLineItemSchema.parse(req.body);
+      const updates = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      );
+      const lineItem = await storage.updateJobLineItem(req.params.id, updates);
+      res.json(lineItem);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : "Failed to update line item" 
+        });
+      }
+    }
+  });
+
+  app.delete("/api/job-line-items/:id", optionalAuth, async (req, res) => {
+    try {
+      await storage.deleteJobLineItem(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete line item" });
     }
   });
 

@@ -6,6 +6,7 @@ import {
   staffShifts,
   machineScheduleBlocks,
   jobSchedule,
+  jobLineItems,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -19,7 +20,9 @@ import {
   type MachineScheduleBlock,
   type InsertMachineScheduleBlock,
   type JobSchedule,
-  type InsertJobSchedule
+  type InsertJobSchedule,
+  type JobLineItem,
+  type InsertJobLineItem
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte } from "drizzle-orm";
@@ -55,6 +58,11 @@ export interface IStorage {
   createJobSchedule(schedule: InsertJobSchedule): Promise<JobSchedule>;
   updateJobSchedule(id: string, schedule: Partial<JobSchedule>): Promise<JobSchedule>;
   deleteJobSchedule(id: string): Promise<void>;
+  
+  getJobLineItems(jobId: string): Promise<JobLineItem[]>;
+  createJobLineItem(lineItem: InsertJobLineItem): Promise<JobLineItem>;
+  updateJobLineItem(id: string, lineItem: Partial<JobLineItem>): Promise<JobLineItem>;
+  deleteJobLineItem(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -305,6 +313,32 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobSchedule(id: string): Promise<void> {
     await db.delete(jobSchedule).where(eq(jobSchedule.id, id));
+  }
+
+  async getJobLineItems(jobId: string): Promise<JobLineItem[]> {
+    return await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId));
+  }
+
+  async createJobLineItem(insertLineItem: InsertJobLineItem): Promise<JobLineItem> {
+    const [lineItem] = await db
+      .insert(jobLineItems)
+      .values(insertLineItem)
+      .returning();
+    return lineItem;
+  }
+
+  async updateJobLineItem(id: string, updates: Partial<JobLineItem>): Promise<JobLineItem> {
+    const [lineItem] = await db
+      .update(jobLineItems)
+      .set(updates)
+      .where(eq(jobLineItems.id, id))
+      .returning();
+    if (!lineItem) throw new Error("Line item not found");
+    return lineItem;
+  }
+
+  async deleteJobLineItem(id: string): Promise<void> {
+    await db.delete(jobLineItems).where(eq(jobLineItems.id, id));
   }
 }
 
