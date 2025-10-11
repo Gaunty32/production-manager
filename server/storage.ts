@@ -78,6 +78,7 @@ export interface IStorage {
   
   awardStar(userId: string, starType: "yellow" | "red"): Promise<any>;
   getStarsLeaderboard(): Promise<any[]>;
+  getStaffProductionMetrics(staffId?: string): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -465,6 +466,106 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`${userStars.yellowStars} + ${userStars.redStars} DESC`);
     
     return leaderboard;
+  }
+
+  async getStaffProductionMetrics(staffId?: string): Promise<any[]> {
+    // Get all completed jobs with their associated staff and line items
+    let completedJobs;
+    
+    if (staffId) {
+      completedJobs = await db
+        .select({
+          staffId: jobs.completedById,
+          jobId: jobs.id,
+          machineId: jobs.machineId,
+        })
+        .from(jobs)
+        .where(and(eq(jobs.completed, true), eq(jobs.completedById, staffId)));
+    } else {
+      completedJobs = await db
+        .select({
+          staffId: jobs.completedById,
+          jobId: jobs.id,
+          machineId: jobs.machineId,
+        })
+        .from(jobs)
+        .where(eq(jobs.completed, true));
+    }
+
+    // Group by staff and calculate metrics
+    const staffMetrics: Record<string, { totalStitches: number; totalMinutes: number }> = {};
+
+    for (const job of completedJobs) {
+      if (!job.staffId) continue;
+
+      if (!staffMetrics[job.staffId]) {
+        staffMetrics[job.staffId] = { totalStitches: 0, totalMinutes: 0 };
+      }
+
+      // Get line items for this job
+      const lineItems = await db
+        .select()
+        .from(jobLineItems)
+        .where(eq(jobLineItems.jobId, job.jobId));
+
+      // Calculate total stitches from line items
+      const jobStitches = lineItems.reduce((sum, item) => {
+        return sum + (item.stitchCount * item.quantity);
+      }, 0);
+
+      staffMetrics[job.staffId].totalStitches += jobStitches;
+
+      // Try to get actual time from job schedule
+      const schedules = await db
+        .select()
+        .from(jobSchedule)
+        .where(and(
+          eq(jobSchedule.jobId, job.jobId),
+          eq(jobSchedule.staffId, job.staffId)
+        ));
+
+      if (schedules.length > 0) {
+        // Use actual scheduled time
+        const jobMinutes = schedules.reduce((sum, schedule) => {
+          return sum + (schedule.endTime - schedule.startTime);
+        }, 0);
+        staffMetrics[job.staffId].totalMinutes += jobMinutes;
+      } else if (job.machineId && jobStitches > 0) {
+        // Fall back to calculated production time
+        const STITCHES_PER_MINUTE = 750;
+        const CHANGEOVER_TIME_MINUTES = 3;
+        const machineHeads = job.machineId === 1 || job.machineId === 3 ? 8 : 1;
+        
+        const totalQuantity = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+        const runs = Math.ceil(totalQuantity / machineHeads);
+        const avgStitchCount = jobStitches / totalQuantity;
+        const embroideryTimePerRun = avgStitchCount / STITCHES_PER_MINUTE;
+        const timePerRunMinutes = embroideryTimePerRun + CHANGEOVER_TIME_MINUTES;
+        const totalMinutes = Math.ceil((runs * timePerRunMinutes) / 10) * 10;
+        
+        staffMetrics[job.staffId].totalMinutes += totalMinutes;
+      }
+    }
+
+    // Convert to array with stitches per hour
+    const metrics = await Promise.all(
+      Object.entries(staffMetrics).map(async ([staffId, data]) => {
+        const staffMember = await db.select().from(staff).where(eq(staff.id, staffId)).limit(1);
+        const hours = data.totalMinutes / 60;
+        const stitchesPerHour = hours > 0 ? Math.round(data.totalStitches / hours) : 0;
+
+        return {
+          staffId,
+          staffName: staffMember[0]?.name || 'Unknown',
+          userId: staffMember[0]?.userId || null,
+          totalStitches: data.totalStitches,
+          totalHours: Math.round(hours * 10) / 10,
+          stitchesPerHour,
+        };
+      })
+    );
+
+    return metrics.sort((a, b) => b.stitchesPerHour - a.stitchesPerHour);
   }
 }
 
