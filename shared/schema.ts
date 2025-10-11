@@ -100,6 +100,7 @@ export const jobLineItems = pgTable("job_line_items", {
   description: text("description"),
   stitchCount: integer("stitch_count").notNull(),
   logoApproved: boolean("logo_approved").notNull().default(false),
+  completed: boolean("completed").notNull().default(false),
 });
 
 export const staffMachineAllocations = pgTable("staff_machine_allocations", {
@@ -355,6 +356,7 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
     (val) => val === true || val === 'true' || val === 1 || val === '1',
     z.boolean()
   ).default(false),
+  completed: z.coerce.boolean().default(false),
   description: z.string().nullable().optional(),
 });
 
@@ -363,6 +365,7 @@ export const updateJobLineItemSchema = z.object({
   description: z.string().nullable().optional(),
   stitchCount: z.coerce.number().int().min(1).optional(),
   logoApproved: z.coerce.boolean().optional(),
+  completed: z.coerce.boolean().optional(),
 });
 
 export type InsertJobLineItem = z.infer<typeof insertJobLineItemSchema>;

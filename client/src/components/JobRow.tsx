@@ -1,5 +1,5 @@
 import { format, isPast, isToday } from "date-fns";
-import { Pencil, Trash2, StickyNote } from "lucide-react";
+import { Pencil, Trash2, StickyNote, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -40,6 +40,14 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete }: J
   const isOverdue = isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = isToday(job.requiredDispatchDate);
   
+  // Check if all line items have logo approved
+  const allLogosApproved = job.lineItems && job.lineItems.length > 0 
+    ? job.lineItems.every(item => item.logoApproved === true)
+    : false;
+  
+  // Check if date received exists
+  const hasDateReceived = !!job.dateReceived;
+  
   // Calculate weighted average stitch count from line items
   const weightedStitchCount = job.lineItems && job.lineItems.length > 0
     ? Math.round(
@@ -74,6 +82,48 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete }: J
       <td className="py-2 px-3">
         <div className="flex items-center gap-2">
           <span>{job.jobName}</span>
+          
+          {/* Traffic light indicators */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button 
+                className="inline-flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
+                aria-label={allLogosApproved ? "All logos approved" : "Logos not approved"}
+                data-testid={`indicator-logo-${job.id}`}
+              >
+                <Circle className={cn(
+                  "h-3 w-3 fill-current",
+                  allLogosApproved ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
+                )} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p className="text-xs">
+                {allLogosApproved ? "All logos approved ✓" : "Logos not approved"}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button 
+                className="inline-flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
+                aria-label={hasDateReceived ? "Date received recorded" : "No date received"}
+                data-testid={`indicator-date-${job.id}`}
+              >
+                <Circle className={cn(
+                  "h-3 w-3 fill-current",
+                  hasDateReceived ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
+                )} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p className="text-xs">
+                {hasDateReceived ? `Received: ${format(new Date(job.dateReceived), "PPP")}` : "No date received"}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+          
           {job.notes && job.notes.trim() && (
             <Tooltip>
               <TooltipTrigger asChild>

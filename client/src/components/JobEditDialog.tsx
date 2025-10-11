@@ -37,7 +37,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { CalendarIcon, Plus, Trash2 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isPast, isToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +48,7 @@ type LineItem = {
   description: string;
   stitchCount: number;
   logoApproved: boolean;
+  completed: boolean;
 };
 
 const formSchema = z.object({
@@ -116,6 +117,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     description: string | null;
     stitchCount: number;
     logoApproved: boolean;
+    completed: boolean;
   }>>({
     queryKey: ['/api/jobs', job?.id, 'line-items'],
     enabled: !!job?.id && open,
@@ -149,6 +151,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           description: item.description || "",
           stitchCount: item.stitchCount,
           logoApproved: item.logoApproved,
+          completed: item.completed,
         })));
       } else if (job && job.quantity > 0) {
         // Old job without line items - create a default line item from job quantity
@@ -157,6 +160,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           description: "",
           stitchCount: 5000,
           logoApproved: false,
+          completed: false,
         }]);
       } else {
         // No line items and no quantity
@@ -165,6 +169,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           description: "",
           stitchCount: 5000,
           logoApproved: false,
+          completed: false,
         }]);
       }
       setDeletedLineItemIds([]);
@@ -172,7 +177,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }, [fetchedLineItems, open, job]);
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { quantity: 1, description: "", stitchCount: 5000, logoApproved: false }]);
+    setLineItems([...lineItems, { quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -192,6 +197,13 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const getTotalQuantity = () => {
     return lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
   };
+  
+  const allLineItemsCompleted = () => {
+    return lineItems.length > 0 && lineItems.every(item => item.completed);
+  };
+  
+  const isOverdue = job && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
+  const isDueToday = job && isToday(job.requiredDispatchDate);
 
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
     if (job) {
@@ -214,6 +226,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               description: item.description || null,
               stitchCount: item.stitchCount,
               logoApproved: item.logoApproved,
+              completed: item.completed,
             });
           } else {
             // Create new line item
@@ -222,6 +235,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               description: item.description || null,
               stitchCount: item.stitchCount,
               logoApproved: item.logoApproved,
+              completed: item.completed,
             });
           }
         }
@@ -260,6 +274,53 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            {/* Required Dispatch Date - TOP PRIORITY with color indicators */}
+            <FormField
+              control={form.control}
+              name="requiredDispatchDate"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel className={cn(
+                    "text-base font-semibold",
+                    isOverdue && "text-red-600 dark:text-red-500",
+                    isDueToday && !isOverdue && "text-amber-600 dark:text-amber-500"
+                  )}>
+                    Required Dispatch Date
+                    {isOverdue && " (OVERDUE)"}
+                    {isDueToday && !isOverdue && " (DUE TODAY)"}
+                  </FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "pl-3 text-left font-normal justify-start",
+                            !field.value && "text-muted-foreground",
+                            isOverdue && "border-red-500 bg-red-50 dark:bg-red-950/30",
+                            isDueToday && !isOverdue && "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
+                          )}
+                          data-testid="button-edit-dispatch-date"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value ? new Date(field.value) : undefined}
+                        onSelect={(date) => field.onChange(date?.toISOString())}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -350,14 +411,25 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             data-testid={`input-edit-line-item-stitch-count-${index}`}
                           />
                         </div>
-                        <div className="flex items-center gap-2 pt-5">
-                          <Checkbox
-                            id={`edit-logo-approved-${index}`}
-                            checked={item.logoApproved}
-                            onCheckedChange={(checked) => updateLineItem(index, 'logoApproved', checked === true)}
-                            data-testid={`checkbox-edit-line-item-logo-approved-${index}`}
-                          />
-                          <label htmlFor={`edit-logo-approved-${index}`} className="text-sm cursor-pointer">Logo Approved</label>
+                        <div className="flex flex-col gap-2 pt-5">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`edit-logo-approved-${index}`}
+                              checked={item.logoApproved}
+                              onCheckedChange={(checked) => updateLineItem(index, 'logoApproved', checked === true)}
+                              data-testid={`checkbox-edit-line-item-logo-approved-${index}`}
+                            />
+                            <label htmlFor={`edit-logo-approved-${index}`} className="text-sm cursor-pointer">Logo</label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`edit-completed-${index}`}
+                              checked={item.completed}
+                              onCheckedChange={(checked) => updateLineItem(index, 'completed', checked === true)}
+                              data-testid={`checkbox-edit-line-item-completed-${index}`}
+                            />
+                            <label htmlFor={`edit-completed-${index}`} className="text-sm cursor-pointer">Done</label>
+                          </div>
                         </div>
                         <Button
                           type="button"
@@ -409,11 +481,19 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                       <Checkbox
                         checked={field.value}
                         onCheckedChange={field.onChange}
+                        disabled={!allLineItemsCompleted()}
                         data-testid="checkbox-edit-completed"
                       />
                     </FormControl>
                     <div className="space-y-1 leading-none">
-                      <FormLabel>Order Completed</FormLabel>
+                      <FormLabel className={!allLineItemsCompleted() ? "text-muted-foreground" : ""}>
+                        Order Completed
+                      </FormLabel>
+                      {!allLineItemsCompleted() && (
+                        <p className="text-xs text-muted-foreground">
+                          All line items must be completed first
+                        </p>
+                      )}
                     </div>
                   </FormItem>
                 )}
@@ -538,41 +618,6 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="requiredDispatchDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Required Dispatch Date</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "pl-3 text-left font-normal justify-start",
-                              !field.value && "text-muted-foreground"
-                            )}
-                            data-testid="button-edit-dispatch-date"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value ? new Date(field.value) : undefined}
-                          onSelect={(date) => field.onChange(date?.toISOString())}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
 
             <FormField
