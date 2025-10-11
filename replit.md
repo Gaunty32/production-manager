@@ -58,3 +58,15 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 - **State Management**: TanStack React Query
 - **Routing**: Wouter
 - **External APIs**: Xero API (for invoice creation)
+
+## Recent Changes
+
+### October 11, 2025
+
+#### Customer Contact Name Fields Update
+- Updated customer contact information to use separate first name and last name fields
+- **Database Schema**: Changed from single `contact_name` field to `contact_first_name` and `contact_last_name` fields
+- **Customer Form**: Form dialog now displays two separate input fields for contact first name and last name, arranged side by side
+- **Display Logic**: Customer list combines both fields to show full contact name (e.g., "John Smith")
+- **Data Migration**: Existing contact_name data preserved in contact_first_name field during migration
+- Improves data organization and enables better contact name formatting

@@ -26,7 +26,8 @@ import { insertCustomerSchema, type Customer } from "@shared/schema";
 
 const formSchema = insertCustomerSchema.extend({
   name: z.string().min(1, "Customer name is required"),
-  contactName: z.string().optional(),
+  contactFirstName: z.string().optional(),
+  contactLastName: z.string().optional(),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   telephone: z.string().optional(),
   address: z.string().optional(),
@@ -52,7 +53,8 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      contactName: "",
+      contactFirstName: "",
+      contactLastName: "",
       email: "",
       telephone: "",
       address: "",
@@ -65,7 +67,8 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
     if (customer && open) {
       form.reset({
         name: customer.name,
-        contactName: customer.contactName || "",
+        contactFirstName: customer.contactFirstName || "",
+        contactLastName: customer.contactLastName || "",
         email: customer.email || "",
         telephone: customer.telephone || "",
         address: customer.address || "",
@@ -75,7 +78,8 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
     } else if (!open) {
       form.reset({
         name: "",
-        contactName: "",
+        contactFirstName: "",
+        contactLastName: "",
         email: "",
         telephone: "",
         address: "",
@@ -115,19 +119,34 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="contactName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Contact Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="Enter contact person name" data-testid="input-contact-name" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="contactFirstName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact First Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="First name" data-testid="input-contact-first-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="contactLastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact Last Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Last name" data-testid="input-contact-last-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <FormField
               control={form.control}
               name="email"

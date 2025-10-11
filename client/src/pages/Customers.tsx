@@ -170,7 +170,11 @@ export default function Customers() {
                   customers.map((customer) => (
                     <tr key={customer.id} className="hover-elevate" data-testid={`row-customer-${customer.id}`}>
                       <td className="py-3 px-4 text-sm">{customer.name}</td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">{customer.contactName || "-"}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">
+                        {customer.contactFirstName || customer.contactLastName 
+                          ? `${customer.contactFirstName || ''} ${customer.contactLastName || ''}`.trim()
+                          : "-"}
+                      </td>
                       <td className="py-3 px-4 text-sm text-muted-foreground">{customer.email || "-"}</td>
                       <td className="py-3 px-4 text-sm text-muted-foreground">{customer.telephone || "-"}</td>
                       <td className="py-3 px-4 text-sm text-muted-foreground">{customer.address || "-"}</td>
