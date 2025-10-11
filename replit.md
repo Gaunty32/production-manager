@@ -45,6 +45,23 @@ The application uses PostgreSQL (Neon serverless database) with Drizzle ORM for 
 
 ### October 11, 2025
 
+#### User Management System and Super Admin Role
+- Added **super_admin** role to the user roles hierarchy (super_admin > admin > manager > staff)
+- Created User Management page accessible only to super admins
+- Super admins can view all users and edit their roles through a dedicated interface
+- Secure backend with authentication and authorization middleware
+  - GET /api/users requires super admin authentication
+  - PATCH /api/users/:id/role requires super admin authentication
+  - Role validation ensures only valid roles can be assigned
+- Created default super admin user "Chris" (chris@selectuniforms.com)
+- User Management link conditionally appears in sidebar for super admins only
+
+#### Staff Member Enhancements
+- Added **email** and **telephone** fields to staff schema
+- Added optional **userId** field to link staff members to user accounts
+- Updated StaffFormDialog to include email and telephone inputs
+- Staff members now have complete contact information for better communication
+
 #### Role-Based Price Visibility
 - Added role-based access control for pricing information
 - Three user roles: Admin, Manager, Staff (default)
