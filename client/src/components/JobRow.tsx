@@ -11,7 +11,7 @@ import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import { calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
 import { getCustomerColorClasses } from "@shared/colors";
-import { calculateJobPrice, formatPrice } from "@shared/pricing";
+import { calculateJobPrice, formatPrice, getPrice } from "@shared/pricing";
 import type { JobLineItem, Customer } from "@shared/schema";
 
 interface JobRowProps {
@@ -31,11 +31,12 @@ interface JobRowProps {
     lineItems?: JobLineItem[];
   };
   customer?: Customer;
+  showPrices?: boolean;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-export function JobRow({ job, customer, onEdit, onDelete }: JobRowProps) {
+export function JobRow({ job, customer, showPrices = true, onEdit, onDelete }: JobRowProps) {
   const isOverdue = isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = isToday(job.requiredDispatchDate);
   
@@ -115,18 +116,38 @@ export function JobRow({ job, customer, onEdit, onDelete }: JobRowProps) {
             <TooltipContent side="top" className="max-w-sm">
               <div className="space-y-1">
                 <p className="font-semibold text-xs">Line Items:</p>
-                {job.lineItems.map((item, idx) => (
-                  <div key={item.id} className="text-sm space-y-0.5">
-                    <div className="flex justify-between gap-3">
-                      <span>{item.description || `Item ${idx + 1}`}</span>
-                      <span className="font-mono">Qty: {item.quantity}</span>
+                {job.lineItems.map((item, idx) => {
+                  // Calculate unit price for this line item if customer has pricing table
+                  const pricingTable = customer?.pricingTable2026 ? "2026" : customer?.pricingTable2025 ? "2025" : null;
+                  let unitPrice: string | null = null;
+                  
+                  if (pricingTable) {
+                    try {
+                      const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
+                      unitPrice = formatPrice(pricing.unitPrice);
+                    } catch (error) {
+                      unitPrice = null;
+                    }
+                  }
+                  
+                  return (
+                    <div key={item.id} className="text-sm space-y-0.5">
+                      <div className="flex justify-between gap-3">
+                        <span>{item.description || `Item ${idx + 1}`}</span>
+                        <span className="font-mono">Qty: {item.quantity}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground flex justify-between gap-3">
+                        <span>Stitches: {item.stitchCount.toLocaleString()}</span>
+                        <span>{item.logoApproved ? "Logo: Approved" : "Logo: Pending"}</span>
+                      </div>
+                      {showPrices && unitPrice && (
+                        <div className="text-xs text-muted-foreground">
+                          Unit Price: {unitPrice}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-xs text-muted-foreground flex justify-between gap-3">
-                      <span>Stitches: {item.stitchCount.toLocaleString()}</span>
-                      <span>{item.logoApproved ? "Logo: Approved" : "Logo: Pending"}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </TooltipContent>
           </Tooltip>
@@ -147,7 +168,11 @@ export function JobRow({ job, customer, onEdit, onDelete }: JobRowProps) {
         {metrics ? formatTimeDisplay(metrics.totalTimeMinutes) : "-"}
       </td>
       <td className="py-2 px-3 font-mono whitespace-nowrap">
-        {jobPrice ? formatPrice(jobPrice.totalPrice) : <span className="text-muted-foreground">-</span>}
+        {showPrices ? (
+          jobPrice ? formatPrice(jobPrice.totalPrice) : <span className="text-muted-foreground">-</span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
       </td>
       <td className="py-2 px-3 font-mono whitespace-nowrap">{format(job.requiredDispatchDate, "PP")}</td>
       <td className="py-2 px-3">

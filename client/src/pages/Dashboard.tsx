@@ -11,6 +11,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
 import type { Customer, Job, JobWithLineItems, Staff } from "@shared/schema";
+import { canViewPrices } from "@shared/schema";
 import { useParams } from "wouter";
 import { isPast, isToday } from "date-fns";
 
@@ -20,6 +21,12 @@ export default function Dashboard() {
   const machineId = params.id ? parseInt(params.id) : null;
   const [searchTerm, setSearchTerm] = useState("");
   const [editingJob, setEditingJob] = useState<Job | null>(null);
+
+  // Fetch current user
+  const { data: currentUser } = useQuery<{ id: string; email: string; firstName?: string; lastName?: string; role?: string }>({
+    queryKey: ["/api/auth/user"],
+    retry: false,
+  });
 
   const { data: customersData = [], isLoading: customersLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -337,6 +344,7 @@ export default function Dashboard() {
                           requiredDispatchDate: new Date(job.requiredDispatchDate),
                         }}
                         customer={customer}
+                        showPrices={canViewPrices(currentUser?.role)}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
                       />
