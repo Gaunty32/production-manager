@@ -9,6 +9,9 @@ interface LeaderboardEntry {
   lastName: string;
   yellowStars: number;
   redStars: number;
+  stitchesPerHour: number;
+  totalStitches: number;
+  totalHours: number;
 }
 
 export default function Leaderboard() {
@@ -93,7 +96,7 @@ export default function Leaderboard() {
                         <h3 className="font-semibold text-lg" data-testid={`text-name-${entry.userId}`}>
                           {entry.firstName} {entry.lastName}
                         </h3>
-                        <div className="flex items-center gap-4 mt-1">
+                        <div className="flex items-center gap-4 mt-1 flex-wrap">
                           <div className="flex items-center gap-1.5" data-testid={`stars-yellow-${entry.userId}`}>
                             <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                             <span className="text-sm font-medium">{entry.yellowStars}</span>
@@ -105,6 +108,11 @@ export default function Leaderboard() {
                           <div className="text-sm text-muted-foreground">
                             Total: {totalStars}
                           </div>
+                          {entry.stitchesPerHour > 0 && (
+                            <div className="text-sm font-medium text-primary" data-testid={`stitches-per-hour-${entry.userId}`}>
+                              {entry.stitchesPerHour.toLocaleString()} stitches/hr
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
