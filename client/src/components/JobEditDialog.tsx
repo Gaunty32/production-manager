@@ -74,6 +74,7 @@ interface JobEditDialogProps {
     customerId: string;
     jobName: string;
     poNumber: string | null;
+    quantity: number;
     dateReceived: Date;
     requiredDispatchDate: Date;
     machineId: number | null;
@@ -140,16 +141,35 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
 
   useEffect(() => {
     if (fetchedLineItems && open) {
-      setLineItems(fetchedLineItems.map((item) => ({
-        id: item.id,
-        quantity: item.quantity,
-        description: item.description || "",
-        stitchCount: item.stitchCount,
-        logoApproved: item.logoApproved,
-      })));
+      if (fetchedLineItems.length > 0) {
+        // Job has line items - use them
+        setLineItems(fetchedLineItems.map((item) => ({
+          id: item.id,
+          quantity: item.quantity,
+          description: item.description || "",
+          stitchCount: item.stitchCount,
+          logoApproved: item.logoApproved,
+        })));
+      } else if (job && job.quantity > 0) {
+        // Old job without line items - create a default line item from job quantity
+        setLineItems([{
+          quantity: job.quantity,
+          description: "",
+          stitchCount: 5000,
+          logoApproved: false,
+        }]);
+      } else {
+        // No line items and no quantity
+        setLineItems([{
+          quantity: 1,
+          description: "",
+          stitchCount: 5000,
+          logoApproved: false,
+        }]);
+      }
       setDeletedLineItemIds([]);
     }
-  }, [fetchedLineItems, open]);
+  }, [fetchedLineItems, open, job]);
 
   const addLineItem = () => {
     setLineItems([...lineItems, { quantity: 1, description: "", stitchCount: 5000, logoApproved: false }]);
