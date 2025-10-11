@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +18,7 @@ const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "All Orders", url: "/orders", icon: ClipboardList },
   { title: "Schedule", url: "/schedule", icon: Calendar },
+  { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
   { title: "Customers", url: "/customers", icon: Users },
   { title: "Staff", url: "/staff", icon: UserCog },
 ];

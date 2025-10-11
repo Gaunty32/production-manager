@@ -16,6 +16,7 @@ import Customers from "@/pages/Customers";
 import StaffPage from "@/pages/Staff";
 import UsersPage from "@/pages/Users";
 import Schedule from "@/pages/Schedule";
+import Leaderboard from "@/pages/Leaderboard";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,6 +47,7 @@ function Router() {
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
       <Route path="/users" component={() => <ProtectedRoute component={UsersPage} />} />
       <Route path="/schedule" component={() => <ProtectedRoute component={Schedule} />} />
+      <Route path="/leaderboard" component={() => <ProtectedRoute component={Leaderboard} />} />
       <Route path="/machine/:id" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route component={NotFound} />
     </Switch>
