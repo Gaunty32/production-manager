@@ -89,64 +89,34 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  // Register strategies for all domain variants
-  // Replit uses different domain extensions (.replit.dev, .repl.co, etc.)
-  const domains = process.env.REPLIT_DOMAINS!.split(",");
-  const allDomainVariants: string[] = [];
+  // Use the primary domain from REPLIT_DOMAINS for the callback URL
+  const primaryDomain = process.env.REPLIT_DOMAINS!.split(",")[0];
   
-  for (const domain of domains) {
-    allDomainVariants.push(domain);
-    // Also register for .repl.co variant if it's .replit.dev
-    if (domain.endsWith('.replit.dev')) {
-      const replCoVariant = domain.replace('.replit.dev', '.repl.co');
-      allDomainVariants.push(replCoVariant);
-    }
-    // Also register for .replit.dev variant if it's .repl.co
-    if (domain.endsWith('.repl.co')) {
-      const replitDevVariant = domain.replace('.repl.co', '.replit.dev');
-      allDomainVariants.push(replitDevVariant);
-    }
-  }
-
-  for (const domain of allDomainVariants) {
-    const strategy = new Strategy(
-      {
-        name: `replitauth:${domain}`,
-        config,
-        scope: "openid email profile offline_access",
-        callbackURL: `https://${domain}/api/callback`,
-      },
-      verify,
-    );
-    passport.use(strategy);
-  }
+  const strategy = new Strategy(
+    {
+      name: `replitauth`,
+      config,
+      scope: "openid email profile offline_access",
+      callbackURL: `https://${primaryDomain}/api/callback`,
+    },
+    verify,
+  );
+  passport.use(strategy);
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
-  // Helper to find the correct strategy for the current hostname
-  const getStrategyName = (hostname: string) => {
-    // First try exact match
-    if (allDomainVariants.includes(hostname)) {
-      return `replitauth:${hostname}`;
-    }
-    // If no exact match, use the first registered strategy
-    return `replitauth:${allDomainVariants[0]}`;
-  };
-
   app.get("/api/login", (req, res, next) => {
-    const strategyName = getStrategyName(req.hostname);
-    console.log(`Login attempt: hostname=${req.hostname}, strategy=${strategyName}, registeredDomains=${allDomainVariants.join(',')}`);
-    passport.authenticate(strategyName, {
+    console.log(`Login attempt: hostname=${req.hostname}, primaryDomain=${primaryDomain}`);
+    passport.authenticate("replitauth", {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
-    const strategyName = getStrategyName(req.hostname);
-    console.log(`Callback attempt: hostname=${req.hostname}, strategy=${strategyName}, query:`, req.query);
-    passport.authenticate(strategyName, (err: any, user: any, info: any) => {
+    console.log(`Callback attempt: hostname=${req.hostname}, primaryDomain=${primaryDomain}, query:`, req.query);
+    passport.authenticate("replitauth", (err: any, user: any, info: any) => {
       if (err) {
         console.error("Authentication error:", err);
         return res.status(500).send(`Authentication error: ${err.message}`);
