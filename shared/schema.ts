@@ -59,6 +59,9 @@ export const jobs = pgTable("jobs", {
   machineId: integer("machine_id"),
   status: text("status").notNull().default("pending"),
   notes: text("notes"),
+  invoiceStatus: varchar("invoice_status").notNull().default("pending"),
+  invoicedAt: timestamp("invoiced_at"),
+  invoiceReference: text("invoice_reference"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {

@@ -225,7 +225,11 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         const justCompleted = wasNotCompleted && isNowCompleted;
 
         // Update the main job first
-        await apiRequest("PATCH", `/api/jobs/${job.id}`, data);
+        // If job is being completed, set invoiceStatus to 'ready' for draft invoicing queue
+        const updateData = justCompleted 
+          ? { ...data, invoiceStatus: 'ready' }
+          : data;
+        await apiRequest("PATCH", `/api/jobs/${job.id}`, updateData);
 
         // Handle line item updates
         // Delete removed line items
