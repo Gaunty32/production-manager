@@ -203,6 +203,7 @@ export const updateJobSchema = z.object({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
+  invoiceStatus: z.string().optional(),
 });
 
 export const insertStaffShiftSchema = createInsertSchema(staffShifts).omit({
