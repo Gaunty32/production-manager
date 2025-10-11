@@ -40,6 +40,9 @@ export const customers = pgTable("customers", {
 export const staff = pgTable("staff", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
+  email: text("email"),
+  telephone: text("telephone"),
+  userId: varchar("user_id").references(() => users.id),
 });
 
 export const jobs = pgTable("jobs", {
@@ -313,6 +316,7 @@ export type User = typeof users.$inferSelect;
 
 // User roles
 export const UserRole = {
+  SUPER_ADMIN: "super_admin",
   ADMIN: "admin",
   MANAGER: "manager",
   STAFF: "staff",
@@ -322,7 +326,12 @@ export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 
 // Helper function to check if a user can view prices
 export function canViewPrices(userRole: string | undefined): boolean {
-  return userRole === UserRole.ADMIN || userRole === UserRole.MANAGER;
+  return userRole === UserRole.SUPER_ADMIN || userRole === UserRole.ADMIN || userRole === UserRole.MANAGER;
+}
+
+// Helper function to check if a user is a super admin
+export function isSuperAdmin(userRole: string | undefined): boolean {
+  return userRole === UserRole.SUPER_ADMIN;
 }
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
