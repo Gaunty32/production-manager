@@ -554,10 +554,27 @@ export class DatabaseStorage implements IStorage {
         const hours = data.totalMinutes / 60;
         const stitchesPerHour = hours > 0 ? Math.round(data.totalStitches / hours) : 0;
 
+        // Get user details if staff has a linked userId
+        let firstName = '';
+        let lastName = '';
+        let email = '';
+        
+        if (staffMember[0]?.userId) {
+          const user = await db.select().from(users).where(eq(users.id, staffMember[0].userId)).limit(1);
+          if (user[0]) {
+            firstName = user[0].firstName || '';
+            lastName = user[0].lastName || '';
+            email = user[0].email || '';
+          }
+        }
+
         return {
           staffId,
           staffName: staffMember[0]?.name || 'Unknown',
           userId: staffMember[0]?.userId || null,
+          firstName,
+          lastName,
+          email,
           totalStitches: data.totalStitches,
           totalHours: Math.round(hours * 10) / 10,
           stitchesPerHour,

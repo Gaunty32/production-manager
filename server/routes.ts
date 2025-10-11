@@ -121,18 +121,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getStaffProductionMetrics()
       ]);
 
-      // Create a map of userId to production metrics
-      const metricsMap = new Map(
-        productionMetrics.map(m => [m.userId, m])
+      // Create a map of userId to stars
+      const starsMap = new Map(
+        stars.map(s => [s.userId, s])
       );
 
-      // Combine stars and production metrics
-      const leaderboard = stars.map(entry => ({
-        ...entry,
-        stitchesPerHour: metricsMap.get(entry.userId)?.stitchesPerHour || 0,
-        totalStitches: metricsMap.get(entry.userId)?.totalStitches || 0,
-        totalHours: metricsMap.get(entry.userId)?.totalHours || 0,
-      }));
+      // Start with production metrics (so staff with production data but no stars still appear)
+      const leaderboard = productionMetrics.map(metric => {
+        const starData = starsMap.get(metric.userId);
+        
+        // Use user names if available, otherwise fall back to staff name
+        let firstName = starData?.firstName || metric.firstName || '';
+        let lastName = starData?.lastName || metric.lastName || '';
+        
+        // If still no name, use staff name (split it if it has spaces)
+        if (!firstName && !lastName && metric.staffName) {
+          const nameParts = metric.staffName.split(' ');
+          firstName = nameParts[0] || '';
+          lastName = nameParts.slice(1).join(' ') || '';
+        }
+        
+        return {
+          userId: metric.userId || metric.staffId, // Use staffId as fallback for userId
+          firstName,
+          lastName,
+          email: starData?.email || metric.email || '',
+          yellowStars: starData?.yellowStars || 0,
+          redStars: starData?.redStars || 0,
+          stitchesPerHour: metric.stitchesPerHour,
+          totalStitches: metric.totalStitches,
+          totalHours: metric.totalHours,
+        };
+      });
+
+      // Add any users with stars but no production metrics
+      stars.forEach(starEntry => {
+        if (!leaderboard.find(entry => entry.userId === starEntry.userId)) {
+          leaderboard.push({
+            ...starEntry,
+            stitchesPerHour: 0,
+            totalStitches: 0,
+            totalHours: 0,
+          });
+        }
+      });
+
+      // Sort by stitches per hour (primary) then total stars (secondary)
+      leaderboard.sort((a, b) => {
+        const aStars = a.yellowStars + a.redStars;
+        const bStars = b.yellowStars + b.redStars;
+        
+        if (b.stitchesPerHour !== a.stitchesPerHour) {
+          return b.stitchesPerHour - a.stitchesPerHour;
+        }
+        return bStars - aStars;
+      });
 
       res.json(leaderboard);
     } catch (error) {
