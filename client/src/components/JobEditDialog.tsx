@@ -41,6 +41,8 @@ import { format, isPast, isToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { CelebrationDialog } from "@/components/CelebrationDialog";
 
 type LineItem = {
   id?: string;
@@ -91,8 +93,11 @@ interface JobEditDialogProps {
 
 export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSubmit }: JobEditDialogProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [deletedLineItemIds, setDeletedLineItemIds] = useState<string[]>([]);
+  const [celebrationOpen, setCelebrationOpen] = useState(false);
+  const [celebrationOnTime, setCelebrationOnTime] = useState(true);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -214,6 +219,11 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
     if (job) {
       try {
+        // Check if job is being marked as complete
+        const wasNotCompleted = !job.completed;
+        const isNowCompleted = data.completed;
+        const justCompleted = wasNotCompleted && isNowCompleted;
+
         // Update the main job first
         await apiRequest("PATCH", `/api/jobs/${job.id}`, data);
 
@@ -250,12 +260,42 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         await queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
         await queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'line-items'] });
         
-        toast({
-          title: "Success",
-          description: "Order updated successfully",
-        });
-        
-        onOpenChange(false);
+        // If job was just completed, show celebration and award star
+        if (justCompleted) {
+          const requiredDate = new Date(data.requiredDispatchDate);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          requiredDate.setHours(0, 0, 0, 0);
+          
+          const isLate = today > requiredDate;
+          const starType = isLate ? "red" : "yellow";
+          
+          // Award the star only if user is authenticated
+          if (user) {
+            try {
+              await apiRequest("POST", `/api/users/${user.id}/stars`, { starType });
+            } catch (error) {
+              console.error("Failed to award star:", error);
+            }
+          }
+          
+          // Show celebration dialog and close edit dialog after celebration
+          setCelebrationOnTime(!isLate);
+          setCelebrationOpen(true);
+          
+          // Close edit dialog after a delay to allow celebration to show
+          // Celebration dialog auto-closes after 3 seconds
+          setTimeout(() => {
+            onOpenChange(false);
+          }, 3500);
+        } else {
+          // No celebration, close immediately
+          toast({
+            title: "Success",
+            description: "Order updated successfully",
+          });
+          onOpenChange(false);
+        }
       } catch (error) {
         console.error('Error updating job or line items:', error);
         toast({
@@ -270,16 +310,17 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   if (!job) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Edit Production Order</DialogTitle>
-          <DialogDescription>
-            Update the details for this production order
-          </DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Production Order</DialogTitle>
+            <DialogDescription>
+              Update the details for this production order
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Required Dispatch Date - TOP PRIORITY with color indicators */}
               <FormField
@@ -664,5 +705,12 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         </Form>
       </DialogContent>
     </Dialog>
+    <CelebrationDialog
+      open={celebrationOpen}
+      onOpenChange={setCelebrationOpen}
+      onTime={celebrationOnTime}
+      staffName={user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Staff Member'}
+    />
+    </>
   );
 }
