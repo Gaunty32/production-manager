@@ -145,10 +145,24 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/callback", (req, res, next) => {
     const strategyName = getStrategyName(req.hostname);
-    console.log(`Callback attempt: hostname=${req.hostname}, strategy=${strategyName}`);
-    passport.authenticate(strategyName, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
+    console.log(`Callback attempt: hostname=${req.hostname}, strategy=${strategyName}, query:`, req.query);
+    passport.authenticate(strategyName, (err: any, user: any, info: any) => {
+      if (err) {
+        console.error("Authentication error:", err);
+        return res.status(500).send(`Authentication error: ${err.message}`);
+      }
+      if (!user) {
+        console.error("Authentication failed:", info);
+        return res.status(401).send(`Authentication failed: ${info?.message || 'Unknown error'}`);
+      }
+      req.logIn(user, (err) => {
+        if (err) {
+          console.error("Login error:", err);
+          return res.status(500).send(`Login error: ${err.message}`);
+        }
+        console.log("Authentication successful, redirecting to /");
+        res.redirect("/");
+      });
     })(req, res, next);
   });
 
