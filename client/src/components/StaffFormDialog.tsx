@@ -24,6 +24,8 @@ import { insertStaffSchema, type Staff } from "@shared/schema";
 
 const formSchema = insertStaffSchema.extend({
   name: z.string().min(1, "Staff name is required"),
+  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  telephone: z.string().optional(),
 });
 
 interface StaffFormDialogProps {
@@ -44,6 +46,8 @@ export function StaffFormDialog({ trigger, staff, onSubmit, open: controlledOpen
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
+      email: "",
+      telephone: "",
     },
   });
 
@@ -51,10 +55,14 @@ export function StaffFormDialog({ trigger, staff, onSubmit, open: controlledOpen
     if (staff && open) {
       form.reset({
         name: staff.name,
+        email: staff.email || "",
+        telephone: staff.telephone || "",
       });
     } else if (!open) {
       form.reset({
         name: "",
+        email: "",
+        telephone: "",
       });
     }
   }, [staff, open, form]);
@@ -84,6 +92,32 @@ export function StaffFormDialog({ trigger, staff, onSubmit, open: controlledOpen
                   <FormLabel>Staff Name</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder="Enter staff name" data-testid="input-staff-name" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="email" placeholder="email@example.com" data-testid="input-staff-email" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="telephone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Telephone</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Phone number" data-testid="input-staff-telephone" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

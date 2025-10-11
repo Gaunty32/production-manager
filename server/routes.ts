@@ -27,6 +27,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   await setupAuth(app);
 
+  // Optional auth middleware - allows both authenticated and guest access
+  const optionalAuth = (req: any, res: any, next: any) => {
+    // Skip authentication check, allow all requests
+    next();
+  };
+
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
@@ -39,11 +45,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Optional auth middleware - allows both authenticated and guest access
-  const optionalAuth = (req: any, res: any, next: any) => {
-    // Skip authentication check, allow all requests
-    next();
+  // Middleware to check if user is super admin
+  const requireSuperAdmin = async (req: any, res: any, next: any) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user || user.role !== "super_admin") {
+        return res.status(403).json({ error: "Super admin access required" });
+      }
+      
+      next();
+    } catch (error) {
+      console.error("Error checking super admin status:", error);
+      res.status(500).json({ error: "Authorization check failed" });
+    }
   };
+
+  // User management routes - protected for super admins only
+  app.get("/api/users", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.patch("/api/users/:id/role", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const { role } = req.body;
+      
+      // Validate role against UserRole enum
+      const validRoles = ["super_admin", "admin", "manager", "staff"];
+      if (!role || typeof role !== "string" || !validRoles.includes(role)) {
+        return res.status(400).json({ error: "Invalid role. Must be one of: super_admin, admin, manager, staff" });
+      }
+      
+      const user = await storage.updateUserRole(req.params.id, role);
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      res.status(500).json({ error: "Failed to update user role" });
+    }
+  });
 
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
@@ -68,8 +118,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  // Seed super admin user
+  const seedSuperAdmin = async () => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const superAdminExists = allUsers.some(u => u.role === "super_admin");
+      
+      if (!superAdminExists) {
+        // Create a super admin user named Chris
+        await storage.upsertUser({
+          id: "chris-super-admin",
+          email: "chris@selectuniforms.com",
+          firstName: "Chris",
+          lastName: "",
+          role: "super_admin",
+        });
+        console.log("Created super admin user: Chris");
+      }
+    } catch (error) {
+      console.error("Failed to seed super admin:", error);
+    }
+  };
+
   // Run seed on startup
   await seedCustomers();
+  await seedSuperAdmin();
 
   // Customer routes
   app.get("/api/customers", optionalAuth, async (req, res) => {

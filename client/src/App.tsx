@@ -14,6 +14,7 @@ import { LogOut } from "lucide-react";
 import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
 import StaffPage from "@/pages/Staff";
+import UsersPage from "@/pages/Users";
 import Schedule from "@/pages/Schedule";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
@@ -43,6 +44,7 @@ function Router() {
       <Route path="/orders" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={Customers} />} />
       <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
+      <Route path="/users" component={() => <ProtectedRoute component={UsersPage} />} />
       <Route path="/schedule" component={() => <ProtectedRoute component={Schedule} />} />
       <Route path="/machine/:id" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route component={NotFound} />
