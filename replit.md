@@ -70,3 +70,12 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 - **Display Logic**: Customer list combines both fields to show full contact name (e.g., "John Smith")
 - **Data Migration**: Existing contact_name data preserved in contact_first_name field during migration
 - Improves data organization and enables better contact name formatting
+
+#### Leaderboard Production Metrics Enhancement
+- Enhanced leaderboard to display production performance metrics alongside star counts
+- **Production Metrics Calculation**: Calculates average stitches per hour, total stitches, and hours worked from completed jobs
+- **Inclusive Display**: Staff members with production data now appear on leaderboard even with zero stars
+- **Data Source**: Metrics calculated from `jobs.completedById`, `lineItems.stitchCount`, and `jobSchedules` time data
+- **Name Fallback**: System uses staff names when staff members aren't linked to user accounts
+- **API Enhancement**: Leaderboard endpoint now starts with production metrics and left-joins star data
+- **Note**: Production metrics rely on `jobs.completedById` being populated; jobs without this field may not be included in calculations
