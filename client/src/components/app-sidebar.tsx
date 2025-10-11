@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Shield } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -52,14 +52,24 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               ))}
               {isUserSuperAdmin && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/users"}>
-                    <Link href="/users" data-testid="link-user-management">
-                      <ShieldCheck className="h-4 w-4" />
-                      <span>User Management</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location === "/users"}>
+                      <Link href="/users" data-testid="link-user-management">
+                        <ShieldCheck className="h-4 w-4" />
+                        <span>User Management</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location === "/2fa"}>
+                      <Link href="/2fa" data-testid="link-2fa-setup">
+                        <Shield className="h-4 w-4" />
+                        <span>Two-Factor Auth</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </>
               )}
             </SidebarMenu>
           </SidebarGroupContent>

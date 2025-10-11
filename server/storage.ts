@@ -74,6 +74,10 @@ export interface IStorage {
   createStaffMachineAllocation(allocation: InsertStaffMachineAllocation): Promise<StaffMachineAllocation>;
   updateStaffMachineAllocation(id: string, allocation: Partial<StaffMachineAllocation>): Promise<StaffMachineAllocation>;
   deleteStaffMachineAllocation(id: string): Promise<void>;
+  
+  enable2FA(userId: string, secret: string, backupCodes: string[]): Promise<User>;
+  disable2FA(userId: string): Promise<User>;
+  verify2FABackupCode(userId: string, backupCode: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -414,6 +418,65 @@ export class DatabaseStorage implements IStorage {
 
   async deleteStaffMachineAllocation(id: string): Promise<void> {
     await db.delete(staffMachineAllocations).where(eq(staffMachineAllocations.id, id));
+  }
+
+  async enable2FA(userId: string, secret: string, backupCodes: string[]): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        twoFactorSecret: secret,
+        twoFactorEnabled: true,
+        backupCodes: backupCodes,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    if (!user) throw new Error("User not found");
+    return user;
+  }
+
+  async disable2FA(userId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        twoFactorSecret: null,
+        twoFactorEnabled: false,
+        backupCodes: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    if (!user) throw new Error("User not found");
+    return user;
+  }
+
+  async verify2FABackupCode(userId: string, backupCode: string): Promise<boolean> {
+    const user = await this.getUser(userId);
+    if (!user || !user.backupCodes) return false;
+    
+    const { verifyBackupCodeHash } = await import("./twoFactor");
+    
+    let matchedIndex = -1;
+    for (let i = 0; i < user.backupCodes.length; i++) {
+      const isMatch = await verifyBackupCodeHash(backupCode, user.backupCodes[i]);
+      if (isMatch) {
+        matchedIndex = i;
+        break;
+      }
+    }
+    
+    if (matchedIndex === -1) return false;
+    
+    const updatedCodes = user.backupCodes.filter((_, i) => i !== matchedIndex);
+    await db
+      .update(users)
+      .set({
+        backupCodes: updatedCodes.length > 0 ? updatedCodes : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+    
+    return true;
   }
 }
 
