@@ -57,12 +57,17 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
+  // Check if this email belongs to a super admin
+  const superAdminEmails = ["chris@selectuniforms.co.uk"];
+  const role = superAdminEmails.includes(claims["email"]) ? "super_admin" : "staff";
+  
   await storage.upsertUser({
     id: claims["sub"],
     email: claims["email"],
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
+    role: role,
   });
 }
 

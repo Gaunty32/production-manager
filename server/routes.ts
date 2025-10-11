@@ -118,31 +118,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Seed super admin user
-  const seedSuperAdmin = async () => {
-    try {
-      const allUsers = await storage.getAllUsers();
-      const superAdminExists = allUsers.some(u => u.role === "super_admin");
-      
-      if (!superAdminExists) {
-        // Create a super admin user named Chris
-        await storage.upsertUser({
-          id: "chris-super-admin",
-          email: "chris@selectuniforms.com",
-          firstName: "Chris",
-          lastName: "",
-          role: "super_admin",
-        });
-        console.log("Created super admin user: Chris");
-      }
-    } catch (error) {
-      console.error("Failed to seed super admin:", error);
-    }
-  };
-
   // Run seed on startup
   await seedCustomers();
-  await seedSuperAdmin();
 
   // Customer routes
   app.get("/api/customers", optionalAuth, async (req, res) => {
