@@ -114,6 +114,13 @@ export const staffMachineAllocations = pgTable("staff_machine_allocations", {
   recurringDaysOfWeek: integer("recurring_days_of_week").array(),
 });
 
+export const userStars = pgTable("user_stars", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  yellowStars: integer("yellow_stars").notNull().default(0),
+  redStars: integer("red_stars").notNull().default(0),
+});
+
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
 });

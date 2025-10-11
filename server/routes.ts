@@ -95,6 +95,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Star management routes
+  app.post("/api/users/:userId/stars", optionalAuth, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { starType } = req.body;
+      
+      if (starType !== "yellow" && starType !== "red") {
+        return res.status(400).json({ error: "Star type must be 'yellow' or 'red'" });
+      }
+      
+      const stars = await storage.awardStar(userId, starType);
+      res.json(stars);
+    } catch (error) {
+      console.error("Error awarding star:", error);
+      res.status(500).json({ error: "Failed to award star" });
+    }
+  });
+
+  app.get("/api/stars/leaderboard", optionalAuth, async (req, res) => {
+    try {
+      const leaderboard = await storage.getStarsLeaderboard();
+      res.json(leaderboard);
+    } catch (error) {
+      console.error("Error fetching leaderboard:", error);
+      res.status(500).json({ error: "Failed to fetch leaderboard" });
+    }
+  });
+
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
     try {

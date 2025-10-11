@@ -8,6 +8,7 @@ import {
   jobSchedule,
   jobLineItems,
   staffMachineAllocations,
+  userStars,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -28,7 +29,7 @@ import {
   type InsertStaffMachineAllocation
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -74,6 +75,9 @@ export interface IStorage {
   createStaffMachineAllocation(allocation: InsertStaffMachineAllocation): Promise<StaffMachineAllocation>;
   updateStaffMachineAllocation(id: string, allocation: Partial<StaffMachineAllocation>): Promise<StaffMachineAllocation>;
   deleteStaffMachineAllocation(id: string): Promise<void>;
+  
+  awardStar(userId: string, starType: "yellow" | "red"): Promise<any>;
+  getStarsLeaderboard(): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -414,6 +418,53 @@ export class DatabaseStorage implements IStorage {
 
   async deleteStaffMachineAllocation(id: string): Promise<void> {
     await db.delete(staffMachineAllocations).where(eq(staffMachineAllocations.id, id));
+  }
+
+  async awardStar(userId: string, starType: "yellow" | "red"): Promise<any> {
+    const [existingStars] = await db
+      .select()
+      .from(userStars)
+      .where(eq(userStars.userId, userId));
+
+    if (existingStars) {
+      const updates = starType === "yellow" 
+        ? { yellowStars: sql`${userStars.yellowStars} + 1` }
+        : { redStars: sql`${userStars.redStars} + 1` };
+      
+      const [updated] = await db
+        .update(userStars)
+        .set(updates)
+        .where(eq(userStars.userId, userId))
+        .returning();
+      return updated;
+    } else {
+      const [newStars] = await db
+        .insert(userStars)
+        .values({
+          userId,
+          yellowStars: starType === "yellow" ? 1 : 0,
+          redStars: starType === "red" ? 1 : 0,
+        })
+        .returning();
+      return newStars;
+    }
+  }
+
+  async getStarsLeaderboard(): Promise<any[]> {
+    const leaderboard = await db
+      .select({
+        userId: userStars.userId,
+        yellowStars: userStars.yellowStars,
+        redStars: userStars.redStars,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+      })
+      .from(userStars)
+      .leftJoin(users, eq(userStars.userId, users.id))
+      .orderBy(sql`${userStars.yellowStars} + ${userStars.redStars} DESC`);
+    
+    return leaderboard;
   }
 }
 
