@@ -61,8 +61,8 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete }: J
     <tr
       className={cn(
         "hover-elevate",
-        // Overdue takes priority over everything
-        isOverdue && "border-l-4 border-l-destructive",
+        // Overdue gets red background
+        isOverdue && "bg-red-100 dark:bg-red-950/30",
         // Customer color coding (only if not overdue)
         !isOverdue && getCustomerColorClasses(job.customerId),
         // Due today adds amber ring accent (augments customer colors, doesn't replace)
