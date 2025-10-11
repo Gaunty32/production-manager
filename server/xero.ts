@@ -84,7 +84,73 @@ export class XeroService {
       ],
       date: new Date(job.dateReceived).toISOString().split('T')[0],
       dueDate: new Date(job.requiredDispatchDate).toISOString().split('T')[0],
-      reference: job.poNumber,
+      reference: job.poNumber || undefined,
+      status: "DRAFT",
+    };
+
+    const response = await fetch(`${this.apiUrl}/Invoices`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "xero-tenant-id": this.tenantId,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify({ Invoices: [invoice] }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Xero API error: ${error}`);
+    }
+
+    return response.json();
+  }
+
+  async createConsolidatedInvoice(
+    jobs: Job[], 
+    customer: Customer, 
+    lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number }>
+  ): Promise<any> {
+    if (!this.isConfigured()) {
+      throw new Error("Xero is not configured");
+    }
+
+    const token = await this.getAccessToken();
+
+    // Create line items from job line items
+    const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => ({
+      description: `${item.jobName}${item.poNumber ? ` (PO: ${item.poNumber})` : ''} - ${item.description}`,
+      quantity: item.quantity,
+      unitAmount: item.unitPrice,
+    }));
+
+    // Get the most recent dates for invoice date and due date
+    const mostRecentDate = jobs.reduce((latest, job) => {
+      const jobDate = new Date(job.dateReceived);
+      return jobDate > latest ? jobDate : latest;
+    }, new Date(jobs[0].dateReceived));
+
+    const mostRecentDueDate = jobs.reduce((latest, job) => {
+      const jobDueDate = new Date(job.requiredDispatchDate);
+      return jobDueDate > latest ? jobDueDate : latest;
+    }, new Date(jobs[0].requiredDispatchDate));
+
+    // Combine all PO numbers for reference
+    const poNumbers = jobs
+      .map(j => j.poNumber)
+      .filter(Boolean)
+      .join(", ");
+
+    const invoice: XeroInvoice = {
+      type: "ACCREC",
+      contact: {
+        name: customer.name,
+      },
+      lineItems: xeroLineItems,
+      date: mostRecentDate.toISOString().split('T')[0],
+      dueDate: mostRecentDueDate.toISOString().split('T')[0],
+      reference: poNumbers || undefined,
       status: "DRAFT",
     };
 

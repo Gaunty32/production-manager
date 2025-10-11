@@ -22,6 +22,7 @@ import {
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { xeroService } from "./xero";
+import { calculateJobPrice } from "@shared/pricing";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
@@ -753,6 +754,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Xero invoice creation error:", error);
       res.status(500).json({ 
         error: error instanceof Error ? error.message : "Failed to create invoice in Xero" 
+      });
+    }
+  });
+
+  app.post("/api/xero/consolidated-invoice", optionalAuth, async (req, res) => {
+    try {
+      const { jobIds, customerId } = req.body;
+
+      if (!xeroService.isConfigured()) {
+        return res.status(400).json({ 
+          error: "Xero is not configured. Please set up Xero credentials." 
+        });
+      }
+
+      if (!Array.isArray(jobIds) || jobIds.length === 0) {
+        return res.status(400).json({ error: "jobIds must be a non-empty array" });
+      }
+
+      // Fetch all jobs and customer
+      const allJobs = await storage.getJobs();
+      const selectedJobs = allJobs.filter(j => jobIds.includes(j.id));
+
+      if (selectedJobs.length !== jobIds.length) {
+        return res.status(404).json({ error: "One or more jobs not found" });
+      }
+
+      // CRITICAL: Verify all selected jobs belong to the specified customer
+      const jobsFromWrongCustomer = selectedJobs.filter(j => j.customerId !== customerId);
+      if (jobsFromWrongCustomer.length > 0) {
+        return res.status(400).json({ 
+          error: "All selected jobs must belong to the same customer" 
+        });
+      }
+
+      // Verify all selected jobs are in 'ready' status
+      const jobsNotReady = selectedJobs.filter(j => j.invoiceStatus !== 'ready');
+      if (jobsNotReady.length > 0) {
+        return res.status(400).json({ 
+          error: "All selected jobs must be in 'ready' status for invoicing" 
+        });
+      }
+
+      const customer = await storage.getCustomers().then(customers => 
+        customers.find(c => c.id === customerId)
+      );
+
+      if (!customer) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+
+      // Determine pricing table
+      const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
+      if (!pricingTable) {
+        return res.status(400).json({ error: "Customer has no pricing table configured" });
+      }
+
+      // Get all line items and calculate pricing
+      const allLineItems = await storage.getJobLineItems();
+      const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number }> = [];
+
+      for (const job of selectedJobs) {
+        const jobLineItems = allLineItems.filter(item => item.jobId === job.id);
+        const priceResult = calculateJobPrice(jobLineItems, pricingTable);
+
+        if (priceResult.totalPrice === "POA") {
+          return res.status(400).json({ error: "Cannot create invoice for jobs with POA pricing" });
+        }
+
+        // Add each line item with its calculated unit price
+        jobLineItems.forEach((lineItem, index) => {
+          const lineItemPrice = priceResult.lineItemPrices[index];
+          lineItemsWithPricing.push({
+            jobName: job.jobName,
+            poNumber: job.poNumber,
+            description: lineItem.description || `${lineItem.quantity} items @ ${lineItem.stitchCount} stitches`,
+            quantity: lineItem.quantity,
+            unitPrice: lineItemPrice.unitPrice,
+          });
+        });
+      }
+
+      // Create consolidated invoice in Xero
+      const invoiceResponse = await xeroService.createConsolidatedInvoice(
+        selectedJobs,
+        customer,
+        lineItemsWithPricing
+      );
+
+      // Extract invoice ID from Xero response
+      const invoiceId = invoiceResponse.Invoices?.[0]?.InvoiceID || "unknown";
+      const invoiceNumber = invoiceResponse.Invoices?.[0]?.InvoiceNumber || null;
+
+      // Update all jobs with invoice status
+      const now = new Date();
+      for (const job of selectedJobs) {
+        await storage.updateJob(job.id, {
+          invoiceStatus: "invoiced",
+          invoicedAt: now,
+          invoiceReference: invoiceNumber || invoiceId,
+        });
+      }
+
+      res.json({
+        success: true,
+        invoiceId,
+        invoiceNumber,
+        jobsInvoiced: selectedJobs.length,
+      });
+    } catch (error) {
+      console.error("Consolidated invoice creation error:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to create consolidated invoice" 
       });
     }
   });

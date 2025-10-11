@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { canViewPrices } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface Job {
   id: string;
@@ -44,7 +46,9 @@ interface LineItem {
 
 export default function InvoicingQueue() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
+  const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
   
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
@@ -132,9 +136,42 @@ export default function InvoicingQueue() {
     const customerJobs = jobsByCustomer[customerId] || [];
     const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
     
-    console.log("Creating invoice for customer:", customerId);
-    console.log("Selected jobs:", selectedCustomerJobs);
-    // TODO: Implement invoice creation with Xero
+    if (selectedCustomerJobs.length === 0) {
+      return;
+    }
+
+    setCreatingInvoice(customerId);
+    
+    try {
+      const jobIds = selectedCustomerJobs.map(job => job.id);
+      
+      const response = await apiRequest("POST", "/api/xero/consolidated-invoice", {
+        jobIds,
+        customerId,
+      }) as unknown as { success: boolean; invoiceId: string; invoiceNumber: string | null; jobsInvoiced: number };
+
+      toast({
+        title: "Invoice Created",
+        description: `Successfully created invoice for ${selectedCustomerJobs.length} ${selectedCustomerJobs.length === 1 ? 'order' : 'orders'}. Reference: ${response.invoiceNumber || response.invoiceId}`,
+      });
+
+      // Clear selected jobs for this customer
+      const newSelected = new Set(selectedJobs);
+      selectedCustomerJobs.forEach(job => newSelected.delete(job.id));
+      setSelectedJobs(newSelected);
+
+      // Refresh jobs list
+      await queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    } catch (error) {
+      console.error("Error creating invoice:", error);
+      toast({
+        title: "Invoice Creation Failed",
+        description: error instanceof Error ? error.message : "Failed to create invoice in Xero",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingInvoice(null);
+    }
   };
 
   const isLoading = jobsLoading || customersLoading;
@@ -205,11 +242,11 @@ export default function InvoicingQueue() {
                         )}
                         <Button
                           onClick={() => handleCreateInvoice(customerId)}
-                          disabled={selectedCount === 0}
+                          disabled={selectedCount === 0 || creatingInvoice === customerId}
                           data-testid={`button-create-invoice-${customerId}`}
                         >
                           <FileText className="h-4 w-4 mr-2" />
-                          Create Invoice
+                          {creatingInvoice === customerId ? "Creating..." : "Create Invoice"}
                         </Button>
                       </div>
                     </div>
