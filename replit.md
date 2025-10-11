@@ -45,6 +45,31 @@ The application uses PostgreSQL (Neon serverless database) with Drizzle ORM for 
 
 ### October 11, 2025
 
+#### Gamification System with Star Leaderboard
+- Implemented **star tracking system** to motivate staff performance
+- **Database Schema**: Created `userStars` table tracking yellow and red stars per user
+- **Star Awarding Logic**:
+  - Yellow stars awarded for on-time job completions (dispatch date ≤ completion date)
+  - Red stars awarded for late job completions (completion date > dispatch date)
+  - Stars only awarded to authenticated users, but celebration shown to all
+- **Celebration Dialog**: 
+  - Animated celebration appears when job marked complete
+  - Shows green smiley with yellow star for on-time completions
+  - Shows orange medium face with red star for late completions
+  - Auto-closes after 3 seconds
+  - Prevents duplicate celebrations for already-completed jobs
+- **Leaderboard Page** (/leaderboard):
+  - Displays all users ranked by performance stars
+  - Sorted by yellow stars (primary) then red stars (secondary)
+  - Trophy icons for top 3 performers (gold, silver, bronze)
+  - Shows yellow and red star counts for each user
+  - Empty state when no stars have been awarded
+  - Accessible via sidebar navigation with Trophy icon
+- **API Routes**:
+  - POST /api/users/:userId/stars - Award stars to user
+  - GET /api/stars/leaderboard - Fetch ranked leaderboard data
+- **UX Enhancement**: Delayed edit dialog close (3.5s) allows celebration to display before unmounting
+
 #### User Management System and Super Admin Role
 - Added **super_admin** role to the user roles hierarchy (super_admin > admin > manager > staff)
 - Created User Management page accessible only to super admins
