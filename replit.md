@@ -41,6 +41,30 @@ The application uses PostgreSQL (Neon serverless database) with Drizzle ORM for 
 - **Production Calculations**: Calculates production runs, time per run (including changeover), and total production time based on stitch count and machine specifications.
 - **Optional Fields**: PO Number is optional; job notes are supported.
 
+## Recent Changes
+
+### October 11, 2025
+
+#### Role-Based Price Visibility
+- Added role-based access control for pricing information
+- Three user roles: Admin, Manager, Staff (default)
+- **Price Visibility Rules**:
+  - Admin and Manager: Can view all pricing (unit prices and total prices)
+  - Staff: Cannot view pricing information (prices hidden with "-")
+- Unit prices displayed for each line item in tooltips when hovering over quantity
+- Total job price displayed in production queue Price column
+- User role stored in `users.role` column with default value "staff"
+- Helper function `canViewPrices(userRole)` determines visibility
+- Pricing displays as "-" for users without price viewing permissions
+
+#### Line Item Editing Improvements
+- Fixed line item editing for jobs without existing line items (legacy jobs)
+- Automatically creates default line item from job quantity for older orders
+- Full CRUD operations on line items (create, update, delete) with proper persistence
+- Added toast notifications for success/error feedback
+- Improved cache management with `refetchOnMount: 'always'` for fresh data
+- Line items now properly editable across all production orders
+
 ## Recent Changes (October 10, 2025)
 
 ### Pricing Tables Integration (2025 & 2026)
