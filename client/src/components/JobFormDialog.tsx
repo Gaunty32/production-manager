@@ -116,6 +116,12 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   const allLineItemsCompleted = () => {
     return lineItems.length > 0 && lineItems.every(item => item.completed);
   };
+
+  const allLogosApproved = lineItems.length > 0 && lineItems.every(item => item.logoApproved);
+
+  const toggleAllLogos = (checked: boolean) => {
+    setLineItems(lineItems.map(item => ({ ...item, logoApproved: checked })));
+  };
   
   const requiredDispatchDate = form.watch("requiredDispatchDate");
   const isOverdue = requiredDispatchDate && isPast(new Date(requiredDispatchDate)) && !isToday(new Date(requiredDispatchDate));
@@ -306,52 +312,70 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            {/* Required Dispatch Date - TOP PRIORITY with color indicators */}
-            <FormField
-              control={form.control}
-              name="requiredDispatchDate"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel className={cn(
-                    "text-base font-semibold",
-                    isOverdue && "text-red-600 dark:text-red-500",
-                    isDueToday && !isOverdue && "text-amber-600 dark:text-amber-500"
-                  )}>
-                    Required Dispatch Date
-                    {isOverdue && " (OVERDUE)"}
-                    {isDueToday && !isOverdue && " (DUE TODAY)"}
-                  </FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "pl-3 text-left font-normal justify-start",
-                            !field.value && "text-muted-foreground",
-                            isOverdue && "border-red-500 bg-red-50 dark:bg-red-950/30",
-                            isDueToday && !isOverdue && "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
-                          )}
-                          data-testid="button-dispatch-date"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value ? new Date(field.value) : undefined}
-                        onSelect={(date) => field.onChange(date?.toISOString())}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Required Dispatch Date - TOP PRIORITY with color indicators */}
+              <FormField
+                control={form.control}
+                name="requiredDispatchDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel className={cn(
+                      "text-base font-semibold",
+                      isOverdue && "text-red-600 dark:text-red-500",
+                      isDueToday && !isOverdue && "text-amber-600 dark:text-amber-500"
+                    )}>
+                      Required Dispatch Date
+                      {isOverdue && " (OVERDUE)"}
+                      {isDueToday && !isOverdue && " (DUE TODAY)"}
+                    </FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "pl-3 text-left font-normal justify-start",
+                              !field.value && "text-muted-foreground",
+                              isOverdue && "border-red-500 bg-red-50 dark:bg-red-950/30",
+                              isDueToday && !isOverdue && "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
+                            )}
+                            data-testid="button-dispatch-date"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value ? new Date(field.value) : undefined}
+                          onSelect={(date) => field.onChange(date?.toISOString())}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Logos Approved - Master checkbox */}
+              <div className="flex flex-col">
+                <label className="text-base font-semibold mb-2">Logos Approved</label>
+                <div className="flex items-center space-x-3 rounded-md border p-3 h-10">
+                  <Checkbox
+                    id="logos-approved"
+                    checked={allLogosApproved}
+                    onCheckedChange={toggleAllLogos}
+                    data-testid="checkbox-logos-approved"
+                  />
+                  <label htmlFor="logos-approved" className="text-sm cursor-pointer">
+                    All logos approved
+                  </label>
+                </div>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
@@ -443,25 +467,14 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                             data-testid={`input-line-item-stitch-count-${index}`}
                           />
                         </div>
-                        <div className="flex flex-col gap-2 pt-5">
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              id={`logo-approved-${index}`}
-                              checked={item.logoApproved}
-                              onCheckedChange={(checked) => updateLineItem(index, 'logoApproved', checked === true)}
-                              data-testid={`checkbox-line-item-logo-approved-${index}`}
-                            />
-                            <label htmlFor={`logo-approved-${index}`} className="text-sm cursor-pointer">Logo</label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              id={`completed-${index}`}
-                              checked={item.completed}
-                              onCheckedChange={(checked) => updateLineItem(index, 'completed', checked === true)}
-                              data-testid={`checkbox-line-item-completed-${index}`}
-                            />
-                            <label htmlFor={`completed-${index}`} className="text-sm cursor-pointer">Done</label>
-                          </div>
+                        <div className="flex items-center gap-2 pt-5">
+                          <Checkbox
+                            id={`completed-${index}`}
+                            checked={item.completed}
+                            onCheckedChange={(checked) => updateLineItem(index, 'completed', checked === true)}
+                            data-testid={`checkbox-line-item-completed-${index}`}
+                          />
+                          <label htmlFor={`completed-${index}`} className="text-sm cursor-pointer">Done</label>
                         </div>
                         <Button
                           type="button"
