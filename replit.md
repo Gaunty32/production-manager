@@ -88,6 +88,27 @@ The application uses PostgreSQL (Neon serverless database) with Drizzle ORM for 
 - Now properly handles: null (clear field), string (update), undefined (no change)
 - Allows users to successfully edit job dates and clear line item descriptions without validation errors
 
+#### Production Queue Status Indicators
+- Added traffic light indicators to production queue for quick visual status assessment
+- **Logo Approval Indicator**: Green circle when all line items have logos approved, red otherwise
+- **Date Received Indicator**: Green circle when date received exists, red when missing
+- Tooltips on indicators show detailed line item information
+- Improves at-a-glance visibility of order status in production queue
+
+#### Form Reorganization and Line Item Completion Tracking
+- **Required Dispatch Date prominence**: Moved to top of job creation/edit forms with color-coded urgency indicators
+  - Red background and "OVERDUE" label for past dates (not today)
+  - Amber background and "DUE TODAY" label for current day deadlines
+  - Improves visibility of critical dispatch deadlines
+- **Granular Line Item Completion**: Added completion checkbox ("Done") to each line item
+  - Database schema includes `completed` boolean field on job_line_items table (default false)
+  - Each line item can be individually marked as complete
+  - Compact UI with "Logo" and "Done" checkboxes side-by-side for each line item
+- **Order Completion Gating**: Order cannot be marked complete until all line items are completed
+  - Order Completed checkbox disabled with helper text when line items incomplete
+  - Prevents premature order closure and ensures all items are tracked to completion
+  - Enforces proper completion workflow in manufacturing process
+
 ## Recent Changes (October 10, 2025)
 
 ### Pricing Tables Integration (2025 & 2026)
