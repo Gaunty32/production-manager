@@ -73,9 +73,14 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 
 #### Leaderboard Production Metrics Enhancement
 - Enhanced leaderboard to display production performance metrics alongside star counts
-- **Production Metrics Calculation**: Calculates average stitches per hour, total stitches, and hours worked from completed jobs
+- **Production Metrics Calculation**: Calculates average stitches per head-hour (normalized by machine capacity), total stitches, and hours worked from completed jobs
+- **Machine Head Normalization**: Accounts for whether staff work on 6-head or 8-head machines by calculating head-hours (hours × machine heads)
+  - Machine 1 (Barudan 8): 8 heads
+  - Machines 2, 3, 4 (Barudan/SWF): 6 heads
+  - Formula: stitches per head-hour = totalStitches ÷ (hours × machineHeads)
 - **Inclusive Display**: Staff members with production data now appear on leaderboard even with zero stars
-- **Data Source**: Metrics calculated from `jobs.completedById`, `lineItems.stitchCount`, and `jobSchedules` time data
+- **Data Source**: Metrics calculated from `jobs.completedById`, `lineItems.stitchCount`, and `jobSchedules` time data with machine configuration from `MACHINE_HEADS`
 - **Name Fallback**: System uses staff names when staff members aren't linked to user accounts
 - **API Enhancement**: Leaderboard endpoint now starts with production metrics and left-joins star data
+- **UI Updates**: Displays "stitches/head-hr" label and explains normalization in card description
 - **Note**: Production metrics rely on `jobs.completedById` being populated; jobs without this field may not be included in calculations

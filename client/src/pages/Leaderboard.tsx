@@ -63,7 +63,8 @@ export default function Leaderboard() {
           <CardHeader>
             <CardTitle>Top Performers</CardTitle>
             <CardDescription>
-              Yellow stars for on-time completions, red stars for late completions
+              Yellow stars for on-time completions, red stars for late completions. 
+              Production metrics normalized per machine head (6-head or 8-head machines).
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -110,7 +111,7 @@ export default function Leaderboard() {
                           </div>
                           {entry.stitchesPerHour > 0 && (
                             <div className="text-sm font-medium text-primary" data-testid={`stitches-per-hour-${entry.userId}`}>
-                              {entry.stitchesPerHour.toLocaleString()} stitches/hr
+                              {entry.stitchesPerHour.toLocaleString()} stitches/head-hr
                             </div>
                           )}
                         </div>

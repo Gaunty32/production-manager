@@ -30,6 +30,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { MACHINE_HEADS } from "@shared/machines";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -492,14 +493,18 @@ export class DatabaseStorage implements IStorage {
         .where(eq(jobs.completed, true));
     }
 
-    // Group by staff and calculate metrics
-    const staffMetrics: Record<string, { totalStitches: number; totalMinutes: number }> = {};
+    // Group by staff and calculate metrics (accounting for machine heads)
+    const staffMetrics: Record<string, { 
+      totalStitches: number; 
+      totalMinutes: number;
+      totalHeadHours: number; // Track head-hours for normalized calculation
+    }> = {};
 
     for (const job of completedJobs) {
       if (!job.staffId) continue;
 
       if (!staffMetrics[job.staffId]) {
-        staffMetrics[job.staffId] = { totalStitches: 0, totalMinutes: 0 };
+        staffMetrics[job.staffId] = { totalStitches: 0, totalMinutes: 0, totalHeadHours: 0 };
       }
 
       // Get line items for this job
@@ -525,16 +530,20 @@ export class DatabaseStorage implements IStorage {
         ));
 
       if (schedules.length > 0) {
-        // Use actual scheduled time
-        const jobMinutes = schedules.reduce((sum, schedule) => {
-          return sum + (schedule.endTime - schedule.startTime);
-        }, 0);
-        staffMetrics[job.staffId].totalMinutes += jobMinutes;
+        // Use actual scheduled time and factor in machine heads
+        for (const schedule of schedules) {
+          const jobMinutes = schedule.endTime - schedule.startTime;
+          const machineHeads = MACHINE_HEADS[schedule.machineId] || 6; // Default to 6 heads
+          const headHours = (jobMinutes / 60) * machineHeads;
+          
+          staffMetrics[job.staffId].totalMinutes += jobMinutes;
+          staffMetrics[job.staffId].totalHeadHours += headHours;
+        }
       } else if (job.machineId && jobStitches > 0) {
         // Fall back to calculated production time
         const STITCHES_PER_MINUTE = 750;
         const CHANGEOVER_TIME_MINUTES = 3;
-        const machineHeads = job.machineId === 1 || job.machineId === 3 ? 8 : 1;
+        const machineHeads = MACHINE_HEADS[job.machineId] || 6;
         
         const totalQuantity = lineItems.reduce((sum, item) => sum + item.quantity, 0);
         const runs = Math.ceil(totalQuantity / machineHeads);
@@ -542,17 +551,23 @@ export class DatabaseStorage implements IStorage {
         const embroideryTimePerRun = avgStitchCount / STITCHES_PER_MINUTE;
         const timePerRunMinutes = embroideryTimePerRun + CHANGEOVER_TIME_MINUTES;
         const totalMinutes = Math.ceil((runs * timePerRunMinutes) / 10) * 10;
+        const headHours = (totalMinutes / 60) * machineHeads;
         
         staffMetrics[job.staffId].totalMinutes += totalMinutes;
+        staffMetrics[job.staffId].totalHeadHours += headHours;
       }
     }
 
-    // Convert to array with stitches per hour
+    // Convert to array with stitches per hour (normalized by machine heads)
     const metrics = await Promise.all(
       Object.entries(staffMetrics).map(async ([staffId, data]) => {
         const staffMember = await db.select().from(staff).where(eq(staff.id, staffId)).limit(1);
         const hours = data.totalMinutes / 60;
-        const stitchesPerHour = hours > 0 ? Math.round(data.totalStitches / hours) : 0;
+        
+        // Calculate normalized stitches per head-hour (accounts for machine capacity)
+        const stitchesPerHeadHour = data.totalHeadHours > 0 
+          ? Math.round(data.totalStitches / data.totalHeadHours) 
+          : 0;
 
         // Get user details if staff has a linked userId
         let firstName = '';
@@ -577,7 +592,7 @@ export class DatabaseStorage implements IStorage {
           email,
           totalStitches: data.totalStitches,
           totalHours: Math.round(hours * 10) / 10,
-          stitchesPerHour,
+          stitchesPerHour: stitchesPerHeadHour, // Now normalized by machine heads
         };
       })
     );
