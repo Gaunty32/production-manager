@@ -116,7 +116,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/stars/leaderboard", optionalAuth, async (req, res) => {
     try {
-      const leaderboard = await storage.getStarsLeaderboard();
+      const [stars, productionMetrics] = await Promise.all([
+        storage.getStarsLeaderboard(),
+        storage.getStaffProductionMetrics()
+      ]);
+
+      // Create a map of userId to production metrics
+      const metricsMap = new Map(
+        productionMetrics.map(m => [m.userId, m])
+      );
+
+      // Combine stars and production metrics
+      const leaderboard = stars.map(entry => ({
+        ...entry,
+        stitchesPerHour: metricsMap.get(entry.userId)?.stitchesPerHour || 0,
+        totalStitches: metricsMap.get(entry.userId)?.totalStitches || 0,
+        totalHours: metricsMap.get(entry.userId)?.totalHours || 0,
+      }));
+
       res.json(leaderboard);
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
