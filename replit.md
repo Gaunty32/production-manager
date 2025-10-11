@@ -82,6 +82,12 @@ The application uses PostgreSQL (Neon serverless database) with Drizzle ORM for 
 - Improved cache management with `refetchOnMount: 'always'` for fresh data
 - Line items now properly editable across all production orders
 
+#### Line Item Validation Fix
+- Fixed 400 error when updating jobs with line items that have null descriptions
+- Changed `updateJobLineItemSchema` description field to `z.string().nullable().optional()`
+- Now properly handles: null (clear field), string (update), undefined (no change)
+- Allows users to successfully edit job dates and clear line item descriptions without validation errors
+
 ## Recent Changes (October 10, 2025)
 
 ### Pricing Tables Integration (2025 & 2026)

@@ -360,7 +360,7 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
 
 export const updateJobLineItemSchema = z.object({
   quantity: z.coerce.number().int().min(1).optional(),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   stitchCount: z.coerce.number().int().min(1).optional(),
   logoApproved: z.coerce.boolean().optional(),
 });
