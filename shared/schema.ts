@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  role: varchar("role").notNull().default("staff"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -309,6 +310,20 @@ export const updateJobScheduleSchema = z.object({
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+// User roles
+export const UserRole = {
+  ADMIN: "admin",
+  MANAGER: "manager",
+  STAFF: "staff",
+} as const;
+
+export type UserRoleType = typeof UserRole[keyof typeof UserRole];
+
+// Helper function to check if a user can view prices
+export function canViewPrices(userRole: string | undefined): boolean {
+  return userRole === UserRole.ADMIN || userRole === UserRole.MANAGER;
+}
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
 export type InsertStaff = z.infer<typeof insertStaffSchema>;
