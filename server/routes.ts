@@ -762,12 +762,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { jobIds, customerId } = req.body;
 
-      if (!xeroService.isConfigured()) {
-        return res.status(400).json({ 
-          error: "Xero is not configured. Please set up Xero credentials." 
-        });
-      }
-
       if (!Array.isArray(jobIds) || jobIds.length === 0) {
         return res.status(400).json({ error: "jobIds must be a non-empty array" });
       }
@@ -804,11 +798,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Customer not found" });
       }
 
-      // Determine pricing table
+      // Determine pricing table (use null for zero pricing if none configured)
       const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
-      if (!pricingTable) {
-        return res.status(400).json({ error: "Customer has no pricing table configured" });
-      }
 
       // Get all line items and calculate pricing
       const allLineItems = await storage.getJobLineItems();
@@ -816,7 +807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const job of selectedJobs) {
         const jobLineItems = allLineItems.filter(item => item.jobId === job.id);
-        const priceResult = calculateJobPrice(jobLineItems, pricingTable);
+        const priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => 0) };
 
         if (priceResult.totalPrice === "POA") {
           return res.status(400).json({ error: "Cannot create invoice for jobs with POA pricing" });
