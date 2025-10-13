@@ -155,6 +155,9 @@ export default function Customers() {
                     Address
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Pricing Table
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Actions
                   </th>
                 </tr>
@@ -162,46 +165,56 @@ export default function Customers() {
               <tbody className="bg-card divide-y divide-border">
                 {customers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
                       No customers found. Click 'Add Customer' to create one.
                     </td>
                   </tr>
                 ) : (
-                  customers.map((customer) => (
-                    <tr key={customer.id} className="hover-elevate" data-testid={`row-customer-${customer.id}`}>
-                      <td className="py-3 px-4 text-sm">{customer.name}</td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">
-                        {customer.contactFirstName || customer.contactLastName 
-                          ? `${customer.contactFirstName || ''} ${customer.contactLastName || ''}`.trim()
-                          : "-"}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">{customer.email || "-"}</td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">{customer.telephone || "-"}</td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">{customer.address || "-"}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setCustomerToEdit(customer)}
-                            data-testid={`button-edit-customer-${customer.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleDelete(customer.id)}
-                            data-testid={`button-delete-customer-${customer.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  customers.map((customer) => {
+                    const pricingTables = [];
+                    if (customer.pricingTable2025) pricingTables.push("2025");
+                    if (customer.pricingTable2026) pricingTables.push("2026");
+                    const pricingTableText = pricingTables.length > 0 ? pricingTables.join(", ") : "-";
+                    
+                    return (
+                      <tr key={customer.id} className="hover-elevate" data-testid={`row-customer-${customer.id}`}>
+                        <td className="py-3 px-4 text-sm">{customer.name}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {customer.contactFirstName || customer.contactLastName 
+                            ? `${customer.contactFirstName || ''} ${customer.contactLastName || ''}`.trim()
+                            : "-"}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.email || "-"}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.telephone || "-"}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.address || "-"}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground" data-testid={`text-pricing-table-${customer.id}`}>
+                          {pricingTableText}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => setCustomerToEdit(customer)}
+                              data-testid={`button-edit-customer-${customer.id}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleDelete(customer.id)}
+                              data-testid={`button-delete-customer-${customer.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
