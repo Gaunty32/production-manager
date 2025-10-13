@@ -152,7 +152,7 @@ export function getStaffAvailableSlots(
     }
     
     // Check if it's a recurring shift for this day of week
-    if (shift.isRecurring && shift.recurringDayOfWeek === date.getDay()) {
+    if (shift.isRecurring && shift.recurringDaysOfWeek?.includes(date.getDay())) {
       return true;
     }
     

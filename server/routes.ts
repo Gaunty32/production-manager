@@ -861,12 +861,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Determine pricing table (use null for zero pricing if none configured)
       const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
 
-      // Get all line items and calculate pricing
-      const allLineItems = await storage.getJobLineItems();
+      // Get line items and calculate pricing for each job
       const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number }> = [];
 
       for (const job of selectedJobs) {
-        const jobLineItems = allLineItems.filter(item => item.jobId === job.id);
+        const jobLineItems = await storage.getJobLineItems(job.id);
         const priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
 
         if (priceResult.totalPrice === "POA") {
@@ -882,7 +881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             poNumber: job.poNumber,
             description: lineItem.description || `${lineItem.quantity} items @ ${lineItem.stitchCount} stitches`,
             quantity: lineItem.quantity,
-            unitPrice,
+            unitPrice: unitPrice as number, // Type assertion safe here - POA already handled above
           });
         });
       }

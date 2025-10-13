@@ -713,7 +713,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       open={celebrationOpen}
       onOpenChange={setCelebrationOpen}
       onTime={celebrationOnTime}
-      staffName={user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Staff Member'}
+      staffName={user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Staff Member' : 'Staff Member'}
     />
     </>
   );
