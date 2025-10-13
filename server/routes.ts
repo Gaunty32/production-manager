@@ -933,27 +933,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/xero/auth/connect", optionalAuth, async (req, res) => {
     try {
       if (!xeroService.isConfigured()) {
-        return res.status(400).json({ error: "Xero is not configured" });
+        return res.status(400).json({ error: "Xero is not configured. Please contact your administrator." });
       }
 
       const protocol = req.headers['x-forwarded-proto'] || req.protocol;
       const host = req.headers.host;
       const redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
       
-      const authUrl = xeroService.getAuthorizationUrl(redirectUri);
-      res.json({ authUrl });
+      const { authUrl, state } = xeroService.getAuthorizationUrl(redirectUri);
+      res.json({ authUrl, state });
     } catch (error) {
       console.error("Error generating Xero auth URL:", error);
-      res.status(500).json({ error: "Failed to generate authorization URL" });
+      res.status(500).json({ error: "Unable to initiate connection. Please try again." });
     }
   });
 
   app.get("/api/xero/auth/callback", optionalAuth, async (req, res) => {
     try {
-      const { code } = req.query;
+      const { code, state } = req.query;
 
       if (!code || typeof code !== 'string') {
-        return res.status(400).send("Missing authorization code");
+        return res.redirect("/?xero=error&reason=missing_code");
+      }
+
+      if (!state || typeof state !== 'string') {
+        return res.redirect("/?xero=error&reason=missing_state");
+      }
+
+      // Validate state to prevent CSRF attacks
+      if (!xeroService.validateState(state)) {
+        return res.redirect("/?xero=error&reason=invalid_state");
       }
 
       const protocol = req.headers['x-forwarded-proto'] || req.protocol;

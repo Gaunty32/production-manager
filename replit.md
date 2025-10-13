@@ -63,6 +63,26 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 
 ### October 13, 2025
 
+#### Xero OAuth 2.0 Integration
+- Implemented complete OAuth 2.0 flow for Xero accounting integration
+- **Backend Implementation**:
+  - Added OAuth endpoints: `/api/xero/auth/status`, `/api/xero/auth/connect`, `/api/xero/auth/callback`
+  - Implemented automatic token refresh when access token expires (5-minute buffer)
+  - Secure token storage in-memory during session (tokens include access_token, refresh_token, expires_at)
+  - Authorization URL generation with required scopes: `accounting.transactions`, `accounting.contacts`, `offline_access`
+  - Token exchange using client credentials (Client ID, Client Secret from environment secrets)
+- **Frontend UI**:
+  - Added Xero connection status badge and "Connect to Xero" button on Invoicing Queue page
+  - Connection status indicator shows whether Xero is configured and connected
+  - Alert notification when Xero is not connected
+  - OAuth flow redirects to Xero login, returns to app with success/error message
+  - Toast notifications for connection success/failure
+- **Security**: Xero credentials (XERO_CLIENT_ID, XERO_CLIENT_SECRET, XERO_TENANT_ID) stored as encrypted Replit Secrets
+- **User Flow**: Click "Connect to Xero" → Authorize in Xero → Redirected back → Can create invoices
+- **Next Step**: User needs to click the "Connect to Xero" button and authorize the app to enable invoice creation
+
+### October 13, 2025
+
 #### Production Queue Reorganization
 - Split production queue into two sections: active orders and completed orders
 - **Active Orders (Production Queue)**: Displays orders that have not been invoiced (invoiceStatus !== 'invoiced')

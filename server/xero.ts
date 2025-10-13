@@ -23,43 +23,77 @@ interface XeroTokens {
   access_token: string;
   refresh_token: string;
   expires_at: number; // Unix timestamp
+  tenant_id?: string;
 }
 
 export class XeroService {
   private apiUrl = "https://api.xero.com/api.xro/2.0";
   private authUrl = "https://login.xero.com/identity/connect/authorize";
   private tokenUrl = "https://identity.xero.com/connect/token";
+  private connectionsUrl = "https://api.xero.com/connections";
   private clientId: string;
   private clientSecret: string;
-  private tenantId: string;
   private tokens: XeroTokens | null = null;
+  private pendingStates: Map<string, number> = new Map(); // state -> timestamp
 
   constructor() {
     this.clientId = process.env.XERO_CLIENT_ID || "";
     this.clientSecret = process.env.XERO_CLIENT_SECRET || "";
-    this.tenantId = process.env.XERO_TENANT_ID || "";
 
-    if (!this.clientId || !this.clientSecret || !this.tenantId) {
+    if (!this.clientId || !this.clientSecret) {
       console.warn("Xero credentials not configured. Invoice creation will be unavailable.");
     }
   }
 
   isConfigured(): boolean {
-    return !!(this.clientId && this.clientSecret && this.tenantId);
+    return !!(this.clientId && this.clientSecret);
   }
 
   isConnected(): boolean {
-    return !!(this.tokens?.access_token);
+    return !!(this.tokens?.access_token && this.tokens?.tenant_id);
   }
 
-  getAuthorizationUrl(redirectUri: string): string {
+  private generateState(): string {
+    return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  }
+
+  private cleanupExpiredStates() {
+    const now = Date.now();
+    const expiryTime = 10 * 60 * 1000; // 10 minutes
+    const entries = Array.from(this.pendingStates.entries());
+    for (const [state, timestamp] of entries) {
+      if (now - timestamp > expiryTime) {
+        this.pendingStates.delete(state);
+      }
+    }
+  }
+
+  getAuthorizationUrl(redirectUri: string): { authUrl: string; state: string } {
+    this.cleanupExpiredStates();
+    
+    const state = this.generateState();
+    this.pendingStates.set(state, Date.now());
+
     const params = new URLSearchParams({
       response_type: "code",
       client_id: this.clientId,
       redirect_uri: redirectUri,
       scope: "accounting.transactions accounting.contacts offline_access",
+      state,
     });
-    return `${this.authUrl}?${params.toString()}`;
+    
+    return {
+      authUrl: `${this.authUrl}?${params.toString()}`,
+      state
+    };
+  }
+
+  validateState(state: string): boolean {
+    const exists = this.pendingStates.has(state);
+    if (exists) {
+      this.pendingStates.delete(state);
+    }
+    return exists;
   }
 
   async exchangeCodeForTokens(code: string, redirectUri: string): Promise<void> {
@@ -80,14 +114,37 @@ export class XeroService {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Failed to exchange code for tokens: ${error}`);
+      throw new Error("Authorization failed. Please try connecting again.");
     }
 
     const data = await response.json();
+    
+    // Fetch tenant ID from connections
+    const connectionsResponse = await fetch(this.connectionsUrl, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${data.access_token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!connectionsResponse.ok) {
+      throw new Error("Failed to retrieve organization information.");
+    }
+
+    const connections = await connectionsResponse.json();
+    if (!connections || connections.length === 0) {
+      throw new Error("No Xero organizations found. Please ensure you have access to a Xero organization.");
+    }
+
+    // Use the first connection's tenant ID
+    const tenantId = connections[0].tenantId;
+
     this.tokens = {
       access_token: data.access_token,
       refresh_token: data.refresh_token,
       expires_at: Date.now() + (data.expires_in * 1000),
+      tenant_id: tenantId,
     };
   }
 
@@ -111,8 +168,7 @@ export class XeroService {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to refresh access token: ${error}`);
+      throw new Error("Session expired. Please reconnect to Xero.");
     }
 
     const data = await response.json();
@@ -120,12 +176,13 @@ export class XeroService {
       access_token: data.access_token,
       refresh_token: data.refresh_token,
       expires_at: Date.now() + (data.expires_in * 1000),
+      tenant_id: this.tokens.tenant_id, // Preserve tenant ID
     };
   }
 
   async getAccessToken(): Promise<string> {
     if (!this.isConfigured()) {
-      throw new Error("Xero is not configured. Please set XERO_CLIENT_ID, XERO_CLIENT_SECRET, and XERO_TENANT_ID environment variables.");
+      throw new Error("Xero is not configured.");
     }
 
     // Check if token exists and is still valid
@@ -138,6 +195,13 @@ export class XeroService {
     }
 
     throw new Error("Not connected to Xero. Please authorize the application first.");
+  }
+
+  getTenantId(): string {
+    if (!this.tokens?.tenant_id) {
+      throw new Error("No tenant ID available. Please reconnect to Xero.");
+    }
+    return this.tokens.tenant_id;
   }
 
   async createInvoice(job: Job, customer: Customer, unitPrice: number = 0): Promise<any> {
@@ -165,11 +229,13 @@ export class XeroService {
       status: "DRAFT",
     };
 
+    const tenantId = this.getTenantId();
+
     const response = await fetch(`${this.apiUrl}/Invoices`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
-        "xero-tenant-id": this.tenantId,
+        "xero-tenant-id": tenantId,
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
@@ -177,8 +243,7 @@ export class XeroService {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Xero API error: ${error}`);
+      throw new Error("Failed to create invoice in Xero. Please check your connection.");
     }
 
     return response.json();
@@ -205,6 +270,7 @@ export class XeroService {
     }
 
     const token = await this.getAccessToken();
+    const tenantId = this.getTenantId();
 
     // Create line items from job line items
     const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => ({
@@ -246,7 +312,7 @@ export class XeroService {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
-        "xero-tenant-id": this.tenantId,
+        "xero-tenant-id": tenantId,
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
@@ -254,8 +320,7 @@ export class XeroService {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Xero API error: ${error}`);
+      throw new Error("Failed to create invoice in Xero. Please check your connection.");
     }
 
     return response.json();
@@ -267,19 +332,19 @@ export class XeroService {
     }
 
     const token = await this.getAccessToken();
+    const tenantId = this.getTenantId();
 
     const response = await fetch(`${this.apiUrl}/Invoices`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
-        "xero-tenant-id": this.tenantId,
+        "xero-tenant-id": tenantId,
         "Accept": "application/json",
       },
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Xero API error: ${error}`);
+      throw new Error("Failed to retrieve invoices from Xero.");
     }
 
     return response.json();
