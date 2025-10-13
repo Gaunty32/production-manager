@@ -2,6 +2,7 @@ import { Plus, Trash2, Pencil } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -135,109 +136,103 @@ export default function Customers() {
           />
         </div>
 
-        <div className="border rounded-md overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Customer Name
-                  </th>
-                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Pricing Table
-                  </th>
-                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Contact Name
-                  </th>
-                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Email
-                  </th>
-                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Telephone
-                  </th>
-                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Address
-                  </th>
-                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-card divide-y divide-border">
-                {customers.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                      No customers found. Click 'Add Customer' to create one.
-                    </td>
-                  </tr>
-                ) : (
-                  customers.map((customer) => {
-                    return (
-                      <tr key={customer.id} className="hover-elevate" data-testid={`row-customer-${customer.id}`}>
-                        <td className="py-3 px-4 text-sm">{customer.name}</td>
-                        <td className="py-3 px-4" data-testid={`text-pricing-table-${customer.id}`}>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {customer.pricingTable2025 && (
-                              <Badge 
-                                variant="outline" 
-                                className="bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
-                                data-testid={`badge-pricing-2025-${customer.id}`}
-                              >
-                                2025
-                              </Badge>
-                            )}
-                            {customer.pricingTable2026 && (
-                              <Badge 
-                                variant="outline" 
-                                className="bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
-                                data-testid={`badge-pricing-2026-${customer.id}`}
-                              >
-                                2026
-                              </Badge>
-                            )}
-                            {!customer.pricingTable2025 && !customer.pricingTable2026 && (
-                              <span className="text-muted-foreground text-sm">-</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">
-                          {customer.contactFirstName || customer.contactLastName 
-                            ? `${customer.contactFirstName || ''} ${customer.contactLastName || ''}`.trim()
-                            : "-"}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.email || "-"}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.telephone || "-"}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.address || "-"}</td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => setCustomerToEdit(customer)}
-                              data-testid={`button-edit-customer-${customer.id}`}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleDelete(customer.id)}
-                              data-testid={`button-delete-customer-${customer.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+        {customers.length === 0 ? (
+          <div className="border rounded-md p-8 text-center text-muted-foreground">
+            No customers found. Click 'Add Customer' to create one.
           </div>
-        </div>
+        ) : (
+          <div className="space-y-3">
+            {customers.map((customer) => (
+              <Card key={customer.id} className="hover-elevate" data-testid={`card-customer-${customer.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 space-y-3">
+                      {/* Customer Name and Pricing Table */}
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h3 className="font-semibold text-base" data-testid={`text-customer-name-${customer.id}`}>
+                          {customer.name}
+                        </h3>
+                        <div className="flex items-center gap-1 flex-wrap" data-testid={`text-pricing-table-${customer.id}`}>
+                          {customer.pricingTable2025 && (
+                            <Badge 
+                              variant="outline" 
+                              className="bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                              data-testid={`badge-pricing-2025-${customer.id}`}
+                            >
+                              2025
+                            </Badge>
+                          )}
+                          {customer.pricingTable2026 && (
+                            <Badge 
+                              variant="outline" 
+                              className="bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
+                              data-testid={`badge-pricing-2026-${customer.id}`}
+                            >
+                              2026
+                            </Badge>
+                          )}
+                          {!customer.pricingTable2025 && !customer.pricingTable2026 && (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Contact Details */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Contact: </span>
+                          <span data-testid={`text-contact-name-${customer.id}`}>
+                            {customer.contactFirstName || customer.contactLastName 
+                              ? `${customer.contactFirstName || ''} ${customer.contactLastName || ''}`.trim()
+                              : "-"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Email: </span>
+                          <span data-testid={`text-email-${customer.id}`}>{customer.email || "-"}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Phone: </span>
+                          <span data-testid={`text-telephone-${customer.id}`}>{customer.telephone || "-"}</span>
+                        </div>
+                      </div>
+
+                      {/* Address - appears below */}
+                      {customer.address && (
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">Address: </span>
+                          <span data-testid={`text-address-${customer.id}`}>{customer.address}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setCustomerToEdit(customer)}
+                        data-testid={`button-edit-customer-${customer.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleDelete(customer.id)}
+                        data-testid={`button-delete-customer-${customer.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
 
         <AlertDialog open={customerToDelete !== null} onOpenChange={(open) => !open && setCustomerToDelete(null)}>
           <AlertDialogContent>

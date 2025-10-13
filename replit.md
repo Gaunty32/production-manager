@@ -61,6 +61,20 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 
 ## Recent Changes
 
+### October 13, 2025
+
+#### Customer List UI Enhancement
+- Restructured customer list from table layout to card-based layout for better space utilization
+- **Layout Change**: Replaced traditional table with Card components to accommodate address field more naturally
+- **Card Structure**: 
+  - Top section displays customer name and color-coded pricing table badges (blue for 2025, green for 2026)
+  - Middle section shows contact details in responsive 3-column grid (Contact Name, Email, Phone)
+  - Bottom section displays full address on its own row with proper spacing
+  - Edit/Delete actions positioned on the right side of each card
+- **Address Display**: Address now appears below contact information instead of in a cramped table column, providing natural flow and better readability for long addresses
+- **Responsive Design**: Grid layout adapts from 1 column on mobile to 3 columns on desktop
+- **Visual Improvement**: Eliminates the cramped appearance of address data in table format
+
 ### October 11, 2025
 
 #### Customer Contact Name Fields Update
