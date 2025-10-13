@@ -867,7 +867,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const job of selectedJobs) {
         const jobLineItems = allLineItems.filter(item => item.jobId === job.id);
-        const priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => 0) };
+        const priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
 
         if (priceResult.totalPrice === "POA") {
           return res.status(400).json({ error: "Cannot create invoice for jobs with POA pricing" });
@@ -876,12 +876,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Add each line item with its calculated unit price
         jobLineItems.forEach((lineItem, index) => {
           const lineItemPrice = priceResult.lineItemPrices[index];
+          const unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice;
           lineItemsWithPricing.push({
             jobName: job.jobName,
             poNumber: job.poNumber,
             description: lineItem.description || `${lineItem.quantity} items @ ${lineItem.stitchCount} stitches`,
             quantity: lineItem.quantity,
-            unitPrice: lineItemPrice.unitPrice,
+            unitPrice,
           });
         });
       }
@@ -918,6 +919,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: error instanceof Error ? error.message : "Failed to create consolidated invoice" 
       });
+    }
+  });
+
+  // Xero OAuth routes
+  app.get("/api/xero/auth/status", optionalAuth, async (req, res) => {
+    res.json({
+      configured: xeroService.isConfigured(),
+      connected: xeroService.isConnected(),
+    });
+  });
+
+  app.get("/api/xero/auth/connect", optionalAuth, async (req, res) => {
+    try {
+      if (!xeroService.isConfigured()) {
+        return res.status(400).json({ error: "Xero is not configured" });
+      }
+
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers.host;
+      const redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
+      
+      const authUrl = xeroService.getAuthorizationUrl(redirectUri);
+      res.json({ authUrl });
+    } catch (error) {
+      console.error("Error generating Xero auth URL:", error);
+      res.status(500).json({ error: "Failed to generate authorization URL" });
+    }
+  });
+
+  app.get("/api/xero/auth/callback", optionalAuth, async (req, res) => {
+    try {
+      const { code } = req.query;
+
+      if (!code || typeof code !== 'string') {
+        return res.status(400).send("Missing authorization code");
+      }
+
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers.host;
+      const redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
+
+      await xeroService.exchangeCodeForTokens(code, redirectUri);
+
+      // Redirect to invoicing queue page with success message
+      res.redirect("/?xero=connected");
+    } catch (error) {
+      console.error("Xero OAuth callback error:", error);
+      res.redirect("/?xero=error");
     }
   });
 

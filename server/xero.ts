@@ -19,12 +19,20 @@ export interface XeroInvoice {
   status: "DRAFT" | "SUBMITTED" | "AUTHORISED";
 }
 
+interface XeroTokens {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number; // Unix timestamp
+}
+
 export class XeroService {
   private apiUrl = "https://api.xero.com/api.xro/2.0";
+  private authUrl = "https://login.xero.com/identity/connect/authorize";
+  private tokenUrl = "https://identity.xero.com/connect/token";
   private clientId: string;
   private clientSecret: string;
   private tenantId: string;
-  private accessToken: string | null = null;
+  private tokens: XeroTokens | null = null;
 
   constructor() {
     this.clientId = process.env.XERO_CLIENT_ID || "";
@@ -40,27 +48,96 @@ export class XeroService {
     return !!(this.clientId && this.clientSecret && this.tenantId);
   }
 
+  isConnected(): boolean {
+    return !!(this.tokens?.access_token);
+  }
+
+  getAuthorizationUrl(redirectUri: string): string {
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: this.clientId,
+      redirect_uri: redirectUri,
+      scope: "accounting.transactions accounting.contacts offline_access",
+    });
+    return `${this.authUrl}?${params.toString()}`;
+  }
+
+  async exchangeCodeForTokens(code: string, redirectUri: string): Promise<void> {
+    const params = new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+    });
+
+    const response = await fetch(this.tokenUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to exchange code for tokens: ${error}`);
+    }
+
+    const data = await response.json();
+    this.tokens = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: Date.now() + (data.expires_in * 1000),
+    };
+  }
+
+  async refreshAccessToken(): Promise<void> {
+    if (!this.tokens?.refresh_token) {
+      throw new Error("No refresh token available");
+    }
+
+    const params = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: this.tokens.refresh_token,
+    });
+
+    const response = await fetch(this.tokenUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to refresh access token: ${error}`);
+    }
+
+    const data = await response.json();
+    this.tokens = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: Date.now() + (data.expires_in * 1000),
+    };
+  }
+
   async getAccessToken(): Promise<string> {
     if (!this.isConfigured()) {
       throw new Error("Xero is not configured. Please set XERO_CLIENT_ID, XERO_CLIENT_SECRET, and XERO_TENANT_ID environment variables.");
     }
 
-    // Check for access token in environment variable
-    const envToken = process.env.XERO_ACCESS_TOKEN;
-    if (envToken) {
-      return envToken;
+    // Check if token exists and is still valid
+    if (this.tokens?.access_token) {
+      // Refresh if expiring within 5 minutes
+      if (this.tokens.expires_at < Date.now() + (5 * 60 * 1000)) {
+        await this.refreshAccessToken();
+      }
+      return this.tokens.access_token;
     }
 
-    // Return in-memory token if available (set via OAuth flow)
-    if (this.accessToken) {
-      return this.accessToken;
-    }
-
-    throw new Error("No access token available. Please set XERO_ACCESS_TOKEN environment variable or implement OAuth flow.");
-  }
-
-  setAccessToken(token: string) {
-    this.accessToken = token;
+    throw new Error("Not connected to Xero. Please authorize the application first.");
   }
 
   async createInvoice(job: Job, customer: Customer, unitPrice: number = 0): Promise<any> {
