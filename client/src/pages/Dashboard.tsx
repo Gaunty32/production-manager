@@ -162,16 +162,24 @@ export default function Dashboard() {
     );
   });
 
-  const sortedJobs = [...filteredJobs].sort(
+  // Separate active and completed orders
+  const activeJobs = filteredJobs.filter(job => job.invoiceStatus !== 'invoiced');
+  const completedJobs = filteredJobs.filter(job => job.invoiceStatus === 'invoiced');
+
+  const sortedActiveJobs = [...activeJobs].sort(
     (a, b) => new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime()
   );
 
-  // Calculate overdue and due today orders
-  const overdueOrders = sortedJobs.filter(job => 
+  const sortedCompletedJobs = [...completedJobs].sort(
+    (a, b) => new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime()
+  );
+
+  // Calculate overdue and due today orders (only from active jobs)
+  const overdueOrders = sortedActiveJobs.filter(job => 
     isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate)
   );
   
-  const dueTodayOrders = sortedJobs.filter(job => 
+  const dueTodayOrders = sortedActiveJobs.filter(job => 
     isToday(job.requiredDispatchDate)
   );
 
@@ -279,6 +287,7 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Production Queue - Active Orders */}
         <div className="border rounded-md overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -326,14 +335,14 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="bg-card divide-y divide-border">
-                {sortedJobs.length === 0 ? (
+                {sortedActiveJobs.length === 0 ? (
                   <tr>
                     <td colSpan={13} className="py-8 text-center text-muted-foreground">
-                      {searchTerm ? "No orders match your search." : "No orders found. Click 'Add Embroidery Order' to create one."}
+                      {searchTerm ? "No active orders match your search." : "No active orders found. Click 'Add Embroidery Order' to create one."}
                     </td>
                   </tr>
                 ) : (
-                  sortedJobs.map((job) => {
+                  sortedActiveJobs.map((job) => {
                     const customer = customers.find(c => c.id === job.customerId);
                     return (
                       <JobRow
@@ -355,6 +364,82 @@ export default function Dashboard() {
             </table>
           </div>
         </div>
+
+        {/* Completed Orders Section */}
+        {sortedCompletedJobs.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-xl font-semibold text-foreground mb-4">Completed Orders</h2>
+            <div className="border rounded-md overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted sticky top-0">
+                    <tr>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Customer
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Job Name
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        PO #
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Qty
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Machine
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Runs
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Time/Run
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Total
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Price
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Dispatch
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        On Time
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Completed By
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Invoice Ref
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-card divide-y divide-border">
+                    {sortedCompletedJobs.map((job) => {
+                      const customer = customers.find(c => c.id === job.customerId);
+                      return (
+                        <JobRow
+                          key={job.id}
+                          job={{
+                            ...job,
+                            dateReceived: new Date(job.dateReceived),
+                            requiredDispatchDate: new Date(job.requiredDispatchDate),
+                          }}
+                          customer={customer}
+                          showPrices={canViewPrices(currentUser?.role)}
+                          onEdit={handleEdit}
+                          onDelete={handleDelete}
+                          isCompleted={true}
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         <JobEditDialog
           open={editingJob !== null}

@@ -63,6 +63,20 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 
 ### October 13, 2025
 
+#### Production Queue Reorganization
+- Split production queue into two sections: active orders and completed orders
+- **Active Orders (Production Queue)**: Displays orders that have not been invoiced (invoiceStatus !== 'invoiced')
+  - Shows edit and delete action buttons
+  - Sorted by dispatch date (earliest first)
+  - Remains the main focus area for active production work
+- **Completed Orders Section**: Displays invoiced orders below the production queue
+  - Shows invoice reference number instead of action buttons
+  - Sorted by dispatch date (most recent first)
+  - Only appears when completed/invoiced orders exist
+  - Provides historical record of completed work
+- **Workflow**: When an order completes and creates a draft invoice, the job's invoiceStatus updates to 'invoiced', causing it to automatically move from the production queue to the completed orders section
+- **UI Improvement**: Cleaner production queue focused on active work, with completed orders archived in a separate viewable section
+
 #### Customer List UI Enhancement
 - Restructured customer list from table layout to card-based layout for better space utilization
 - **Layout Change**: Replaced traditional table with Card components to accommodate address field more naturally

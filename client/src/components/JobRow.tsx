@@ -29,14 +29,16 @@ interface JobRowProps {
     machineId: number | null;
     notes: string | null;
     lineItems?: JobLineItem[];
+    invoiceReference?: string | null;
   };
   customer?: Customer;
   showPrices?: boolean;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  isCompleted?: boolean;
 }
 
-export function JobRow({ job, customer, showPrices = true, onEdit, onDelete }: JobRowProps) {
+export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isCompleted = false }: JobRowProps) {
   const isOverdue = isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = isToday(job.requiredDispatchDate);
   
@@ -230,26 +232,32 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete }: J
       </td>
       <td className="py-2 px-3">{job.completedByName || "-"}</td>
       <td className="py-2 px-3">
-        <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => onEdit(job.id)}
-            data-testid={`button-edit-${job.id}`}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => onDelete(job.id)}
-            data-testid={`button-delete-${job.id}`}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        {isCompleted ? (
+          <span className="text-sm" data-testid={`text-invoice-ref-${job.id}`}>
+            {job.invoiceReference || "-"}
+          </span>
+        ) : (
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => onEdit(job.id)}
+              data-testid={`button-edit-${job.id}`}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => onDelete(job.id)}
+              data-testid={`button-delete-${job.id}`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
       </td>
     </tr>
   );
