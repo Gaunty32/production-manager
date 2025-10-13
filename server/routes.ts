@@ -960,16 +960,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { code, state } = req.query;
 
+      console.log("=== XERO CALLBACK ===");
+      console.log("Code:", code ? "present" : "missing");
+      console.log("State:", state);
+
       if (!code || typeof code !== 'string') {
+        console.log("Missing code - redirecting to error");
         return res.redirect("/?xero=error&reason=missing_code");
       }
 
       if (!state || typeof state !== 'string') {
+        console.log("Missing state - redirecting to error");
         return res.redirect("/?xero=error&reason=missing_state");
       }
 
       // Validate state to prevent CSRF attacks
       if (!xeroService.validateState(state)) {
+        console.log("Invalid state - redirecting to error");
         return res.redirect("/?xero=error&reason=invalid_state");
       }
 
@@ -985,12 +992,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
       }
 
+      console.log("Redirect URI:", redirectUri);
+      console.log("Exchanging code for tokens...");
+
       await xeroService.exchangeCodeForTokens(code, redirectUri);
 
+      console.log("Successfully exchanged tokens - redirecting to success");
       // Redirect to invoicing queue page with success message
       res.redirect("/?xero=connected");
     } catch (error) {
       console.error("Xero OAuth callback error:", error);
+      console.error("Error details:", error instanceof Error ? error.message : String(error));
       res.redirect("/?xero=error");
     }
   });
