@@ -97,55 +97,81 @@ export class XeroService {
   }
 
   async exchangeCodeForTokens(code: string, redirectUri: string): Promise<void> {
-    const params = new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: redirectUri,
-    });
+    try {
+      console.log("=== XERO TOKEN EXCHANGE ===");
+      console.log("Code:", code.substring(0, 10) + "...");
+      console.log("Redirect URI:", redirectUri);
+      
+      const params = new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri,
+      });
 
-    const response = await fetch(this.tokenUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params.toString(),
-    });
+      console.log("Fetching access token from Xero...");
+      const response = await fetch(this.tokenUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error("Authorization failed. Please try connecting again.");
+      console.log("Token response status:", response.status);
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("Token exchange failed:", error);
+        throw new Error("Authorization failed. Please try connecting again.");
+      }
+
+      const data = await response.json();
+      console.log("Access token received, fetching tenant info...");
+      
+      // Fetch tenant ID from connections
+      const connectionsResponse = await fetch(this.connectionsUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${data.access_token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("Connections response status:", connectionsResponse.status);
+
+      if (!connectionsResponse.ok) {
+        const error = await connectionsResponse.text();
+        console.error("Connections fetch failed:", error);
+        throw new Error("Failed to retrieve organization information.");
+      }
+
+      const connections = await connectionsResponse.json();
+      console.log("Connections received:", connections.length);
+      
+      if (!connections || connections.length === 0) {
+        throw new Error("No Xero organizations found. Please ensure you have access to a Xero organization.");
+      }
+
+      // Use the first connection's tenant ID
+      const tenantId = connections[0].tenantId;
+      console.log("Tenant ID:", tenantId);
+
+      this.tokens = {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: Date.now() + (data.expires_in * 1000),
+        tenant_id: tenantId,
+      };
+      
+      console.log("Token exchange complete!");
+      console.log("=========================");
+    } catch (error) {
+      console.error("=== TOKEN EXCHANGE ERROR ===");
+      console.error("Error:", error);
+      console.error("============================");
+      throw error;
     }
-
-    const data = await response.json();
-    
-    // Fetch tenant ID from connections
-    const connectionsResponse = await fetch(this.connectionsUrl, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${data.access_token}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!connectionsResponse.ok) {
-      throw new Error("Failed to retrieve organization information.");
-    }
-
-    const connections = await connectionsResponse.json();
-    if (!connections || connections.length === 0) {
-      throw new Error("No Xero organizations found. Please ensure you have access to a Xero organization.");
-    }
-
-    // Use the first connection's tenant ID
-    const tenantId = connections[0].tenantId;
-
-    this.tokens = {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_at: Date.now() + (data.expires_in * 1000),
-      tenant_id: tenantId,
-    };
   }
 
   async refreshAccessToken(): Promise<void> {
