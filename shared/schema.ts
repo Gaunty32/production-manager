@@ -131,7 +131,8 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
 
 export const updateCustomerSchema = z.object({
   name: z.string().optional(),
-  contactName: z.string().optional(),
+  contactFirstName: z.string().optional(),
+  contactLastName: z.string().optional(),
   email: z.string().email().optional().or(z.literal("")),
   telephone: z.string().optional(),
   address: z.string().optional(),
