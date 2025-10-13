@@ -144,6 +144,9 @@ export default function Customers() {
                     Customer Name
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Pricing Table
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Contact Name
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -154,9 +157,6 @@ export default function Customers() {
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Address
-                  </th>
-                  <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Pricing Table
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Actions
@@ -175,14 +175,6 @@ export default function Customers() {
                     return (
                       <tr key={customer.id} className="hover-elevate" data-testid={`row-customer-${customer.id}`}>
                         <td className="py-3 px-4 text-sm">{customer.name}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">
-                          {customer.contactFirstName || customer.contactLastName 
-                            ? `${customer.contactFirstName || ''} ${customer.contactLastName || ''}`.trim()
-                            : "-"}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.email || "-"}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.telephone || "-"}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.address || "-"}</td>
                         <td className="py-3 px-4" data-testid={`text-pricing-table-${customer.id}`}>
                           <div className="flex items-center gap-1 flex-wrap">
                             {customer.pricingTable2025 && (
@@ -208,6 +200,14 @@ export default function Customers() {
                             )}
                           </div>
                         </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {customer.contactFirstName || customer.contactLastName 
+                            ? `${customer.contactFirstName || ''} ${customer.contactLastName || ''}`.trim()
+                            : "-"}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.email || "-"}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.telephone || "-"}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">{customer.address || "-"}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1">
                             <Button
