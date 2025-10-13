@@ -949,6 +949,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const { authUrl, state } = xeroService.getAuthorizationUrl(redirectUri);
+      
+      // Store state in session to survive server restarts
+      (req.session as any).xeroOAuthState = state;
+      
       res.json({ authUrl, state });
     } catch (error) {
       console.error("Error generating Xero auth URL:", error);
@@ -963,6 +967,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("=== XERO CALLBACK ===");
       console.log("Code:", code ? "present" : "missing");
       console.log("State:", state);
+      console.log("Session state:", (req.session as any)?.xeroOAuthState);
 
       if (!code || typeof code !== 'string') {
         console.log("Missing code - redirecting to error");
@@ -974,11 +979,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.redirect("/?xero=error&reason=missing_state");
       }
 
-      // Validate state to prevent CSRF attacks
-      if (!xeroService.validateState(state)) {
-        console.log("Invalid state - redirecting to error");
+      // Validate state from session to prevent CSRF attacks
+      const sessionState = (req.session as any)?.xeroOAuthState;
+      if (!sessionState || sessionState !== state) {
+        console.log("Invalid state - session mismatch - redirecting to error");
         return res.redirect("/?xero=error&reason=invalid_state");
       }
+
+      // Clear the state from session after validation
+      delete (req.session as any).xeroOAuthState;
 
       // Use Replit dev domain if available, otherwise fall back to request headers
       const replitDevDomain = process.env.REPLIT_DEV_DOMAIN;
