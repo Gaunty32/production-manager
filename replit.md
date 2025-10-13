@@ -74,6 +74,7 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 - **Address Display**: Address now appears below contact information instead of in a cramped table column, providing natural flow and better readability for long addresses
 - **Responsive Design**: Grid layout adapts from 1 column on mobile to 3 columns on desktop
 - **Visual Improvement**: Eliminates the cramped appearance of address data in table format
+- **2025 Pricing Indicator**: Cards with 2025 pricing table have an orange background (light orange in light mode, dark orange tint in dark mode) for instant visual identification
 
 ### October 11, 2025
 

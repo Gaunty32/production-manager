@@ -143,7 +143,11 @@ export default function Customers() {
         ) : (
           <div className="space-y-3">
             {customers.map((customer) => (
-              <Card key={customer.id} className="hover-elevate" data-testid={`card-customer-${customer.id}`}>
+              <Card 
+                key={customer.id} 
+                className={`hover-elevate ${customer.pricingTable2025 ? 'bg-orange-50 dark:bg-orange-950/20' : ''}`}
+                data-testid={`card-customer-${customer.id}`}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-3">
