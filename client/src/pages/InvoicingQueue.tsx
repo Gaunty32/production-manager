@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, Calendar, Package } from "lucide-react";
+import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { canViewPrices } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Job {
   id: string;
@@ -49,6 +50,7 @@ export default function InvoicingQueue() {
   const { toast } = useToast();
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
+  const [connectingXero, setConnectingXero] = useState(false);
   
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
@@ -61,6 +63,29 @@ export default function InvoicingQueue() {
   const { data: allLineItems = [] } = useQuery<LineItem[]>({
     queryKey: ["/api/job-line-items"],
   });
+
+  const { data: xeroStatus } = useQuery<{ configured: boolean; connected: boolean }>({
+    queryKey: ["/api/xero/auth/status"],
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('xero') === 'connected') {
+      toast({
+        title: "Xero Connected",
+        description: "Successfully connected to Xero. You can now create invoices.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/xero/auth/status"] });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('xero') === 'error') {
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Xero. Please try again.",
+        variant: "destructive",
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [toast]);
 
   // Filter jobs ready for invoicing
   const readyJobs = jobs.filter(job => job.invoiceStatus === 'ready');
@@ -132,6 +157,28 @@ export default function InvoicingQueue() {
     return hasPOA ? "POA" : total;
   };
 
+  const handleConnectXero = async () => {
+    setConnectingXero(true);
+    try {
+      const response = await fetch("/api/xero/auth/connect");
+      const data = await response.json();
+      
+      if (data.authUrl) {
+        window.location.href = data.authUrl;
+      } else {
+        throw new Error("Failed to get authorization URL");
+      }
+    } catch (error) {
+      console.error("Error connecting to Xero:", error);
+      toast({
+        title: "Connection Failed",
+        description: "Failed to initiate Xero connection. Please try again.",
+        variant: "destructive",
+      });
+      setConnectingXero(false);
+    }
+  };
+
   const handleCreateInvoice = async (customerId: string) => {
     const customerJobs = jobsByCustomer[customerId] || [];
     const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
@@ -180,11 +227,42 @@ export default function InvoicingQueue() {
     <div className="h-full overflow-auto p-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">Draft Invoicing Queue</h1>
-          <p className="text-muted-foreground mt-2">
-            Review and consolidate completed orders by customer for invoice generation
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Draft Invoicing Queue</h1>
+              <p className="text-muted-foreground mt-2">
+                Review and consolidate completed orders by customer for invoice generation
+              </p>
+            </div>
+            {xeroStatus && (
+              <div className="flex items-center gap-2">
+                {xeroStatus.connected ? (
+                  <Badge variant="outline" className="gap-1.5" data-testid="badge-xero-connected">
+                    <LinkIcon className="h-3.5 w-3.5" />
+                    Xero Connected
+                  </Badge>
+                ) : (
+                  <Button
+                    onClick={handleConnectXero}
+                    disabled={connectingXero}
+                    data-testid="button-connect-xero"
+                  >
+                    {connectingXero ? "Connecting..." : "Connect to Xero"}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
+
+        {xeroStatus && !xeroStatus.connected && (
+          <Alert className="mb-6" data-testid="alert-xero-not-connected">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Connect to Xero to create invoices directly from completed orders.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {isLoading ? (
           <div className="space-y-4">
