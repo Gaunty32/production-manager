@@ -109,6 +109,10 @@ export class XeroService {
       });
 
       console.log("Fetching access token from Xero...");
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       const response = await fetch(this.tokenUrl, {
         method: "POST",
         headers: {
@@ -116,8 +120,10 @@ export class XeroService {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: params.toString(),
+        signal: controller.signal,
       });
-
+      
+      clearTimeout(timeoutId);
       console.log("Token response status:", response.status);
 
       if (!response.ok) {
