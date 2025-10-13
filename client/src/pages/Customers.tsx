@@ -1,6 +1,7 @@
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -171,11 +172,6 @@ export default function Customers() {
                   </tr>
                 ) : (
                   customers.map((customer) => {
-                    const pricingTables = [];
-                    if (customer.pricingTable2025) pricingTables.push("2025");
-                    if (customer.pricingTable2026) pricingTables.push("2026");
-                    const pricingTableText = pricingTables.length > 0 ? pricingTables.join(", ") : "-";
-                    
                     return (
                       <tr key={customer.id} className="hover-elevate" data-testid={`row-customer-${customer.id}`}>
                         <td className="py-3 px-4 text-sm">{customer.name}</td>
@@ -187,8 +183,30 @@ export default function Customers() {
                         <td className="py-3 px-4 text-sm text-muted-foreground">{customer.email || "-"}</td>
                         <td className="py-3 px-4 text-sm text-muted-foreground">{customer.telephone || "-"}</td>
                         <td className="py-3 px-4 text-sm text-muted-foreground">{customer.address || "-"}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground" data-testid={`text-pricing-table-${customer.id}`}>
-                          {pricingTableText}
+                        <td className="py-3 px-4" data-testid={`text-pricing-table-${customer.id}`}>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {customer.pricingTable2025 && (
+                              <Badge 
+                                variant="outline" 
+                                className="bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                                data-testid={`badge-pricing-2025-${customer.id}`}
+                              >
+                                2025
+                              </Badge>
+                            )}
+                            {customer.pricingTable2026 && (
+                              <Badge 
+                                variant="outline" 
+                                className="bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
+                                data-testid={`badge-pricing-2026-${customer.id}`}
+                              >
+                                2026
+                              </Badge>
+                            )}
+                            {!customer.pricingTable2025 && !customer.pricingTable2026 && (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1">
