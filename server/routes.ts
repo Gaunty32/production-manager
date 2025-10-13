@@ -952,7 +952,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store state in session to survive server restarts
       (req.session as any).xeroOAuthState = state;
       
-      res.json({ authUrl, state });
+      // Explicitly save the session before responding to ensure it's persisted
+      req.session.save((err) => {
+        if (err) {
+          console.error("Failed to save session:", err);
+          return res.status(500).json({ error: "Session error. Please try again." });
+        }
+        console.log("Session saved with state:", state);
+        res.json({ authUrl, state });
+      });
     } catch (error) {
       console.error("Error generating Xero auth URL:", error);
       res.status(500).json({ error: "Unable to initiate connection. Please try again." });
