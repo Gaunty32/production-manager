@@ -936,15 +936,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Xero is not configured. Please contact your administrator." });
       }
 
-      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-      const host = req.headers.host;
-      const redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
+      // Use Replit dev domain if available, otherwise fall back to request headers
+      const replitDevDomain = process.env.REPLIT_DEV_DOMAIN;
+      let redirectUri: string;
       
-      console.log("=== XERO AUTH DEBUG ===");
-      console.log("Protocol:", protocol);
-      console.log("Host:", host);
-      console.log("Redirect URI:", redirectUri);
-      console.log("======================");
+      if (replitDevDomain) {
+        redirectUri = `https://${replitDevDomain}/api/xero/auth/callback`;
+      } else {
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+        const host = req.headers.host;
+        redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
+      }
       
       const { authUrl, state } = xeroService.getAuthorizationUrl(redirectUri);
       res.json({ authUrl, state });
@@ -971,9 +973,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.redirect("/?xero=error&reason=invalid_state");
       }
 
-      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-      const host = req.headers.host;
-      const redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
+      // Use Replit dev domain if available, otherwise fall back to request headers
+      const replitDevDomain = process.env.REPLIT_DEV_DOMAIN;
+      let redirectUri: string;
+      
+      if (replitDevDomain) {
+        redirectUri = `https://${replitDevDomain}/api/xero/auth/callback`;
+      } else {
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+        const host = req.headers.host;
+        redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
+      }
 
       await xeroService.exchangeCodeForTokens(code, redirectUri);
 
