@@ -940,6 +940,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const host = req.headers.host;
       const redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
       
+      console.log("=== XERO AUTH DEBUG ===");
+      console.log("Protocol:", protocol);
+      console.log("Host:", host);
+      console.log("Redirect URI:", redirectUri);
+      console.log("======================");
+      
       const { authUrl, state } = xeroService.getAuthorizationUrl(redirectUri);
       res.json({ authUrl, state });
     } catch (error) {
