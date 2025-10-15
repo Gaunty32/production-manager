@@ -304,12 +304,6 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Add Embroidery Order</DialogTitle>
-          <DialogDescription>
-            Create a new embroidery order for production
-          </DialogDescription>
-        </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
