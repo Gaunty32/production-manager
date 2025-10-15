@@ -301,6 +301,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       for (const lineItem of lineItems) {
         if (lineItem.quantity > 0) {
           await apiRequest("POST", `/api/jobs/${createdJob.id}/line-items`, {
+            jobType: lineItem.jobType,
             quantity: lineItem.quantity,
             description: lineItem.description || null,
             stitchCount: lineItem.stitchCount,
@@ -308,6 +309,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
             completed: lineItem.completed,
             completedById: lineItem.completedById || null,
             completedAt: lineItem.completedAt || null,
+            machineId: lineItem.machineId || null,
           });
         }
       }
@@ -320,7 +322,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setOpen(false);
       form.reset();
-      setLineItems([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null }]);
+      setLineItems([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
       setScheduleSuggestion(null);
     } catch (error) {
       toast({

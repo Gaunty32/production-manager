@@ -281,6 +281,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           if (item.id) {
             // Update existing line item
             await apiRequest("PATCH", `/api/job-line-items/${item.id}`, {
+              jobType: item.jobType,
               quantity: item.quantity,
               description: item.description || null,
               stitchCount: item.stitchCount,
@@ -288,10 +289,12 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               completed: item.completed,
               completedById: item.completedById || null,
               completedAt: item.completedAt || null,
+              machineId: item.machineId || null,
             });
           } else {
             // Create new line item
             await apiRequest("POST", `/api/jobs/${job.id}/line-items`, {
+              jobType: item.jobType,
               quantity: item.quantity,
               description: item.description || null,
               stitchCount: item.stitchCount,
@@ -299,6 +302,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               completed: item.completed,
               completedById: item.completedById || null,
               completedAt: item.completedAt || null,
+              machineId: item.machineId || null,
             });
           }
         }
