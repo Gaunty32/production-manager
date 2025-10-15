@@ -54,6 +54,7 @@ type LineItem = {
   completed: boolean;
   completedById: string | null;
   completedAt: string | null;
+  machineId: number | null;
 };
 
 const JOB_TYPES = ["Embroidery", "Print", "Bagging", "Other"] as const;
@@ -131,6 +132,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     completed: boolean;
     completedById: string | null;
     completedAt: string | null;
+    machineId: number | null;
   }>>({
     queryKey: ['/api/jobs', job?.id, 'line-items'],
     enabled: !!job?.id && open,
@@ -168,6 +170,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completed: item.completed,
           completedById: item.completedById || null,
           completedAt: item.completedAt || null,
+          machineId: item.machineId || null,
         })));
       } else if (job && job.quantity > 0) {
         // Old job without line items - create a default line item from job quantity
@@ -180,6 +183,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completed: false,
           completedById: null,
           completedAt: null,
+          machineId: null,
         }]);
       } else {
         // No line items and no quantity
@@ -192,6 +196,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completed: false,
           completedById: null,
           completedAt: null,
+          machineId: null,
         }]);
       }
       setDeletedLineItemIds([]);
@@ -199,7 +204,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }, [fetchedLineItems, open, job]);
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -534,6 +539,25 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             className="font-mono mt-1"
                             data-testid={`input-edit-line-item-stitch-count-${index}`}
                           />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-xs text-muted-foreground">Machine</label>
+                          <Select 
+                            value={item.machineId?.toString() || "unassigned"}
+                            onValueChange={(value) => updateLineItem(index, 'machineId', value === "unassigned" ? null : parseInt(value))}
+                          >
+                            <SelectTrigger className="mt-1" data-testid={`select-edit-line-item-machine-${index}`}>
+                              <SelectValue placeholder="Select machine" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unassigned">Not assigned</SelectItem>
+                              {[1, 2, 3, 4].map((machineNum) => (
+                                <SelectItem key={machineNum} value={machineNum.toString()}>
+                                  {MACHINE_NAMES[machineNum]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="flex items-center gap-2 pt-5">
                           <Checkbox
