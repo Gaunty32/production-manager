@@ -353,64 +353,64 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
               )}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Logos Approved - Master checkbox */}
-              <div className="flex flex-col">
-                <label className="text-base font-semibold mb-2">Logos Approved</label>
-                <div className="flex items-center space-x-3 rounded-md border p-3 h-10">
-                  <Checkbox
-                    id="logos-approved"
-                    checked={allLogosApproved}
-                    onCheckedChange={toggleAllLogos}
-                    data-testid="checkbox-logos-approved"
-                  />
-                  <label htmlFor="logos-approved" className="text-sm cursor-pointer">
-                    All logos approved
-                  </label>
-                </div>
+            {/* Customer - Full Width */}
+            <FormField
+              control={form.control}
+              name="customerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Customer</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-customer">
+                        <SelectValue placeholder="Select customer" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {customers.map((customer) => (
+                        <SelectItem key={customer.id} value={customer.id}>
+                          {customer.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Job Name - Full Width */}
+            <FormField
+              control={form.control}
+              name="jobName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Job Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} data-testid="input-job-name" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Logos Approved - Master checkbox */}
+            <div className="flex flex-col">
+              <label className="text-base font-semibold mb-2">Logos Approved</label>
+              <div className="flex items-center space-x-3 rounded-md border p-3 h-10">
+                <Checkbox
+                  id="logos-approved"
+                  checked={allLogosApproved}
+                  onCheckedChange={toggleAllLogos}
+                  data-testid="checkbox-logos-approved"
+                />
+                <label htmlFor="logos-approved" className="text-sm cursor-pointer">
+                  All logos approved
+                </label>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="customerId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Customer</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-customer">
-                          <SelectValue placeholder="Select customer" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {customers.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.id}>
-                            {customer.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="jobName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Job Name</FormLabel>
-                    <FormControl>
-                      <Input {...field} data-testid="input-job-name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <FormField
                 control={form.control}
                 name="poNumber"
