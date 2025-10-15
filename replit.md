@@ -98,3 +98,28 @@ A complete invoicing workflow is implemented, moving completed jobs to a draft q
   - Updated `updateLineItem()` function signature to accept `null` values for completion fields
 - **Result**: Complete end-to-end data flow now working - completion tracking data persists through API/storage to database and correctly rehydrates in UI
 - **Technical Details**: Storage layer converts string dates to Date objects transparently; frontend sends ISO string dates or null values; Zod schemas validate the data flow
+
+#### Per-Line-Item Machine Assignment
+- Implemented independent machine assignment for each line item within a job
+- **Schema Changes**:
+  - Added `machineId` field to `jobLineItems` table (integer, nullable)
+  - Updated insert and update schemas with preprocessing to handle machineId (null, empty string, or 1-4)
+  - Each line item can now be assigned to a different machine (Machine 1-4) or left unassigned
+- **UI Enhancements**:
+  - Added machine dropdown to each line item in JobFormDialog with "Not assigned" default
+  - Added machine dropdown to each line item in JobEditDialog
+  - Machine options: Machine 1 (Barudan 8), Machine 2 (Barudan), Machine 3 (SWF), Machine 4 (Barudan)
+  - Test IDs added: `select-line-item-machine-{index}` and `select-edit-line-item-machine-{index}`
+- **Bug Fix**:
+  - Fixed issue where jobType and machineId weren't included in line item create/update API requests
+  - Updated both JobFormDialog and JobEditDialog to send complete line item data including machineId
+  - Ensures machineId persists correctly through create, edit, and reload operations
+- **Data Flow**:
+  - Storage layer automatically handles machineId through spread operators
+  - API validates machineId values (1-4 or null) through Zod schemas
+  - Frontend properly hydrates and displays machine assignments in edit dialogs
+- **Testing**:
+  - End-to-end test verified: Create job with multiple line items, each with different machine assignments
+  - Verified persistence: Machine assignments persist when reopening edit dialog
+  - Verified updates: Can change machine assignments and changes persist correctly
+- **Use Case**: Enables jobs where different line items need to run on different machines, improving production workflow flexibility
