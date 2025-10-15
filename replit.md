@@ -14,21 +14,17 @@ The application adheres to Material Design principles with a minimalist aestheti
 
 ### Technical Implementations
 
-The frontend uses React with TypeScript, Vite, `shadcn/ui`, and Tailwind CSS. State management is handled by TanStack React Query for server state and React Hook Form with Zod for form validation. The backend is built with Express.js on Node.js, using TypeScript, following a RESTful API design. Authentication is managed via Replit Auth (OpenID Connect) with session-based authentication and Passport.js. Request/response validation uses Zod schemas.
-
-### Data Storage
-
-PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe operations. The schema includes tables for sessions, users, customers, staff, and jobs, with foreign key constraints ensuring data integrity. A `DatabaseStorage` class implements a repository pattern for data access.
+The frontend uses React with TypeScript, Vite, `shadcn/ui`, and Tailwind CSS. State management is handled by TanStack React Query for server state and React Hook Form with Zod for form validation. The backend is built with Express.js on Node.js, using TypeScript, following a RESTful API design. Authentication is managed via Replit Auth (OpenID Connect) with session-based authentication and Passport.js. Request/response validation uses Zod schemas. Data storage uses PostgreSQL (Neon serverless database) with Drizzle ORM.
 
 ### Feature Specifications
 
-The system supports multi-line item jobs, where each item has quantity, stitch count, logo approval, and individual completion tracking (completed by staff and date). Line items are immutable post-creation. A robust scheduling system combines machine availability and staff shifts, preventing double-bookings, with simplified staff shift management using recurring days. Customer pricing tables (2025/2026) enable accurate quote generation based on stitch count and quantity, including POA for high stitch counts. Full CRUD operations are available for staff and customers. Production calculations derive runs, time per run, and total production time. PO numbers are optional, and job notes are supported.
+The system supports multi-line item jobs, where each item has quantity, stitch count, logo approval, individual completion tracking, and independent machine assignment. Line items are immutable post-creation. A robust scheduling system combines machine availability and staff shifts, preventing double-bookings, with simplified staff shift management using recurring days. Per-line-item schedule suggestions are available based on machine assignment. Customer pricing tables (2025/2026) enable accurate quote generation. Full CRUD operations are available for staff and customers. Production calculations derive runs, time per run, and total production time. PO numbers are optional, and job notes are supported.
 
-A complete invoicing workflow is implemented, moving completed jobs to a draft queue for review, grouping by customer, and consolidating into batch invoices with automatic Xero API integration. A gamification system tracks staff performance with a star system (yellow for on-time, red for late) and a leaderboard that also displays production metrics like stitches per head-hour. A `super_admin` role provides user management and role editing. Production queue status is indicated by traffic light indicators for logo approval and goods received status. The required dispatch date is prominently displayed with color-coded urgency. Line items can be classified by job type (Embroidery, Print, Bagging, Other), with pricing currently only calculated for Embroidery types. "Date Received" has been renamed to "Goods Received," and the system calculates and visually indicates production time (days between Goods Received and Required Dispatch Date), highlighting urgent orders.
+A complete invoicing workflow is implemented, moving completed jobs to a draft queue for review, grouping by customer, and consolidating into batch invoices with automatic Xero API integration. A gamification system tracks staff performance with a star system and a leaderboard. A `super_admin` role provides user management and role editing. Production queue status is indicated by traffic light indicators for logo approval and goods received status. The required dispatch date is prominently displayed with color-coded urgency. Line items can be classified by job type (Embroidery, Print, Bagging, Other), with pricing currently only calculated for Embroidery types. "Date Received" has been renamed to "Goods Received," and the system calculates and visually indicates production time, highlighting urgent orders. Job completion is managed via a button that requires all line items to be completed first, with automatic status resets if line items become incomplete. The goods received date field is optional and can be left empty.
 
 ## External Dependencies
 
-- **Database Service**: Neon Serverless PostgreSQL (@neondatabase/serverless)
+- **Database Service**: Neon Serverless PostgreSQL
 - **ORM**: Drizzle ORM
 - **UI Component Libraries**: `shadcn/ui`, Radix UI primitives, Embla Carousel, Lucide React
 - **Date Utilities**: `date-fns`
@@ -39,114 +35,3 @@ A complete invoicing workflow is implemented, moving completed jobs to a draft q
 - **State Management**: TanStack React Query
 - **Routing**: Wouter
 - **External APIs**: Xero API (for invoice creation)
-
-## Recent Changes
-
-### October 15, 2025
-
-#### Goods Received Date Optional Field
-- Updated goods received date field to default to blank/empty, allowing users to add jobs to the system before goods arrive
-- **Schema Changes**:
-  - Changed `goodsReceived` field in jobs table from `notNull()` to nullable
-  - Fixed schema field name from legacy `dateReceived` to `goodsReceived` in both insert and update schemas
-  - Allows jobs to be created without a goods received date
-  - Allows users to clear the goods received date when editing existing jobs
-- **Form Updates**:
-  - Both JobFormDialog and JobEditDialog now default to empty string for goods received date
-  - Calendar picker shows "Pick a date" placeholder when field is empty
-  - Updated insert schema validation: converts empty string to null using Zod preprocessing
-  - Updated update schema validation: converts empty string to null (not undefined) for proper field clearing
-  - Fixed calendar onChange handlers to send empty string when date is cleared
-- **Production Time Calculation**:
-  - Production time display only shown when both goods received and dispatch dates are set
-  - Prevents calculation errors when goods haven't arrived yet
-- **Testing**:
-  - End-to-end test verified: Successfully creates jobs without goods received date
-  - End-to-end test verified: Successfully edits and updates goods received date
-  - Database migration completed successfully to make field nullable
-
-#### Order Completion Button Redesign
-- Converted job completion from checkbox to button interface for better UX and workflow enforcement
-- **Button Behavior**:
-  - "Mark Order as Completed" button only enabled when all line items are marked as completed
-  - Changes to "Unmark as Completed" when order is already completed
-  - Visual feedback: default variant when not completed, secondary variant when completed
-- **Automatic State Management**:
-  - Added useEffect guard that automatically resets order completion to false when any line item becomes incomplete
-  - Prevents submission of "completed" jobs with incomplete line items
-  - Clears completion metadata (completedById, completedOnTime) when auto-resetting
-- **Completion Metadata**:
-  - Automatically sets completedById to current user when marking order as complete
-  - Properly clears metadata when unmarking
-  - Maintains existing celebration/star logic when job is submitted as completed
-- **UI Improvements**:
-  - Helper text with Info icon displays when line items are not all completed
-  - Button positioned at bottom right with other action buttons
-  - Hidden input ensures completed field is properly registered for form submission
-- Applied consistently to both JobFormDialog (new orders) and JobEditDialog (existing orders)
-
-#### Line Item Completion Tracking - Persistence & Data Flow Fix
-- Fixed critical issue where line item completion data (completedById and completedAt) was not being persisted or loaded correctly
-- **Backend Enhancements**:
-  - Updated `updateJobLineItem()` in storage layer to handle date conversion for `completedAt` field (similar to create operation)
-  - Ensures consistent date handling on both create and update operations
-- **Frontend Query Updates**:
-  - Updated JobEditDialog query type to properly include `completedById`, `completedAt`, and `jobType` fields
-  - Removed unsafe type casts (`as any`) that masked missing field data
-- **Frontend Persistence**:
-  - Both JobFormDialog and JobEditDialog now send `completedById` and `completedAt` in POST/PATCH requests
-  - Updated `updateLineItem()` function signature to accept `null` values for completion fields
-- **Result**: Complete end-to-end data flow now working - completion tracking data persists through API/storage to database and correctly rehydrates in UI
-- **Technical Details**: Storage layer converts string dates to Date objects transparently; frontend sends ISO string dates or null values; Zod schemas validate the data flow
-
-#### Per-Line-Item Machine Assignment
-- Implemented independent machine assignment for each line item within a job
-- **Schema Changes**:
-  - Added `machineId` field to `jobLineItems` table (integer, nullable)
-  - Updated insert and update schemas with preprocessing to handle machineId (null, empty string, or 1-4)
-  - Each line item can now be assigned to a different machine (Machine 1-4) or left unassigned
-- **UI Enhancements**:
-  - Added machine dropdown to each line item in JobFormDialog with "Not assigned" default
-  - Added machine dropdown to each line item in JobEditDialog
-  - Machine options: Machine 1 (Barudan 8), Machine 2 (Barudan), Machine 3 (SWF), Machine 4 (Barudan)
-  - Test IDs added: `select-line-item-machine-{index}` and `select-edit-line-item-machine-{index}`
-- **Bug Fix**:
-  - Fixed issue where jobType and machineId weren't included in line item create/update API requests
-  - Updated both JobFormDialog and JobEditDialog to send complete line item data including machineId
-  - Ensures machineId persists correctly through create, edit, and reload operations
-- **Data Flow**:
-  - Storage layer automatically handles machineId through spread operators
-  - API validates machineId values (1-4 or null) through Zod schemas
-  - Frontend properly hydrates and displays machine assignments in edit dialogs
-- **Testing**:
-  - End-to-end test verified: Create job with multiple line items, each with different machine assignments
-  - Verified persistence: Machine assignments persist when reopening edit dialog
-  - Verified updates: Can change machine assignments and changes persist correctly
-- **Use Case**: Enables jobs where different line items need to run on different machines, improving production workflow flexibility
-
-#### Per-Line-Item Schedule Suggestions
-- Implemented independent schedule suggestions for each line item based on their individual machine assignments
-- **Type Updates**:
-  - Extended LineItem type in both JobFormDialog and JobEditDialog with optional `scheduleSuggestion` field
-  - Suggestion includes: staffId, staffName, date, startTime, endTime
-- **UI Implementation**:
-  - Added "Find Slot" button for each line item in JobFormDialog (data-testid: `button-suggest-line-item-schedule-{index}`)
-  - Added "Find Slot" button for each line item in JobEditDialog (data-testid: `button-suggest-edit-line-item-schedule-{index}`)
-  - Button disabled when no machine is assigned to the line item
-  - Schedule suggestion displayed inline: "Staff Name • Date • Start Time-End Time"
-- **Functionality**:
-  - Each "Find Slot" button calls POST /api/suggest-schedule with line item-specific parameters
-  - Parameters: machineId (from line item), quantity, stitchCount, requiredDispatchDate (from job)
-  - Finds earliest available slot for that specific machine and production parameters
-  - Stores suggestion in line item state (not persisted to database - informational only)
-  - Toast notifications for success ("Schedule Found") or failure ("No Slots Available")
-- **Workflow**:
-  - Each line item can have a different schedule suggestion based on its machine assignment
-  - Suggestions help identify available staff and time slots for individual line items
-  - Particularly useful for jobs where line items run on different machines
-- **Testing**:
-  - End-to-end test verified: "Find Slot" buttons functional in both create and edit dialogs
-  - Verified: Buttons properly disabled without machine assignment
-  - Verified: API calls made with correct line item-specific parameters
-  - Verified: API responses (both available and unavailable) handled correctly
-- **Use Case**: Enables independent scheduling for each line item, supporting complex jobs where different items need different machines and may have different available time slots
