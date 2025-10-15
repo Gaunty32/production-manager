@@ -108,6 +108,7 @@ export const jobLineItems = pgTable("job_line_items", {
   completed: boolean("completed").notNull().default(false),
   completedById: varchar("completed_by_id").references(() => staff.id),
   completedAt: timestamp("completed_at"),
+  machineId: integer("machine_id"),
 });
 
 export const staffMachineAllocations = pgTable("staff_machine_allocations", {
