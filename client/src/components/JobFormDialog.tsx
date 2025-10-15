@@ -306,54 +306,54 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Required Dispatch Date - TOP PRIORITY with color indicators */}
-              <FormField
-                control={form.control}
-                name="requiredDispatchDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel className={cn(
-                      "text-base font-semibold",
-                      isOverdue && "text-red-600 dark:text-red-500",
-                      isDueToday && !isOverdue && "text-amber-600 dark:text-amber-500"
-                    )}>
-                      Required Dispatch Date
-                      {isOverdue && " (OVERDUE)"}
-                      {isDueToday && !isOverdue && " (DUE TODAY)"}
-                    </FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "pl-3 text-left font-normal justify-start",
-                              !field.value && "text-muted-foreground",
-                              isOverdue && "border-red-500 bg-red-50 dark:bg-red-950/30",
-                              isDueToday && !isOverdue && "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
-                            )}
-                            data-testid="button-dispatch-date"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value ? new Date(field.value) : undefined}
-                          onSelect={(date) => field.onChange(date?.toISOString())}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Required Dispatch Date - HEADER - Full Width */}
+            <FormField
+              control={form.control}
+              name="requiredDispatchDate"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel className={cn(
+                    "text-xl font-bold",
+                    isOverdue && "text-red-600 dark:text-red-500",
+                    isDueToday && !isOverdue && "text-amber-600 dark:text-amber-500"
+                  )}>
+                    Required Dispatch Date
+                    {isOverdue && " (OVERDUE)"}
+                    {isDueToday && !isOverdue && " (DUE TODAY)"}
+                  </FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "pl-3 text-left font-normal justify-start w-full text-base h-12",
+                            !field.value && "text-muted-foreground",
+                            isOverdue && "border-red-500 bg-red-50 dark:bg-red-950/30",
+                            isDueToday && !isOverdue && "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
+                          )}
+                          data-testid="button-dispatch-date"
+                        >
+                          <CalendarIcon className="mr-2 h-5 w-5" />
+                          {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value ? new Date(field.value) : undefined}
+                        onSelect={(date) => field.onChange(date?.toISOString())}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Logos Approved - Master checkbox */}
               <div className="flex flex-col">
                 <label className="text-base font-semibold mb-2">Logos Approved</label>
