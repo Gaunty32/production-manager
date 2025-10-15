@@ -379,6 +379,21 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
               )}
             />
 
+            {/* PO Number - Full Width */}
+            <FormField
+              control={form.control}
+              name="poNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>PO Number</FormLabel>
+                  <FormControl>
+                    <Input {...field} value={field.value || ""} className="font-mono" data-testid="input-po-number" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* Job Name - Full Width */}
             <FormField
               control={form.control}
@@ -412,20 +427,6 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="poNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>PO Number</FormLabel>
-                    <FormControl>
-                      <Input {...field} value={field.value || ""} className="font-mono" data-testid="input-po-number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <div className="md:col-span-2">
                 <FormLabel>Line Items</FormLabel>
                 <div className="space-y-3 mt-2">
