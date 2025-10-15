@@ -55,6 +55,13 @@ type LineItem = {
   completedById: string | null;
   completedAt: string | null;
   machineId: number | null;
+  scheduleSuggestion?: {
+    staffId: string;
+    staffName: string;
+    date: string;
+    startTime: number;
+    endTime: number;
+  } | null;
 };
 
 const JOB_TYPES = ["Embroidery", "Print", "Bagging", "Other"] as const;
@@ -219,6 +226,73 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
     setLineItems(updated);
+  };
+
+  const handleSuggestLineItemSchedule = async (index: number) => {
+    const values = form.getValues();
+    const lineItem = lineItems[index];
+    
+    const requiredDispatchDate = values.requiredDispatchDate;
+    
+    if (!lineItem.machineId) {
+      toast({
+        title: "Machine Required",
+        description: "Please select a machine for this line item first",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!requiredDispatchDate) {
+      toast({
+        title: "Dispatch Date Required",
+        description: "Please select a required dispatch date first",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const suggestResponse = await apiRequest("POST", "/api/suggest-schedule", {
+        machineId: lineItem.machineId,
+        quantity: lineItem.quantity,
+        stitchCount: lineItem.stitchCount,
+        requiredDispatchDate,
+      });
+      const response: any = await suggestResponse.json();
+      
+      if (response.available) {
+        const updated = [...lineItems];
+        updated[index] = {
+          ...updated[index],
+          scheduleSuggestion: {
+            staffId: response.suggestion.staffId,
+            staffName: response.suggestion.staffName,
+            date: response.suggestion.date,
+            startTime: response.suggestion.startTime,
+            endTime: response.suggestion.endTime,
+          }
+        };
+        setLineItems(updated);
+        
+        toast({
+          title: "Schedule Found",
+          description: `Available slot: ${response.suggestion.staffName} on ${format(new Date(response.suggestion.date), 'MMM d')}`,
+        });
+      } else {
+        toast({
+          title: "No Slots Available",
+          description: response.message || "No available time slot found for this line item",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to suggest schedule",
+        variant: "destructive",
+      });
+    }
   };
 
   const getTotalQuantity = () => {
@@ -593,6 +667,25 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                           className="mt-1"
                           data-testid={`input-edit-line-item-description-${index}`}
                         />
+                      </div>
+                      
+                      {/* Schedule Suggestion for Line Item */}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSuggestLineItemSchedule(index)}
+                          disabled={!item.machineId}
+                          data-testid={`button-suggest-edit-line-item-schedule-${index}`}
+                        >
+                          Find Slot
+                        </Button>
+                        {item.scheduleSuggestion && (
+                          <div className="text-sm text-muted-foreground">
+                            {item.scheduleSuggestion.staffName} • {format(new Date(item.scheduleSuggestion.date), 'MMM d')} • {minutesToTime(item.scheduleSuggestion.startTime)}-{minutesToTime(item.scheduleSuggestion.endTime)}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Completion Tracking - Show when item is completed */}
