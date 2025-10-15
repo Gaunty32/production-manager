@@ -115,12 +115,20 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 #### Form Layout and Terminology Updates
 - **New Order Dialog Restructure**: Redesigned form hierarchy to emphasize critical fields
   - Required Dispatch Date is now the prominent header field (full width, larger text/button)
-  - Customer and Job Name fields are now full width for better prominence
-  - Fields arranged in priority order: Dispatch Date → Customer → Job Name → Embroidery Approved → Other fields
+  - Customer, PO Number, and Job Name fields are now full width for better prominence
+  - Fields arranged in priority order: Dispatch Date → Customer → PO Number → Job Name → Embroidery Approved → Line Items
 - **Terminology Change**: Renamed "Logos Approved" to "Embroidery Approved" throughout application
   - Updated in JobFormDialog, JobEditDialog, and design guidelines
   - Changed from checkbox control to Yes/No dropdown selector for clearer approval status
   - Maintains functionality: controls approval status for all line items in a job
+
+#### Job Type Classification for Line Items
+- **Multi-Type Job Support**: Line items can now be classified by job type
+- **Database Schema**: Added `job_type` field to `job_line_items` table with default value "Embroidery"
+- **Job Type Options**: Embroidery, Print, Bagging, Other
+- **UI Implementation**: Dropdown selector added as first field in each line item for both New Order and Edit Order dialogs
+- **Data Migration**: Existing line items automatically default to "Embroidery" type
+- **Purpose**: Enables tracking different types of work within a single job (e.g., embroidery + bagging services)
 
 ### October 11, 2025
 

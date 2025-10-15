@@ -46,12 +46,15 @@ import { CelebrationDialog } from "@/components/CelebrationDialog";
 
 type LineItem = {
   id?: string;
+  jobType: string;
   quantity: number;
   description: string;
   stitchCount: number;
   logoApproved: boolean;
   completed: boolean;
 };
+
+const JOB_TYPES = ["Embroidery", "Print", "Bagging", "Other"] as const;
 
 const formSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
@@ -152,6 +155,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         // Job has line items - use them
         setLineItems(fetchedLineItems.map((item) => ({
           id: item.id,
+          jobType: (item as any).jobType || "Embroidery", // Default to Embroidery if missing (for existing data)
           quantity: item.quantity,
           description: item.description || "",
           stitchCount: item.stitchCount,
@@ -161,6 +165,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       } else if (job && job.quantity > 0) {
         // Old job without line items - create a default line item from job quantity
         setLineItems([{
+          jobType: "Embroidery",
           quantity: job.quantity,
           description: "",
           stitchCount: 5000,
@@ -170,6 +175,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       } else {
         // No line items and no quantity
         setLineItems([{
+          jobType: "Embroidery",
           quantity: 1,
           description: "",
           stitchCount: 5000,
@@ -182,7 +188,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }, [fetchedLineItems, open, job]);
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -451,6 +457,22 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                   {lineItems.map((item, index) => (
                     <div key={index} className="border rounded-md p-3 space-y-2">
                       <div className="flex gap-2 items-start">
+                        <div className="flex-1">
+                          <label className="text-xs text-muted-foreground">Job Type</label>
+                          <Select 
+                            value={item.jobType}
+                            onValueChange={(value) => updateLineItem(index, 'jobType', value)}
+                          >
+                            <SelectTrigger className="mt-1" data-testid={`select-edit-line-item-job-type-${index}`}>
+                              <SelectValue placeholder="Select job type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {JOB_TYPES.map((type) => (
+                                <SelectItem key={type} value={type}>{type}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="flex-1">
                           <label className="text-xs text-muted-foreground">Quantity</label>
                           <Input

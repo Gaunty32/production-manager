@@ -46,12 +46,15 @@ import { format, isPast, isToday } from "date-fns";
 import { cn } from "@/lib/utils";
 
 type LineItem = {
+  jobType: string;
   quantity: number;
   description: string;
   stitchCount: number;
   logoApproved: boolean;
   completed: boolean;
 };
+
+const JOB_TYPES = ["Embroidery", "Print", "Bagging", "Other"] as const;
 
 const formSchema = insertJobSchema.extend({
   customerId: z.string().min(1, "Customer is required"),
@@ -72,7 +75,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   const [open, setOpen] = useState(false);
   const [scheduleSuggestion, setScheduleSuggestion] = useState<any>(null);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -94,7 +97,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   });
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -282,7 +285,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setOpen(false);
       form.reset();
-      setLineItems([{ quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
+      setLineItems([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
       setScheduleSuggestion(null);
     } catch (error) {
       toast({
@@ -433,6 +436,22 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   {lineItems.map((item, index) => (
                     <div key={index} className="border rounded-md p-3 space-y-2">
                       <div className="flex gap-2 items-start">
+                        <div className="flex-1">
+                          <label className="text-xs text-muted-foreground">Job Type</label>
+                          <Select 
+                            value={item.jobType}
+                            onValueChange={(value) => updateLineItem(index, 'jobType', value)}
+                          >
+                            <SelectTrigger className="mt-1" data-testid={`select-line-item-job-type-${index}`}>
+                              <SelectValue placeholder="Select job type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {JOB_TYPES.map((type) => (
+                                <SelectItem key={type} value={type}>{type}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="flex-1">
                           <label className="text-xs text-muted-foreground">Quantity</label>
                           <Input

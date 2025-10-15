@@ -100,6 +100,7 @@ export const jobSchedule = pgTable("job_schedule", {
 export const jobLineItems = pgTable("job_line_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  jobType: text("job_type").notNull().default("Embroidery"),
   quantity: integer("quantity").notNull(),
   description: text("description"),
   stitchCount: integer("stitch_count").notNull(),
