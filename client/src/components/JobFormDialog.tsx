@@ -84,8 +84,6 @@ interface JobFormDialogProps {
 
 export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps) {
   const [open, setOpen] = useState(false);
-  const [scheduleSuggestion, setScheduleSuggestion] = useState<any>(null);
-  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -99,11 +97,10 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       quantity: 1,
       goodsReceived: "",
       requiredDispatchDate: new Date().toISOString(),
-      machineId: null,
       status: "pending",
       completed: false,
-      completedOnTime: null,
       completedById: null,
+      completedOnTime: null,
       notes: "",
     },
   });
@@ -291,63 +288,6 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
         description: error instanceof Error ? error.message : "Failed to suggest schedule",
         variant: "destructive",
       });
-    }
-  };
-  
-  const handleSuggestSchedule = async () => {
-    const values = form.getValues();
-    
-    const machineId = values.machineId ? Number(values.machineId) : null;
-    const totalQuantity = getTotalQuantity();
-    
-    // Calculate weighted average stitch count from line items
-    const weightedStitchCount = lineItems.reduce((sum, item) => 
-      sum + (item.stitchCount * item.quantity), 0
-    ) / Math.max(totalQuantity, 1);
-    
-    const requiredDispatchDate = values.requiredDispatchDate;
-    
-    if (!machineId || totalQuantity <= 0 || weightedStitchCount <= 0 || !requiredDispatchDate) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in Machine, Line Items (with stitch counts), and Required Dispatch Date first",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setLoadingSuggestion(true);
-    try {
-      const suggestResponse = await apiRequest("POST", "/api/suggest-schedule", {
-        machineId,
-        quantity: totalQuantity,
-        stitchCount: Math.round(weightedStitchCount),
-        requiredDispatchDate,
-      });
-      const response: any = await suggestResponse.json();
-      
-      if (response.available) {
-        setScheduleSuggestion(response.suggestion);
-        toast({
-          title: "Schedule Found",
-          description: `Earliest available slot found for ${response.suggestion.staffName}`,
-        });
-      } else {
-        setScheduleSuggestion(null);
-        toast({
-          title: "No Slots Available",
-          description: response.message || "No available time slot found",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to suggest schedule",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingSuggestion(false);
     }
   };
 
@@ -863,48 +803,6 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                 </div>
               </div>
 
-            </div>
-
-            {/* Schedule Suggestion Section */}
-            <div className="border rounded-md p-4 space-y-3 bg-muted/30">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium">Schedule Suggestion</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSuggestSchedule}
-                  disabled={loadingSuggestion}
-                  data-testid="button-suggest-schedule"
-                >
-                  {loadingSuggestion ? "Finding Slot..." : "Find Earliest Slot"}
-                </Button>
-              </div>
-              
-              {scheduleSuggestion && (
-                <div className="space-y-2 text-sm" data-testid="schedule-suggestion-result">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Suggested Date:</span>
-                    <span className="font-medium">
-                      {format(new Date(scheduleSuggestion.date), "PPP")}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Time Slot:</span>
-                    <span className="font-medium">
-                      {minutesToTime(scheduleSuggestion.startTime)} - {minutesToTime(scheduleSuggestion.endTime)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Staff Member:</span>
-                    <span className="font-medium">{scheduleSuggestion.staffName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Duration:</span>
-                    <span className="font-medium">{scheduleSuggestion.duration} minutes</span>
-                  </div>
-                </div>
-              )}
             </div>
 
             <FormField
