@@ -384,6 +384,14 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
   description: z.string().nullable().optional(),
   completedById: z.string().nullable().optional(),
   completedAt: z.string().nullable().optional(),
+  machineId: z.preprocess(
+    (val) => {
+      if (val === null || val === undefined || val === "") return null;
+      if (typeof val === "string") return parseInt(val, 10);
+      return val;
+    },
+    z.union([z.number().int().min(1).max(4), z.null()])
+  ).optional(),
 });
 
 export const updateJobLineItemSchema = z.object({
@@ -394,6 +402,15 @@ export const updateJobLineItemSchema = z.object({
   completed: z.coerce.boolean().optional(),
   completedById: z.string().nullable().optional(),
   completedAt: z.string().nullable().optional(),
+  machineId: z.preprocess(
+    (val) => {
+      if (val === undefined) return undefined;
+      if (val === null || val === "") return null;
+      if (typeof val === "string") return parseInt(val, 10);
+      return val;
+    },
+    z.union([z.number().int().min(1).max(4), z.null()]).optional()
+  ),
 });
 
 export type InsertJobLineItem = z.infer<typeof insertJobLineItemSchema>;
