@@ -110,6 +110,18 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 - **Visual Improvement**: Eliminates the cramped appearance of address data in table format
 - **2025 Pricing Indicator**: Cards with 2025 pricing table have an orange background (light orange in light mode, dark orange tint in dark mode) for instant visual identification
 
+### October 15, 2025
+
+#### Form Layout and Terminology Updates
+- **New Order Dialog Restructure**: Redesigned form hierarchy to emphasize critical fields
+  - Required Dispatch Date is now the prominent header field (full width, larger text/button)
+  - Customer and Job Name fields are now full width for better prominence
+  - Fields arranged in priority order: Dispatch Date → Customer → Job Name → Embroidery Approved → Other fields
+- **Terminology Change**: Renamed "Logos Approved" to "Embroidery Approved" throughout application
+  - Updated in JobFormDialog, JobEditDialog, and design guidelines
+  - Changed from checkbox control to Yes/No dropdown selector for clearer approval status
+  - Maintains functionality: controls approval status for all line items in a job
+
 ### October 11, 2025
 
 #### Customer Contact Name Fields Update

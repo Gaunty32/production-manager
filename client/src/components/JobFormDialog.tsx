@@ -394,20 +394,21 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
               )}
             />
 
-            {/* Logos Approved - Master checkbox */}
+            {/* Embroidery Approved - Yes/No selector */}
             <div className="flex flex-col">
-              <label className="text-base font-semibold mb-2">Logos Approved</label>
-              <div className="flex items-center space-x-3 rounded-md border p-3 h-10">
-                <Checkbox
-                  id="logos-approved"
-                  checked={allLogosApproved}
-                  onCheckedChange={toggleAllLogos}
-                  data-testid="checkbox-logos-approved"
-                />
-                <label htmlFor="logos-approved" className="text-sm cursor-pointer">
-                  All logos approved
-                </label>
-              </div>
+              <label className="text-base font-semibold mb-2">Embroidery Approved</label>
+              <Select 
+                value={allLogosApproved ? "yes" : "no"} 
+                onValueChange={(value) => toggleAllLogos(value === "yes")}
+              >
+                <SelectTrigger data-testid="select-embroidery-approved">
+                  <SelectValue placeholder="Select approval status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="yes">Yes</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

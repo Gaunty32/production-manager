@@ -74,7 +74,7 @@
 - **Production Queue Table:**
   - Sticky header row with sortable columns
   - Alternating row colors (subtle zebra striping)
-  - Status badges: Logo Approved, On-time Completion (rounded-full px-3 py-1)
+  - Status badges: Embroidery Approved, On-time Completion (rounded-full px-3 py-1)
   - Machine assignment chips with distinct colors per machine
   - Row actions: Edit, Complete, Delete (icon buttons on hover)
   - Compact spacing: py-3 px-4 per cell
@@ -110,7 +110,7 @@
 - Icon buttons: p-2 rounded-md hover:bg-surface
 
 **Status Indicators:**
-- Logo Approved: Green checkmark badge or red X badge
+- Embroidery Approved: Green checkmark badge or red X badge
 - On-time: Green "Yes" / Red "No" badges
 - Priority: Border-left accent on overdue items (border-l-4 border-error)
 
