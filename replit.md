@@ -123,3 +123,30 @@ A complete invoicing workflow is implemented, moving completed jobs to a draft q
   - Verified persistence: Machine assignments persist when reopening edit dialog
   - Verified updates: Can change machine assignments and changes persist correctly
 - **Use Case**: Enables jobs where different line items need to run on different machines, improving production workflow flexibility
+
+#### Per-Line-Item Schedule Suggestions
+- Implemented independent schedule suggestions for each line item based on their individual machine assignments
+- **Type Updates**:
+  - Extended LineItem type in both JobFormDialog and JobEditDialog with optional `scheduleSuggestion` field
+  - Suggestion includes: staffId, staffName, date, startTime, endTime
+- **UI Implementation**:
+  - Added "Find Slot" button for each line item in JobFormDialog (data-testid: `button-suggest-line-item-schedule-{index}`)
+  - Added "Find Slot" button for each line item in JobEditDialog (data-testid: `button-suggest-edit-line-item-schedule-{index}`)
+  - Button disabled when no machine is assigned to the line item
+  - Schedule suggestion displayed inline: "Staff Name • Date • Start Time-End Time"
+- **Functionality**:
+  - Each "Find Slot" button calls POST /api/suggest-schedule with line item-specific parameters
+  - Parameters: machineId (from line item), quantity, stitchCount, requiredDispatchDate (from job)
+  - Finds earliest available slot for that specific machine and production parameters
+  - Stores suggestion in line item state (not persisted to database - informational only)
+  - Toast notifications for success ("Schedule Found") or failure ("No Slots Available")
+- **Workflow**:
+  - Each line item can have a different schedule suggestion based on its machine assignment
+  - Suggestions help identify available staff and time slots for individual line items
+  - Particularly useful for jobs where line items run on different machines
+- **Testing**:
+  - End-to-end test verified: "Find Slot" buttons functional in both create and edit dialogs
+  - Verified: Buttons properly disabled without machine assignment
+  - Verified: API calls made with correct line item-specific parameters
+  - Verified: API responses (both available and unavailable) handled correctly
+- **Use Case**: Enables independent scheduling for each line item, supporting complex jobs where different items need different machines and may have different available time slots
