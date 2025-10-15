@@ -55,6 +55,7 @@ type LineItem = {
   completed: boolean;
   completedById: string | null;
   completedAt: string | null;
+  machineId: number | null;
 };
 
 const JOB_TYPES = ["Embroidery", "Print", "Bagging", "Other"] as const;
@@ -78,7 +79,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   const [open, setOpen] = useState(false);
   const [scheduleSuggestion, setScheduleSuggestion] = useState<any>(null);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null }]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -101,7 +102,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   });
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -582,6 +583,25 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                             className="font-mono mt-1"
                             data-testid={`input-line-item-stitch-count-${index}`}
                           />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-xs text-muted-foreground">Machine</label>
+                          <Select 
+                            value={item.machineId?.toString() || "unassigned"}
+                            onValueChange={(value) => updateLineItem(index, 'machineId', value === "unassigned" ? null : parseInt(value))}
+                          >
+                            <SelectTrigger className="mt-1" data-testid={`select-line-item-machine-${index}`}>
+                              <SelectValue placeholder="Select machine" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unassigned">Not assigned</SelectItem>
+                              {[1, 2, 3, 4].map((machineNum) => (
+                                <SelectItem key={machineNum} value={machineNum.toString()}>
+                                  {MACHINE_NAMES[machineNum]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="flex items-center gap-2 pt-5">
                           <Checkbox
