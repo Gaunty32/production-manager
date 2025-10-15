@@ -349,7 +349,7 @@ export default function Dashboard() {
                         key={job.id}
                         job={{
                           ...job,
-                          dateReceived: new Date(job.dateReceived),
+                          goodsReceived: new Date(job.goodsReceived),
                           requiredDispatchDate: new Date(job.requiredDispatchDate),
                         }}
                         customer={customer}
@@ -423,7 +423,7 @@ export default function Dashboard() {
                           key={job.id}
                           job={{
                             ...job,
-                            dateReceived: new Date(job.dateReceived),
+                            goodsReceived: new Date(job.goodsReceived),
                             requiredDispatchDate: new Date(job.requiredDispatchDate),
                           }}
                           customer={customer}
@@ -446,7 +446,7 @@ export default function Dashboard() {
           onOpenChange={(open) => !open && setEditingJob(null)}
           job={editingJob ? {
             ...editingJob,
-            dateReceived: new Date(editingJob.dateReceived),
+            goodsReceived: new Date(editingJob.goodsReceived),
             requiredDispatchDate: new Date(editingJob.requiredDispatchDate),
           } : null}
           customers={customers}

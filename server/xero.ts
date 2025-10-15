@@ -255,7 +255,7 @@ export class XeroService {
           unitAmount: unitPrice,
         },
       ],
-      date: new Date(job.dateReceived).toISOString().split('T')[0],
+      date: new Date(job.goodsReceived).toISOString().split('T')[0],
       dueDate: new Date(job.requiredDispatchDate).toISOString().split('T')[0],
       reference: job.poNumber || undefined,
       status: "DRAFT",
@@ -313,9 +313,9 @@ export class XeroService {
 
     // Get the most recent dates for invoice date and due date
     const mostRecentDate = jobs.reduce((latest, job) => {
-      const jobDate = new Date(job.dateReceived);
+      const jobDate = new Date(job.goodsReceived);
       return jobDate > latest ? jobDate : latest;
-    }, new Date(jobs[0].dateReceived));
+    }, new Date(jobs[0].goodsReceived));
 
     const mostRecentDueDate = jobs.reduce((latest, job) => {
       const jobDueDate = new Date(job.requiredDispatchDate);

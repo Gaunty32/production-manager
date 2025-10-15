@@ -37,7 +37,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { CalendarIcon, Plus, Trash2 } from "lucide-react";
-import { format, isPast, isToday } from "date-fns";
+import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -63,7 +63,7 @@ const formSchema = z.object({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
-  dateReceived: z.string(),
+  goodsReceived: z.string(),
   requiredDispatchDate: z.string(),
   machineId: z.number().nullable(),
   completed: z.boolean(),
@@ -81,7 +81,7 @@ interface JobEditDialogProps {
     jobName: string;
     poNumber: string | null;
     quantity: number;
-    dateReceived: Date;
+    goodsReceived: Date;
     requiredDispatchDate: Date;
     machineId: number | null;
     completed: boolean;
@@ -108,7 +108,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       customerId: "",
       jobName: "",
       poNumber: "",
-      dateReceived: new Date().toISOString(),
+      goodsReceived: new Date().toISOString(),
       requiredDispatchDate: new Date().toISOString(),
       machineId: null,
       completed: false,
@@ -138,7 +138,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         customerId: job.customerId,
         jobName: job.jobName,
         poNumber: job.poNumber || "",
-        dateReceived: job.dateReceived.toISOString(),
+        goodsReceived: job.goodsReceived.toISOString(),
         requiredDispatchDate: job.requiredDispatchDate.toISOString(),
         machineId: job.machineId,
         completed: job.completed,
@@ -221,6 +221,14 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   
   const isOverdue = job && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = job && isToday(job.requiredDispatchDate);
+  
+  // Calculate Production Time (days between goods received and required dispatch date)
+  const requiredDispatchDate = form.watch("requiredDispatchDate");
+  const goodsReceived = form.watch("goodsReceived");
+  const productionTime = goodsReceived && requiredDispatchDate 
+    ? differenceInCalendarDays(new Date(requiredDispatchDate), new Date(goodsReceived))
+    : null;
+  const isUrgent = productionTime !== null && productionTime < 3;
 
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
     if (job) {
@@ -665,10 +673,10 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
 
               <FormField
                 control={form.control}
-                name="dateReceived"
+                name="goodsReceived"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Date Received</FormLabel>
+                    <FormLabel>Goods Received</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -678,7 +686,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                               "pl-3 text-left font-normal justify-start",
                               !field.value && "text-muted-foreground"
                             )}
-                            data-testid="button-edit-date-received"
+                            data-testid="button-edit-goods-received"
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
@@ -695,6 +703,36 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                       </PopoverContent>
                     </Popover>
                     <FormMessage />
+                    
+                    {/* Production Time Display */}
+                    {productionTime !== null && (
+                      <div className={cn(
+                        "mt-2 p-3 rounded-md border-2",
+                        isUrgent 
+                          ? "border-red-500 bg-red-50 dark:bg-red-950/30" 
+                          : "border-green-500 bg-green-50 dark:bg-green-950/30"
+                      )}>
+                        <div className="flex items-center justify-between">
+                          <span className={cn(
+                            "font-semibold",
+                            isUrgent ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
+                          )}>
+                            Production Time:
+                          </span>
+                          <span className={cn(
+                            "text-2xl font-bold",
+                            isUrgent ? "text-red-600 dark:text-red-500" : "text-green-600 dark:text-green-500"
+                          )}>
+                            {productionTime} {productionTime === 1 ? 'day' : 'days'}
+                          </span>
+                        </div>
+                        {isUrgent && (
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium">
+                            ⚠️ URGENT ORDER - Less than 3 days production time
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </FormItem>
                 )}
               />

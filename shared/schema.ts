@@ -52,7 +52,7 @@ export const jobs = pgTable("jobs", {
   jobName: text("job_name").notNull(),
   poNumber: text("po_number"),
   quantity: integer("quantity").notNull(),
-  dateReceived: timestamp("date_received").notNull(),
+  goodsReceived: timestamp("goods_received").notNull(),
   requiredDispatchDate: timestamp("required_dispatch_date").notNull(),
   completed: boolean("completed").notNull().default(false),
   completedOnTime: boolean("completed_on_time"),

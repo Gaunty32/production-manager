@@ -42,7 +42,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { CalendarIcon, Plus, Trash2 } from "lucide-react";
-import { format, isPast, isToday } from "date-fns";
+import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
 type LineItem = {
@@ -85,7 +85,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       jobName: "",
       poNumber: "",
       quantity: 1,
-      dateReceived: new Date().toISOString(),
+      goodsReceived: new Date().toISOString(),
       requiredDispatchDate: new Date().toISOString(),
       machineId: null,
       status: "pending",
@@ -127,8 +127,15 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   };
   
   const requiredDispatchDate = form.watch("requiredDispatchDate");
+  const goodsReceived = form.watch("goodsReceived");
   const isOverdue = requiredDispatchDate && isPast(new Date(requiredDispatchDate)) && !isToday(new Date(requiredDispatchDate));
   const isDueToday = requiredDispatchDate && isToday(new Date(requiredDispatchDate));
+  
+  // Calculate Production Time (days between goods received and required dispatch date)
+  const productionTime = goodsReceived && requiredDispatchDate 
+    ? differenceInCalendarDays(new Date(requiredDispatchDate), new Date(goodsReceived))
+    : null;
+  const isUrgent = productionTime !== null && productionTime < 3;
 
   // Calculate pricing based on selected customer and line items
   const pricingData = useMemo(() => {
@@ -364,6 +371,73 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                     </PopoverContent>
                   </Popover>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Goods Received - Full Width with Production Time */}
+            <FormField
+              control={form.control}
+              name="goodsReceived"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel className="text-base font-semibold">Goods Received</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "pl-3 text-left font-normal justify-start w-full",
+                            !field.value && "text-muted-foreground"
+                          )}
+                          data-testid="button-goods-received"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value ? new Date(field.value) : undefined}
+                        onSelect={(date) => field.onChange(date?.toISOString())}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                  
+                  {/* Production Time Display */}
+                  {productionTime !== null && (
+                    <div className={cn(
+                      "mt-2 p-3 rounded-md border-2",
+                      isUrgent 
+                        ? "border-red-500 bg-red-50 dark:bg-red-950/30" 
+                        : "border-green-500 bg-green-50 dark:bg-green-950/30"
+                    )}>
+                      <div className="flex items-center justify-between">
+                        <span className={cn(
+                          "font-semibold",
+                          isUrgent ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
+                        )}>
+                          Production Time:
+                        </span>
+                        <span className={cn(
+                          "text-2xl font-bold",
+                          isUrgent ? "text-red-600 dark:text-red-500" : "text-green-600 dark:text-green-500"
+                        )}>
+                          {productionTime} {productionTime === 1 ? 'day' : 'days'}
+                        </span>
+                      </div>
+                      {isUrgent && (
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium">
+                          ⚠️ URGENT ORDER - Less than 3 days production time
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </FormItem>
               )}
             />
@@ -696,10 +770,10 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
 
               <FormField
                 control={form.control}
-                name="dateReceived"
+                name="goodsReceived"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Date Received</FormLabel>
+                    <FormLabel>Goods Received</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -709,7 +783,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                               "pl-3 text-left font-normal justify-start",
                               !field.value && "text-muted-foreground"
                             )}
-                            data-testid="button-date-received"
+                            data-testid="button-goods-received"
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
@@ -729,6 +803,42 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   </FormItem>
                 )}
               />
+              
+              {/* Production Time Display - Outside FormField for visibility */}
+              {productionTime !== null && (
+                <div 
+                  className={cn(
+                    "p-3 rounded-md border-2",
+                    isUrgent 
+                      ? "border-red-500 bg-red-50 dark:bg-red-950/30" 
+                      : "border-green-500 bg-green-50 dark:bg-green-950/30"
+                  )}
+                  data-testid="production-time-display"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={cn(
+                      "font-semibold",
+                      isUrgent ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
+                    )}>
+                      Production Time:
+                    </span>
+                    <span 
+                      className={cn(
+                        "text-2xl font-bold",
+                        isUrgent ? "text-red-600 dark:text-red-500" : "text-green-600 dark:text-green-500"
+                      )}
+                      data-testid="production-time-value"
+                    >
+                      {productionTime} {productionTime === 1 ? 'day' : 'days'}
+                    </span>
+                  </div>
+                  {isUrgent && (
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium" data-testid="urgent-warning">
+                      ⚠️ URGENT ORDER - Less than 3 days production time
+                    </p>
+                  )}
+                </div>
+              )}
 
             </div>
 

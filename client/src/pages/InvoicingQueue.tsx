@@ -20,7 +20,7 @@ interface Job {
   jobName: string;
   poNumber: string | null;
   quantity: number;
-  dateReceived: string;
+  goodsReceived: string;
   requiredDispatchDate: string;
   completed: boolean;
   invoiceStatus: string;

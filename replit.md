@@ -112,6 +112,20 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 
 ### October 15, 2025
 
+#### Goods Received and Production Time Feature
+- **Field Rename**: "Date Received" renamed to "Goods Received" across the application
+- **Database Schema**: Column `date_received` renamed to `goods_received` in jobs table (data preserved via SQL rename)
+- **Production Time Calculation**: System now calculates and displays production time (days between Goods Received and Required Dispatch Date)
+  - Displayed prominently below Goods Received field with large, eye-catching typography
+  - **Visual Indicators**:
+    - Green border and background for normal production time (3+ days)
+    - Red border and background for urgent orders (< 3 days)
+    - Production time shown in large 2xl font for maximum visibility
+  - **Urgent Order Alert**: Orders with less than 3 days production time display "⚠️ URGENT ORDER" warning
+- **Form Layout**: Goods Received positioned directly under Required Dispatch Date for logical workflow
+- **Reporting Metric**: Production time will be used for future production efficiency reporting
+- **Implementation**: Available in both New Order and Edit Order dialogs
+
 #### Form Layout and Terminology Updates
 - **New Order Dialog Restructure**: Redesigned form hierarchy to emphasize critical fields
   - Required Dispatch Date is now the prominent header field (full width, larger text/button)

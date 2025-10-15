@@ -22,7 +22,7 @@ interface JobRowProps {
     jobName: string;
     poNumber: string | null;
     quantity: number;
-    dateReceived: Date;
+    goodsReceived: Date;
     requiredDispatchDate: Date;
     completedOnTime: boolean | null;
     completedByName: string | null;
@@ -48,7 +48,7 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isC
     : false;
   
   // Check if date received exists
-  const hasDateReceived = !!job.dateReceived;
+  const hasGoodsReceived = !!job.goodsReceived;
   
   // Calculate weighted average stitch count from line items
   const weightedStitchCount = job.lineItems && job.lineItems.length > 0
@@ -110,18 +110,18 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isC
             <TooltipTrigger asChild>
               <button 
                 className="inline-flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
-                aria-label={hasDateReceived ? "Date received recorded" : "No date received"}
+                aria-label={hasGoodsReceived ? "Goods received recorded" : "Goods not yet received"}
                 data-testid={`indicator-date-${job.id}`}
               >
                 <Circle className={cn(
                   "h-3 w-3 fill-current",
-                  hasDateReceived ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
+                  hasGoodsReceived ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
                 )} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="top">
               <p className="text-xs">
-                {hasDateReceived ? `Received: ${format(new Date(job.dateReceived), "PPP")}` : "No date received"}
+                {hasGoodsReceived ? `Goods Received: ${format(new Date(job.goodsReceived), "PPP")}` : "Goods not yet received"}
               </p>
             </TooltipContent>
           </Tooltip>
