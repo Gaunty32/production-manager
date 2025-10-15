@@ -36,7 +36,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon, Plus, Trash2 } from "lucide-react";
+import { CalendarIcon, Plus, Trash2, Info } from "lucide-react";
 import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -223,6 +223,15 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const allLineItemsCompleted = () => {
     return lineItems.length > 0 && lineItems.every(item => item.completed);
   };
+
+  // Automatically reset completed to false if any line item becomes incomplete
+  useEffect(() => {
+    if (form.watch('completed') && !allLineItemsCompleted()) {
+      form.setValue('completed', false);
+      form.setValue('completedById', null);
+      form.setValue('completedOnTime', null);
+    }
+  }, [lineItems, form]);
 
   const allLogosApproved = lineItems.length > 0 && lineItems.every(item => item.logoApproved);
 
@@ -627,33 +636,6 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
 
               <FormField
                 control={form.control}
-                name="completed"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={!allLineItemsCompleted()}
-                        data-testid="checkbox-edit-completed"
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel className={!allLineItemsCompleted() ? "text-muted-foreground" : ""}>
-                        Order Completed
-                      </FormLabel>
-                      {!allLineItemsCompleted() && (
-                        <p className="text-xs text-muted-foreground">
-                          All line items must be completed first
-                        </p>
-                      )}
-                    </div>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="completedById"
                 render={({ field }) => (
                   <FormItem>
@@ -822,9 +804,41 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               )}
             />
 
+            {!allLineItemsCompleted() && (
+              <p className="text-sm text-muted-foreground bg-muted/50 border rounded-md p-3 flex items-center gap-2">
+                <Info className="h-4 w-4" />
+                <span>Complete all line items above before marking the order as completed</span>
+              </p>
+            )}
+            
+            <input type="hidden" {...form.register('completed')} />
+            
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-edit-cancel">
                 Cancel
+              </Button>
+              <Button 
+                type="button" 
+                variant={form.watch('completed') ? "secondary" : "default"}
+                onClick={() => {
+                  const isCurrentlyCompleted = form.watch('completed');
+                  if (!isCurrentlyCompleted) {
+                    // Marking as complete - set metadata
+                    form.setValue('completed', true);
+                    if (user) {
+                      form.setValue('completedById', user.id);
+                    }
+                  } else {
+                    // Unmarking - clear completion metadata
+                    form.setValue('completed', false);
+                    form.setValue('completedById', null);
+                    form.setValue('completedOnTime', null);
+                  }
+                }}
+                disabled={!allLineItemsCompleted() && !form.watch('completed')}
+                data-testid="button-edit-mark-completed"
+              >
+                {form.watch('completed') ? "Unmark as Completed" : "Mark Order as Completed"}
               </Button>
               <Button type="submit" data-testid="button-edit-submit">
                 Save Changes

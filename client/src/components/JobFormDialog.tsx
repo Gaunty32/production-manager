@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema, type Customer } from "@shared/schema";
@@ -8,6 +8,7 @@ import { getPrice, formatPrice, type PricingTable } from "@shared/pricing";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon, Plus, Trash2 } from "lucide-react";
+import { CalendarIcon, Plus, Trash2, Info } from "lucide-react";
 import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +80,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null }]);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -121,6 +123,15 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   const allLineItemsCompleted = () => {
     return lineItems.length > 0 && lineItems.every(item => item.completed);
   };
+
+  // Automatically reset completed to false if any line item becomes incomplete
+  useEffect(() => {
+    if (form.watch('completed') && !allLineItemsCompleted()) {
+      form.setValue('completed', false);
+      form.setValue('completedById', null);
+      form.setValue('completedOnTime', null);
+    }
+  }, [lineItems, form]);
 
   const allLogosApproved = lineItems.length > 0 && lineItems.every(item => item.logoApproved);
 
@@ -739,33 +750,6 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
 
               <FormField
                 control={form.control}
-                name="completed"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={!allLineItemsCompleted()}
-                        data-testid="checkbox-completed"
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel className={!allLineItemsCompleted() ? "text-muted-foreground" : ""}>
-                        Order Completed
-                      </FormLabel>
-                      {!allLineItemsCompleted() && (
-                        <p className="text-xs text-muted-foreground">
-                          All line items must be completed first
-                        </p>
-                      )}
-                    </div>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="completedById"
                 render={({ field }) => (
                   <FormItem>
@@ -957,9 +941,41 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
               )}
             />
 
+            {!allLineItemsCompleted() && (
+              <p className="text-sm text-muted-foreground bg-muted/50 border rounded-md p-3 flex items-center gap-2">
+                <Info className="h-4 w-4" />
+                <span>Complete all line items above before marking the order as completed</span>
+              </p>
+            )}
+            
+            <input type="hidden" {...form.register('completed')} />
+            
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)} data-testid="button-cancel">
                 Cancel
+              </Button>
+              <Button 
+                type="button" 
+                variant={form.watch('completed') ? "secondary" : "default"}
+                onClick={() => {
+                  const isCurrentlyCompleted = form.watch('completed');
+                  if (!isCurrentlyCompleted) {
+                    // Marking as complete - set metadata
+                    form.setValue('completed', true);
+                    if (user) {
+                      form.setValue('completedById', user.id);
+                    }
+                  } else {
+                    // Unmarking - clear completion metadata
+                    form.setValue('completed', false);
+                    form.setValue('completedById', null);
+                    form.setValue('completedOnTime', null);
+                  }
+                }}
+                disabled={!allLineItemsCompleted() && !form.watch('completed')}
+                data-testid="button-mark-completed"
+              >
+                {form.watch('completed') ? "Unmark as Completed" : "Mark Order as Completed"}
               </Button>
               <Button 
                 type="submit" 
@@ -969,7 +985,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                 }}
                 data-testid="button-create-order"
               >
-                Add Embroidery Order
+                Create Order
               </Button>
             </div>
           </form>

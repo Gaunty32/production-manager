@@ -44,6 +44,26 @@ A complete invoicing workflow is implemented, moving completed jobs to a draft q
 
 ### October 15, 2025
 
+#### Order Completion Button Redesign
+- Converted job completion from checkbox to button interface for better UX and workflow enforcement
+- **Button Behavior**:
+  - "Mark Order as Completed" button only enabled when all line items are marked as completed
+  - Changes to "Unmark as Completed" when order is already completed
+  - Visual feedback: default variant when not completed, secondary variant when completed
+- **Automatic State Management**:
+  - Added useEffect guard that automatically resets order completion to false when any line item becomes incomplete
+  - Prevents submission of "completed" jobs with incomplete line items
+  - Clears completion metadata (completedById, completedOnTime) when auto-resetting
+- **Completion Metadata**:
+  - Automatically sets completedById to current user when marking order as complete
+  - Properly clears metadata when unmarking
+  - Maintains existing celebration/star logic when job is submitted as completed
+- **UI Improvements**:
+  - Helper text with Info icon displays when line items are not all completed
+  - Button positioned at bottom right with other action buttons
+  - Hidden input ensures completed field is properly registered for form submission
+- Applied consistently to both JobFormDialog (new orders) and JobEditDialog (existing orders)
+
 #### Line Item Completion Tracking - Persistence & Data Flow Fix
 - Fixed critical issue where line item completion data (completedById and completedAt) was not being persisted or loaded correctly
 - **Backend Enhancements**:
