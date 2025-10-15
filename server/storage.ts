@@ -357,15 +357,26 @@ export class DatabaseStorage implements IStorage {
   async createJobLineItem(insertLineItem: InsertJobLineItem): Promise<JobLineItem> {
     const [lineItem] = await db
       .insert(jobLineItems)
-      .values(insertLineItem)
+      .values({
+        ...insertLineItem,
+        completedAt: insertLineItem.completedAt ? new Date(insertLineItem.completedAt) : null,
+      })
       .returning();
     return lineItem;
   }
 
   async updateJobLineItem(id: string, updates: Partial<JobLineItem>): Promise<JobLineItem> {
+    // Handle date conversion for completedAt if it's a string
+    const processedUpdates = {
+      ...updates,
+      ...(updates.completedAt && typeof updates.completedAt === 'string' 
+        ? { completedAt: new Date(updates.completedAt) } 
+        : {}),
+    };
+    
     const [lineItem] = await db
       .update(jobLineItems)
-      .set(updates)
+      .set(processedUpdates)
       .where(eq(jobLineItems.id, id))
       .returning();
     if (!lineItem) throw new Error("Line item not found");

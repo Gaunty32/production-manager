@@ -52,6 +52,8 @@ type LineItem = {
   stitchCount: number;
   logoApproved: boolean;
   completed: boolean;
+  completedById: string | null;
+  completedAt: string | null;
 };
 
 const JOB_TYPES = ["Embroidery", "Print", "Bagging", "Other"] as const;
@@ -75,7 +77,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   const [open, setOpen] = useState(false);
   const [scheduleSuggestion, setScheduleSuggestion] = useState<any>(null);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null }]);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -97,7 +99,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   });
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -106,7 +108,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
     }
   };
 
-  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean) => {
+  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean | null) => {
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
     setLineItems(updated);
@@ -292,6 +294,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
             stitchCount: lineItem.stitchCount,
             logoApproved: lineItem.logoApproved,
             completed: lineItem.completed,
+            completedById: lineItem.completedById || null,
+            completedAt: lineItem.completedAt || null,
           });
         }
       }
@@ -599,6 +603,55 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                           data-testid={`input-line-item-description-${index}`}
                         />
                       </div>
+                      
+                      {/* Completion Tracking - Show when item is completed */}
+                      {item.completed && (
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                          <div>
+                            <label className="text-xs text-muted-foreground">Completed By</label>
+                            <Select 
+                              value={item.completedById || "unassigned"}
+                              onValueChange={(value) => updateLineItem(index, 'completedById', value === "unassigned" ? null : value)}
+                            >
+                              <SelectTrigger className="mt-1" data-testid={`select-line-item-completed-by-${index}`}>
+                                <SelectValue placeholder="Select staff" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unassigned">Not assigned</SelectItem>
+                                {staff.map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-muted-foreground">Completed Date</label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal mt-1",
+                                    !item.completedAt && "text-muted-foreground"
+                                  )}
+                                  data-testid={`button-line-item-completed-at-${index}`}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {item.completedAt ? format(new Date(item.completedAt), "PPP") : "Pick date"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={item.completedAt ? new Date(item.completedAt) : undefined}
+                                  onSelect={(date) => updateLineItem(index, 'completedAt', date?.toISOString() || null)}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <Button

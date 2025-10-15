@@ -106,6 +106,8 @@ export const jobLineItems = pgTable("job_line_items", {
   stitchCount: integer("stitch_count").notNull(),
   logoApproved: boolean("logo_approved").notNull().default(false),
   completed: boolean("completed").notNull().default(false),
+  completedById: varchar("completed_by_id").references(() => staff.id),
+  completedAt: timestamp("completed_at"),
 });
 
 export const staffMachineAllocations = pgTable("staff_machine_allocations", {
@@ -372,6 +374,8 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
   ).default(false),
   completed: z.coerce.boolean().default(false),
   description: z.string().nullable().optional(),
+  completedById: z.string().nullable().optional(),
+  completedAt: z.string().nullable().optional(),
 });
 
 export const updateJobLineItemSchema = z.object({
@@ -380,6 +384,8 @@ export const updateJobLineItemSchema = z.object({
   stitchCount: z.coerce.number().int().min(1).optional(),
   logoApproved: z.coerce.boolean().optional(),
   completed: z.coerce.boolean().optional(),
+  completedById: z.string().nullable().optional(),
+  completedAt: z.string().nullable().optional(),
 });
 
 export type InsertJobLineItem = z.infer<typeof insertJobLineItemSchema>;

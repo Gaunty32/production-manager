@@ -52,6 +52,8 @@ type LineItem = {
   stitchCount: number;
   logoApproved: boolean;
   completed: boolean;
+  completedById: string | null;
+  completedAt: string | null;
 };
 
 const JOB_TYPES = ["Embroidery", "Print", "Bagging", "Other"] as const;
@@ -121,11 +123,14 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   // Fetch line items for the job
   const { data: fetchedLineItems } = useQuery<Array<{
     id: string;
+    jobType: string;
     quantity: number;
     description: string | null;
     stitchCount: number;
     logoApproved: boolean;
     completed: boolean;
+    completedById: string | null;
+    completedAt: string | null;
   }>>({
     queryKey: ['/api/jobs', job?.id, 'line-items'],
     enabled: !!job?.id && open,
@@ -155,12 +160,14 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         // Job has line items - use them
         setLineItems(fetchedLineItems.map((item) => ({
           id: item.id,
-          jobType: (item as any).jobType || "Embroidery", // Default to Embroidery if missing (for existing data)
+          jobType: item.jobType || "Embroidery", // Default to Embroidery if missing (for existing data)
           quantity: item.quantity,
           description: item.description || "",
           stitchCount: item.stitchCount,
           logoApproved: item.logoApproved,
           completed: item.completed,
+          completedById: item.completedById || null,
+          completedAt: item.completedAt || null,
         })));
       } else if (job && job.quantity > 0) {
         // Old job without line items - create a default line item from job quantity
@@ -171,6 +178,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           stitchCount: 5000,
           logoApproved: false,
           completed: false,
+          completedById: null,
+          completedAt: null,
         }]);
       } else {
         // No line items and no quantity
@@ -181,6 +190,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           stitchCount: 5000,
           logoApproved: false,
           completed: false,
+          completedById: null,
+          completedAt: null,
         }]);
       }
       setDeletedLineItemIds([]);
@@ -188,7 +199,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }, [fetchedLineItems, open, job]);
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -199,7 +210,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     setLineItems(lineItems.filter((_, i) => i !== index));
   };
 
-  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean) => {
+  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean | null) => {
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
     setLineItems(updated);
@@ -261,6 +272,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               stitchCount: item.stitchCount,
               logoApproved: item.logoApproved,
               completed: item.completed,
+              completedById: item.completedById || null,
+              completedAt: item.completedAt || null,
             });
           } else {
             // Create new line item
@@ -270,6 +283,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               stitchCount: item.stitchCount,
               logoApproved: item.logoApproved,
               completed: item.completed,
+              completedById: item.completedById || null,
+              completedAt: item.completedAt || null,
             });
           }
         }
@@ -542,6 +557,55 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                           data-testid={`input-edit-line-item-description-${index}`}
                         />
                       </div>
+                      
+                      {/* Completion Tracking - Show when item is completed */}
+                      {item.completed && (
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                          <div>
+                            <label className="text-xs text-muted-foreground">Completed By</label>
+                            <Select 
+                              value={item.completedById || "unassigned"}
+                              onValueChange={(value) => updateLineItem(index, 'completedById', value === "unassigned" ? null : value)}
+                            >
+                              <SelectTrigger className="mt-1" data-testid={`select-edit-line-item-completed-by-${index}`}>
+                                <SelectValue placeholder="Select staff" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unassigned">Not assigned</SelectItem>
+                                {staff.map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-muted-foreground">Completed Date</label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal mt-1",
+                                    !item.completedAt && "text-muted-foreground"
+                                  )}
+                                  data-testid={`button-edit-line-item-completed-at-${index}`}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {item.completedAt ? format(new Date(item.completedAt), "PPP") : "Pick date"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={item.completedAt ? new Date(item.completedAt) : undefined}
+                                  onSelect={(date) => updateLineItem(index, 'completedAt', date?.toISOString() || null)}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <Button
