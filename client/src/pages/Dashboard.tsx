@@ -219,7 +219,7 @@ export default function Dashboard() {
               trigger={
                 <Button data-testid="button-add-order">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Embroidery Order
+                  New Order
                 </Button>
               }
               customers={customers}
@@ -338,7 +338,7 @@ export default function Dashboard() {
                 {sortedActiveJobs.length === 0 ? (
                   <tr>
                     <td colSpan={13} className="py-8 text-center text-muted-foreground">
-                      {searchTerm ? "No active orders match your search." : "No active orders found. Click 'Add Embroidery Order' to create one."}
+                      {searchTerm ? "No active orders match your search." : "No active orders found. Click 'New Order' to create one."}
                     </td>
                   </tr>
                 ) : (
