@@ -150,8 +150,13 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       return null;
     }
 
-    // Calculate pricing for each line item
+    // Calculate pricing only for Embroidery line items
     const lineItemPricing = lineItems.map(item => {
+      // Only calculate pricing for Embroidery type - other types don't have pricing tables yet
+      if (item.jobType !== "Embroidery") {
+        return null;
+      }
+      
       try {
         const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
         return {
@@ -163,12 +168,14 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       }
     });
 
-    // Calculate job total
+    // Calculate job total (only from Embroidery items)
     let jobTotal: number | "POA" = 0;
     let hasPOA = false;
+    let hasEmbroideryItems = false;
     
     for (const pricing of lineItemPricing) {
       if (!pricing) continue;
+      hasEmbroideryItems = true;
       if (pricing.lineTotal === "POA") {
         hasPOA = true;
         break;
@@ -178,6 +185,11 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
 
     if (hasPOA) {
       jobTotal = "POA";
+    }
+
+    // Don't show pricing if there are no embroidery items
+    if (!hasEmbroideryItems) {
+      return null;
     }
 
     return {
@@ -539,13 +551,30 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                       
                       {lineItems.map((item, index) => {
                         const pricing = pricingData.lineItemPricing[index];
-                        if (!pricing) return null;
+                        if (!pricing) {
+                          // Show message for non-embroidery items
+                          if (item.jobType !== "Embroidery") {
+                            return (
+                              <div key={index} className="text-xs space-y-1 pb-2 border-b last:border-b-0 last:pb-0">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">
+                                    Line {index + 1} ({item.jobType}): {item.quantity} units
+                                  </span>
+                                  <span className="text-muted-foreground italic">
+                                    Pricing not available
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }
                         
                         return (
                           <div key={index} className="text-xs space-y-1 pb-2 border-b last:border-b-0 last:pb-0">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">
-                                Line {index + 1}: {item.quantity} × {item.stitchCount.toLocaleString()} stitches
+                                Line {index + 1} (Embroidery): {item.quantity} × {item.stitchCount.toLocaleString()} stitches
                               </span>
                             </div>
                             <div className="flex justify-between font-mono">
@@ -561,7 +590,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                       })}
                       
                       <div className="flex justify-between items-center pt-2 border-t">
-                        <span className="font-medium">Total Price:</span>
+                        <span className="font-medium">Total Price (Embroidery Only):</span>
                         <span className="font-mono font-bold text-lg" data-testid="total-price">
                           {formatPrice(pricingData.jobTotal)}
                         </span>
@@ -572,7 +601,9 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   {!pricingData && form.watch("customerId") && (
                     <div className="border border-amber-500/50 rounded-md p-3 bg-amber-500/5">
                       <p className="text-sm text-amber-600 dark:text-amber-500">
-                        No pricing table selected for this customer. Please update customer settings.
+                        {lineItems.every(item => item.jobType !== "Embroidery") 
+                          ? "No embroidery items - pricing tables only apply to embroidery work."
+                          : "No pricing table selected for this customer. Please update customer settings."}
                       </p>
                     </div>
                   )}

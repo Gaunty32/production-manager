@@ -129,6 +129,12 @@ PostgreSQL (Neon serverless database) with Drizzle ORM is used for type-safe ope
 - **UI Implementation**: Dropdown selector added as first field in each line item for both New Order and Edit Order dialogs
 - **Data Migration**: Existing line items automatically default to "Embroidery" type
 - **Purpose**: Enables tracking different types of work within a single job (e.g., embroidery + bagging services)
+- **Pricing Limitation**: Current pricing tables (2025/2026) only apply to Embroidery work
+  - Embroidery line items show calculated pricing based on stitch count and quantity
+  - Print, Bagging, and Other job types display "Pricing not available" in pricing summary
+  - Total price calculation only includes Embroidery line items
+  - System clearly labels totals as "Total Price (Embroidery Only)" when mixed job types are present
+  - Future enhancement: Add dedicated pricing tables for Print, Bagging, and Other services
 
 ### October 11, 2025
 
