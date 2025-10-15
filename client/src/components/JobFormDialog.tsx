@@ -337,7 +337,6 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       setOpen(false);
       form.reset();
       setLineItems([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
-      setScheduleSuggestion(null);
     } catch (error) {
       toast({
         title: "Error",
@@ -349,9 +348,6 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
-    if (!newOpen) {
-      setScheduleSuggestion(null);
-    }
   };
 
   return (
