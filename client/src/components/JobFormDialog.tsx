@@ -89,7 +89,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       jobName: "",
       poNumber: "",
       quantity: 1,
-      goodsReceived: new Date().toISOString(),
+      goodsReceived: "",
       requiredDispatchDate: new Date().toISOString(),
       machineId: null,
       status: "pending",
@@ -319,7 +319,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setOpen(false);
       form.reset();
-      setLineItems([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false }]);
+      setLineItems([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null }]);
       setScheduleSuggestion(null);
     } catch (error) {
       toast({
@@ -830,8 +830,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={new Date(field.value)}
-                          onSelect={(date) => field.onChange(date?.toISOString())}
+                          selected={field.value ? new Date(field.value) : undefined}
+                          onSelect={(date) => field.onChange(date?.toISOString() || "")}
                           initialFocus
                         />
                       </PopoverContent>

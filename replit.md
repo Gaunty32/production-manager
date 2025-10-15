@@ -44,6 +44,27 @@ A complete invoicing workflow is implemented, moving completed jobs to a draft q
 
 ### October 15, 2025
 
+#### Goods Received Date Optional Field
+- Updated goods received date field to default to blank/empty, allowing users to add jobs to the system before goods arrive
+- **Schema Changes**:
+  - Changed `goodsReceived` field in jobs table from `notNull()` to nullable
+  - Fixed schema field name from legacy `dateReceived` to `goodsReceived` in both insert and update schemas
+  - Allows jobs to be created without a goods received date
+  - Allows users to clear the goods received date when editing existing jobs
+- **Form Updates**:
+  - Both JobFormDialog and JobEditDialog now default to empty string for goods received date
+  - Calendar picker shows "Pick a date" placeholder when field is empty
+  - Updated insert schema validation: converts empty string to null using Zod preprocessing
+  - Updated update schema validation: converts empty string to null (not undefined) for proper field clearing
+  - Fixed calendar onChange handlers to send empty string when date is cleared
+- **Production Time Calculation**:
+  - Production time display only shown when both goods received and dispatch dates are set
+  - Prevents calculation errors when goods haven't arrived yet
+- **Testing**:
+  - End-to-end test verified: Successfully creates jobs without goods received date
+  - End-to-end test verified: Successfully edits and updates goods received date
+  - Database migration completed successfully to make field nullable
+
 #### Order Completion Button Redesign
 - Converted job completion from checkbox to button interface for better UX and workflow enforcement
 - **Button Behavior**:

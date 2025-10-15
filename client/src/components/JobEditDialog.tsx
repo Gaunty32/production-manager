@@ -65,7 +65,7 @@ const formSchema = z.object({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
-  goodsReceived: z.string(),
+  goodsReceived: z.union([z.string(), z.null()]),
   requiredDispatchDate: z.string(),
   machineId: z.number().nullable(),
   completed: z.boolean(),
@@ -83,7 +83,7 @@ interface JobEditDialogProps {
     jobName: string;
     poNumber: string | null;
     quantity: number;
-    goodsReceived: Date;
+    goodsReceived: Date | null;
     requiredDispatchDate: Date;
     machineId: number | null;
     completed: boolean;
@@ -110,7 +110,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       customerId: "",
       jobName: "",
       poNumber: "",
-      goodsReceived: new Date().toISOString(),
+      goodsReceived: "",
       requiredDispatchDate: new Date().toISOString(),
       machineId: null,
       completed: false,
@@ -143,7 +143,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         customerId: job.customerId,
         jobName: job.jobName,
         poNumber: job.poNumber || "",
-        goodsReceived: job.goodsReceived.toISOString(),
+        goodsReceived: job.goodsReceived ? job.goodsReceived.toISOString() : "",
         requiredDispatchDate: job.requiredDispatchDate.toISOString(),
         machineId: job.machineId,
         completed: job.completed,
@@ -401,7 +401,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                         <Calendar
                           mode="single"
                           selected={field.value ? new Date(field.value) : undefined}
-                          onSelect={(date) => field.onChange(date?.toISOString())}
+                          onSelect={(date) => field.onChange(date?.toISOString() || "")}
                           initialFocus
                         />
                       </PopoverContent>
@@ -743,7 +743,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                         <Calendar
                           mode="single"
                           selected={field.value ? new Date(field.value) : undefined}
-                          onSelect={(date) => field.onChange(date?.toISOString())}
+                          onSelect={(date) => field.onChange(date?.toISOString() || "")}
                           initialFocus
                         />
                       </PopoverContent>

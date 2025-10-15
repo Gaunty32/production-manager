@@ -52,7 +52,7 @@ export const jobs = pgTable("jobs", {
   jobName: text("job_name").notNull(),
   poNumber: text("po_number"),
   quantity: integer("quantity").notNull(),
-  goodsReceived: timestamp("goods_received").notNull(),
+  goodsReceived: timestamp("goods_received"),
   requiredDispatchDate: timestamp("required_dispatch_date").notNull(),
   completed: boolean("completed").notNull().default(false),
   completedOnTime: boolean("completed_on_time"),
@@ -158,7 +158,10 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
-  dateReceived: z.string(),
+  goodsReceived: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.union([z.string(), z.null()])
+  ),
   requiredDispatchDate: z.string(),
   machineId: z.preprocess(
     (val) => {
@@ -179,9 +182,13 @@ export const updateJobSchema = z.object({
     z.string().nullable().optional()
   ),
   quantity: z.coerce.number().int().min(1).optional(),
-  dateReceived: z.preprocess(
-    (val) => val ? new Date(val as string) : undefined,
-    z.date().optional()
+  goodsReceived: z.preprocess(
+    (val) => {
+      if (val === "" || val === null) return null;
+      if (val) return new Date(val as string);
+      return undefined;
+    },
+    z.union([z.date(), z.null()]).optional()
   ),
   requiredDispatchDate: z.preprocess(
     (val) => val ? new Date(val as string) : undefined,
