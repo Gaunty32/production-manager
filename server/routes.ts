@@ -916,22 +916,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const job of selectedJobs) {
         const jobLineItems = await storage.getJobLineItems(job.id);
-        const priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
-
-        if (priceResult.totalPrice === "POA") {
+        
+        // Try to calculate price, but catch errors for items outside pricing tables
+        let priceResult;
+        try {
+          priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
+          if (priceResult.totalPrice === "POA") {
+            hasPOA = true;
+          }
+        } catch (error) {
+          // If price calculation fails (e.g., no tier for quantity), treat as POA
+          console.log(`Price calculation failed for job ${job.id}, treating as POA:`, error instanceof Error ? error.message : error);
           hasPOA = true;
+          priceResult = null;
         }
 
         // Add each line item with its calculated unit price or manual price
         jobLineItems.forEach((lineItem, index) => {
           let unitPrice: number;
           
-          // Use manual price if provided for this line item, otherwise use calculated price
+          // Use manual price if provided for this line item
           if (manualPrices && manualPrices[lineItem.id] !== undefined) {
             unitPrice = parseFloat(manualPrices[lineItem.id]);
-          } else {
+          } else if (priceResult) {
+            // Use calculated price if available
             const lineItemPrice = priceResult.lineItemPrices[index];
             unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice as number;
+          } else {
+            // No calculated price and no manual price - this will trigger error below
+            unitPrice = 0;
           }
           
           lineItemsWithPricing.push({
