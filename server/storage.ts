@@ -194,7 +194,7 @@ export class DatabaseStorage implements IStorage {
       .insert(jobs)
       .values({
         ...insertJob,
-        goodsReceived: new Date(insertJob.goodsReceived),
+        goodsReceived: insertJob.goodsReceived ? new Date(insertJob.goodsReceived) : null,
         requiredDispatchDate: new Date(insertJob.requiredDispatchDate),
       })
       .returning();

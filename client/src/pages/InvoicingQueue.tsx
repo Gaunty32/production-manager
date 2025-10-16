@@ -64,6 +64,10 @@ export default function InvoicingQueue() {
     queryKey: ["/api/job-line-items"],
   });
 
+  useEffect(() => {
+    console.log("All line items loaded:", allLineItems);
+  }, [allLineItems]);
+
   const { data: xeroStatus } = useQuery<{ configured: boolean; connected: boolean }>({
     queryKey: ["/api/xero/auth/status"],
   });
@@ -130,17 +134,38 @@ export default function InvoicingQueue() {
 
   const getJobPrice = (job: Job) => {
     const customer = customers.find(c => c.id === job.customerId);
-    if (!customer) return null;
+    if (!customer) {
+      console.log(`No customer found for job ${job.id}`);
+      return null;
+    }
 
     const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
-    if (!pricingTable) return null;
+    if (!pricingTable) {
+      console.log(`No pricing table for customer ${customer.name}`);
+      return null;
+    }
 
     const lineItems = getJobLineItems(job.id);
+    console.log(`Job ${job.jobName}: Found ${lineItems.length} line items`, lineItems);
+    
+    if (lineItems.length === 0) {
+      console.log(`No line items found for job ${job.id}`);
+      return null;
+    }
+    
     try {
+      console.log(`Calling calculateJobPrice with:`, { lineItems, pricingTable });
       const result = calculateJobPrice(lineItems, pricingTable);
+      console.log(`Price calculation result for ${job.jobName}:`, result);
       return result?.totalPrice || null;
     } catch (error) {
-      console.error("Failed to calculate job price for invoicing:", error);
+      console.error(`Failed to calculate job price for ${job.jobName}:`, error);
+      console.error(`Error details:`, {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack',
+        lineItems,
+        pricingTable
+      });
       return null;
     }
   };

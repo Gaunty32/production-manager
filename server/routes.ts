@@ -405,6 +405,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/job-line-items", optionalAuth, async (req, res) => {
     try {
       const lineItems = await storage.getAllJobLineItems();
+      console.log(`GET /api/job-line-items: Returning ${lineItems.length} line items`, 
+        lineItems.map(li => ({ id: li.id, jobId: li.jobId, qty: li.quantity, stitches: li.stitchCount }))
+      );
       res.json(lineItems);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch line items" });
