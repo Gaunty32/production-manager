@@ -218,6 +218,14 @@ export const updateJobSchema = z.object({
     z.string().nullable().optional()
   ),
   invoiceStatus: z.string().optional(),
+  shippingMethod: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
+  dhlTrackingNumber: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
 });
 
 export const insertStaffShiftSchema = createInsertSchema(staffShifts).omit({

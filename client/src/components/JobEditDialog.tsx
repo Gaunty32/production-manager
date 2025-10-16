@@ -44,6 +44,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { CelebrationDialog } from "@/components/CelebrationDialog";
+import { ShippingInfoDialog } from "@/components/ShippingInfoDialog";
 
 type LineItem = {
   id?: string;
@@ -80,6 +81,8 @@ const formSchema = z.object({
   completedOnTime: z.boolean().nullable(),
   completedById: z.string().nullable(),
   notes: z.string().optional(),
+  shippingMethod: z.string().nullable().optional(),
+  dhlTrackingNumber: z.string().nullable().optional(),
 });
 
 interface JobEditDialogProps {
@@ -112,6 +115,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [celebrationOnTime, setCelebrationOnTime] = useState(true);
+  const [shippingDialogOpen, setShippingDialogOpen] = useState(false);
   
   // Find the staff member associated with the current user
   const { data: currentUserStaff } = useQuery<{ id: string; name: string; userId: string } | null>({
@@ -882,7 +886,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                 onClick={async () => {
                   const isCurrentlyCompleted = form.watch('completed');
                   if (!isCurrentlyCompleted) {
-                    // Marking as complete - use staff ID, not user ID
+                    // Marking as complete - open shipping dialog first
                     if (!currentUserStaff?.id) {
                       toast({
                         title: "Error",
@@ -891,12 +895,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                       });
                       return;
                     }
-                    const currentData = form.getValues();
-                    await handleSubmit({
-                      ...currentData,
-                      completed: true,
-                      completedById: currentUserStaff.id,
-                    });
+                    setShippingDialogOpen(true);
                   } else {
                     // Unmarking - directly call handleSubmit with updated data
                     const currentData = form.getValues();
@@ -905,6 +904,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                       completed: false,
                       completedById: null,
                       completedOnTime: null,
+                      shippingMethod: null,
+                      dhlTrackingNumber: null,
                     });
                   }
                 }}
@@ -926,6 +927,22 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       onOpenChange={setCelebrationOpen}
       onTime={celebrationOnTime}
       staffName={user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Staff Member' : 'Staff Member'}
+    />
+    <ShippingInfoDialog
+      open={shippingDialogOpen}
+      onOpenChange={setShippingDialogOpen}
+      isPending={isSubmitting}
+      onSubmit={async (shippingData) => {
+        const currentData = form.getValues();
+        await handleSubmit({
+          ...currentData,
+          completed: true,
+          completedById: currentUserStaff?.id || null,
+          shippingMethod: shippingData.shippingMethod,
+          dhlTrackingNumber: shippingData.dhlTrackingNumber || null,
+        });
+        setShippingDialogOpen(false);
+      }}
     />
     </>
   );
