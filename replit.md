@@ -8,6 +8,8 @@ This application is a production management system designed to track customer or
 - Fixed double-click submission bug in JobFormDialog and JobEditDialog using isSubmitting state guard
 - Fixed job quantity not updating when line items change - now recalculates total from line items on every edit
 - Submit buttons now disabled during async operations with visual feedback ("Creating..."/"Saving...")
+- Customer dropdown now only shows customers with pricing tables when creating orders
+- Added helper text showing count of hidden customers without pricing tables
 
 ## User Preferences
 
