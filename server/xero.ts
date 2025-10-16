@@ -5,6 +5,7 @@ export interface XeroInvoiceLineItem {
   quantity: number;
   unitAmount: number;
   accountCode?: string;
+  taxType?: string;
 }
 
 export interface XeroInvoice {
@@ -253,6 +254,8 @@ export class XeroService {
           description: `${job.jobName} - PO: ${job.poNumber}`,
           quantity: job.quantity,
           unitAmount: unitPrice,
+          accountCode: "4002",
+          taxType: "OUTPUT2", // 20% VAT on income
         },
       ],
       date: new Date(job.goodsReceived).toISOString().split('T')[0],
@@ -309,6 +312,8 @@ export class XeroService {
       description: `${item.jobName}${item.poNumber ? ` (PO: ${item.poNumber})` : ''} - ${item.description}`,
       quantity: item.quantity,
       unitAmount: item.unitPrice,
+      accountCode: "4002",
+      taxType: "OUTPUT2", // 20% VAT on income
     }));
 
     // Get the most recent dates for invoice date and due date
