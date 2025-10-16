@@ -5,6 +5,11 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 16, 2025 (Latest)**
+- **NEW: Invoice Description Format** - Updated Xero invoice line item descriptions to show professional format
+  - Format: "Job Name, X Stitches (PO: Y)" when PO number exists
+  - Format: "Job Name, X Stitches" when no PO number
+  - Capitalized "Stitches" and removed quantity duplication from description
+  - Quantity now only appears in Xero quantity field (not description)
 - **NEW: Intelligent Xero Contact Matching** - Invoices now automatically match to existing Xero contacts using multi-field lookup
   - First attempts exact name match, then email match, then phone number match
   - Ensures invoices use existing customer records with pre-configured account details and payment terms
