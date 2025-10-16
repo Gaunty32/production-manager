@@ -5,6 +5,10 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 16, 2025 (Latest)**
+- **FIXED: Extended Pricing Tables to Support 1000+ Quantities** - Added unlimited tier for high-volume orders
+  - 2025 pricing: 1000+ units tier added with discounted rates (£0.75-£1.45 depending on stitches)
+  - 2026 pricing: 1000+ units tier added with discounted rates (£0.95-£2.40 depending on stitches)
+  - Fixes invoice creation errors for large quantity orders
 - **NEW: Invoice Description Format** - Updated Xero invoice line item descriptions to show professional format
   - Format: "Job Name, X Stitches (PO: Y)" when PO number exists
   - Format: "Job Name, X Stitches" when no PO number
