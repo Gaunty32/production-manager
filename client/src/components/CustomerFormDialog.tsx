@@ -21,19 +21,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
 
-const formSchema = insertCustomerSchema.extend({
-  name: z.string().min(1, "Customer name is required"),
-  contactFirstName: z.string().optional(),
-  contactLastName: z.string().optional(),
-  email: z.string().email("Invalid email address").optional().or(z.literal("")),
-  telephone: z.string().optional(),
-  address: z.string().optional(),
-  pricingTable2025: z.boolean().default(false),
-  pricingTable2026: z.boolean().default(false),
-});
+const formSchema = insertCustomerSchema
+  .omit({ pricingTable2025: true, pricingTable2026: true })
+  .extend({
+    name: z.string().min(1, "Customer name is required"),
+    contactFirstName: z.string().optional(),
+    contactLastName: z.string().optional(),
+    email: z.string().email("Invalid email address").optional().or(z.literal("")),
+    telephone: z.string().optional(),
+    address: z.string().optional(),
+    pricingTable: z.enum(["none", "2025", "2026"]).default("none"),
+  });
 
 interface CustomerFormDialogProps {
   trigger?: React.ReactNode;
@@ -58,13 +59,15 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
       email: "",
       telephone: "",
       address: "",
-      pricingTable2025: false,
-      pricingTable2026: false,
+      pricingTable: "none",
     },
   });
 
   useEffect(() => {
     if (customer && open) {
+      // Determine which pricing table is set
+      const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : "none";
+      
       form.reset({
         name: customer.name,
         contactFirstName: customer.contactFirstName || "",
@@ -72,8 +75,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         email: customer.email || "",
         telephone: customer.telephone || "",
         address: customer.address || "",
-        pricingTable2025: customer.pricingTable2025 || false,
-        pricingTable2026: customer.pricingTable2026 || false,
+        pricingTable,
       });
     } else if (!open) {
       form.reset({
@@ -83,14 +85,20 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         email: "",
         telephone: "",
         address: "",
-        pricingTable2025: false,
-        pricingTable2026: false,
+        pricingTable: "none",
       });
     }
   }, [customer, open, form]);
 
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
-    onSubmit(data);
+    // Convert radio button selection to boolean fields
+    const { pricingTable, ...rest } = data;
+    const submitData = {
+      ...rest,
+      pricingTable2025: pricingTable === "2025",
+      pricingTable2026: pricingTable === "2026",
+    };
+    onSubmit(submitData);
     setOpen(false);
   };
 
@@ -188,40 +196,39 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
             />
             
             <div className="space-y-3 pt-2 border-t">
-              <div className="text-sm font-medium">Pricing Tables</div>
               <FormField
                 control={form.control}
-                name="pricingTable2025"
+                name="pricingTable"
                 render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormItem>
+                    <FormLabel>Pricing Table</FormLabel>
                     <FormControl>
-                      <Checkbox 
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="checkbox-pricing-2025"
-                      />
+                      <RadioGroup
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        className="flex flex-col gap-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="none" id="pricing-none" data-testid="radio-pricing-none" />
+                          <label htmlFor="pricing-none" className="text-sm font-normal cursor-pointer">
+                            No Pricing Table
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="2025" id="pricing-2025" data-testid="radio-pricing-2025" />
+                          <label htmlFor="pricing-2025" className="text-sm font-normal cursor-pointer">
+                            Pricing Table 2025
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="2026" id="pricing-2026" data-testid="radio-pricing-2026" />
+                          <label htmlFor="pricing-2026" className="text-sm font-normal cursor-pointer">
+                            Pricing Table 2026
+                          </label>
+                        </div>
+                      </RadioGroup>
                     </FormControl>
-                    <FormLabel className="font-normal cursor-pointer">
-                      Pricing Table 2025
-                    </FormLabel>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="pricingTable2026"
-                render={({ field }) => (
-                  <FormItem className="flex items-center gap-2 space-y-0">
-                    <FormControl>
-                      <Checkbox 
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="checkbox-pricing-2026"
-                      />
-                    </FormControl>
-                    <FormLabel className="font-normal cursor-pointer">
-                      Pricing Table 2026
-                    </FormLabel>
+                    <FormMessage />
                   </FormItem>
                 )}
               />

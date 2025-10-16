@@ -60,11 +60,16 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isC
   
   const metrics = calculateProductionMetrics(job.quantity, weightedStitchCount, job.machineId);
   
-  // Calculate job price
+  // Calculate job price with error handling
   const jobPrice = customer && job.lineItems && job.lineItems.length > 0 ? (() => {
     const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
     if (!pricingTable) return null;
-    return calculateJobPrice(job.lineItems, pricingTable);
+    try {
+      return calculateJobPrice(job.lineItems, pricingTable);
+    } catch (error) {
+      console.error("Failed to calculate job price:", error);
+      return null;
+    }
   })() : null;
 
   return (

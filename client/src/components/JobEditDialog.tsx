@@ -868,22 +868,22 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                 onClick={async () => {
                   const isCurrentlyCompleted = form.watch('completed');
                   if (!isCurrentlyCompleted) {
-                    // Marking as complete - set metadata and auto-save
-                    form.setValue('completed', true);
-                    if (user) {
-                      form.setValue('completedById', user.id);
-                    }
-                    // Automatically trigger save
-                    const formData = form.getValues();
-                    await handleSubmit(formData);
+                    // Marking as complete - directly call handleSubmit with updated data
+                    const currentData = form.getValues();
+                    await handleSubmit({
+                      ...currentData,
+                      completed: true,
+                      completedById: user?.id || null,
+                    });
                   } else {
-                    // Unmarking - clear completion metadata and auto-save
-                    form.setValue('completed', false);
-                    form.setValue('completedById', null);
-                    form.setValue('completedOnTime', null);
-                    // Automatically trigger save
-                    const formData = form.getValues();
-                    await handleSubmit(formData);
+                    // Unmarking - directly call handleSubmit with updated data
+                    const currentData = form.getValues();
+                    await handleSubmit({
+                      ...currentData,
+                      completed: false,
+                      completedById: null,
+                      completedOnTime: null,
+                    });
                   }
                 }}
                 disabled={(!allLineItemsCompleted() && !form.watch('completed')) || isSubmitting}
