@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { MACHINE_NAMES } from "@shared/machines";
+import { minutesToTime } from "@shared/scheduling";
 import { z } from "zod";
 import {
   Dialog,
@@ -108,6 +109,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const { user } = useAuth();
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [deletedLineItemIds, setDeletedLineItemIds] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [celebrationOnTime, setCelebrationOnTime] = useState(true);
 
@@ -327,7 +329,10 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const isUrgent = productionTime !== null && productionTime < 3;
 
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
+    if (isSubmitting) return; // Prevent double submission
+    
     if (job) {
+      setIsSubmitting(true);
       try {
         // Check if job is being marked as complete
         const wasNotCompleted = !job.completed;
@@ -425,6 +430,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           description: error instanceof Error ? error.message : "Failed to update order",
           variant: "destructive",
         });
+      } finally {
+        setIsSubmitting(false);
       }
     }
   };
@@ -875,8 +882,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               >
                 {form.watch('completed') ? "Unmark as Completed" : "Mark Order as Completed"}
               </Button>
-              <Button type="submit" data-testid="button-edit-submit">
-                Save Changes
+              <Button type="submit" disabled={isSubmitting} data-testid="button-edit-submit">
+                {isSubmitting ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </form>
