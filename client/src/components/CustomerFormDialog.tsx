@@ -39,7 +39,7 @@ const formSchema = insertCustomerSchema
 interface CustomerFormDialogProps {
   trigger?: React.ReactNode;
   customer?: Customer;
-  onSubmit: (data: z.infer<typeof formSchema>) => void;
+  onSubmit: (data: Omit<z.infer<typeof formSchema>, 'pricingTable'> & { pricingTable2025: boolean; pricingTable2026: boolean }) => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }

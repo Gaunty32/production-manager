@@ -112,6 +112,20 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [celebrationOnTime, setCelebrationOnTime] = useState(true);
+  
+  // Find the staff member associated with the current user
+  const { data: currentUserStaff } = useQuery<{ id: string; name: string; userId: string } | null>({
+    queryKey: ['/api/staff/by-user', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      if (!user?.id) return null;
+      // Staff endpoint returns all staff, we need to find the one with matching userId
+      const response = await fetch('/api/staff', { credentials: 'include' });
+      if (!response.ok) return null;
+      const allStaff = await response.json();
+      return allStaff.find((s: any) => s.userId === user.id) || null;
+    },
+  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -868,12 +882,20 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                 onClick={async () => {
                   const isCurrentlyCompleted = form.watch('completed');
                   if (!isCurrentlyCompleted) {
-                    // Marking as complete - directly call handleSubmit with updated data
+                    // Marking as complete - use staff ID, not user ID
+                    if (!currentUserStaff?.id) {
+                      toast({
+                        title: "Error",
+                        description: "You must be associated with a staff member to mark orders as complete",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
                     const currentData = form.getValues();
                     await handleSubmit({
                       ...currentData,
                       completed: true,
-                      completedById: user?.id || null,
+                      completedById: currentUserStaff.id,
                     });
                   } else {
                     // Unmarking - directly call handleSubmit with updated data

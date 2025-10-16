@@ -4,7 +4,14 @@ This application is a production management system designed to track customer or
 
 ## Recent Changes
 
-**October 16, 2025**
+**October 16, 2025 (Latest)**
+- Fixed "Mark Order as Completed" 500 error - now correctly uses staff ID instead of user ID for completedById field
+- Added automatic lookup of staff member associated with logged-in user when marking orders complete
+- Fixed pricing calculation crash causing app to freeze - added error handling in JobRow component
+- Changed customer pricing tables to be mutually exclusive - replaced checkboxes with radio buttons (None/2025/2026)
+- Added validation to prevent marking orders complete if user is not associated with a staff member
+
+**October 16, 2025 (Earlier)**
 - Fixed double-click submission bug in JobFormDialog and JobEditDialog using isSubmitting state guard
 - Fixed job quantity not updating when line items change - now recalculates total from line items on every edit
 - Submit buttons now disabled during async operations with visual feedback ("Creating..."/"Saving...")
