@@ -889,10 +889,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobLineItems.forEach((lineItem, index) => {
           const lineItemPrice = priceResult.lineItemPrices[index];
           const unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice;
+          
+          // Format: Job Name, X Stitches (PO: Y) if PO available
+          const description = `${job.jobName}, ${lineItem.stitchCount} Stitches${job.poNumber ? ` (PO: ${job.poNumber})` : ''}`;
+          
           lineItemsWithPricing.push({
             jobName: job.jobName,
             poNumber: job.poNumber,
-            description: lineItem.description || `${lineItem.quantity} items @ ${lineItem.stitchCount} stitches`,
+            description: description,
             quantity: lineItem.quantity,
             unitPrice: unitPrice as number, // Type assertion safe here - POA already handled above
           });
