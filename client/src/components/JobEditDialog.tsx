@@ -865,25 +865,31 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               <Button 
                 type="button" 
                 variant={form.watch('completed') ? "secondary" : "default"}
-                onClick={() => {
+                onClick={async () => {
                   const isCurrentlyCompleted = form.watch('completed');
                   if (!isCurrentlyCompleted) {
-                    // Marking as complete - set metadata
+                    // Marking as complete - set metadata and auto-save
                     form.setValue('completed', true);
                     if (user) {
                       form.setValue('completedById', user.id);
                     }
+                    // Automatically trigger save
+                    const formData = form.getValues();
+                    await handleSubmit(formData);
                   } else {
-                    // Unmarking - clear completion metadata
+                    // Unmarking - clear completion metadata and auto-save
                     form.setValue('completed', false);
                     form.setValue('completedById', null);
                     form.setValue('completedOnTime', null);
+                    // Automatically trigger save
+                    const formData = form.getValues();
+                    await handleSubmit(formData);
                   }
                 }}
-                disabled={!allLineItemsCompleted() && !form.watch('completed')}
+                disabled={(!allLineItemsCompleted() && !form.watch('completed')) || isSubmitting}
                 data-testid="button-edit-mark-completed"
               >
-                {form.watch('completed') ? "Unmark as Completed" : "Mark Order as Completed"}
+                {isSubmitting ? "Saving..." : (form.watch('completed') ? "Unmark as Completed" : "Mark Order as Completed")}
               </Button>
               <Button type="submit" disabled={isSubmitting} data-testid="button-edit-submit">
                 {isSubmitting ? "Saving..." : "Save Changes"}
