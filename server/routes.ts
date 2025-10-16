@@ -402,6 +402,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Job line item routes
+  app.get("/api/job-line-items", optionalAuth, async (req, res) => {
+    try {
+      const lineItems = await storage.getAllJobLineItems();
+      res.json(lineItems);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch line items" });
+    }
+  });
+
   app.get("/api/jobs/:jobId/line-items", optionalAuth, async (req, res) => {
     try {
       const { jobId } = req.params;

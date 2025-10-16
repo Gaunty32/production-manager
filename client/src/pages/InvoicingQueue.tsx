@@ -136,8 +136,13 @@ export default function InvoicingQueue() {
     if (!pricingTable) return null;
 
     const lineItems = getJobLineItems(job.id);
-    const result = calculateJobPrice(lineItems, pricingTable);
-    return result?.totalPrice || null;
+    try {
+      const result = calculateJobPrice(lineItems, pricingTable);
+      return result?.totalPrice || null;
+    } catch (error) {
+      console.error("Failed to calculate job price for invoicing:", error);
+      return null;
+    }
   };
 
   const getTotalPrice = (customerJobs: Job[]): number | "POA" | null => {

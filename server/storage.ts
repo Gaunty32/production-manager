@@ -67,6 +67,7 @@ export interface IStorage {
   updateJobSchedule(id: string, schedule: Partial<JobSchedule>): Promise<JobSchedule>;
   deleteJobSchedule(id: string): Promise<void>;
   
+  getAllJobLineItems(): Promise<JobLineItem[]>;
   getJobLineItems(jobId: string): Promise<JobLineItem[]>;
   createJobLineItem(lineItem: InsertJobLineItem): Promise<JobLineItem>;
   updateJobLineItem(id: string, lineItem: Partial<JobLineItem>): Promise<JobLineItem>;
@@ -348,6 +349,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobSchedule(id: string): Promise<void> {
     await db.delete(jobSchedule).where(eq(jobSchedule.id, id));
+  }
+
+  async getAllJobLineItems(): Promise<JobLineItem[]> {
+    return await db.select().from(jobLineItems);
   }
 
   async getJobLineItems(jobId: string): Promise<JobLineItem[]> {
