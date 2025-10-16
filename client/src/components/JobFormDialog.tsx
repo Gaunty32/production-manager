@@ -85,6 +85,7 @@ interface JobFormDialogProps {
 export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps) {
   const [open, setOpen] = useState(false);
   const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -292,6 +293,9 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   };
 
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
+    if (isSubmitting) return; // Prevent double submission
+    
+    setIsSubmitting(true);
     try {
       const totalQuantity = getTotalQuantity();
       
@@ -343,6 +347,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
         description: error instanceof Error ? error.message : "Failed to create order",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -863,9 +869,10 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   e.preventDefault();
                   form.handleSubmit(handleSubmit)();
                 }}
+                disabled={isSubmitting}
                 data-testid="button-create-order"
               >
-                Create Order
+                {isSubmitting ? "Creating..." : "Create Order"}
               </Button>
             </div>
           </form>
