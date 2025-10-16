@@ -12,6 +12,7 @@ export interface XeroInvoiceLineItem {
 export interface XeroInvoice {
   type: "ACCREC"; // Accounts Receivable
   contact: {
+    contactID?: string;
     name: string;
   };
   lineItems: XeroInvoiceLineItem[];
@@ -238,6 +239,97 @@ export class XeroService {
     return this.tokens.tenant_id;
   }
 
+  async findContact(customer: Customer): Promise<{ contactID: string; name: string } | null> {
+    if (!this.isConfigured() || !this.isConnected()) {
+      return null;
+    }
+
+    try {
+      const token = await this.getAccessToken();
+      const tenantId = this.getTenantId();
+
+      // First try to find by exact name match
+      let response = await fetch(`${this.apiUrl}/Contacts?where=Name=="${encodeURIComponent(customer.name)}"`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "xero-tenant-id": tenantId,
+          "Accept": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.Contacts && data.Contacts.length > 0) {
+          return {
+            contactID: data.Contacts[0].ContactID,
+            name: data.Contacts[0].Name,
+          };
+        }
+      }
+
+      // If no match by name and email exists, try to find by email
+      if (customer.email) {
+        response = await fetch(`${this.apiUrl}/Contacts?where=EmailAddress=="${encodeURIComponent(customer.email)}"`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "xero-tenant-id": tenantId,
+            "Accept": "application/json",
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.Contacts && data.Contacts.length > 0) {
+            return {
+              contactID: data.Contacts[0].ContactID,
+              name: data.Contacts[0].Name,
+            };
+          }
+        }
+      }
+
+      // If still no match and phone exists, try to find by phone
+      if (customer.telephone) {
+        const phoneSearch = customer.telephone.replace(/\s/g, ''); // Remove spaces for comparison
+        response = await fetch(`${this.apiUrl}/Contacts`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "xero-tenant-id": tenantId,
+            "Accept": "application/json",
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.Contacts) {
+            // Search through contacts for matching phone
+            const match = data.Contacts.find((contact: any) => {
+              const contactPhone = contact.Phones?.find((p: any) => 
+                p.PhoneNumber?.replace(/\s/g, '') === phoneSearch
+              );
+              return !!contactPhone;
+            });
+
+            if (match) {
+              return {
+                contactID: match.ContactID,
+                name: match.Name,
+              };
+            }
+          }
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error finding Xero contact:", error);
+      return null;
+    }
+  }
+
   async createInvoice(job: Job, customer: Customer, unitPrice: number = 0): Promise<any> {
     if (!this.isConfigured()) {
       throw new Error("Xero is not configured");
@@ -245,11 +337,14 @@ export class XeroService {
 
     const token = await this.getAccessToken();
 
+    // Try to find existing contact in Xero
+    const xeroContact = await this.findContact(customer);
+
     const invoice: XeroInvoice = {
       type: "ACCREC",
-      contact: {
-        name: customer.name,
-      },
+      contact: xeroContact 
+        ? { contactID: xeroContact.contactID, name: xeroContact.name }
+        : { name: customer.name },
       lineItems: [
         {
           description: `${job.jobName} - PO: ${job.poNumber}`,
@@ -309,6 +404,9 @@ export class XeroService {
     const token = await this.getAccessToken();
     const tenantId = this.getTenantId();
 
+    // Try to find existing contact in Xero
+    const xeroContact = await this.findContact(customer);
+
     // Create line items from job line items
     const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => ({
       description: `${item.jobName}${item.poNumber ? ` (PO: ${item.poNumber})` : ''} - ${item.description}`,
@@ -338,9 +436,9 @@ export class XeroService {
 
     const invoice: XeroInvoice = {
       type: "ACCREC",
-      contact: {
-        name: customer.name,
-      },
+      contact: xeroContact 
+        ? { contactID: xeroContact.contactID, name: xeroContact.name }
+        : { name: customer.name },
       lineItems: xeroLineItems,
       date: mostRecentDate.toISOString().split('T')[0],
       dueDate: mostRecentDueDate.toISOString().split('T')[0],
