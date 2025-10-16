@@ -5,6 +5,11 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 16, 2025 (Latest)**
+- **NEW: Intelligent Xero Contact Matching** - Invoices now automatically match to existing Xero contacts using multi-field lookup
+  - First attempts exact name match, then email match, then phone number match
+  - Ensures invoices use existing customer records with pre-configured account details and payment terms
+  - Prevents duplicate contacts in Xero
+  - Console logging shows which field was used for matching (name/email/phone)
 - **FIXED: Production Queue Filtering** - Production Queue now only shows pending orders (invoiceStatus='pending'), excluding completed orders that are ready for invoicing or already invoiced
 - **NEW: Shipping Information Tracking** - Added shipping method and DHL tracking number capture when marking orders complete
   - Three shipping methods: Customer Collection, Consolidated Back to Customer, Direct Delivery

@@ -249,7 +249,9 @@ export class XeroService {
       const tenantId = this.getTenantId();
 
       // First try to find by exact name match
-      let response = await fetch(`${this.apiUrl}/Contacts?where=Name=="${encodeURIComponent(customer.name)}"`, {
+      // Build the where clause with escaped quotes, then encode the entire clause
+      const nameWhere = `Name=="${customer.name.replace(/"/g, '\\"')}"`;
+      let response = await fetch(`${this.apiUrl}/Contacts?where=${encodeURIComponent(nameWhere)}`, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -261,6 +263,7 @@ export class XeroService {
       if (response.ok) {
         const data = await response.json();
         if (data.Contacts && data.Contacts.length > 0) {
+          console.log(`✓ Matched Xero contact by name: ${customer.name} → ${data.Contacts[0].Name}`);
           return {
             contactID: data.Contacts[0].ContactID,
             name: data.Contacts[0].Name,
@@ -270,7 +273,8 @@ export class XeroService {
 
       // If no match by name and email exists, try to find by email
       if (customer.email) {
-        response = await fetch(`${this.apiUrl}/Contacts?where=EmailAddress=="${encodeURIComponent(customer.email)}"`, {
+        const emailWhere = `EmailAddress=="${customer.email.replace(/"/g, '\\"')}"`;
+        response = await fetch(`${this.apiUrl}/Contacts?where=${encodeURIComponent(emailWhere)}`, {
           method: "GET",
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -282,6 +286,7 @@ export class XeroService {
         if (response.ok) {
           const data = await response.json();
           if (data.Contacts && data.Contacts.length > 0) {
+            console.log(`✓ Matched Xero contact by email: ${customer.email} → ${data.Contacts[0].Name}`);
             return {
               contactID: data.Contacts[0].ContactID,
               name: data.Contacts[0].Name,
@@ -304,7 +309,7 @@ export class XeroService {
 
         if (response.ok) {
           const data = await response.json();
-          if (data.Contacts) {
+          if (data.Contacts && data.Contacts.length > 0) {
             // Search through contacts for matching phone
             const match = data.Contacts.find((contact: any) => {
               const contactPhone = contact.Phones?.find((p: any) => 
@@ -314,6 +319,7 @@ export class XeroService {
             });
 
             if (match) {
+              console.log(`✓ Matched Xero contact by phone: ${customer.telephone} → ${match.Name}`);
               return {
                 contactID: match.ContactID,
                 name: match.Name,
@@ -323,6 +329,7 @@ export class XeroService {
         }
       }
 
+      console.log(`✗ No Xero contact match found for: ${customer.name}`);
       return null;
     } catch (error) {
       console.error("Error finding Xero contact:", error);
