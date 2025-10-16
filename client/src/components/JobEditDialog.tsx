@@ -340,10 +340,13 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         const justCompleted = wasNotCompleted && isNowCompleted;
 
         // Update the main job first
+        // Calculate total quantity from line items
+        const totalQuantity = getTotalQuantity();
+        
         // If job is being completed, set invoiceStatus to 'ready' for draft invoicing queue
         const updateData = justCompleted 
-          ? { ...data, invoiceStatus: 'ready' }
-          : data;
+          ? { ...data, quantity: totalQuantity, invoiceStatus: 'ready' }
+          : { ...data, quantity: totalQuantity };
         await apiRequest("PATCH", `/api/jobs/${job.id}`, updateData);
 
         // Handle line item updates
