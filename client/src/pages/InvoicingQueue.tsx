@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck } from "lucide-react";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice } from "@shared/pricing";
@@ -53,6 +54,7 @@ export default function InvoicingQueue() {
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
   const [connectingXero, setConnectingXero] = useState(false);
+  const [manualPrices, setManualPrices] = useState<Record<string, string>>({});
   
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
@@ -132,6 +134,10 @@ export default function InvoicingQueue() {
 
   const getJobLineItems = (jobId: string) => {
     return allLineItems.filter(item => item.jobId === jobId);
+  };
+
+  const needsManualPrice = (lineItem: LineItem) => {
+    return lineItem.quantity >= 1000 || lineItem.stitchCount >= 50000;
   };
 
   const getJobPrice = (job: Job) => {
@@ -219,14 +225,43 @@ export default function InvoicingQueue() {
       return;
     }
 
+    // Check if any selected job has line items that need manual pricing
+    const lineItemsNeedingPrices: string[] = [];
+    for (const job of selectedCustomerJobs) {
+      const lineItems = getJobLineItems(job.id);
+      lineItems.forEach(item => {
+        if (needsManualPrice(item) && !manualPrices[item.id]) {
+          lineItemsNeedingPrices.push(item.id);
+        }
+      });
+    }
+
+    if (lineItemsNeedingPrices.length > 0) {
+      toast({
+        title: "Manual Prices Required",
+        description: "Please enter manual prices for all items with 1000+ units or 50,000+ stitches",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setCreatingInvoice(customerId);
     
     try {
       const jobIds = selectedCustomerJobs.map(job => job.id);
       
+      // Build manual prices object, converting strings to numbers
+      const manualPricesForAPI: Record<string, number> = {};
+      Object.entries(manualPrices).forEach(([lineItemId, price]) => {
+        if (price) {
+          manualPricesForAPI[lineItemId] = parseFloat(price);
+        }
+      });
+      
       const response = await apiRequest("POST", "/api/xero/consolidated-invoice", {
         jobIds,
         customerId,
+        manualPrices: Object.keys(manualPricesForAPI).length > 0 ? manualPricesForAPI : undefined,
       }) as unknown as { success: boolean; invoiceId: string; invoiceNumber: string | null; jobsInvoiced: number };
 
       toast({
@@ -238,6 +273,16 @@ export default function InvoicingQueue() {
       const newSelected = new Set(selectedJobs);
       selectedCustomerJobs.forEach(job => newSelected.delete(job.id));
       setSelectedJobs(newSelected);
+
+      // Clear manual prices for this customer's jobs
+      const newManualPrices = { ...manualPrices };
+      for (const job of selectedCustomerJobs) {
+        const lineItems = getJobLineItems(job.id);
+        lineItems.forEach(item => {
+          delete newManualPrices[item.id];
+        });
+      }
+      setManualPrices(newManualPrices);
 
       // Refresh jobs list
       await queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
@@ -412,6 +457,44 @@ export default function InvoicingQueue() {
                                           Tracking: {job.dhlTrackingNumber}
                                         </Badge>
                                       )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Manual price inputs for line items needing them */}
+                                  {lineItems.some(item => needsManualPrice(item)) && (
+                                    <div className="mt-4 space-y-2">
+                                      <p className="text-sm font-medium text-muted-foreground">Manual Pricing Required:</p>
+                                      {lineItems.filter(item => needsManualPrice(item)).map(item => (
+                                        <div key={item.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-md">
+                                          <div className="flex-1">
+                                            <p className="text-sm font-medium">
+                                              {item.description || `${item.quantity} units @ ${item.stitchCount.toLocaleString()} stitches`}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                              {item.quantity >= 1000 ? `${item.quantity.toLocaleString()} units (1000+)` : ''}
+                                              {item.quantity >= 1000 && item.stitchCount >= 50000 ? ' • ' : ''}
+                                              {item.stitchCount >= 50000 ? `${item.stitchCount.toLocaleString()} stitches (50,000+)` : ''}
+                                            </p>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm text-muted-foreground">£</span>
+                                            <Input
+                                              type="number"
+                                              step="0.01"
+                                              min="0"
+                                              placeholder="Unit price"
+                                              value={manualPrices[item.id] || ''}
+                                              onChange={(e) => setManualPrices(prev => ({
+                                                ...prev,
+                                                [item.id]: e.target.value
+                                              }))}
+                                              className="w-24"
+                                              data-testid={`input-manual-price-${item.id}`}
+                                            />
+                                            <span className="text-sm text-muted-foreground">per unit</span>
+                                          </div>
+                                        </div>
+                                      ))}
                                     </div>
                                   )}
                                 </div>
