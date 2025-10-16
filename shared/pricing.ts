@@ -85,6 +85,21 @@ export const PRICING_2025: PricingTier[] = [
       { maxStitches: null, price: "POA" },
     ],
   },
+  {
+    minQty: 1000,
+    maxQty: null,
+    prices: [
+      { maxStitches: 3000, price: 0.75 },
+      { maxStitches: 5000, price: 0.85 },
+      { maxStitches: 7500, price: 0.95 },
+      { maxStitches: 10000, price: 1.05 },
+      { maxStitches: 15000, price: 1.25 },
+      { maxStitches: 20000, price: 1.35 },
+      { maxStitches: 25000, price: 1.45 },
+      { maxStitches: 50000, price: 5.00 },
+      { maxStitches: null, price: "POA" },
+    ],
+  },
 ];
 
 export const PRICING_2026: PricingTier[] = [
