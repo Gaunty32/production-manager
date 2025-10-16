@@ -14,6 +14,7 @@ This application is a production management system designed to track customer or
 - **NEW: Xero Invoice Defaults** - Configured automatic tax and account settings for Xero invoices
   - Account Code: 4002 (applied to all invoice line items)
   - Tax Type: OUTPUT2 (20% VAT on income)
+  - Item Code: EMB (Embroidery)
 - Fixed "Mark Order as Completed" 500 error - now correctly uses staff ID instead of user ID for completedById field
 - Added automatic lookup of staff member associated with logged-in user when marking orders complete
 - Fixed pricing calculation crash causing app to freeze - added error handling in JobRow component

@@ -6,6 +6,7 @@ export interface XeroInvoiceLineItem {
   unitAmount: number;
   accountCode?: string;
   taxType?: string;
+  itemCode?: string;
 }
 
 export interface XeroInvoice {
@@ -256,9 +257,10 @@ export class XeroService {
           unitAmount: unitPrice,
           accountCode: "4002",
           taxType: "OUTPUT2", // 20% VAT on income
+          itemCode: "EMB", // Embroidery
         },
       ],
-      date: new Date(job.goodsReceived).toISOString().split('T')[0],
+      date: job.goodsReceived ? new Date(job.goodsReceived).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       dueDate: new Date(job.requiredDispatchDate).toISOString().split('T')[0],
       reference: job.poNumber || undefined,
       status: "DRAFT",
@@ -314,13 +316,14 @@ export class XeroService {
       unitAmount: item.unitPrice,
       accountCode: "4002",
       taxType: "OUTPUT2", // 20% VAT on income
+      itemCode: "EMB", // Embroidery
     }));
 
     // Get the most recent dates for invoice date and due date
     const mostRecentDate = jobs.reduce((latest, job) => {
-      const jobDate = new Date(job.goodsReceived);
+      const jobDate = job.goodsReceived ? new Date(job.goodsReceived) : new Date();
       return jobDate > latest ? jobDate : latest;
-    }, new Date(jobs[0].goodsReceived));
+    }, jobs[0].goodsReceived ? new Date(jobs[0].goodsReceived) : new Date());
 
     const mostRecentDueDate = jobs.reduce((latest, job) => {
       const jobDueDate = new Date(job.requiredDispatchDate);
