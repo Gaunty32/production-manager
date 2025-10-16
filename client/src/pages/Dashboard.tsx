@@ -163,7 +163,9 @@ export default function Dashboard() {
   });
 
   // Separate active and completed orders
-  const activeJobs = filteredJobs.filter(job => job.invoiceStatus !== 'invoiced');
+  // Production Queue: only show jobs that are pending (not yet marked complete)
+  const activeJobs = filteredJobs.filter(job => job.invoiceStatus === 'pending');
+  // Completed Orders: only show jobs that have been invoiced
   const completedJobs = filteredJobs.filter(job => job.invoiceStatus === 'invoiced');
 
   const sortedActiveJobs = [...activeJobs].sort(
