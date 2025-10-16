@@ -5,6 +5,12 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 16, 2025 (Latest)**
+- **FIXED: Production Queue Filtering** - Production Queue now only shows pending orders (invoiceStatus='pending'), excluding completed orders that are ready for invoicing or already invoiced
+- **NEW: Shipping Information Tracking** - Added shipping method and DHL tracking number capture when marking orders complete
+  - Three shipping methods: Customer Collection, Consolidated Back to Customer, Direct Delivery
+  - DHL tracking number required for consolidated and direct delivery methods
+  - Shipping information displays in Draft Invoicing Queue
+  - Validation ensures tracking numbers are captured when required
 - Fixed "Mark Order as Completed" 500 error - now correctly uses staff ID instead of user ID for completedById field
 - Added automatic lookup of staff member associated with logged-in user when marking orders complete
 - Fixed pricing calculation crash causing app to freeze - added error handling in JobRow component
