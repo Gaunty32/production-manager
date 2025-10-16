@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle } from "lucide-react";
+import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck } from "lucide-react";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,6 +25,8 @@ interface Job {
   completed: boolean;
   invoiceStatus: string;
   notes: string | null;
+  shippingMethod: string | null;
+  dhlTrackingNumber: string | null;
 }
 
 interface Customer {
@@ -397,6 +399,21 @@ export default function InvoicingQueue() {
                                       <span>{lineItems.length} {lineItems.length === 1 ? 'item' : 'items'}</span>
                                     </div>
                                   </div>
+                                  {job.shippingMethod && (
+                                    <div className="flex items-center gap-2 mt-2 text-sm">
+                                      <Truck className="h-3 w-3 text-muted-foreground" />
+                                      <span className="text-muted-foreground">
+                                        {job.shippingMethod === 'customer_collection' && 'Customer Collection'}
+                                        {job.shippingMethod === 'consolidated' && 'Consolidated Back to Customer'}
+                                        {job.shippingMethod === 'direct_delivery' && 'Direct Delivery'}
+                                      </span>
+                                      {job.dhlTrackingNumber && (
+                                        <Badge variant="outline" className="ml-1">
+                                          Tracking: {job.dhlTrackingNumber}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                                 {canViewPrices(user?.role) && (
                                   <div className="text-right shrink-0">
