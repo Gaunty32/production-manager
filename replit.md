@@ -2,6 +2,13 @@
 
 This application is a production management system designed to track customer orders, schedule machines, and manage dispatch deadlines within a manufacturing workflow. It aims to streamline manufacturing operations, improve efficiency, and enhance customer order fulfillment by providing a comprehensive overview of the production process. Key capabilities include multi-line item job tracking with per-item specifics, a robust scheduling system integrating machine and staff availability, and detailed production metrics. The project envisions enhancing customer satisfaction and operational transparency in manufacturing.
 
+## Recent Changes
+
+**October 16, 2025**
+- Fixed double-click submission bug in JobFormDialog and JobEditDialog using isSubmitting state guard
+- Fixed job quantity not updating when line items change - now recalculates total from line items on every edit
+- Submit buttons now disabled during async operations with visual feedback ("Creating..."/"Saving...")
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
