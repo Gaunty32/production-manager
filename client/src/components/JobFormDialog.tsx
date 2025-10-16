@@ -480,26 +480,37 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
             <FormField
               control={form.control}
               name="customerId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Customer</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-customer">
-                        <SelectValue placeholder="Select customer" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {customer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
+              render={({ field }) => {
+                // Only show customers with pricing tables
+                const customersWithPricing = customers.filter(c => c.pricingTable2025 || c.pricingTable2026);
+                const customersWithoutPricing = customers.length - customersWithPricing.length;
+                
+                return (
+                  <FormItem>
+                    <FormLabel>Customer</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-customer">
+                          <SelectValue placeholder="Select customer" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {customersWithPricing.map((customer) => (
+                          <SelectItem key={customer.id} value={customer.id}>
+                            {customer.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {customersWithoutPricing > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {customersWithoutPricing} customer{customersWithoutPricing !== 1 ? 's' : ''} hidden (no pricing table)
+                      </p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
             />
 
             {/* PO Number - Full Width */}
