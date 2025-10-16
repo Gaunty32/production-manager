@@ -798,7 +798,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/xero/invoice/:jobId", optionalAuth, async (req, res) => {
     try {
       const { jobId } = req.params;
-      const { unitPrice } = req.body;
 
       if (!xeroService.isConfigured()) {
         return res.status(400).json({ 
@@ -821,7 +820,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Customer not found" });
       }
 
-      const invoice = await xeroService.createInvoice(job, customer, unitPrice || 0);
+      // Determine pricing table
+      const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
+
+      // Get line items and calculate pricing
+      const jobLineItems = await storage.getJobLineItems(job.id);
+      const priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
+
+      if (priceResult.totalPrice === "POA") {
+        return res.status(400).json({ error: "Cannot create invoice for jobs with POA pricing" });
+      }
+
+      // Build line items with pricing and stitch count
+      const lineItemsWithPricing = jobLineItems.map((lineItem, index) => {
+        const lineItemPrice = priceResult.lineItemPrices[index];
+        const unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice;
+        return {
+          jobName: job.jobName,
+          poNumber: job.poNumber,
+          description: lineItem.description || '',
+          quantity: lineItem.quantity,
+          unitPrice: unitPrice as number,
+          stitchCount: lineItem.stitchCount,
+        };
+      });
+
+      const invoice = await xeroService.createInvoice(job, customer, lineItemsWithPricing);
       res.json(invoice);
     } catch (error) {
       console.error("Xero invoice creation error:", error);
@@ -875,7 +899,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
 
       // Get line items and calculate pricing for each job
-      const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number }> = [];
+      const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number }> = [];
 
       for (const job of selectedJobs) {
         const jobLineItems = await storage.getJobLineItems(job.id);
@@ -890,15 +914,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const lineItemPrice = priceResult.lineItemPrices[index];
           const unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice;
           
-          // Format: Job Name, X Stitches (PO: Y) if PO available
-          const description = `${job.jobName}, ${lineItem.stitchCount} Stitches${job.poNumber ? ` (PO: ${job.poNumber})` : ''}`;
-          
           lineItemsWithPricing.push({
             jobName: job.jobName,
             poNumber: job.poNumber,
-            description: description,
+            description: lineItem.description || '',
             quantity: lineItem.quantity,
             unitPrice: unitPrice as number, // Type assertion safe here - POA already handled above
+            stitchCount: lineItem.stitchCount,
           });
         });
       }

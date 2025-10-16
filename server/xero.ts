@@ -337,7 +337,11 @@ export class XeroService {
     }
   }
 
-  async createInvoice(job: Job, customer: Customer, unitPrice: number = 0): Promise<any> {
+  async createInvoice(
+    job: Job, 
+    customer: Customer, 
+    lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number }>
+  ): Promise<any> {
     if (!this.isConfigured()) {
       throw new Error("Xero is not configured");
     }
@@ -347,21 +351,22 @@ export class XeroService {
     // Try to find existing contact in Xero
     const xeroContact = await this.findContact(customer);
 
+    // Create line items with proper descriptions
+    const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => ({
+      description: `${item.jobName}, ${item.stitchCount} Stitches${item.poNumber ? ` (PO: ${item.poNumber})` : ''}`,
+      quantity: item.quantity,
+      unitAmount: item.unitPrice,
+      accountCode: "4002",
+      taxType: "OUTPUT2", // 20% VAT on income
+      itemCode: "EMB", // Embroidery
+    }));
+
     const invoice: XeroInvoice = {
       type: "ACCREC",
       contact: xeroContact 
         ? { contactID: xeroContact.contactID, name: xeroContact.name }
         : { name: customer.name },
-      lineItems: [
-        {
-          description: `${job.jobName} - PO: ${job.poNumber}`,
-          quantity: job.quantity,
-          unitAmount: unitPrice,
-          accountCode: "4002",
-          taxType: "OUTPUT2", // 20% VAT on income
-          itemCode: "EMB", // Embroidery
-        },
-      ],
+      lineItems: xeroLineItems,
       date: job.goodsReceived ? new Date(job.goodsReceived).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       dueDate: new Date(job.requiredDispatchDate).toISOString().split('T')[0],
       reference: job.poNumber || undefined,
@@ -391,7 +396,7 @@ export class XeroService {
   async createConsolidatedInvoice(
     jobs: Job[], 
     customer: Customer, 
-    lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number }>
+    lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number }>
   ): Promise<any> {
     if (!this.isConfigured()) {
       // Return mock response for demo/testing purposes
@@ -416,7 +421,7 @@ export class XeroService {
 
     // Create line items from job line items
     const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => ({
-      description: `${item.jobName}${item.poNumber ? ` (PO: ${item.poNumber})` : ''} - ${item.description}`,
+      description: `${item.jobName}, ${item.stitchCount} Stitches${item.poNumber ? ` (PO: ${item.poNumber})` : ''}`,
       quantity: item.quantity,
       unitAmount: item.unitPrice,
       accountCode: "4002",
