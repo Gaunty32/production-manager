@@ -85,21 +85,6 @@ export const PRICING_2025: PricingTier[] = [
       { maxStitches: null, price: "POA" },
     ],
   },
-  {
-    minQty: 1000,
-    maxQty: null,
-    prices: [
-      { maxStitches: 3000, price: 0.75 },
-      { maxStitches: 5000, price: 0.85 },
-      { maxStitches: 7500, price: 0.95 },
-      { maxStitches: 10000, price: 1.05 },
-      { maxStitches: 15000, price: 1.25 },
-      { maxStitches: 20000, price: 1.35 },
-      { maxStitches: 25000, price: 1.45 },
-      { maxStitches: 50000, price: 5.00 },
-      { maxStitches: null, price: "POA" },
-    ],
-  },
 ];
 
 export const PRICING_2026: PricingTier[] = [
@@ -175,21 +160,6 @@ export const PRICING_2026: PricingTier[] = [
       { maxStitches: 25000, price: 1.75 },
       { maxStitches: 35000, price: 2.25 },
       { maxStitches: 50000, price: 2.50 },
-      { maxStitches: null, price: "POA" },
-    ],
-  },
-  {
-    minQty: 1000,
-    maxQty: null,
-    prices: [
-      { maxStitches: 5000, price: 0.95 },
-      { maxStitches: 7500, price: 1.05 },
-      { maxStitches: 10000, price: 1.25 },
-      { maxStitches: 15000, price: 1.35 },
-      { maxStitches: 20000, price: 1.45 },
-      { maxStitches: 25000, price: 1.65 },
-      { maxStitches: 35000, price: 2.15 },
-      { maxStitches: 50000, price: 2.40 },
       { maxStitches: null, price: "POA" },
     ],
   },
