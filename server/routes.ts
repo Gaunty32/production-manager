@@ -798,6 +798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/xero/invoice/:jobId", optionalAuth, async (req, res) => {
     try {
       const { jobId } = req.params;
+      const { manualPrices } = req.body; // Optional manual prices: { lineItemId: unitPrice }
 
       if (!xeroService.isConfigured()) {
         return res.status(400).json({ 
@@ -827,20 +828,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobLineItems = await storage.getJobLineItems(job.id);
       const priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
 
-      if (priceResult.totalPrice === "POA") {
-        return res.status(400).json({ error: "Cannot create invoice for jobs with POA pricing" });
+      const isPOA = priceResult.totalPrice === "POA";
+      
+      // If POA and no manual prices provided, reject
+      if (isPOA && !manualPrices) {
+        return res.status(400).json({ error: "Manual prices required for POA items" });
       }
 
       // Build line items with pricing and stitch count
       const lineItemsWithPricing = jobLineItems.map((lineItem, index) => {
-        const lineItemPrice = priceResult.lineItemPrices[index];
-        const unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice;
+        let unitPrice: number;
+        
+        // Use manual price if provided for this line item, otherwise use calculated price
+        if (manualPrices && manualPrices[lineItem.id] !== undefined) {
+          unitPrice = parseFloat(manualPrices[lineItem.id]);
+        } else {
+          const lineItemPrice = priceResult.lineItemPrices[index];
+          unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice as number;
+        }
+        
         return {
           jobName: job.jobName,
           poNumber: job.poNumber,
           description: lineItem.description || '',
           quantity: lineItem.quantity,
-          unitPrice: unitPrice as number,
+          unitPrice,
           stitchCount: lineItem.stitchCount,
         };
       });
@@ -857,7 +869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/xero/consolidated-invoice", optionalAuth, async (req, res) => {
     try {
-      const { jobIds, customerId } = req.body;
+      const { jobIds, customerId, manualPrices } = req.body; // Optional manual prices: { lineItemId: unitPrice }
 
       if (!Array.isArray(jobIds) || jobIds.length === 0) {
         return res.status(400).json({ error: "jobIds must be a non-empty array" });
@@ -900,29 +912,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get line items and calculate pricing for each job
       const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number }> = [];
+      let hasPOA = false;
 
       for (const job of selectedJobs) {
         const jobLineItems = await storage.getJobLineItems(job.id);
         const priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
 
         if (priceResult.totalPrice === "POA") {
-          return res.status(400).json({ error: "Cannot create invoice for jobs with POA pricing" });
+          hasPOA = true;
         }
 
-        // Add each line item with its calculated unit price
+        // Add each line item with its calculated unit price or manual price
         jobLineItems.forEach((lineItem, index) => {
-          const lineItemPrice = priceResult.lineItemPrices[index];
-          const unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice;
+          let unitPrice: number;
+          
+          // Use manual price if provided for this line item, otherwise use calculated price
+          if (manualPrices && manualPrices[lineItem.id] !== undefined) {
+            unitPrice = parseFloat(manualPrices[lineItem.id]);
+          } else {
+            const lineItemPrice = priceResult.lineItemPrices[index];
+            unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice as number;
+          }
           
           lineItemsWithPricing.push({
             jobName: job.jobName,
             poNumber: job.poNumber,
             description: lineItem.description || '',
             quantity: lineItem.quantity,
-            unitPrice: unitPrice as number, // Type assertion safe here - POA already handled above
+            unitPrice,
             stitchCount: lineItem.stitchCount,
           });
         });
+      }
+      
+      // If we have POA items and no manual prices provided, reject
+      if (hasPOA && !manualPrices) {
+        return res.status(400).json({ error: "Manual prices required for POA items" });
       }
 
       // Create consolidated invoice in Xero
