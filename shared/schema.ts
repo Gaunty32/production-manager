@@ -250,6 +250,8 @@ export const updateJobSchema = z.object({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
+  // This is not a database field - used to specify which jobs to consolidate together
+  consolidatedJobIds: z.array(z.string()).optional(),
 });
 
 export const insertStaffShiftSchema = createInsertSchema(staffShifts).omit({

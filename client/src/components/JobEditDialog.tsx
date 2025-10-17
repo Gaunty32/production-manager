@@ -1003,6 +1003,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       open={shippingDialogOpen}
       onOpenChange={setShippingDialogOpen}
       isPending={isSubmitting}
+      currentJobId={job.id}
+      customerId={job.customerId}
       onSubmit={async (shippingData) => {
         const currentData = form.getValues();
         await handleSubmit({
@@ -1013,7 +1015,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           dhlTrackingNumber: shippingData.dhlTrackingNumber || null,
           packageCount: shippingData.packageCount || null,
           packageType: shippingData.packageType || null,
-        });
+          consolidatedJobIds: shippingData.consolidatedJobIds || [],
+        } as any);
         setShippingDialogOpen(false);
       }}
     />

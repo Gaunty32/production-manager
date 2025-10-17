@@ -374,9 +374,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const data = updateJobSchema.parse(req.body);
       
-      // Remove undefined keys from updates
+      // Extract consolidatedJobIds before filtering
+      const consolidatedJobIds = data.consolidatedJobIds || [];
+      
+      // Remove undefined keys and consolidatedJobIds (not a database field) from updates
       const updates = Object.fromEntries(
-        Object.entries(data).filter(([_, value]) => value !== undefined)
+        Object.entries(data).filter(([key, value]) => value !== undefined && key !== 'consolidatedJobIds')
       );
       
       // Calculate shipping cost if package type and count are provided
@@ -388,6 +391,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updates.shippingCost = typeof shippingCost.cost === "number" 
           ? shippingCost.cost.toString() 
           : shippingCost.cost;
+      }
+      
+      // Handle consolidated shipments
+      if (updates.shippingMethod === "consolidated" && consolidatedJobIds.length > 0) {
+        // Generate a unique shipment ID for this consolidated shipment
+        const { randomUUID } = await import('crypto');
+        const consolidatedShipmentId = randomUUID();
+        
+        // Add the shipment ID to the current job
+        updates.consolidatedShipmentId = consolidatedShipmentId;
+        
+        // Update all consolidated jobs with the same shipment details
+        // (but without shipping cost - only the primary job has the cost)
+        for (const consolidatedJobId of consolidatedJobIds) {
+          await storage.updateJob(consolidatedJobId, {
+            consolidatedShipmentId,
+            shippingMethod: updates.shippingMethod as string,
+            dhlTrackingNumber: updates.dhlTrackingNumber as string | null,
+            packageType: updates.packageType as string,
+            packageCount: updates.packageCount as number,
+            shippingCost: null, // Don't duplicate shipping cost on consolidated jobs
+            completed: true, // Mark as completed
+            invoiceStatus: "ready", // Ready for invoicing
+          });
+        }
       }
       
       const job = await storage.updateJob(id, updates);
