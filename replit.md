@@ -4,7 +4,16 @@ This application is a production management system designed to track customer or
 
 ## Recent Changes
 
-**October 16, 2025 (Latest)**
+**October 17, 2025 (Latest)**
+- **NEW: Print Job Pricing Tables** - Added separate pricing tables for print jobs
+  - Print jobs use size-based pricing (A6, A5, A4, A3) instead of stitch count
+  - 2025 Print Pricing: 0-49 qty (A4=£2.00), 50-99 qty (A4=£1.75), 100+ qty (A4=£1.50)
+  - 2026 Print Pricing: 0-49 qty (A4=£2.50), 50-99 qty (A4=£2.00), 100+ qty (A4=£1.75)
+  - Print size selector replaces stitch count input for Print job types
+  - Machine assignment not required for Print jobs (hidden in UI)
+  - Default print size is A4 when creating new print jobs
+
+**October 16, 2025**
 - **NEW: Manual Pricing for High-Volume Orders** - Orders with 1000+ units or 50,000+ stitches now require manual price entry
   - Draft Invoicing Queue shows manual price input fields for qualifying line items
   - Invoice creation validates that all manual prices are entered before proceeding
