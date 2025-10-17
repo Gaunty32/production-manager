@@ -30,6 +30,7 @@ interface Job {
   dhlTrackingNumber: string | null;
   packageCount: number | null;
   packageType: string | null;
+  shippingCost: string | null;
 }
 
 interface Customer {
@@ -181,10 +182,11 @@ export default function InvoicingQueue() {
     }
   };
 
-  const getTotalPrice = (customerJobs: Job[]): number | "POA" | null => {
+  const getTotalPrice = (customerJobs: Job[]): number | "POA" | "TBA" | null => {
     const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
     let total = 0;
     let hasPOA = false;
+    let hasTBA = false;
 
     selectedCustomerJobs.forEach(job => {
       const price = getJobPrice(job);
@@ -193,9 +195,25 @@ export default function InvoicingQueue() {
       } else if (typeof price === 'number') {
         total += price;
       }
+      
+      // Add shipping cost if available
+      if (job.shippingCost) {
+        if (job.shippingCost === "TBA") {
+          hasTBA = true;
+        } else {
+          const shippingCost = parseFloat(job.shippingCost);
+          if (!isNaN(shippingCost)) {
+            total += shippingCost;
+          }
+        }
+      }
     });
 
-    return hasPOA ? "POA" : total;
+    // If any item is TBA or POA, return that
+    if (hasTBA) return "TBA";
+    if (hasPOA) return "POA";
+    
+    return total;
   };
 
   const handleConnectXero = async () => {
@@ -394,7 +412,9 @@ export default function InvoicingQueue() {
                           <div className="text-right">
                             <p className="text-sm text-muted-foreground">Selected Total</p>
                             <p className="text-2xl font-bold">
-                              {selectedCount > 0 && totalPrice !== null ? formatPrice(totalPrice) : "-"}
+                              {selectedCount > 0 && totalPrice !== null 
+                                ? (typeof totalPrice === 'number' ? formatPrice(totalPrice) : totalPrice)
+                                : "-"}
                             </p>
                           </div>
                         )}
@@ -468,6 +488,11 @@ export default function InvoicingQueue() {
                                           <span className="text-muted-foreground">
                                             {job.packageCount} {job.packageType === 'boxes' ? (job.packageCount === 1 ? 'Box' : 'Boxes') : (job.packageCount === 1 ? 'Bag' : 'Bags')}
                                           </span>
+                                          {job.shippingCost && (
+                                            <Badge variant="secondary" className="ml-2">
+                                              Shipping: {job.shippingCost === 'TBA' ? 'TBA' : formatPrice(parseFloat(job.shippingCost))}
+                                            </Badge>
+                                          )}
                                         </div>
                                       )}
                                     </div>

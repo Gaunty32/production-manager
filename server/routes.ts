@@ -924,6 +924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get line items and calculate pricing for each job
       const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number }> = [];
       let hasPOA = false;
+      let hasTBA = false;
 
       for (const job of selectedJobs) {
         const jobLineItems = await storage.getJobLineItems(job.id);
@@ -967,11 +968,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
             stitchCount: lineItem.stitchCount,
           });
         });
+
+        // Add shipping cost as a separate line item if available
+        if (job.shippingCost && job.shippingCost !== "TBA") {
+          const shippingCost = parseFloat(job.shippingCost);
+          if (!isNaN(shippingCost) && shippingCost > 0) {
+            lineItemsWithPricing.push({
+              jobName: job.jobName,
+              poNumber: job.poNumber,
+              description: `Shipping - ${job.shippingMethod === 'customer_collection' ? 'Customer Collection' : job.shippingMethod === 'consolidated' ? 'Consolidated Back to Customer' : 'Direct Delivery'}`,
+              quantity: 1,
+              unitPrice: shippingCost,
+              stitchCount: 0, // No stitch count for shipping
+            });
+          }
+        } else if (job.shippingCost === "TBA") {
+          hasTBA = true;
+        }
       }
       
       // If we have POA items and no manual prices provided, reject
       if (hasPOA && !manualPrices) {
         return res.status(400).json({ error: "Manual prices required for POA items" });
+      }
+
+      // If we have TBA shipping costs, reject
+      if (hasTBA) {
+        return res.status(400).json({ error: "Cannot create invoice with TBA shipping costs. Please contact support for shipping pricing on orders with more than 4 boxes." });
       }
 
       // Create consolidated invoice in Xero
