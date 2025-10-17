@@ -403,3 +403,41 @@ export function calculateJobPrice(
     totalPrice: parseFloat(totalPrice.toFixed(2)),
   };
 }
+
+export interface ShippingCostResult {
+  cost: number | "TBA";
+  description: string;
+}
+
+export function calculateShippingCost(
+  packageType: "boxes" | "bags",
+  packageCount: number
+): ShippingCostResult {
+  if (packageType === "bags") {
+    return {
+      cost: 0,
+      description: "1 Bag",
+    };
+  }
+
+  // Box pricing
+  const boxPricing: Record<number, number> = {
+    1: 7.50,
+    2: 10.00,
+    3: 15.00,
+    4: 20.00,
+  };
+
+  if (packageCount <= 4) {
+    return {
+      cost: boxPricing[packageCount],
+      description: `${packageCount} ${packageCount === 1 ? 'Box' : 'Boxes'}`,
+    };
+  }
+
+  // More than 4 boxes
+  return {
+    cost: "TBA",
+    description: `${packageCount} Boxes`,
+  };
+}
