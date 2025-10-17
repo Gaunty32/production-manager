@@ -84,6 +84,8 @@ const formSchema = z.object({
   notes: z.string().optional(),
   shippingMethod: z.string().nullable().optional(),
   dhlTrackingNumber: z.string().nullable().optional(),
+  packageCount: z.number().nullable().optional(),
+  packageType: z.string().nullable().optional(),
 });
 
 interface JobEditDialogProps {
@@ -116,6 +118,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [celebrationOnTime, setCelebrationOnTime] = useState(true);
+  const [celebrationStaffNames, setCelebrationStaffNames] = useState<string[]>([]);
   const [shippingDialogOpen, setShippingDialogOpen] = useState(false);
   
   // Find the staff member associated with the current user
@@ -409,7 +412,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         await queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
         await queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'line-items'] });
         
-        // If job was just completed, show celebration and award star
+        // If job was just completed, award stars to employees who completed line items
         if (justCompleted) {
           const requiredDate = new Date(data.requiredDispatchDate);
           const today = new Date();
@@ -419,17 +422,47 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           const isLate = today > requiredDate;
           const starType = isLate ? "red" : "yellow";
           
-          // Award the star only if user is authenticated
-          if (user) {
+          // Get all unique staff IDs who completed line items
+          const completedByIds = lineItems
+            .filter(item => item.completed && item.completedById)
+            .map(item => item.completedById!);
+          const staffIdsWhoCompleted = Array.from(new Set(completedByIds));
+          
+          // Award stars to each staff member who completed line items
+          let allStaffNamesWhoCompleted: string[] = [];
+          if (staffIdsWhoCompleted.length > 0) {
             try {
-              await apiRequest("POST", `/api/users/${user.id}/stars`, { starType });
+              // Get staff members to find their user IDs
+              const staffResponse = await apiRequest("GET", "/api/staff");
+              const allStaff: any[] = await staffResponse.json();
+              
+              // Award star to each staff member who completed a line item
+              for (const staffId of staffIdsWhoCompleted) {
+                const staffMember = allStaff.find((s: any) => s.id === staffId);
+                if (staffMember) {
+                  // Always add to celebration names
+                  allStaffNamesWhoCompleted.push(staffMember.name);
+                  
+                  // Only award star if they have a linked user account
+                  if (staffMember.userId) {
+                    try {
+                      await apiRequest("POST", `/api/users/${staffMember.userId}/stars`, { starType });
+                    } catch (error) {
+                      console.error(`Failed to award star to ${staffMember.name}:`, error);
+                    }
+                  } else {
+                    console.warn(`Staff member ${staffMember.name} completed line items but has no linked user account - star not awarded`);
+                  }
+                }
+              }
             } catch (error) {
-              console.error("Failed to award star:", error);
+              console.error("Failed to process star awards:", error);
             }
           }
           
-          // Show celebration dialog and close edit dialog after celebration
+          // Show celebration dialog with all staff names who completed work
           setCelebrationOnTime(!isLate);
+          setCelebrationStaffNames(allStaffNamesWhoCompleted);
           setCelebrationOpen(true);
           
           // Close edit dialog after a delay to allow celebration to show
@@ -964,7 +997,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       open={celebrationOpen}
       onOpenChange={setCelebrationOpen}
       onTime={celebrationOnTime}
-      staffName={user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Staff Member' : 'Staff Member'}
+      staffNames={celebrationStaffNames}
     />
     <ShippingInfoDialog
       open={shippingDialogOpen}
@@ -978,6 +1011,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completedById: currentUserStaff?.id || null,
           shippingMethod: shippingData.shippingMethod,
           dhlTrackingNumber: shippingData.dhlTrackingNumber || null,
+          packageCount: shippingData.packageCount || null,
+          packageType: shippingData.packageType || null,
         });
         setShippingDialogOpen(false);
       }}

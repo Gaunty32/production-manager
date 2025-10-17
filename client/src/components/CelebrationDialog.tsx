@@ -6,10 +6,10 @@ interface CelebrationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTime: boolean;
-  staffName: string;
+  staffNames: string[];
 }
 
-export function CelebrationDialog({ open, onOpenChange, onTime, staffName }: CelebrationDialogProps) {
+export function CelebrationDialog({ open, onOpenChange, onTime, staffNames }: CelebrationDialogProps) {
   const [showStar, setShowStar] = useState(false);
 
   useEffect(() => {
@@ -41,7 +41,9 @@ export function CelebrationDialog({ open, onOpenChange, onTime, staffName }: Cel
               <div className="text-center space-y-2">
                 <h2 className="text-3xl font-bold text-green-600">Great Job!</h2>
                 <p className="text-lg text-muted-foreground">Order completed on time</p>
-                <p className="text-sm font-medium">{staffName}</p>
+                {staffNames.length > 0 && (
+                  <p className="text-sm font-medium">{staffNames.join(", ")}</p>
+                )}
               </div>
               <div 
                 className={`transition-all duration-500 ${
@@ -63,7 +65,9 @@ export function CelebrationDialog({ open, onOpenChange, onTime, staffName }: Cel
               <div className="text-center space-y-2">
                 <h2 className="text-3xl font-bold text-orange-600">Well Done!</h2>
                 <p className="text-lg text-muted-foreground">But it was late...</p>
-                <p className="text-sm font-medium">{staffName}</p>
+                {staffNames.length > 0 && (
+                  <p className="text-sm font-medium">{staffNames.join(", ")}</p>
+                )}
               </div>
               <div 
                 className={`transition-all duration-500 ${
