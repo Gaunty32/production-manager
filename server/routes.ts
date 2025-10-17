@@ -22,7 +22,7 @@ import {
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { xeroService } from "./xero";
-import { calculateJobPrice } from "@shared/pricing";
+import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
@@ -378,6 +378,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
+      
+      // Calculate shipping cost if package type and count are provided
+      if (updates.packageType && updates.packageCount) {
+        const shippingCost = calculateShippingCost(
+          updates.packageType as "boxes" | "bags",
+          updates.packageCount as number
+        );
+        updates.shippingCost = typeof shippingCost.cost === "number" 
+          ? shippingCost.cost.toString() 
+          : shippingCost.cost;
+      }
       
       const job = await storage.updateJob(id, updates);
       res.json(job);
