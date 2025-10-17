@@ -823,11 +823,16 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                           return null;
                         }
                         
+                        // Display line item details based on job type
+                        const itemDetails = item.jobType === "Print" 
+                          ? `${item.quantity} × ${CODE_TO_PRINT_SIZE[item.stitchCount as keyof typeof CODE_TO_PRINT_SIZE] || 'A4'}`
+                          : `${item.quantity} × ${item.stitchCount.toLocaleString()} stitches`;
+                        
                         return (
                           <div key={index} className="text-xs space-y-1 pb-2 border-b last:border-b-0 last:pb-0">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">
-                                Line {index + 1} (Embroidery): {item.quantity} × {item.stitchCount.toLocaleString()} stitches
+                                Line {index + 1} ({item.jobType}): {itemDetails}
                               </span>
                             </div>
                             <div className="flex justify-between font-mono">
@@ -843,7 +848,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                       })}
                       
                       <div className="flex justify-between items-center pt-2 border-t">
-                        <span className="font-medium">Total Price (Embroidery Only):</span>
+                        <span className="font-medium">Total Price:</span>
                         <span className="font-mono font-bold text-lg" data-testid="total-price">
                           {formatPrice(pricingData.jobTotal)}
                         </span>
@@ -854,8 +859,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   {!pricingData && form.watch("customerId") && (
                     <div className="border border-amber-500/50 rounded-md p-3 bg-amber-500/5">
                       <p className="text-sm text-amber-600 dark:text-amber-500">
-                        {lineItems.every(item => item.jobType !== "Embroidery") 
-                          ? "No embroidery items - pricing tables only apply to embroidery work."
+                        {lineItems.every(item => item.jobType !== "Embroidery" && item.jobType !== "Print") 
+                          ? "No embroidery or print items - pricing tables only apply to embroidery and print work."
                           : "No pricing table selected for this customer. Please update customer settings."}
                       </p>
                     </div>
