@@ -12,6 +12,7 @@ This application is a production management system designed to track customer or
   - Print size selector replaces stitch count input for Print job types
   - Machine assignment not required for Print jobs (hidden in UI)
   - Default print size is A4 when creating new print jobs
+  - Fixed UI reactivity bug: combined state updates to ensure React re-renders when changing job type to Print
 
 **October 16, 2025**
 - **NEW: Manual Pricing for High-Volume Orders** - Orders with 1000+ units or 50,000+ stitches now require manual price entry
