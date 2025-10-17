@@ -602,7 +602,13 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                           <label className="text-xs text-muted-foreground">Job Type</label>
                           <Select 
                             value={item.jobType}
-                            onValueChange={(value) => updateLineItem(index, 'jobType', value)}
+                            onValueChange={(value) => {
+                              updateLineItem(index, 'jobType', value);
+                              // Set default print size to A4 when switching to Print
+                              if (value === "Print" && item.jobType !== "Print") {
+                                updateLineItem(index, 'stitchCount', PRINT_SIZE_CODE.A4);
+                              }
+                            }}
                           >
                             <SelectTrigger className="mt-1" data-testid={`select-edit-line-item-job-type-${index}`}>
                               <SelectValue placeholder="Select job type" />
