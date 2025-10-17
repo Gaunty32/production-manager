@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,6 +17,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import {
   Select,
@@ -27,7 +28,9 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Truck, Package } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Truck, Package, Coins } from "lucide-react";
+import { calculateShippingCost, formatPrice } from "@shared/pricing";
 
 const shippingSchema = z.object({
   shippingMethod: z.enum(["customer_collection", "consolidated", "direct_delivery"], {
@@ -60,6 +63,15 @@ const shippingSchema = z.object({
 }, {
   message: "Package type is required for this shipping method",
   path: ["packageType"],
+}).refine((data) => {
+  // Enforce bag quantity = 1 restriction
+  if (data.packageType === "bags" && data.packageCount && data.packageCount > 1) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Only 1 bag is allowed for bag shipments",
+  path: ["packageCount"],
 });
 
 type ShippingFormData = z.infer<typeof shippingSchema>;
@@ -90,7 +102,15 @@ export function ShippingInfoDialog({
   });
 
   const selectedMethod = form.watch("shippingMethod");
+  const packageType = form.watch("packageType");
+  const packageCount = form.watch("packageCount");
   const needsTracking = selectedMethod === "consolidated" || selectedMethod === "direct_delivery";
+
+  // Calculate shipping cost when package type and count are selected
+  const shippingCost = useMemo(() => {
+    if (!packageType || !packageCount) return null;
+    return calculateShippingCost(packageType as "boxes" | "bags", packageCount);
+  }, [packageType, packageCount]);
 
   const handleSubmit = async (data: ShippingFormData) => {
     if (isSubmitting) return;
@@ -189,7 +209,13 @@ export function ShippingInfoDialog({
                       <FormItem>
                         <FormLabel>Package Type</FormLabel>
                         <Select
-                          onValueChange={field.onChange}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            // Auto-set quantity to 1 for bags
+                            if (value === "bags") {
+                              form.setValue("packageCount", 1);
+                            }
+                          }}
                           defaultValue={field.value}
                           disabled={isPending || isSubmitting}
                         >
@@ -219,16 +245,36 @@ export function ShippingInfoDialog({
                             {...field}
                             type="number"
                             min="1"
+                            max={form.watch("packageType") === "bags" ? 1 : undefined}
                             placeholder="Enter count"
-                            disabled={isPending || isSubmitting}
+                            disabled={isPending || isSubmitting || form.watch("packageType") === "bags"}
                             data-testid="input-package-count"
                           />
                         </FormControl>
+                        {form.watch("packageType") === "bags" && (
+                          <FormDescription className="text-xs">
+                            Bags are limited to 1 per shipment
+                          </FormDescription>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
+
+                {shippingCost && (
+                  <Alert className="mt-4">
+                    <Coins className="h-4 w-4" />
+                    <AlertDescription className="flex items-center justify-between">
+                      <span className="font-medium">Shipping Cost:</span>
+                      <span className="text-lg font-semibold">
+                        {typeof shippingCost.cost === "number" 
+                          ? formatPrice(shippingCost.cost)
+                          : shippingCost.cost}
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                )}
               </>
             )}
 
