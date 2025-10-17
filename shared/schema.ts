@@ -65,6 +65,8 @@ export const jobs = pgTable("jobs", {
   invoiceReference: text("invoice_reference"),
   shippingMethod: text("shipping_method"),
   dhlTrackingNumber: text("dhl_tracking_number"),
+  packageCount: integer("package_count"),
+  packageType: text("package_type"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {
@@ -223,6 +225,18 @@ export const updateJobSchema = z.object({
     z.string().nullable().optional()
   ),
   dhlTrackingNumber: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
+  packageCount: z.preprocess(
+    (val) => {
+      if (val === "" || val === null || val === undefined) return null;
+      if (typeof val === "string") return parseInt(val, 10);
+      return val;
+    },
+    z.number().int().min(1).nullable().optional()
+  ),
+  packageType: z.preprocess(
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
