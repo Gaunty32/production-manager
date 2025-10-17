@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema, type Customer } from "@shared/schema";
 import { MACHINE_NAMES } from "@shared/machines";
 import { minutesToTime } from "@shared/scheduling";
-import { getPrice, formatPrice, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
+import { getPrice, getPrintPrice, formatPrice, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -176,32 +176,42 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       return null;
     }
 
-    // Calculate pricing only for Embroidery line items
+    // Calculate pricing for Embroidery and Print line items
     const lineItemPricing = lineItems.map(item => {
-      // Only calculate pricing for Embroidery type - other types don't have pricing tables yet
-      if (item.jobType !== "Embroidery") {
+      // Only calculate pricing for Embroidery and Print types
+      if (item.jobType !== "Embroidery" && item.jobType !== "Print") {
         return null;
       }
       
       try {
-        const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
-        return {
-          ...pricing,
-          lineTotal: pricing.totalPrice as number | "POA",
-        };
+        if (item.jobType === "Print") {
+          // Use print pricing
+          const pricing = getPrintPrice(item.quantity, item.stitchCount, pricingTable);
+          return {
+            ...pricing,
+            lineTotal: pricing.totalPrice as number,
+          };
+        } else {
+          // Use embroidery pricing
+          const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
+          return {
+            ...pricing,
+            lineTotal: pricing.totalPrice as number | "POA",
+          };
+        }
       } catch (error) {
         return null;
       }
     });
 
-    // Calculate job total (only from Embroidery items)
+    // Calculate job total (from Embroidery and Print items)
     let jobTotal: number | "POA" = 0;
     let hasPOA = false;
-    let hasEmbroideryItems = false;
+    let hasPricedItems = false;
     
     for (const pricing of lineItemPricing) {
       if (!pricing) continue;
-      hasEmbroideryItems = true;
+      hasPricedItems = true;
       if (pricing.lineTotal === "POA") {
         hasPOA = true;
         break;
@@ -213,8 +223,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       jobTotal = "POA";
     }
 
-    // Don't show pricing if there are no embroidery items
-    if (!hasEmbroideryItems) {
+    // Don't show pricing if there are no priced items
+    if (!hasPricedItems) {
       return null;
     }
 
