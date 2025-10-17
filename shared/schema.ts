@@ -68,6 +68,7 @@ export const jobs = pgTable("jobs", {
   packageCount: integer("package_count"),
   packageType: text("package_type"),
   shippingCost: text("shipping_cost"),
+  consolidatedShipmentId: varchar("consolidated_shipment_id"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {
@@ -242,6 +243,10 @@ export const updateJobSchema = z.object({
     z.string().nullable().optional()
   ),
   shippingCost: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
+  consolidatedShipmentId: z.preprocess(
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
