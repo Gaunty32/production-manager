@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema, type Customer } from "@shared/schema";
 import { MACHINE_NAMES } from "@shared/machines";
 import { minutesToTime } from "@shared/scheduling";
-import { getPrice, formatPrice, type PricingTable } from "@shared/pricing";
+import { getPrice, formatPrice, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -599,19 +599,41 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                           />
                         </div>
                         <div className="flex-1">
-                          <label className="text-xs text-muted-foreground">Stitch Count</label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={item.stitchCount}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value) || 0;
-                              updateLineItem(index, 'stitchCount', Math.max(1, val));
-                            }}
-                            placeholder="Stitch count"
-                            className="font-mono mt-1"
-                            data-testid={`input-line-item-stitch-count-${index}`}
-                          />
+                          {item.jobType === "Print" ? (
+                            <>
+                              <label className="text-xs text-muted-foreground">Print Size</label>
+                              <Select 
+                                value={item.stitchCount.toString()}
+                                onValueChange={(value) => updateLineItem(index, 'stitchCount', parseInt(value))}
+                              >
+                                <SelectTrigger className="mt-1" data-testid={`select-line-item-print-size-${index}`}>
+                                  <SelectValue placeholder="Select size" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={PRINT_SIZE_CODE.A6.toString()}>A6 (1/4 A4)</SelectItem>
+                                  <SelectItem value={PRINT_SIZE_CODE.A5.toString()}>A5 (1/2 A4)</SelectItem>
+                                  <SelectItem value={PRINT_SIZE_CODE.A4.toString()}>A4</SelectItem>
+                                  <SelectItem value={PRINT_SIZE_CODE.A3.toString()}>A3</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </>
+                          ) : (
+                            <>
+                              <label className="text-xs text-muted-foreground">Stitch Count</label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.stitchCount}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value) || 0;
+                                  updateLineItem(index, 'stitchCount', Math.max(1, val));
+                                }}
+                                placeholder="Stitch count"
+                                className="font-mono mt-1"
+                                data-testid={`input-line-item-stitch-count-${index}`}
+                              />
+                            </>
+                          )}
                         </div>
                         <div className="flex-1">
                           <label className="text-xs text-muted-foreground">Machine</label>
