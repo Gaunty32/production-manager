@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -29,8 +30,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Truck, Package, Coins } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Truck, Package, Coins, PackageCheck } from "lucide-react";
 import { calculateShippingCost, formatPrice } from "@shared/pricing";
+import type { Job } from "@shared/schema";
 
 const shippingSchema = z.object({
   shippingMethod: z.enum(["customer_collection", "consolidated", "direct_delivery"], {
@@ -39,6 +42,7 @@ const shippingSchema = z.object({
   dhlTrackingNumber: z.string().optional(),
   packageCount: z.coerce.number().int().min(1).optional(),
   packageType: z.enum(["boxes", "bags"]).optional(),
+  consolidatedJobIds: z.array(z.string()).optional(),
 }).refine((data) => {
   if (data.shippingMethod === "consolidated" || data.shippingMethod === "direct_delivery") {
     return data.dhlTrackingNumber && data.dhlTrackingNumber.trim().length > 0;
@@ -81,6 +85,8 @@ interface ShippingInfoDialogProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: ShippingFormData) => void;
   isPending?: boolean;
+  currentJobId: string;
+  customerId: string;
 }
 
 export function ShippingInfoDialog({
@@ -88,8 +94,11 @@ export function ShippingInfoDialog({
   onOpenChange,
   onSubmit,
   isPending = false,
+  currentJobId,
+  customerId,
 }: ShippingInfoDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedConsolidatedJobs, setSelectedConsolidatedJobs] = useState<string[]>([]);
 
   const form = useForm<ShippingFormData>({
     resolver: zodResolver(shippingSchema),
@@ -98,6 +107,7 @@ export function ShippingInfoDialog({
       dhlTrackingNumber: "",
       packageCount: undefined,
       packageType: undefined,
+      consolidatedJobIds: [],
     },
   });
 
@@ -105,6 +115,24 @@ export function ShippingInfoDialog({
   const packageType = form.watch("packageType");
   const packageCount = form.watch("packageCount");
   const needsTracking = selectedMethod === "consolidated" || selectedMethod === "direct_delivery";
+
+  // Fetch completed jobs for the same customer (excluding the current job)
+  const { data: jobs = [] } = useQuery<Job[]>({
+    queryKey: ["/api/jobs"],
+    enabled: open && selectedMethod === "consolidated",
+  });
+
+  // Filter to only show completed jobs for this customer (excluding current job)
+  const availableJobsForConsolidation = useMemo(() => {
+    if (selectedMethod !== "consolidated") return [];
+    return jobs.filter(job => 
+      job.customerId === customerId && 
+      job.id !== currentJobId &&
+      job.completed &&
+      job.invoiceStatus === "ready" &&
+      !job.consolidatedShipmentId // Don't show jobs already in a consolidated shipment
+    );
+  }, [jobs, customerId, currentJobId, selectedMethod]);
 
   // Calculate shipping cost when package type and count are selected
   const shippingCost = useMemo(() => {
@@ -116,11 +144,24 @@ export function ShippingInfoDialog({
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await onSubmit(data);
+      // Include selected consolidated job IDs in the submission
+      await onSubmit({
+        ...data,
+        consolidatedJobIds: selectedMethod === "consolidated" ? selectedConsolidatedJobs : [],
+      });
       form.reset();
+      setSelectedConsolidatedJobs([]);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const toggleJobSelection = (jobId: string) => {
+    setSelectedConsolidatedJobs(prev => 
+      prev.includes(jobId) 
+        ? prev.filter(id => id !== jobId)
+        : [...prev, jobId]
+    );
   };
 
   return (
@@ -261,6 +302,50 @@ export function ShippingInfoDialog({
                     )}
                   />
                 </div>
+
+                {/* Show consolidation options only for "consolidated" shipping method */}
+                {selectedMethod === "consolidated" && availableJobsForConsolidation.length > 0 && (
+                  <div className="space-y-3">
+                    <FormLabel className="flex items-center gap-2">
+                      <PackageCheck className="h-4 w-4" />
+                      Select Jobs to Consolidate Together
+                    </FormLabel>
+                    <FormDescription className="text-xs">
+                      Choose other completed orders being shipped with this one
+                    </FormDescription>
+                    <div className="max-h-48 overflow-y-auto space-y-2 border rounded-md p-3 bg-muted/20">
+                      {availableJobsForConsolidation.map((job) => (
+                        <div
+                          key={job.id}
+                          className="flex items-start gap-3 p-2 rounded hover-elevate border bg-card"
+                          data-testid={`consolidate-job-${job.id}`}
+                        >
+                          <Checkbox
+                            id={`job-${job.id}`}
+                            checked={selectedConsolidatedJobs.includes(job.id)}
+                            onCheckedChange={() => toggleJobSelection(job.id)}
+                            disabled={isPending || isSubmitting}
+                            data-testid={`checkbox-consolidate-${job.id}`}
+                          />
+                          <label
+                            htmlFor={`job-${job.id}`}
+                            className="flex-1 cursor-pointer text-sm leading-tight"
+                          >
+                            <div className="font-medium">{job.jobName}</div>
+                            {job.poNumber && (
+                              <div className="text-xs text-muted-foreground">PO: {job.poNumber}</div>
+                            )}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    {selectedConsolidatedJobs.length > 0 && (
+                      <div className="text-sm text-muted-foreground">
+                        {selectedConsolidatedJobs.length} {selectedConsolidatedJobs.length === 1 ? "job" : "jobs"} selected
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {shippingCost && (
                   <Alert className="mt-4">
