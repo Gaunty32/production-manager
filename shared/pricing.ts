@@ -1,4 +1,5 @@
 export type PricingTable = "2025" | "2026";
+export type PrintSize = "A6" | "A5" | "A4" | "A3";
 
 export interface PricingTier {
   minQty: number;
@@ -8,6 +9,32 @@ export interface PricingTier {
     price: number | "POA"; // Price on Application
   }[];
 }
+
+export interface PrintPricingTier {
+  minQty: number;
+  maxQty: number | null; // null means unlimited
+  prices: {
+    A6: number;
+    A5: number;
+    A4: number;
+    A3: number;
+  };
+}
+
+// Print size to numeric code mapping (stored in stitchCount field for print jobs)
+export const PRINT_SIZE_CODE = {
+  A6: 1,
+  A5: 2,
+  A4: 3,
+  A3: 4,
+} as const;
+
+export const CODE_TO_PRINT_SIZE = {
+  1: "A6",
+  2: "A5",
+  3: "A4",
+  4: "A3",
+} as const;
 
 export const PRICING_2025: PricingTier[] = [
   {
@@ -165,11 +192,85 @@ export const PRICING_2026: PricingTier[] = [
   },
 ];
 
+// Print Pricing Tables
+export const PRINT_PRICING_2025: PrintPricingTier[] = [
+  {
+    minQty: 0,
+    maxQty: 49,
+    prices: {
+      A6: 1.50,
+      A5: 1.75,
+      A4: 2.00,
+      A3: 2.50,
+    },
+  },
+  {
+    minQty: 50,
+    maxQty: 99,
+    prices: {
+      A6: 1.25,
+      A5: 1.50,
+      A4: 1.75,
+      A3: 2.00,
+    },
+  },
+  {
+    minQty: 100,
+    maxQty: null,
+    prices: {
+      A6: 1.00,
+      A5: 1.25,
+      A4: 1.50,
+      A3: 1.75,
+    },
+  },
+];
+
+export const PRINT_PRICING_2026: PrintPricingTier[] = [
+  {
+    minQty: 0,
+    maxQty: 49,
+    prices: {
+      A6: 1.75,
+      A5: 2.00,
+      A4: 2.50,
+      A3: 3.50,
+    },
+  },
+  {
+    minQty: 50,
+    maxQty: 99,
+    prices: {
+      A6: 1.50,
+      A5: 1.75,
+      A4: 2.00,
+      A3: 2.50,
+    },
+  },
+  {
+    minQty: 100,
+    maxQty: null,
+    prices: {
+      A6: 1.25,
+      A5: 1.50,
+      A4: 1.75,
+      A3: 2.00,
+    },
+  },
+];
+
 export interface PriceLookupResult {
   unitPrice: number | "POA";
   totalPrice: number | "POA";
   tier: string;
   stitchRange: string;
+}
+
+export interface PrintPriceLookupResult {
+  unitPrice: number;
+  totalPrice: number;
+  tier: string;
+  printSize: string;
 }
 
 export function getPrice(
@@ -228,16 +329,59 @@ export function formatPrice(price: number | "POA"): string {
   return `£${price.toFixed(2)}`;
 }
 
+export function getPrintPrice(
+  quantity: number,
+  printSizeCode: number,
+  pricingTable: PricingTable = "2026"
+): PrintPriceLookupResult {
+  const tiers = pricingTable === "2026" ? PRINT_PRICING_2026 : PRINT_PRICING_2025;
+  
+  // Find the quantity tier
+  const tier = tiers.find(
+    (t) => quantity >= t.minQty && (t.maxQty === null || quantity <= t.maxQty)
+  );
+
+  if (!tier) {
+    throw new Error(`No print pricing tier found for quantity ${quantity}`);
+  }
+
+  // Get print size from code
+  const printSize = CODE_TO_PRINT_SIZE[printSizeCode as keyof typeof CODE_TO_PRINT_SIZE];
+  
+  if (!printSize) {
+    throw new Error(`Invalid print size code: ${printSizeCode}`);
+  }
+
+  const unitPrice = tier.prices[printSize];
+  const totalPrice = unitPrice * quantity;
+
+  const tierLabel = tier.maxQty === null 
+    ? `${tier.minQty}+`
+    : `${tier.minQty}-${tier.maxQty}`;
+
+  return {
+    unitPrice,
+    totalPrice: parseFloat(totalPrice.toFixed(2)),
+    tier: tierLabel,
+    printSize,
+  };
+}
+
 export function calculateJobPrice(
-  lineItems: Array<{ quantity: number; stitchCount: number }>,
+  lineItems: Array<{ quantity: number; stitchCount: number; jobType?: string }>,
   pricingTable: PricingTable = "2026"
 ): {
-  lineItemPrices: PriceLookupResult[];
+  lineItemPrices: (PriceLookupResult | PrintPriceLookupResult)[];
   totalPrice: number | "POA";
 } {
-  const lineItemPrices = lineItems.map((item) =>
-    getPrice(item.quantity, item.stitchCount, pricingTable)
-  );
+  const lineItemPrices = lineItems.map((item) => {
+    // For print jobs, use print pricing
+    if (item.jobType === "Print") {
+      return getPrintPrice(item.quantity, item.stitchCount, pricingTable);
+    }
+    // For embroidery and other types, use standard pricing
+    return getPrice(item.quantity, item.stitchCount, pricingTable);
+  });
 
   // If any line item is POA, the whole job is POA
   const hasPOA = lineItemPrices.some((item) => item.totalPrice === "POA");
