@@ -582,10 +582,17 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                           <Select 
                             value={item.jobType}
                             onValueChange={(value) => {
-                              updateLineItem(index, 'jobType', value);
-                              // Set default print size to A4 when switching to Print
+                              // When switching to Print, set default print size to A4
                               if (value === "Print" && item.jobType !== "Print") {
-                                updateLineItem(index, 'stitchCount', PRINT_SIZE_CODE.A4);
+                                const updated = [...lineItems];
+                                updated[index] = { 
+                                  ...updated[index], 
+                                  jobType: value,
+                                  stitchCount: PRINT_SIZE_CODE.A4 
+                                };
+                                setLineItems(updated);
+                              } else {
+                                updateLineItem(index, 'jobType', value);
                               }
                             }}
                           >
