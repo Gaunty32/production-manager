@@ -28,6 +28,8 @@ interface Job {
   notes: string | null;
   shippingMethod: string | null;
   dhlTrackingNumber: string | null;
+  packageCount: number | null;
+  packageType: string | null;
 }
 
 interface Customer {
@@ -445,17 +447,27 @@ export default function InvoicingQueue() {
                                     </div>
                                   </div>
                                   {job.shippingMethod && (
-                                    <div className="flex items-center gap-2 mt-2 text-sm">
-                                      <Truck className="h-3 w-3 text-muted-foreground" />
-                                      <span className="text-muted-foreground">
-                                        {job.shippingMethod === 'customer_collection' && 'Customer Collection'}
-                                        {job.shippingMethod === 'consolidated' && 'Consolidated Back to Customer'}
-                                        {job.shippingMethod === 'direct_delivery' && 'Direct Delivery'}
-                                      </span>
-                                      {job.dhlTrackingNumber && (
-                                        <Badge variant="outline" className="ml-1">
-                                          Tracking: {job.dhlTrackingNumber}
-                                        </Badge>
+                                    <div className="flex flex-col gap-1 mt-2 text-sm">
+                                      <div className="flex items-center gap-2">
+                                        <Truck className="h-3 w-3 text-muted-foreground" />
+                                        <span className="text-muted-foreground">
+                                          {job.shippingMethod === 'customer_collection' && 'Customer Collection'}
+                                          {job.shippingMethod === 'consolidated' && 'Consolidated Back to Customer'}
+                                          {job.shippingMethod === 'direct_delivery' && 'Direct Delivery'}
+                                        </span>
+                                        {job.dhlTrackingNumber && (
+                                          <Badge variant="outline" className="ml-1">
+                                            Tracking: {job.dhlTrackingNumber}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      {job.packageCount && job.packageType && (
+                                        <div className="flex items-center gap-2 ml-5">
+                                          <Package className="h-3 w-3 text-muted-foreground" />
+                                          <span className="text-muted-foreground">
+                                            {job.packageCount} {job.packageType === 'boxes' ? (job.packageCount === 1 ? 'Box' : 'Boxes') : (job.packageCount === 1 ? 'Bag' : 'Bags')}
+                                          </span>
+                                        </div>
                                       )}
                                     </div>
                                   )}

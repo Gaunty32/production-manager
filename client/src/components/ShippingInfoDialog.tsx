@@ -34,6 +34,8 @@ const shippingSchema = z.object({
     required_error: "Please select a shipping method",
   }),
   dhlTrackingNumber: z.string().optional(),
+  packageCount: z.coerce.number().int().min(1).optional(),
+  packageType: z.enum(["boxes", "bags"]).optional(),
 }).refine((data) => {
   if (data.shippingMethod === "consolidated" || data.shippingMethod === "direct_delivery") {
     return data.dhlTrackingNumber && data.dhlTrackingNumber.trim().length > 0;
@@ -42,6 +44,22 @@ const shippingSchema = z.object({
 }, {
   message: "DHL tracking number is required for this shipping method",
   path: ["dhlTrackingNumber"],
+}).refine((data) => {
+  if (data.shippingMethod === "consolidated" || data.shippingMethod === "direct_delivery") {
+    return data.packageCount && data.packageCount > 0;
+  }
+  return true;
+}, {
+  message: "Package count is required for this shipping method",
+  path: ["packageCount"],
+}).refine((data) => {
+  if (data.shippingMethod === "consolidated" || data.shippingMethod === "direct_delivery") {
+    return data.packageType && (data.packageType === "boxes" || data.packageType === "bags");
+  }
+  return true;
+}, {
+  message: "Package type is required for this shipping method",
+  path: ["packageType"],
 });
 
 type ShippingFormData = z.infer<typeof shippingSchema>;
@@ -66,6 +84,8 @@ export function ShippingInfoDialog({
     defaultValues: {
       shippingMethod: undefined,
       dhlTrackingNumber: "",
+      packageCount: undefined,
+      packageType: undefined,
     },
   });
 
@@ -141,24 +161,75 @@ export function ShippingInfoDialog({
             />
 
             {needsTracking && (
-              <FormField
-                control={form.control}
-                name="dhlTrackingNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>DHL Tracking Number</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="Enter DHL tracking number"
-                        disabled={isPending || isSubmitting}
-                        data-testid="input-dhl-tracking"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <>
+                <FormField
+                  control={form.control}
+                  name="dhlTrackingNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>DHL Tracking Number</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Enter DHL tracking number"
+                          disabled={isPending || isSubmitting}
+                          data-testid="input-dhl-tracking"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="packageType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Package Type</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          disabled={isPending || isSubmitting}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-package-type">
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="boxes" data-testid="option-boxes">Boxes</SelectItem>
+                            <SelectItem value="bags" data-testid="option-bags">Bags</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="packageCount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Number of {form.watch("packageType") === "bags" ? "Bags" : "Boxes"}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            min="1"
+                            placeholder="Enter count"
+                            disabled={isPending || isSubmitting}
+                            data-testid="input-package-count"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
             )}
 
             <DialogFooter>
