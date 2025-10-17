@@ -5,6 +5,12 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 17, 2025 (Latest)**
+- **NEW: Package Count and Type Tracking** - Enhanced shipping information to capture package details
+  - Added package count field (number of boxes/bags) for Consolidated and Direct Delivery shipments
+  - Added package type selector (Boxes or Bags)
+  - Package information required for Consolidated Back to Customer and Direct Delivery methods
+  - Not required for Customer Collection
+  - Package details display in Draft Invoicing Queue with proper singular/plural formatting
 - **NEW: Print Job Pricing Tables** - Added separate pricing tables for print jobs
   - Print jobs use size-based pricing (A6, A5, A4, A3) instead of stitch count
   - 2025 Print Pricing: 0-49 qty (A4=£2.00), 50-99 qty (A4=£1.75), 100+ qty (A4=£1.50)
@@ -13,6 +19,7 @@ This application is a production management system designed to track customer or
   - Machine assignment not required for Print jobs (hidden in UI)
   - Default print size is A4 when creating new print jobs
   - Fixed UI reactivity bug: combined state updates to ensure React re-renders when changing job type to Print
+  - Fixed pricing summary to show correct job type and details (Print shows size, Embroidery shows stitches)
 
 **October 16, 2025**
 - **NEW: Manual Pricing for High-Volume Orders** - Orders with 1000+ units or 50,000+ stitches now require manual price entry
