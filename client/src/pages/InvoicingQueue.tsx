@@ -43,6 +43,7 @@ interface Customer {
 interface LineItem {
   id: string;
   jobId: string;
+  jobType: string;
   quantity: number;
   description: string | null;
   stitchCount: number;
