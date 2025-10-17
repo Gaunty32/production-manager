@@ -641,25 +641,27 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                             </>
                           )}
                         </div>
-                        <div className="flex-1">
-                          <label className="text-xs text-muted-foreground">Machine</label>
-                          <Select 
-                            value={item.machineId?.toString() || "unassigned"}
-                            onValueChange={(value) => updateLineItem(index, 'machineId', value === "unassigned" ? null : parseInt(value))}
-                          >
-                            <SelectTrigger className="mt-1" data-testid={`select-line-item-machine-${index}`}>
-                              <SelectValue placeholder="Select machine" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="unassigned">Not assigned</SelectItem>
-                              {[1, 2, 3, 4].map((machineNum) => (
-                                <SelectItem key={machineNum} value={machineNum.toString()}>
-                                  {MACHINE_NAMES[machineNum]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        {item.jobType !== "Print" && (
+                          <div className="flex-1">
+                            <label className="text-xs text-muted-foreground">Machine</label>
+                            <Select 
+                              value={item.machineId?.toString() || "unassigned"}
+                              onValueChange={(value) => updateLineItem(index, 'machineId', value === "unassigned" ? null : parseInt(value))}
+                            >
+                              <SelectTrigger className="mt-1" data-testid={`select-line-item-machine-${index}`}>
+                                <SelectValue placeholder="Select machine" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unassigned">Not assigned</SelectItem>
+                                {[1, 2, 3, 4].map((machineNum) => (
+                                  <SelectItem key={machineNum} value={machineNum.toString()}>
+                                    {MACHINE_NAMES[machineNum]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 pt-5">
                           <Checkbox
                             id={`completed-${index}`}
