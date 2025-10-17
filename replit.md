@@ -5,6 +5,11 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 17, 2025 (Latest)**
+- **FIXED: Star Award System** - Stars now correctly awarded to employees who completed line items
+  - Changed from awarding stars to person marking order complete to employees who completed each line item
+  - Each unique staff member who completed line items receives one star (yellow if on time, red if late)
+  - Staff members without linked user accounts are still recognized in celebration dialog with console warning
+  - Celebration dialog now shows names of all staff members who completed line items
 - **NEW: Package Count and Type Tracking** - Enhanced shipping information to capture package details
   - Added package count field (number of boxes/bags) for Consolidated and Direct Delivery shipments
   - Added package type selector (Boxes or Bags)
