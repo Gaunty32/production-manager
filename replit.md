@@ -5,6 +5,14 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 17, 2025 (Latest)**
+- **NEW: Shipping Cost Pricing for Boxes and Bags** - Implemented automated shipping cost calculation with tiered pricing
+  - Box pricing: 1 box=£7.50, 2 boxes=£10, 3 boxes=£15, 4 boxes=£20, >4 boxes=TBA (requires manual quote)
+  - Bag pricing: Restricted to quantity 1, cost £0
+  - Real-time cost display in ShippingInfoDialog with visual feedback
+  - Shipping costs stored in database and included in Draft Invoicing Queue totals
+  - Xero invoices include shipping as separate line item with descriptive text
+  - Invoice creation blocked when shipping cost is TBA (>4 boxes)
+  - Customer collection has zero shipping cost
 - **FIXED: Draft Invoicing Queue Pricing for Mixed Job Types** - Resolved crash when calculating prices for orders with both Print and Embroidery line items
   - Added missing jobType field to LineItem interface in InvoicingQueue component
   - Now correctly routes Print jobs through print pricing and Embroidery jobs through embroidery pricing
