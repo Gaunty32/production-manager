@@ -5,6 +5,10 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 17, 2025 (Latest)**
+- **FIXED: Draft Invoicing Queue Pricing for Mixed Job Types** - Resolved crash when calculating prices for orders with both Print and Embroidery line items
+  - Added missing jobType field to LineItem interface in InvoicingQueue component
+  - Now correctly routes Print jobs through print pricing and Embroidery jobs through embroidery pricing
+  - Mixed job type orders (e.g., Spirit of Sussex with Print + Embroidery) now display correct totals
 - **FIXED: Star Award System** - Stars now correctly awarded to employees who completed line items
   - Changed from awarding stars to person marking order complete to employees who completed each line item
   - Each unique staff member who completed line items receives one star (yellow if on time, red if late)
