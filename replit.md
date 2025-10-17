@@ -5,6 +5,13 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 17, 2025 (Latest)**
+- **NEW: Consolidated Shipment Tracking** - Multiple completed jobs can now be shipped together in one delivery
+  - Added consolidatedShipmentId field to link jobs in the same physical shipment
+  - When marking job complete with "Consolidated Back to Customer", can select other completed jobs to ship together
+  - All jobs in shipment share same tracking number, package count/type, and shipment ID
+  - Only primary job (being marked complete) has shipping cost to avoid duplication in invoicing
+  - Draft Invoicing Queue shows visual indicator (blue left border) for consolidated jobs
+  - Displays which jobs are consolidated together with "Consolidated with: [job names]" text
 - **NEW: Shipping Cost Pricing for Boxes and Bags** - Implemented automated shipping cost calculation with tiered pricing
   - Box pricing: 1 box=£7.50, 2 boxes=£10, 3 boxes=£15, 4 boxes=£20, >4 boxes=TBA (requires manual quote)
   - Bag pricing: Restricted to quantity 1, cost £0

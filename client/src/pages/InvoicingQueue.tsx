@@ -10,36 +10,10 @@ import { calculateJobPrice, formatPrice } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import { canViewPrices } from "@shared/schema";
+import { canViewPrices, type Job, type Customer } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-
-interface Job {
-  id: string;
-  customerId: string;
-  jobName: string;
-  poNumber: string | null;
-  quantity: number;
-  goodsReceived: string;
-  requiredDispatchDate: string;
-  completed: boolean;
-  invoiceStatus: string;
-  notes: string | null;
-  shippingMethod: string | null;
-  dhlTrackingNumber: string | null;
-  packageCount: number | null;
-  packageType: string | null;
-  shippingCost: string | null;
-}
-
-interface Customer {
-  id: string;
-  name: string;
-  email: string | null;
-  pricingTable2025: boolean;
-  pricingTable2026: boolean;
-}
 
 interface LineItem {
   id: string;
@@ -435,12 +409,17 @@ export default function InvoicingQueue() {
                         const price = getJobPrice(job);
                         const lineItems = getJobLineItems(job.id);
                         
+                        // Find other jobs in the same consolidated shipment
+                        const consolidatedJobs = job.consolidatedShipmentId 
+                          ? customerJobs.filter(j => j.consolidatedShipmentId === job.consolidatedShipmentId && j.id !== job.id)
+                          : [];
+                        
                         return (
                           <div
                             key={job.id}
                             className={`flex items-start gap-3 p-4 rounded-lg border ${
                               selectedJobs.has(job.id) ? 'bg-accent/50 border-accent' : ''
-                            } hover-elevate active-elevate-2`}
+                            } ${job.consolidatedShipmentId ? 'border-l-4 border-l-primary/50' : ''} hover-elevate active-elevate-2`}
                             data-testid={`job-invoice-${job.id}`}
                           >
                             <Checkbox
@@ -482,6 +461,13 @@ export default function InvoicingQueue() {
                                           </Badge>
                                         )}
                                       </div>
+                                      {consolidatedJobs.length > 0 && (
+                                        <div className="flex items-center gap-2 ml-5">
+                                          <span className="text-muted-foreground">
+                                            Consolidated with: {consolidatedJobs.map(cj => cj.jobName).join(', ')}
+                                          </span>
+                                        </div>
+                                      )}
                                       {job.packageCount && job.packageType && (
                                         <div className="flex items-center gap-2 ml-5">
                                           <Package className="h-3 w-3 text-muted-foreground" />

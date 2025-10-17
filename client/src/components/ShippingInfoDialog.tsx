@@ -129,7 +129,7 @@ export function ShippingInfoDialog({
       job.customerId === customerId && 
       job.id !== currentJobId &&
       job.completed &&
-      job.invoiceStatus === "ready" &&
+      job.invoiceStatus !== "invoiced" && // Don't show already invoiced jobs
       !job.consolidatedShipmentId // Don't show jobs already in a consolidated shipment
     );
   }, [jobs, customerId, currentJobId, selectedMethod]);
