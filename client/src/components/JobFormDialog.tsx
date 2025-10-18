@@ -84,7 +84,7 @@ interface JobFormDialogProps {
 
 export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps) {
   const [open, setOpen] = useState(false);
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -107,7 +107,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   });
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
   };
 
   const removeLineItem = (index: number) => {
