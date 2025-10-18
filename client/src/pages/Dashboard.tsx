@@ -177,12 +177,35 @@ export default function Dashboard() {
     return allLogosApproved;
   });
   
+  // Pending Orders: orders that are pending but don't have all required info yet
+  const pendingJobs = filteredJobs.filter(job => {
+    if (job.invoiceStatus !== 'pending') return false;
+    
+    // Missing dates OR missing logo approvals
+    const missingDates = !job.requiredDispatchDate || !job.goodsReceived;
+    const allLogosApproved = job.lineItems && job.lineItems.length > 0 
+      && job.lineItems.every(item => item.logoApproved);
+    const missingLogoApprovals = !allLogosApproved;
+    
+    return missingDates || missingLogoApprovals;
+  });
+  
   // Completed Orders: only show jobs that have been invoiced
   const completedJobs = filteredJobs.filter(job => job.invoiceStatus === 'invoiced');
 
   const sortedActiveJobs = [...activeJobs].sort(
     (a, b) => new Date(a.requiredDispatchDate!).getTime() - new Date(b.requiredDispatchDate!).getTime()
   );
+
+  const sortedPendingJobs = [...pendingJobs].sort((a, b) => {
+    // Sort by dispatch date if both have it, otherwise by customer name
+    if (a.requiredDispatchDate && b.requiredDispatchDate) {
+      return new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
+    }
+    if (a.requiredDispatchDate) return -1;
+    if (b.requiredDispatchDate) return 1;
+    return a.customerName.localeCompare(b.customerName);
+  });
 
   const sortedCompletedJobs = [...completedJobs].sort((a, b) => {
     if (!a.requiredDispatchDate) return 1;
@@ -380,6 +403,82 @@ export default function Dashboard() {
             </table>
           </div>
         </div>
+
+        {/* Pending Orders Section - Orders that need attention */}
+        {sortedPendingJobs.length > 0 && (
+          <div className="mt-8">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              <h2 className="text-xl font-semibold text-foreground">Pending Orders - Awaiting Information</h2>
+            </div>
+            <div className="border rounded-md overflow-hidden bg-amber-50 dark:bg-amber-950/20">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted sticky top-0">
+                    <tr>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Customer
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Job Name
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        PO #
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Qty
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Machine
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Runs
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Time/Run
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Total
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Price
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Dispatch
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Status
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-card divide-y divide-border">
+                    {sortedPendingJobs.map((job) => {
+                      const customer = customers.find(c => c.id === job.customerId);
+                      return (
+                        <JobRow
+                          key={job.id}
+                          job={{
+                            ...job,
+                            goodsReceived: job.goodsReceived ? new Date(job.goodsReceived) : null,
+                            requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
+                          }}
+                          customer={customer}
+                          showPrices={canViewPrices(currentUser?.role)}
+                          onEdit={handleEdit}
+                          onDelete={handleDelete}
+                          isCompleted={false}
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Completed Orders Section */}
         {sortedCompletedJobs.length > 0 && (
