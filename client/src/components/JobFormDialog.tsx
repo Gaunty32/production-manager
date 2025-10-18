@@ -937,11 +937,20 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                       </>
                     )}
                     
-                    <div className="text-muted-foreground">Total Items:</div>
-                    <div className="font-medium">{lineItems.length}</div>
-                    
-                    <div className="text-muted-foreground">Total Quantity:</div>
-                    <div className="font-medium">{getTotalQuantity()}</div>
+                    {/* Quantity breakdown by job type */}
+                    {(() => {
+                      const breakdown: Record<string, number> = {};
+                      lineItems.forEach(item => {
+                        const type = item.jobType || "Embroidery";
+                        breakdown[type] = (breakdown[type] || 0) + item.quantity;
+                      });
+                      return Object.entries(breakdown).map(([type, qty], idx) => (
+                        <div key={idx} className="contents">
+                          <div className="text-muted-foreground">Total {type}:</div>
+                          <div className="font-medium">{qty}</div>
+                        </div>
+                      ));
+                    })()}
                   </div>
                 </div>
 
