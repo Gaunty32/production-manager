@@ -4,7 +4,17 @@ This application is a production management system designed to track customer or
 
 ## Recent Changes
 
-**October 17, 2025 (Latest)**
+**October 18, 2025 (Latest)**
+- **IMPROVED: Consolidated Shipment Workflow** - Streamlined process for joining existing consolidated shipments
+  - First job creates consolidated shipment with full shipping details (tracking number, package count/type, shipping cost)
+  - Subsequent jobs can join existing shipment by selecting it from dropdown
+  - Shipping details (DHL tracking, package count/type) auto-populated from selected shipment
+  - Fields become read-only when joining existing shipment
+  - Only primary job (first in shipment) has shipping cost; additional jobs have zero shipping cost
+  - Prevents duplicate tracking numbers and ensures single shipping charge per physical shipment
+  - Dropdown shows existing shipments with tracking info for easy selection
+
+**October 17, 2025**
 - **NEW: Consolidated Shipment Tracking** - Multiple completed jobs can now be shipped together in one delivery
   - Added consolidatedShipmentId field to link jobs in the same physical shipment
   - When marking job complete with "Consolidated Back to Customer", can select other completed jobs to ship together

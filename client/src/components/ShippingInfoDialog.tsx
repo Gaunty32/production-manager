@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -99,6 +99,7 @@ export function ShippingInfoDialog({
 }: ShippingInfoDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedConsolidatedJobs, setSelectedConsolidatedJobs] = useState<string[]>([]);
+  const [selectedExistingShipment, setSelectedExistingShipment] = useState<string | null>(null);
 
   const form = useForm<ShippingFormData>({
     resolver: zodResolver(shippingSchema),
@@ -122,6 +123,27 @@ export function ShippingInfoDialog({
     enabled: open && selectedMethod === "consolidated",
   });
 
+  // Find existing consolidated shipments for this customer
+  const existingShipments = useMemo(() => {
+    if (selectedMethod !== "consolidated") return [];
+    
+    const shipmentsMap = new Map<string, Job>();
+    jobs.forEach(job => {
+      if (
+        job.customerId === customerId &&
+        job.consolidatedShipmentId &&
+        job.invoiceStatus !== "invoiced" &&
+        job.dhlTrackingNumber // Must have tracking info
+      ) {
+        // Use the first job we find for each shipment ID
+        if (!shipmentsMap.has(job.consolidatedShipmentId)) {
+          shipmentsMap.set(job.consolidatedShipmentId, job);
+        }
+      }
+    });
+    return Array.from(shipmentsMap.values());
+  }, [jobs, customerId, selectedMethod]);
+
   // Filter to only show completed jobs for this customer (excluding current job)
   const availableJobsForConsolidation = useMemo(() => {
     if (selectedMethod !== "consolidated") return [];
@@ -134,11 +156,28 @@ export function ShippingInfoDialog({
     );
   }, [jobs, customerId, currentJobId, selectedMethod]);
 
+  // Auto-populate form fields when an existing shipment is selected
+  const selectedShipmentJob = useMemo(() => {
+    if (!selectedExistingShipment) return null;
+    return existingShipments.find(job => job.consolidatedShipmentId === selectedExistingShipment);
+  }, [selectedExistingShipment, existingShipments]);
+
+  // Update form when existing shipment is selected
+  useEffect(() => {
+    if (selectedShipmentJob) {
+      form.setValue("dhlTrackingNumber", selectedShipmentJob.dhlTrackingNumber || "");
+      form.setValue("packageCount", selectedShipmentJob.packageCount || undefined);
+      form.setValue("packageType", selectedShipmentJob.packageType as "boxes" | "bags" || undefined);
+    }
+  }, [selectedShipmentJob, form]);
+
   // Calculate shipping cost when package type and count are selected
+  // No cost when joining existing shipment
   const shippingCost = useMemo(() => {
+    if (selectedExistingShipment) return null; // No cost for joining existing shipment
     if (!packageType || !packageCount) return null;
     return calculateShippingCost(packageType as "boxes" | "bags", packageCount);
-  }, [packageType, packageCount]);
+  }, [packageType, packageCount, selectedExistingShipment]);
 
   const handleSubmit = async (data: ShippingFormData) => {
     if (isSubmitting) return;
@@ -148,9 +187,12 @@ export function ShippingInfoDialog({
       await onSubmit({
         ...data,
         consolidatedJobIds: selectedMethod === "consolidated" ? selectedConsolidatedJobs : [],
-      });
+        // Pass the existing shipment ID if joining one
+        existingShipmentId: selectedExistingShipment || undefined,
+      } as any);
       form.reset();
       setSelectedConsolidatedJobs([]);
+      setSelectedExistingShipment(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -221,6 +263,47 @@ export function ShippingInfoDialog({
               )}
             />
 
+            {/* Show existing shipments option for consolidated method */}
+            {selectedMethod === "consolidated" && existingShipments.length > 0 && (
+              <div className="space-y-3 p-4 border rounded-md bg-muted/20">
+                <FormLabel>Join Existing Consolidated Shipment</FormLabel>
+                <FormDescription className="text-xs">
+                  Select an existing shipment to join (shipping details will be inherited)
+                </FormDescription>
+                <Select
+                  value={selectedExistingShipment || "new"}
+                  onValueChange={(value) => {
+                    if (value === "new") {
+                      setSelectedExistingShipment(null);
+                      form.setValue("dhlTrackingNumber", "");
+                      form.setValue("packageCount", undefined);
+                      form.setValue("packageType", undefined);
+                    } else {
+                      setSelectedExistingShipment(value);
+                    }
+                  }}
+                  disabled={isPending || isSubmitting}
+                >
+                  <SelectTrigger data-testid="select-existing-shipment">
+                    <SelectValue placeholder="Select shipment" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="max-h-[300px]">
+                    <SelectItem value="new">Create New Shipment</SelectItem>
+                    {existingShipments.map((shipment) => (
+                      <SelectItem key={shipment.consolidatedShipmentId} value={shipment.consolidatedShipmentId!}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{shipment.jobName}</span>
+                          <span className="text-xs text-muted-foreground">
+                            Tracking: {shipment.dhlTrackingNumber} • {shipment.packageCount} {shipment.packageType}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {needsTracking && (
               <>
                 <FormField
@@ -233,10 +316,16 @@ export function ShippingInfoDialog({
                         <Input
                           {...field}
                           placeholder="Enter DHL tracking number"
-                          disabled={isPending || isSubmitting}
+                          disabled={isPending || isSubmitting || !!selectedExistingShipment}
                           data-testid="input-dhl-tracking"
+                          readOnly={!!selectedExistingShipment}
                         />
                       </FormControl>
+                      {selectedExistingShipment && (
+                        <FormDescription className="text-xs">
+                          Inherited from existing shipment
+                        </FormDescription>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -257,8 +346,8 @@ export function ShippingInfoDialog({
                               form.setValue("packageCount", 1);
                             }
                           }}
-                          defaultValue={field.value}
-                          disabled={isPending || isSubmitting}
+                          value={field.value}
+                          disabled={isPending || isSubmitting || !!selectedExistingShipment}
                         >
                           <FormControl>
                             <SelectTrigger data-testid="select-package-type">
@@ -270,6 +359,11 @@ export function ShippingInfoDialog({
                             <SelectItem value="bags" data-testid="option-bags">Bags</SelectItem>
                           </SelectContent>
                         </Select>
+                        {selectedExistingShipment && (
+                          <FormDescription className="text-xs">
+                            Inherited from existing shipment
+                          </FormDescription>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -288,13 +382,19 @@ export function ShippingInfoDialog({
                             min="1"
                             max={form.watch("packageType") === "bags" ? 1 : undefined}
                             placeholder="Enter count"
-                            disabled={isPending || isSubmitting || form.watch("packageType") === "bags"}
+                            disabled={isPending || isSubmitting || form.watch("packageType") === "bags" || !!selectedExistingShipment}
+                            readOnly={!!selectedExistingShipment}
                             data-testid="input-package-count"
                           />
                         </FormControl>
-                        {form.watch("packageType") === "bags" && (
+                        {form.watch("packageType") === "bags" && !selectedExistingShipment && (
                           <FormDescription className="text-xs">
                             Bags are limited to 1 per shipment
+                          </FormDescription>
+                        )}
+                        {selectedExistingShipment && (
+                          <FormDescription className="text-xs">
+                            Inherited from existing shipment
                           </FormDescription>
                         )}
                         <FormMessage />
@@ -303,8 +403,8 @@ export function ShippingInfoDialog({
                   />
                 </div>
 
-                {/* Show consolidation options only for "consolidated" shipping method */}
-                {selectedMethod === "consolidated" && availableJobsForConsolidation.length > 0 && (
+                {/* Show consolidation options only for "consolidated" shipping method when creating new shipment */}
+                {selectedMethod === "consolidated" && !selectedExistingShipment && availableJobsForConsolidation.length > 0 && (
                   <div className="space-y-3">
                     <FormLabel className="flex items-center gap-2">
                       <PackageCheck className="h-4 w-4" />
