@@ -174,8 +174,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         customerId: job.customerId,
         jobName: job.jobName,
         poNumber: job.poNumber || "",
-        goodsReceived: job.goodsReceived ? job.goodsReceived.toISOString() : "",
-        requiredDispatchDate: job.requiredDispatchDate.toISOString(),
+        goodsReceived: job.goodsReceived ? job.goodsReceived.toISOString() : null,
+        requiredDispatchDate: job.requiredDispatchDate ? job.requiredDispatchDate.toISOString() : null,
         completed: job.completed,
         completedOnTime: job.completedOnTime,
         completedById: job.completedById,
@@ -339,8 +339,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     setLineItems(lineItems.map(item => ({ ...item, logoApproved: checked })));
   };
   
-  const isOverdue = job && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
-  const isDueToday = job && isToday(job.requiredDispatchDate);
+  const isOverdue = job && job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
+  const isDueToday = job && job.requiredDispatchDate && isToday(job.requiredDispatchDate);
   
   // Calculate Production Time (days between goods received and required dispatch date)
   const requiredDispatchDate = form.watch("requiredDispatchDate");
@@ -413,7 +413,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         await queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'line-items'] });
         
         // If job was just completed, award stars to employees who completed line items
-        if (justCompleted) {
+        if (justCompleted && data.requiredDispatchDate) {
           const requiredDate = new Date(data.requiredDispatchDate);
           const today = new Date();
           today.setHours(0, 0, 0, 0);

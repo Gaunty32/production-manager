@@ -5,6 +5,12 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 18, 2025 (Latest)**
+- **NEW: Flat-Rate Job Types** - Added two new job types with £2.50 flat pricing on both 2025 and 2026 tables
+  - "Embroidery Initials/Name" - £2.50 per item (no stitch count or machine assignment required)
+  - "Print Initials/Name" - £2.50 per item (no stitch count or machine assignment required)
+  - UI displays "£2.50 per item" badge instead of stitch count input for these types
+  - Stitch count and machine assignment fields automatically hidden for flat-rate types
+  - Pricing logic in shared/pricing.ts handles flat-rate calculation via new getFlatRatePrice() function
 - **NEW: Optional Dates for Pending Orders** - Orders can now be created without dispatch/goods received dates
   - Orders without both dates remain "pending" and don't appear in Production Queue
   - Orders enter Production Queue only when they have: Required Dispatch Date, Goods Received, AND all embroidery approved
