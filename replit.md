@@ -5,6 +5,15 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 18, 2025 (Latest)**
+- **NEW: Multi-Step Job Creation Form** - Transformed order creation into guided wizard with sequential sections
+  - Step 1: Dates - Required Dispatch Date and Goods Received side-by-side with calendar pickers that default to calendar view
+  - Production time calculation prominently displayed after both dates are entered (with urgent warning if <3 days)
+  - Step 2: Customer & Job Details - Customer selection, job name, PO number, embroidery approval
+  - Step 3: Line Items - Add/edit line items with quantity, type, stitch count/print size, machine assignment
+  - Step 4: Notes & Review - Optional notes plus complete order summary before submission
+  - Visual step indicator shows progress with checkmarks for completed steps
+  - Cannot proceed to next step until current step requirements are met
+  - Line items now default to quantity 0 and stitch count 0 (empty fields instead of 1/5000)
 - **IMPROVED: Consolidated Shipment Workflow** - Streamlined process for joining existing consolidated shipments
   - First job creates consolidated shipment with full shipping details (tracking number, package count/type, shipping cost)
   - Subsequent jobs can join existing shipment by selecting it from dropdown

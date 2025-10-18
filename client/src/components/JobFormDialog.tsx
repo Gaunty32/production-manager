@@ -24,6 +24,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import {
   Select,
@@ -42,7 +43,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon, Plus, Trash2, Info } from "lucide-react";
+import { CalendarIcon, Plus, Trash2, Info, ChevronRight, ChevronLeft, Check } from "lucide-react";
 import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -84,6 +85,7 @@ interface JobFormDialogProps {
 
 export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps) {
   const [open, setOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
   const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
@@ -350,7 +352,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setOpen(false);
       form.reset();
-      setLineItems([{ jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
+      setCurrentStep(1);
+      setLineItems([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
     } catch (error) {
       toast({
         title: "Error",
@@ -364,225 +367,329 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
+    if (!newOpen) {
+      setCurrentStep(1);
+    }
+  };
+
+  const canProceedFromStep1 = () => {
+    return !!requiredDispatchDate && !!goodsReceived;
+  };
+
+  const canProceedFromStep2 = () => {
+    const customerId = form.watch("customerId");
+    const jobName = form.watch("jobName");
+    return !!customerId && !!jobName;
+  };
+
+  const canProceedFromStep3 = () => {
+    return lineItems.length > 0 && lineItems.some(item => item.quantity > 0);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create New Order</DialogTitle>
+          <DialogDescription>
+            Fill in the details to create a new production order
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Step Indicator */}
+        <div className="flex items-center justify-between mb-6 px-4">
+          {[1, 2, 3, 4].map((step) => (
+            <div key={step} className="flex items-center">
+              <div className={cn(
+                "flex items-center justify-center w-10 h-10 rounded-full border-2 font-semibold transition-colors",
+                currentStep === step && "border-primary bg-primary text-primary-foreground",
+                currentStep > step && "border-green-500 bg-green-500 text-white",
+                currentStep < step && "border-muted-foreground/30 text-muted-foreground"
+              )}>
+                {currentStep > step ? <Check className="h-5 w-5" /> : step}
+              </div>
+              {step < 4 && (
+                <div className={cn(
+                  "h-0.5 w-16 mx-2 transition-colors",
+                  currentStep > step ? "bg-green-500" : "bg-muted-foreground/30"
+                )} />
+              )}
+            </div>
+          ))}
+        </div>
+
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            {/* Required Dispatch Date - HEADER - Full Width */}
-            <FormField
-              control={form.control}
-              name="requiredDispatchDate"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel className={cn(
-                    "text-xl font-bold",
-                    isOverdue && "text-red-600 dark:text-red-500",
-                    isDueToday && !isOverdue && "text-amber-600 dark:text-amber-500"
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+            {/* Step 1: Dates */}
+            {currentStep === 1 && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Step 1: Dates</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Select when the goods arrived and when the order needs to be dispatched
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Required Dispatch Date */}
+                  <FormField
+                    control={form.control}
+                    name="requiredDispatchDate"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel className={cn(
+                          "text-base font-semibold",
+                          isOverdue && "text-red-600 dark:text-red-500",
+                          isDueToday && !isOverdue && "text-amber-600 dark:text-amber-500"
+                        )}>
+                          Required Dispatch Date
+                          {isOverdue && " (OVERDUE)"}
+                          {isDueToday && !isOverdue && " (DUE TODAY)"}
+                        </FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "pl-3 text-left font-normal justify-start w-full h-auto py-3",
+                                  !field.value && "text-muted-foreground",
+                                  isOverdue && "border-red-500 bg-red-50 dark:bg-red-950/30",
+                                  isDueToday && !isOverdue && "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
+                                )}
+                                data-testid="button-dispatch-date"
+                              >
+                                <CalendarIcon className="mr-2 h-5 w-5" />
+                                {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value ? new Date(field.value) : undefined}
+                              onSelect={(date) => field.onChange(date?.toISOString())}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Goods Received */}
+                  <FormField
+                    control={form.control}
+                    name="goodsReceived"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel className="text-base font-semibold">Goods Received</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "pl-3 text-left font-normal justify-start w-full h-auto py-3",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                                data-testid="button-goods-received"
+                              >
+                                <CalendarIcon className="mr-2 h-5 w-5" />
+                                {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value ? new Date(field.value) : undefined}
+                              onSelect={(date) => field.onChange(date?.toISOString())}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Production Time Display */}
+                {productionTime !== null && (
+                  <div className={cn(
+                    "p-4 rounded-lg border-2",
+                    isUrgent 
+                      ? "border-red-500 bg-red-50 dark:bg-red-950/30" 
+                      : "border-green-500 bg-green-50 dark:bg-green-950/30"
                   )}>
-                    Required Dispatch Date
-                    {isOverdue && " (OVERDUE)"}
-                    {isDueToday && !isOverdue && " (DUE TODAY)"}
-                  </FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "pl-3 text-left font-normal justify-start w-full text-base h-12",
-                            !field.value && "text-muted-foreground",
-                            isOverdue && "border-red-500 bg-red-50 dark:bg-red-950/30",
-                            isDueToday && !isOverdue && "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
-                          )}
-                          data-testid="button-dispatch-date"
-                        >
-                          <CalendarIcon className="mr-2 h-5 w-5" />
-                          {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value ? new Date(field.value) : undefined}
-                        onSelect={(date) => field.onChange(date?.toISOString())}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Goods Received - Full Width with Production Time */}
-            <FormField
-              control={form.control}
-              name="goodsReceived"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel className="text-base font-semibold">Goods Received</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "pl-3 text-left font-normal justify-start w-full",
-                            !field.value && "text-muted-foreground"
-                          )}
-                          data-testid="button-goods-received"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {field.value ? format(new Date(field.value), "PPP") : "Pick a date"}
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value ? new Date(field.value) : undefined}
-                        onSelect={(date) => field.onChange(date?.toISOString())}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                  
-                  {/* Production Time Display */}
-                  {productionTime !== null && (
-                    <div className={cn(
-                      "mt-2 p-3 rounded-md border-2",
-                      isUrgent 
-                        ? "border-red-500 bg-red-50 dark:bg-red-950/30" 
-                        : "border-green-500 bg-green-50 dark:bg-green-950/30"
-                    )}>
-                      <div className="flex items-center justify-between">
-                        <span className={cn(
-                          "font-semibold",
-                          isUrgent ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
-                        )}>
-                          Production Time:
-                        </span>
-                        <span className={cn(
-                          "text-2xl font-bold",
-                          isUrgent ? "text-red-600 dark:text-red-500" : "text-green-600 dark:text-green-500"
-                        )}>
-                          {productionTime} {productionTime === 1 ? 'day' : 'days'}
-                        </span>
-                      </div>
-                      {isUrgent && (
-                        <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium">
-                          ⚠️ URGENT ORDER - Less than 3 days production time
-                        </p>
-                      )}
+                    <div className="flex items-center justify-between">
+                      <span className={cn(
+                        "text-base font-semibold",
+                        isUrgent ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"
+                      )}>
+                        Production Time:
+                      </span>
+                      <span className={cn(
+                        "text-3xl font-bold",
+                        isUrgent ? "text-red-600 dark:text-red-500" : "text-green-600 dark:text-green-500"
+                      )}>
+                        {productionTime} {productionTime === 1 ? 'day' : 'days'}
+                      </span>
                     </div>
-                  )}
-                </FormItem>
-              )}
-            />
-
-            {/* Customer - Full Width */}
-            <FormField
-              control={form.control}
-              name="customerId"
-              render={({ field }) => {
-                // Only show customers with pricing tables
-                const customersWithPricing = customers.filter(c => c.pricingTable2025 || c.pricingTable2026);
-                const customersWithoutPricing = customers.length - customersWithPricing.length;
-                
-                return (
-                  <FormItem>
-                    <FormLabel>Customer</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-customer">
-                          <SelectValue placeholder="Select customer" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent position="popper" className="max-h-[300px]">
-                        {customersWithPricing.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.id}>
-                            {customer.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {customersWithoutPricing > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {customersWithoutPricing} customer{customersWithoutPricing !== 1 ? 's' : ''} hidden (no pricing table)
+                    {isUrgent && (
+                      <p className="text-sm text-red-600 dark:text-red-400 mt-2 font-medium">
+                        ⚠️ URGENT ORDER - Less than 3 days production time
                       </p>
                     )}
-                    <FormMessage />
-                  </FormItem>
-                );
-              }}
-            />
+                  </div>
+                )}
 
-            {/* PO Number - Full Width */}
-            <FormField
-              control={form.control}
-              name="poNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>PO Number</FormLabel>
-                  <FormControl>
-                    <Input {...field} value={field.value || ""} className="font-mono" data-testid="input-po-number" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    onClick={() => setCurrentStep(2)}
+                    disabled={!canProceedFromStep1()}
+                    data-testid="button-next-step-1"
+                  >
+                    Next <ChevronRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
 
-            {/* Job Name - Full Width */}
-            <FormField
-              control={form.control}
-              name="jobName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Job Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} data-testid="input-job-name" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Step 2: Customer & Job Details */}
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Step 2: Customer & Job Details</h3>
+                </div>
 
-            {/* Embroidery Approved - Yes/No selector */}
-            <div className="flex flex-col">
-              <label className="text-base font-semibold mb-2">Embroidery Approved</label>
-              <Select 
-                value={allLogosApproved ? "yes" : "no"} 
-                onValueChange={(value) => toggleAllLogos(value === "yes")}
-              >
-                <SelectTrigger data-testid="select-embroidery-approved">
-                  <SelectValue placeholder="Select approval status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yes">Yes</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                {/* Customer */}
+                <FormField
+                  control={form.control}
+                  name="customerId"
+                  render={({ field }) => {
+                    const customersWithPricing = customers.filter(c => c.pricingTable2025 || c.pricingTable2026);
+                    const customersWithoutPricing = customers.length - customersWithPricing.length;
+                    
+                    return (
+                      <FormItem>
+                        <FormLabel>Customer</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-customer">
+                              <SelectValue placeholder="Select customer" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent position="popper" className="max-h-[300px]">
+                            {customersWithPricing.map((customer) => (
+                              <SelectItem key={customer.id} value={customer.id}>
+                                {customer.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {customersWithoutPricing > 0 && (
+                          <FormDescription>
+                            {customersWithoutPricing} customer{customersWithoutPricing !== 1 ? 's' : ''} hidden (no pricing table)
+                          </FormDescription>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
+                />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <FormLabel>Line Items</FormLabel>
-                <div className="space-y-3 mt-2">
+                {/* Job Name */}
+                <FormField
+                  control={form.control}
+                  name="jobName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Job Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="e.g., Company Logo Polo Shirts" data-testid="input-job-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* PO Number */}
+                <FormField
+                  control={form.control}
+                  name="poNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>PO Number (Optional)</FormLabel>
+                      <FormControl>
+                        <Input {...field} value={field.value || ""} placeholder="Purchase order number" className="font-mono" data-testid="input-po-number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Embroidery Approved */}
+                <div className="flex flex-col space-y-2">
+                  <FormLabel>Embroidery Approved</FormLabel>
+                  <Select 
+                    value={allLogosApproved ? "yes" : "no"} 
+                    onValueChange={(value) => toggleAllLogos(value === "yes")}
+                  >
+                    <SelectTrigger data-testid="select-embroidery-approved">
+                      <SelectValue placeholder="Select approval status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Yes</SelectItem>
+                      <SelectItem value="no">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex justify-between">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentStep(1)}
+                    data-testid="button-back-step-2"
+                  >
+                    <ChevronLeft className="mr-2 h-4 w-4" /> Back
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => setCurrentStep(3)}
+                    disabled={!canProceedFromStep2()}
+                    data-testid="button-next-step-2"
+                  >
+                    Next <ChevronRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Line Items */}
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Step 3: Line Items</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Add items to this order with quantities, types, and specifications
+                  </p>
+                </div>
+
+                <div className="space-y-3">
                   {lineItems.map((item, index) => (
-                    <div key={index} className="border rounded-md p-3 space-y-2">
-                      <div className="flex gap-2 items-start">
+                    <div key={index} className="border rounded-lg p-4 space-y-3 bg-muted/20">
+                      <div className="flex gap-3 items-start">
                         <div className="flex-1">
-                          <label className="text-xs text-muted-foreground">Job Type</label>
+                          <label className="text-xs text-muted-foreground font-medium">Job Type</label>
                           <Select 
                             value={item.jobType}
                             onValueChange={(value) => {
-                              // When switching to Print, set default print size to A4
                               if (value === "Print" && item.jobType !== "Print") {
                                 const updated = [...lineItems];
                                 updated[index] = { 
@@ -607,16 +714,16 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                           </Select>
                         </div>
                         <div className="flex-1">
-                          <label className="text-xs text-muted-foreground">Quantity</label>
+                          <label className="text-xs text-muted-foreground font-medium">Quantity</label>
                           <Input
                             type="number"
-                            min="1"
-                            value={item.quantity}
+                            min="0"
+                            value={item.quantity || ''}
                             onChange={(e) => {
                               const val = parseInt(e.target.value) || 0;
-                              updateLineItem(index, 'quantity', Math.max(1, val));
+                              updateLineItem(index, 'quantity', val);
                             }}
-                            placeholder="Quantity"
+                            placeholder="0"
                             className="font-mono mt-1"
                             data-testid={`input-line-item-quantity-${index}`}
                           />
@@ -624,7 +731,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                         <div className="flex-1">
                           {item.jobType === "Print" ? (
                             <>
-                              <label className="text-xs text-muted-foreground">Print Size</label>
+                              <label className="text-xs text-muted-foreground font-medium">Print Size</label>
                               <Select 
                                 value={item.stitchCount.toString()}
                                 onValueChange={(value) => updateLineItem(index, 'stitchCount', parseInt(value))}
@@ -642,16 +749,16 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                             </>
                           ) : (
                             <>
-                              <label className="text-xs text-muted-foreground">Stitch Count</label>
+                              <label className="text-xs text-muted-foreground font-medium">Stitch Count</label>
                               <Input
                                 type="number"
-                                min="1"
-                                value={item.stitchCount}
+                                min="0"
+                                value={item.stitchCount || ''}
                                 onChange={(e) => {
                                   const val = parseInt(e.target.value) || 0;
-                                  updateLineItem(index, 'stitchCount', Math.max(1, val));
+                                  updateLineItem(index, 'stitchCount', val);
                                 }}
-                                placeholder="Stitch count"
+                                placeholder="0"
                                 className="font-mono mt-1"
                                 data-testid={`input-line-item-stitch-count-${index}`}
                               />
@@ -660,7 +767,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                         </div>
                         {item.jobType !== "Print" && (
                           <div className="flex-1">
-                            <label className="text-xs text-muted-foreground">Machine</label>
+                            <label className="text-xs text-muted-foreground font-medium">Machine</label>
                             <Select 
                               value={item.machineId?.toString() || "unassigned"}
                               onValueChange={(value) => updateLineItem(index, 'machineId', value === "unassigned" ? null : parseInt(value))}
@@ -679,15 +786,6 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                             </Select>
                           </div>
                         )}
-                        <div className="flex items-center gap-2 pt-5">
-                          <Checkbox
-                            id={`completed-${index}`}
-                            checked={item.completed}
-                            onCheckedChange={(checked) => updateLineItem(index, 'completed', checked === true)}
-                            data-testid={`checkbox-line-item-completed-${index}`}
-                          />
-                          <label htmlFor={`completed-${index}`} className="text-sm cursor-pointer">Done</label>
-                        </div>
                         <Button
                           type="button"
                           variant="ghost"
@@ -695,249 +793,161 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                           onClick={() => removeLineItem(index)}
                           disabled={lineItems.length === 1}
                           data-testid={`button-remove-line-item-${index}`}
-                          className="mt-5"
+                          className="mt-6"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                       <div>
-                        <label className="text-xs text-muted-foreground">Description</label>
+                        <label className="text-xs text-muted-foreground font-medium">Description</label>
                         <Input
                           value={item.description}
                           onChange={(e) => updateLineItem(index, 'description', e.target.value)}
-                          placeholder="Description (e.g., Size M, Color Red)"
+                          placeholder="e.g., Size M, Color Red, Front Logo"
                           className="mt-1"
                           data-testid={`input-line-item-description-${index}`}
                         />
                       </div>
-                      
-                      {/* Schedule Suggestion for Line Item */}
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSuggestLineItemSchedule(index)}
-                          disabled={!item.machineId}
-                          data-testid={`button-suggest-line-item-schedule-${index}`}
-                        >
-                          Find Slot
-                        </Button>
-                        {item.scheduleSuggestion && (
-                          <div className="text-sm text-muted-foreground">
-                            {item.scheduleSuggestion.staffName} • {format(new Date(item.scheduleSuggestion.date), 'MMM d')} • {minutesToTime(item.scheduleSuggestion.startTime)}-{minutesToTime(item.scheduleSuggestion.endTime)}
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Completion Tracking - Show when item is completed */}
-                      {item.completed && (
-                        <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                          <div>
-                            <label className="text-xs text-muted-foreground">Completed By</label>
-                            <Select 
-                              value={item.completedById || "unassigned"}
-                              onValueChange={(value) => updateLineItem(index, 'completedById', value === "unassigned" ? null : value)}
-                            >
-                              <SelectTrigger className="mt-1" data-testid={`select-line-item-completed-by-${index}`}>
-                                <SelectValue placeholder="Select staff" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="unassigned">Not assigned</SelectItem>
-                                {staff.map((s) => (
-                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <label className="text-xs text-muted-foreground">Completed Date</label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    "w-full justify-start text-left font-normal mt-1",
-                                    !item.completedAt && "text-muted-foreground"
-                                  )}
-                                  data-testid={`button-line-item-completed-at-${index}`}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {item.completedAt ? format(new Date(item.completedAt), "PPP") : "Pick date"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={item.completedAt ? new Date(item.completedAt) : undefined}
-                                  onSelect={(date) => updateLineItem(index, 'completedAt', date?.toISOString() || null)}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ))}
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addLineItem}
+                  className="w-full"
+                  data-testid="button-add-line-item"
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Add Line Item
+                </Button>
+
+                {/* Pricing Summary */}
+                {pricingData && (
+                  <div className="border rounded-lg p-4 bg-primary/5">
+                    <h4 className="font-semibold mb-2">Pricing Summary ({pricingData.pricingTable} Table)</h4>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Estimated Total:</span>
+                      <span className="text-xl font-bold">
+                        {typeof pricingData.jobTotal === "number" 
+                          ? formatPrice(pricingData.jobTotal)
+                          : pricingData.jobTotal}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between">
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    onClick={addLineItem}
-                    className="w-full"
-                    data-testid="button-add-line-item"
+                    onClick={() => setCurrentStep(2)}
+                    data-testid="button-back-step-3"
                   >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Line Item
+                    <ChevronLeft className="mr-2 h-4 w-4" /> Back
                   </Button>
-                  <p className="text-sm text-muted-foreground">
-                    Total Quantity: <span className="font-mono font-semibold">{getTotalQuantity()}</span>
-                  </p>
-
-                  {/* Pricing Display */}
-                  {pricingData && (
-                    <div className="border rounded-md p-3 bg-muted/30 space-y-2" data-testid="pricing-summary">
-                      <div className="flex justify-between items-center mb-2">
-                        <h4 className="text-sm font-medium">Pricing ({pricingData.pricingTable} Table)</h4>
-                      </div>
-                      
-                      {lineItems.map((item, index) => {
-                        const pricing = pricingData.lineItemPricing[index];
-                        if (!pricing) {
-                          // Show message for non-embroidery items
-                          if (item.jobType !== "Embroidery") {
-                            return (
-                              <div key={index} className="text-xs space-y-1 pb-2 border-b last:border-b-0 last:pb-0">
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">
-                                    Line {index + 1} ({item.jobType}): {item.quantity} units
-                                  </span>
-                                  <span className="text-muted-foreground italic">
-                                    Pricing not available
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }
-                        
-                        // Display line item details based on job type
-                        const itemDetails = item.jobType === "Print" 
-                          ? `${item.quantity} × ${CODE_TO_PRINT_SIZE[item.stitchCount as keyof typeof CODE_TO_PRINT_SIZE] || 'A4'}`
-                          : `${item.quantity} × ${item.stitchCount.toLocaleString()} stitches`;
-                        
-                        return (
-                          <div key={index} className="text-xs space-y-1 pb-2 border-b last:border-b-0 last:pb-0">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">
-                                Line {index + 1} ({item.jobType}): {itemDetails}
-                              </span>
-                            </div>
-                            <div className="flex justify-between font-mono">
-                              <span className="text-muted-foreground">
-                                {formatPrice(pricing.unitPrice)}/unit
-                              </span>
-                              <span className="font-semibold" data-testid={`line-item-price-${index}`}>
-                                {formatPrice(pricing.lineTotal)}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      
-                      <div className="flex justify-between items-center pt-2 border-t">
-                        <span className="font-medium">Total Price:</span>
-                        <span className="font-mono font-bold text-lg" data-testid="total-price">
-                          {formatPrice(pricingData.jobTotal)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {!pricingData && form.watch("customerId") && (
-                    <div className="border border-amber-500/50 rounded-md p-3 bg-amber-500/5">
-                      <p className="text-sm text-amber-600 dark:text-amber-500">
-                        {lineItems.every(item => item.jobType !== "Embroidery" && item.jobType !== "Print") 
-                          ? "No embroidery or print items - pricing tables only apply to embroidery and print work."
-                          : "No pricing table selected for this customer. Please update customer settings."}
-                      </p>
-                    </div>
-                  )}
+                  <Button
+                    type="button"
+                    onClick={() => setCurrentStep(4)}
+                    disabled={!canProceedFromStep3()}
+                    data-testid="button-next-step-3"
+                  >
+                    Next <ChevronRight className="ml-2 h-4 w-4" />
+                  </Button>
                 </div>
               </div>
-
-            </div>
-
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      {...field}
-                      value={field.value || ""}
-                      placeholder="Add any additional notes about this order..."
-                      className="resize-none min-h-[100px]"
-                      data-testid="input-notes" 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {!allLineItemsCompleted() && (
-              <p className="text-sm text-muted-foreground bg-muted/50 border rounded-md p-3 flex items-center gap-2">
-                <Info className="h-4 w-4" />
-                <span>Complete all line items above before marking the order as completed</span>
-              </p>
             )}
-            
-            <input type="hidden" {...form.register('completed')} />
-            
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} data-testid="button-cancel">
-                Cancel
-              </Button>
-              <Button 
-                type="button" 
-                variant={form.watch('completed') ? "secondary" : "default"}
-                onClick={() => {
-                  const isCurrentlyCompleted = form.watch('completed');
-                  if (!isCurrentlyCompleted) {
-                    // Marking as complete - set metadata
-                    form.setValue('completed', true);
-                    if (user) {
-                      form.setValue('completedById', user.id);
-                    }
-                  } else {
-                    // Unmarking - clear completion metadata
-                    form.setValue('completed', false);
-                    form.setValue('completedById', null);
-                    form.setValue('completedOnTime', null);
-                  }
-                }}
-                disabled={!allLineItemsCompleted() && !form.watch('completed')}
-                data-testid="button-mark-completed"
-              >
-                {form.watch('completed') ? "Unmark as Completed" : "Mark Order as Completed"}
-              </Button>
-              <Button 
-                type="submit" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  form.handleSubmit(handleSubmit)();
-                }}
-                disabled={isSubmitting}
-                data-testid="button-create-order"
-              >
-                {isSubmitting ? "Creating..." : "Create Order"}
-              </Button>
-            </div>
+
+            {/* Step 4: Notes & Review */}
+            {currentStep === 4 && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Step 4: Notes & Review</h3>
+                </div>
+
+                {/* Notes */}
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Additional Notes (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          value={field.value || ""} 
+                          placeholder="Any special instructions or notes about this order..."
+                          className="min-h-[100px]"
+                          data-testid="input-notes" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Order Summary */}
+                <div className="border rounded-lg p-4 bg-muted/20 space-y-3">
+                  <h4 className="font-semibold">Order Summary</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-muted-foreground">Customer:</div>
+                    <div className="font-medium">{customers.find(c => c.id === form.watch("customerId"))?.name || "-"}</div>
+                    
+                    <div className="text-muted-foreground">Job Name:</div>
+                    <div className="font-medium">{form.watch("jobName") || "-"}</div>
+                    
+                    <div className="text-muted-foreground">PO Number:</div>
+                    <div className="font-medium font-mono">{form.watch("poNumber") || "None"}</div>
+                    
+                    <div className="text-muted-foreground">Dispatch Date:</div>
+                    <div className="font-medium">
+                      {requiredDispatchDate ? format(new Date(requiredDispatchDate), "PPP") : "-"}
+                    </div>
+                    
+                    <div className="text-muted-foreground">Goods Received:</div>
+                    <div className="font-medium">
+                      {goodsReceived ? format(new Date(goodsReceived), "PPP") : "-"}
+                    </div>
+                    
+                    {productionTime !== null && (
+                      <>
+                        <div className="text-muted-foreground">Production Time:</div>
+                        <div className={cn(
+                          "font-bold",
+                          isUrgent ? "text-red-600" : "text-green-600"
+                        )}>
+                          {productionTime} {productionTime === 1 ? 'day' : 'days'}
+                        </div>
+                      </>
+                    )}
+                    
+                    <div className="text-muted-foreground">Total Items:</div>
+                    <div className="font-medium">{lineItems.length}</div>
+                    
+                    <div className="text-muted-foreground">Total Quantity:</div>
+                    <div className="font-medium">{getTotalQuantity()}</div>
+                  </div>
+                </div>
+
+                <div className="flex justify-between">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentStep(3)}
+                    data-testid="button-back-step-4"
+                  >
+                    <ChevronLeft className="mr-2 h-4 w-4" /> Back
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    data-testid="button-create-job"
+                  >
+                    {isSubmitting ? "Creating..." : "Create Order"}
+                  </Button>
+                </div>
+              </div>
+            )}
           </form>
         </Form>
       </DialogContent>
