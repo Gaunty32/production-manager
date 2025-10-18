@@ -67,7 +67,7 @@ type LineItem = {
   } | null;
 };
 
-const JOB_TYPES = ["Embroidery", "Print", "Bagging", "Other"] as const;
+const JOB_TYPES = ["Embroidery", "Print", "Embroidery Initials/Name", "Print Initials/Name", "Bagging", "Other"] as const;
 
 const formSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
@@ -694,6 +694,13 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                                 </SelectContent>
                               </Select>
                             </>
+                          ) : item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name" ? (
+                            <>
+                              <label className="text-xs text-muted-foreground">Price</label>
+                              <div className="mt-1 px-3 py-2 rounded-md bg-muted/30 border text-sm font-semibold text-primary">
+                                £2.50 per item
+                              </div>
+                            </>
                           ) : (
                             <>
                               <label className="text-xs text-muted-foreground">Stitch Count</label>
@@ -712,7 +719,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             </>
                           )}
                         </div>
-                        {item.jobType !== "Print" && (
+                        {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && (
                           <div className="flex-1">
                             <label className="text-xs text-muted-foreground">Machine</label>
                             <Select 

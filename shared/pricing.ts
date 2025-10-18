@@ -367,14 +367,40 @@ export function getPrintPrice(
   };
 }
 
+export interface FlatRatePriceLookupResult {
+  unitPrice: number;
+  totalPrice: number;
+  tier: string;
+  jobType: string;
+}
+
+export function getFlatRatePrice(
+  quantity: number,
+  jobType: string
+): FlatRatePriceLookupResult {
+  const unitPrice = 2.50;
+  const totalPrice = unitPrice * quantity;
+
+  return {
+    unitPrice,
+    totalPrice: parseFloat(totalPrice.toFixed(2)),
+    tier: "Flat Rate",
+    jobType,
+  };
+}
+
 export function calculateJobPrice(
   lineItems: Array<{ quantity: number; stitchCount: number; jobType?: string }>,
   pricingTable: PricingTable = "2026"
 ): {
-  lineItemPrices: (PriceLookupResult | PrintPriceLookupResult)[];
+  lineItemPrices: (PriceLookupResult | PrintPriceLookupResult | FlatRatePriceLookupResult)[];
   totalPrice: number | "POA";
 } {
   const lineItemPrices = lineItems.map((item) => {
+    // For flat-rate job types (£2.50 each)
+    if (item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name") {
+      return getFlatRatePrice(item.quantity, item.jobType);
+    }
     // For print jobs, use print pricing
     if (item.jobType === "Print") {
       return getPrintPrice(item.quantity, item.stitchCount, pricingTable);

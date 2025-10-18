@@ -66,7 +66,7 @@ type LineItem = {
   } | null;
 };
 
-const JOB_TYPES = ["Embroidery", "Print", "Bagging", "Other"] as const;
+const JOB_TYPES = ["Embroidery", "Print", "Embroidery Initials/Name", "Print Initials/Name", "Bagging", "Other"] as const;
 
 const formSchema = insertJobSchema.extend({
   customerId: z.string().min(1, "Customer is required"),
@@ -756,6 +756,13 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                                 </SelectContent>
                               </Select>
                             </>
+                          ) : item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name" ? (
+                            <>
+                              <label className="text-xs text-muted-foreground font-medium">Price</label>
+                              <div className="mt-1 px-3 py-2 rounded-md bg-muted/30 border text-sm font-semibold text-primary">
+                                £2.50 per item
+                              </div>
+                            </>
                           ) : (
                             <>
                               <label className="text-xs text-muted-foreground font-medium">Stitch Count</label>
@@ -774,7 +781,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                             </>
                           )}
                         </div>
-                        {item.jobType !== "Print" && (
+                        {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && (
                           <div className="flex-1">
                             <label className="text-xs text-muted-foreground font-medium">Machine</label>
                             <Select 
