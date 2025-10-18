@@ -180,8 +180,13 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isC
                   
                   if (pricingTable) {
                     try {
-                      const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
-                      unitPrice = formatPrice(pricing.unitPrice);
+                      // Check if it's a flat-rate job type
+                      if (item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name") {
+                        unitPrice = "£2.50";
+                      } else {
+                        const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
+                        unitPrice = formatPrice(pricing.unitPrice);
+                      }
                     } catch (error) {
                       unitPrice = null;
                     }

@@ -413,8 +413,8 @@ export type JobSchedule = typeof jobSchedule.$inferSelect;
 export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
   id: true,
 }).extend({
-  quantity: z.coerce.number().int().min(1),
-  stitchCount: z.coerce.number().int().min(1),
+  quantity: z.coerce.number().int().min(0),
+  stitchCount: z.coerce.number().int().min(0),
   logoApproved: z.preprocess(
     (val) => val === true || val === 'true' || val === 1 || val === '1',
     z.boolean()
@@ -434,9 +434,9 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
 });
 
 export const updateJobLineItemSchema = z.object({
-  quantity: z.coerce.number().int().min(1).optional(),
+  quantity: z.coerce.number().int().min(0).optional(),
   description: z.string().nullable().optional(),
-  stitchCount: z.coerce.number().int().min(1).optional(),
+  stitchCount: z.coerce.number().int().min(0).optional(),
   logoApproved: z.coerce.boolean().optional(),
   completed: z.coerce.boolean().optional(),
   completedById: z.string().nullable().optional(),
