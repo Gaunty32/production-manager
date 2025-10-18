@@ -408,8 +408,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           }
         }
 
-        // All updates successful, remove cached data to force refetch
-        await queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+        // All updates successful, refetch data to ensure UI is updated
+        await queryClient.refetchQueries({ queryKey: ["/api/jobs"] });
         await queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'line-items'] });
         
         // If job was just completed, award stars to employees who completed line items
@@ -543,7 +543,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                         <Calendar
                           mode="single"
                           selected={field.value ? new Date(field.value) : undefined}
-                          onSelect={(date) => field.onChange(date?.toISOString() || "")}
+                          onSelect={(date) => field.onChange(date?.toISOString() || null)}
                           initialFocus
                         />
                       </PopoverContent>
@@ -553,9 +553,9 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                 )}
               />
 
-              {/* Embroidery Approved - Yes/No selector */}
+              {/* Bulk Logo Approval Toggle */}
               <div className="flex flex-col">
-                <label className="text-base font-semibold mb-2">Embroidery Approved</label>
+                <label className="text-base font-semibold mb-2">Quick Toggle - All Logos</label>
                 <Select 
                   value={allLogosApproved ? "yes" : "no"} 
                   onValueChange={(value) => toggleAllLogos(value === "yes")}
@@ -564,8 +564,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                     <SelectValue placeholder="Select approval status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="yes">Yes</SelectItem>
-                    <SelectItem value="no">No</SelectItem>
+                    <SelectItem value="yes">Mark All Approved</SelectItem>
+                    <SelectItem value="no">Mark All Pending</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -740,14 +740,25 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             </Select>
                           </div>
                         )}
-                        <div className="flex items-center gap-2 pt-5">
-                          <Checkbox
-                            id={`edit-completed-${index}`}
-                            checked={item.completed}
-                            onCheckedChange={(checked) => updateLineItem(index, 'completed', checked === true)}
-                            data-testid={`checkbox-edit-line-item-completed-${index}`}
-                          />
-                          <label htmlFor={`edit-completed-${index}`} className="text-sm cursor-pointer">Done</label>
+                        <div className="flex flex-col gap-3 pt-5">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`edit-logo-approved-${index}`}
+                              checked={item.logoApproved}
+                              onCheckedChange={(checked) => updateLineItem(index, 'logoApproved', checked === true)}
+                              data-testid={`checkbox-edit-line-item-logo-approved-${index}`}
+                            />
+                            <label htmlFor={`edit-logo-approved-${index}`} className="text-sm cursor-pointer">Logo OK</label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`edit-completed-${index}`}
+                              checked={item.completed}
+                              onCheckedChange={(checked) => updateLineItem(index, 'completed', checked === true)}
+                              data-testid={`checkbox-edit-line-item-completed-${index}`}
+                            />
+                            <label htmlFor={`edit-completed-${index}`} className="text-sm cursor-pointer">Done</label>
+                          </div>
                         </div>
                         <Button
                           type="button"
@@ -884,7 +895,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                         <Calendar
                           mode="single"
                           selected={field.value ? new Date(field.value) : undefined}
-                          onSelect={(date) => field.onChange(date?.toISOString() || "")}
+                          onSelect={(date) => field.onChange(date?.toISOString() || null)}
                           initialFocus
                         />
                       </PopoverContent>

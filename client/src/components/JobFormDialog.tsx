@@ -647,9 +647,9 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   )}
                 />
 
-                {/* Embroidery Approved */}
+                {/* Bulk Logo Approval Toggle */}
                 <div className="flex flex-col space-y-2">
-                  <FormLabel>Embroidery Approved</FormLabel>
+                  <FormLabel>Quick Toggle - All Logos</FormLabel>
                   <Select 
                     value={allLogosApproved ? "yes" : "no"} 
                     onValueChange={(value) => toggleAllLogos(value === "yes")}
@@ -658,8 +658,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                       <SelectValue placeholder="Select approval status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="yes">Yes</SelectItem>
-                      <SelectItem value="no">No</SelectItem>
+                      <SelectItem value="yes">Mark All Approved</SelectItem>
+                      <SelectItem value="no">Mark All Pending</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -807,6 +807,15 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                             </Select>
                           </div>
                         )}
+                        <div className="flex items-center gap-2 pt-5">
+                          <Checkbox
+                            id={`logo-approved-${index}`}
+                            checked={item.logoApproved}
+                            onCheckedChange={(checked) => updateLineItem(index, 'logoApproved', checked === true)}
+                            data-testid={`checkbox-line-item-logo-approved-${index}`}
+                          />
+                          <label htmlFor={`logo-approved-${index}`} className="text-sm cursor-pointer">Logo OK</label>
+                        </div>
                         <Button
                           type="button"
                           variant="ghost"
