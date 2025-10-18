@@ -762,11 +762,11 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                         </Button>
                       </div>
                       <div>
-                        <label className="text-xs text-muted-foreground">Description</label>
+                        <label className="text-xs text-muted-foreground">Additional Information</label>
                         <Input
                           value={item.description}
                           onChange={(e) => updateLineItem(index, 'description', e.target.value)}
-                          placeholder="Description (e.g., Size M, Color Red)"
+                          placeholder=""
                           className="mt-1"
                           data-testid={`input-edit-line-item-description-${index}`}
                         />

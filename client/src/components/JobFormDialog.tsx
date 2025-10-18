@@ -815,11 +815,11 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                         </Button>
                       </div>
                       <div>
-                        <label className="text-xs text-muted-foreground font-medium">Description</label>
+                        <label className="text-xs text-muted-foreground font-medium">Additional Information</label>
                         <Input
                           value={item.description}
                           onChange={(e) => updateLineItem(index, 'description', e.target.value)}
-                          placeholder="e.g., Size M, Color Red, Front Logo"
+                          placeholder=""
                           className="mt-1"
                           data-testid={`input-line-item-description-${index}`}
                         />
