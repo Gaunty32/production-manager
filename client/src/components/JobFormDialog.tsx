@@ -193,6 +193,11 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
         return null;
       }
       
+      // Skip pricing if stitch count is not set (0 or missing)
+      if (!item.stitchCount || item.stitchCount === 0) {
+        return null;
+      }
+      
       try {
         if (item.jobType === "Print") {
           // Use print pricing
@@ -953,6 +958,21 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                     })()}
                   </div>
                 </div>
+
+                {/* Pricing Summary */}
+                {pricingData && (
+                  <div className="border rounded-lg p-4 bg-primary/5">
+                    <h4 className="font-semibold mb-2">Pricing Summary ({pricingData.pricingTable} Table)</h4>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Estimated Total:</span>
+                      <span className="text-xl font-bold">
+                        {typeof pricingData.jobTotal === "number" 
+                          ? formatPrice(pricingData.jobTotal)
+                          : pricingData.jobTotal}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-between">
                   <Button
