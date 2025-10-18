@@ -22,8 +22,8 @@ interface JobRowProps {
     jobName: string;
     poNumber: string | null;
     quantity: number;
-    goodsReceived: Date;
-    requiredDispatchDate: Date;
+    goodsReceived: Date | null;
+    requiredDispatchDate: Date | null;
     completedOnTime: boolean | null;
     completedByName: string | null;
     machineId: number | null;
@@ -39,8 +39,8 @@ interface JobRowProps {
 }
 
 export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isCompleted = false }: JobRowProps) {
-  const isOverdue = isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
-  const isDueToday = isToday(job.requiredDispatchDate);
+  const isOverdue = job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
+  const isDueToday = job.requiredDispatchDate && isToday(job.requiredDispatchDate);
   
   // Check if all line items have logo approved
   const allLogosApproved = job.lineItems && job.lineItems.length > 0 
@@ -126,7 +126,7 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isC
             </TooltipTrigger>
             <TooltipContent side="top">
               <p className="text-xs">
-                {hasGoodsReceived ? `Goods Received: ${format(new Date(job.goodsReceived), "PPP")}` : "Goods not yet received"}
+                {hasGoodsReceived && job.goodsReceived ? `Goods Received: ${format(job.goodsReceived, "PPP")}` : "Goods not yet received"}
               </p>
             </TooltipContent>
           </Tooltip>
@@ -231,7 +231,7 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isC
           <span className="text-muted-foreground">-</span>
         )}
       </td>
-      <td className="py-2 px-3 font-mono whitespace-nowrap">{format(job.requiredDispatchDate, "PP")}</td>
+      <td className="py-2 px-3 font-mono whitespace-nowrap">{job.requiredDispatchDate ? format(job.requiredDispatchDate, "PP") : "-"}</td>
       <td className="py-2 px-3">
         <StatusBadge status={job.completedOnTime} type="ontime" />
       </td>

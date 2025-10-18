@@ -53,7 +53,7 @@ export const jobs = pgTable("jobs", {
   poNumber: text("po_number"),
   quantity: integer("quantity").notNull(),
   goodsReceived: timestamp("goods_received"),
-  requiredDispatchDate: timestamp("required_dispatch_date").notNull(),
+  requiredDispatchDate: timestamp("required_dispatch_date"),
   completed: boolean("completed").notNull().default(false),
   completedOnTime: boolean("completed_on_time"),
   completedById: varchar("completed_by_id").references(() => staff.id),
@@ -169,7 +169,10 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
     (val) => val === "" ? null : val,
     z.union([z.string(), z.null()])
   ),
-  requiredDispatchDate: z.string(),
+  requiredDispatchDate: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.union([z.string(), z.null()])
+  ),
   machineId: z.preprocess(
     (val) => {
       if (val === null || val === undefined || val === "") return null;

@@ -5,8 +5,14 @@ This application is a production management system designed to track customer or
 ## Recent Changes
 
 **October 18, 2025 (Latest)**
+- **NEW: Optional Dates for Pending Orders** - Orders can now be created without dispatch/goods received dates
+  - Orders without both dates remain "pending" and don't appear in Production Queue
+  - Orders enter Production Queue only when they have: Required Dispatch Date, Goods Received, AND all embroidery approved
+  - Allows partial order entry when information is not yet available
+  - Made requiredDispatchDate nullable in database schema
+  - Updated all components (JobRow, JobEditDialog, Dashboard) to handle nullable dates
 - **NEW: Multi-Step Job Creation Form** - Transformed order creation into guided wizard with sequential sections
-  - Step 1: Dates - Required Dispatch Date and Goods Received side-by-side with calendar pickers that default to calendar view
+  - Step 1: Dates (Optional) - Required Dispatch Date and Goods Received side-by-side with calendar pickers that default to calendar view
   - Production time calculation prominently displayed after both dates are entered (with urgent warning if <3 days)
   - Step 2: Customer & Job Details - Customer selection, job name, PO number, embroidery approval
   - Step 3: Line Items - Add/edit line items with quantity, type, stitch count/print size, machine assignment

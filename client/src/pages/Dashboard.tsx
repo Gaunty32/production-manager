@@ -163,26 +163,40 @@ export default function Dashboard() {
   });
 
   // Separate active and completed orders
-  // Production Queue: only show jobs that are pending (not yet marked complete)
-  const activeJobs = filteredJobs.filter(job => job.invoiceStatus === 'pending');
+  // Production Queue: only show jobs that have all required info (dates + embroidery approval)
+  const activeJobs = filteredJobs.filter(job => {
+    if (job.invoiceStatus !== 'pending') return false;
+    
+    // Must have both dates to enter production queue
+    if (!job.requiredDispatchDate || !job.goodsReceived) return false;
+    
+    // Must have all line items with embroidery approved
+    const allLogosApproved = job.lineItems && job.lineItems.length > 0 
+      && job.lineItems.every(item => item.logoApproved);
+    
+    return allLogosApproved;
+  });
+  
   // Completed Orders: only show jobs that have been invoiced
   const completedJobs = filteredJobs.filter(job => job.invoiceStatus === 'invoiced');
 
   const sortedActiveJobs = [...activeJobs].sort(
-    (a, b) => new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime()
+    (a, b) => new Date(a.requiredDispatchDate!).getTime() - new Date(b.requiredDispatchDate!).getTime()
   );
 
-  const sortedCompletedJobs = [...completedJobs].sort(
-    (a, b) => new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime()
-  );
+  const sortedCompletedJobs = [...completedJobs].sort((a, b) => {
+    if (!a.requiredDispatchDate) return 1;
+    if (!b.requiredDispatchDate) return -1;
+    return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
+  });
 
   // Calculate overdue and due today orders (only from active jobs)
   const overdueOrders = sortedActiveJobs.filter(job => 
-    isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate)
+    job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate)
   );
   
   const dueTodayOrders = sortedActiveJobs.filter(job => 
-    isToday(job.requiredDispatchDate)
+    job.requiredDispatchDate && isToday(job.requiredDispatchDate)
   );
 
   const pageTitle = machineId 
@@ -351,8 +365,8 @@ export default function Dashboard() {
                         key={job.id}
                         job={{
                           ...job,
-                          goodsReceived: new Date(job.goodsReceived),
-                          requiredDispatchDate: new Date(job.requiredDispatchDate),
+                          goodsReceived: new Date(job.goodsReceived!),
+                          requiredDispatchDate: new Date(job.requiredDispatchDate!),
                         }}
                         customer={customer}
                         showPrices={canViewPrices(currentUser?.role)}
@@ -425,8 +439,8 @@ export default function Dashboard() {
                           key={job.id}
                           job={{
                             ...job,
-                            goodsReceived: new Date(job.goodsReceived),
-                            requiredDispatchDate: new Date(job.requiredDispatchDate),
+                            goodsReceived: job.goodsReceived ? new Date(job.goodsReceived) : null,
+                            requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
                           }}
                           customer={customer}
                           showPrices={canViewPrices(currentUser?.role)}
@@ -448,8 +462,8 @@ export default function Dashboard() {
           onOpenChange={(open) => !open && setEditingJob(null)}
           job={editingJob ? {
             ...editingJob,
-            goodsReceived: new Date(editingJob.goodsReceived),
-            requiredDispatchDate: new Date(editingJob.requiredDispatchDate),
+            goodsReceived: editingJob.goodsReceived ? new Date(editingJob.goodsReceived) : null,
+            requiredDispatchDate: editingJob.requiredDispatchDate ? new Date(editingJob.requiredDispatchDate) : null,
           } : null}
           customers={customers}
           staff={staff}

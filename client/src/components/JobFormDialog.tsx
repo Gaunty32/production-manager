@@ -75,6 +75,14 @@ const formSchema = insertJobSchema.extend({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
+  requiredDispatchDate: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.union([z.string(), z.null()]).optional()
+  ),
+  goodsReceived: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.union([z.string(), z.null()]).optional()
+  ),
 });
 
 interface JobFormDialogProps {
@@ -99,7 +107,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       poNumber: "",
       quantity: 1,
       goodsReceived: "",
-      requiredDispatchDate: new Date().toISOString(),
+      requiredDispatchDate: "",
       status: "pending",
       completed: false,
       completedById: null,
@@ -373,7 +381,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   };
 
   const canProceedFromStep1 = () => {
-    return !!requiredDispatchDate && !!goodsReceived;
+    // Dates are optional - can always proceed
+    return true;
   };
 
   const canProceedFromStep2 = () => {
@@ -425,9 +434,9 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
             {currentStep === 1 && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">Step 1: Dates</h3>
+                  <h3 className="text-lg font-semibold mb-4">Step 1: Dates (Optional)</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Select when the goods arrived and when the order needs to be dispatched
+                    Select when the goods arrived and when the order needs to be dispatched. You can skip this and add dates later. Orders enter the production queue only when they have both dates and embroidery approval.
                   </p>
                 </div>
 

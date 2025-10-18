@@ -77,7 +77,7 @@ const formSchema = z.object({
     z.string().nullable().optional()
   ),
   goodsReceived: z.union([z.string(), z.null()]),
-  requiredDispatchDate: z.string(),
+  requiredDispatchDate: z.union([z.string(), z.null()]),
   completed: z.boolean(),
   completedOnTime: z.boolean().nullable(),
   completedById: z.string().nullable(),
@@ -98,7 +98,7 @@ interface JobEditDialogProps {
     poNumber: string | null;
     quantity: number;
     goodsReceived: Date | null;
-    requiredDispatchDate: Date;
+    requiredDispatchDate: Date | null;
     machineId: number | null;
     completed: boolean;
     completedOnTime: boolean | null;
