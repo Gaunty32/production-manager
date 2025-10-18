@@ -504,7 +504,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                           <SelectValue placeholder="Select customer" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
+                      <SelectContent position="popper" className="max-h-[300px]">
                         {customersWithPricing.map((customer) => (
                           <SelectItem key={customer.id} value={customer.id}>
                             {customer.name}
