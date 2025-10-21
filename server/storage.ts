@@ -59,6 +59,7 @@ export interface IStorage {
   getJob(id: string): Promise<Job | undefined>;
   getJobs(): Promise<Job[]>;
   getJobsByMachine(machineId: number): Promise<Job[]>;
+  getJobsByCustomerId(customerId: string): Promise<Job[]>;
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: string, job: Partial<Job>): Promise<Job>;
   deleteJob(id: string): Promise<void>;
@@ -215,6 +216,10 @@ export class DatabaseStorage implements IStorage {
 
   async getJobsByMachine(machineId: number): Promise<Job[]> {
     return await db.select().from(jobs).where(eq(jobs.machineId, machineId));
+  }
+
+  async getJobsByCustomerId(customerId: string): Promise<Job[]> {
+    return await db.select().from(jobs).where(eq(jobs.customerId, customerId));
   }
 
   async createJob(insertJob: InsertJob): Promise<Job> {

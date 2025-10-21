@@ -25,6 +25,8 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
+import { loginCustomer, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
+import { customerLoginSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
@@ -211,6 +213,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Run seed on startup
   await seedCustomers();
+
+  // Customer Portal Authentication Routes
+  app.post("/api/customer-auth/login", async (req, res) => {
+    try {
+      const data = customerLoginSchema.parse(req.body);
+      const customerUser = await loginCustomer(data);
+      
+      // Set session
+      (req.session as any).customerUserId = customerUser.id;
+      
+      res.json(customerUser);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(401).json({ error: error instanceof Error ? error.message : "Login failed" });
+      }
+    }
+  });
+
+  app.post("/api/customer-auth/logout", (req, res) => {
+    (req.session as any).customerUserId = undefined;
+    res.json({ success: true });
+  });
+
+  app.get("/api/customer-auth/user", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
+      if (!customerUser) {
+        return res.status(404).json({ error: "Customer user not found" });
+      }
+      
+      // Return without password hash
+      const { passwordHash: _, ...user } = customerUser;
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching customer user:", error);
+      res.status(500).json({ error: "Failed to fetch customer user" });
+    }
+  });
+
+  // Customer Portal - Jobs (read-only for now)
+  app.get("/api/customer-portal/jobs", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
+      if (!customerUser) {
+        return res.status(404).json({ error: "Customer user not found" });
+      }
+      
+      // Get all jobs for this customer
+      const jobs = await storage.getJobsByCustomerId(customerUser.customerId);
+      res.json(jobs);
+    } catch (error) {
+      console.error("Error fetching customer jobs:", error);
+      res.status(500).json({ error: "Failed to fetch jobs" });
+    }
+  });
 
   // Customer routes
   app.get("/api/customers", optionalAuth, async (req, res) => {
