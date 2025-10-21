@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { CheckCircle2, XCircle, Package, AlertCircle, Clock, Layers, StickyNote } from "lucide-react";
+import { CheckCircle2, XCircle, Package, AlertCircle, Clock, Layers, StickyNote, Trash2 } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { calculateProductionMetrics } from "@shared/machines";
 import type { JobLineItem, Customer } from "@shared/schema";
@@ -26,6 +26,7 @@ interface JobCardProps {
   };
   customer: Customer;
   onClick: () => void;
+  onDelete?: (jobId: string) => void;
 }
 
 const JOB_TYPE_LABELS: Record<string, string> = {
@@ -35,7 +36,7 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-export function JobCard({ job, customer, onClick }: JobCardProps) {
+export function JobCard({ job, customer, onClick, onDelete }: JobCardProps) {
   const isOverdue = job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = job.requiredDispatchDate && isToday(job.requiredDispatchDate);
   
@@ -104,10 +105,34 @@ export function JobCard({ job, customer, onClick }: JobCardProps) {
               </p>
             </div>
             
-            {/* Job Type Badge */}
-            <Badge variant="secondary" className="shrink-0">
-              {JOB_TYPE_LABELS[primaryJobType] || primaryJobType}
-            </Badge>
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Job Type Badge */}
+              <Badge variant="secondary">
+                {JOB_TYPE_LABELS[primaryJobType] || primaryJobType}
+              </Badge>
+              
+              {/* Delete Button */}
+              {onDelete && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(job.id);
+                      }}
+                      aria-label="Delete job"
+                      data-testid={`button-delete-${job.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Delete job</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           </div>
         </div>
 

@@ -591,6 +591,11 @@ export default function Dashboard() {
                     }}
                     customer={customer}
                     onClick={() => handleEdit(job.id)}
+                    onDelete={(jobId) => {
+                      if (window.confirm(`Are you sure you want to delete this job: ${job.jobName}?`)) {
+                        deleteJobMutation.mutate(jobId);
+                      }
+                    }}
                   />
                 );
               })}
