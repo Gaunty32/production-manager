@@ -16,7 +16,7 @@ The dashboard uses a card-based "scorecard" layout for at-a-glance production vi
 
 ### Technical Implementations
 
-The frontend uses React with TypeScript, Vite, `shadcn/ui`, and Tailwind CSS. State management is handled by TanStack React Query for server state and React Hook Form with Zod for form validation. The backend is built with Express.js on Node.js, using TypeScript, following a RESTful API design. Authentication is managed via Replit Auth (OpenID Connect) with session-based authentication and Passport.js. Request/response validation uses Zod schemas. Data storage uses PostgreSQL (Neon serverless database) with Drizzle ORM.
+The frontend uses React with TypeScript, Vite, `shadcn/ui`, and Tailwind CSS. State management is handled by TanStack React Query for server state and React Hook Form with Zod for form validation. The backend is built with Express.js on Node.js, using TypeScript, following a RESTful API design. Authentication is managed via Replit Auth (OpenID Connect) with session-based authentication and Passport.js for staff portal, and bcrypt password hashing with session-based authentication for customer portal. Request/response validation uses Zod schemas. Data storage uses PostgreSQL (Neon serverless database) with Drizzle ORM.
 
 ### Feature Specifications
 
@@ -27,6 +27,14 @@ A complete invoicing workflow moves completed jobs to a draft queue for review, 
 Logo setup queue management tracks customer logo approval requests with £10 charge per approved logo. The queue displays on the dashboard showing pending approvals with customer name, job name, notes, and creation date. Approved logo setups are automatically added as £10 line items to customer invoices (both single and consolidated) and are only deleted from the queue after successful invoice creation to prevent data loss. Logo setups use itemCode "OTHER" in Xero. The feature prevents revenue loss by ensuring logo setup charges are only removed after confirmation of successful invoice generation.
 
 A gamification system tracks staff performance with a star system and a leaderboard. A `super_admin` role provides user management and role editing. The production queue displays traffic light indicators for logo approval and goods received status, with color-coded urgency for required dispatch dates. Job types include Embroidery, Print, Bagging, and Other, with pricing currently calculated for Embroidery and Print types. "Date Received" is now "Goods Received," and the system calculates and visually indicates production time, highlighting urgent orders. Job completion requires all line items to be completed first, with automatic status resets if line items become incomplete. The goods received date field is optional.
+
+**Customer Portal**: A separate customer-facing interface allows customers to log in and view their orders. Customer authentication uses email/password with bcrypt hashing and session-based authentication (separate from staff Replit Auth). The customer portal includes:
+- Login page at `/customer/login` with email and password fields
+- Customer dashboard at `/customer/dashboard` showing all jobs for the logged-in customer
+- Job cards display job name, status, dispatch date, production metrics, line items, and notes
+- Logout functionality that clears the session and returns to login
+- Separate routing and layout from staff portal (no sidebar, simplified header)
+- Current implementation is read-only; future enhancements will include job submission, file uploads, and messaging
 
 ## External Dependencies
 
