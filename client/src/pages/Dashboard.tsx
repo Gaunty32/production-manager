@@ -39,6 +39,7 @@ export default function Dashboard() {
   const [showLogoSetupDialog, setShowLogoSetupDialog] = useState(false);
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
   const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'overdue' | 'logo-setups' | '3-4-days' | null>(null);
 
   // Fetch current user
   const { data: currentUser } = useQuery<{ id: string; email: string; firstName?: string; lastName?: string; role?: string }>({
@@ -310,6 +311,26 @@ export default function Dashboard() {
   
   const pendingLogoSetups = logoSetups.filter(ls => !ls.approved);
 
+  // Apply active filter to production jobs
+  const displayedJobs = (() => {
+    if (!activeFilter) return allProductionJobs;
+    
+    switch (activeFilter) {
+      case 'overdue':
+        return overdueOrders;
+      case '3-4-days':
+        return jobsDueNext3To4Days;
+      case 'logo-setups':
+        // Filter jobs that have line items without logo approval
+        return allProductionJobs.filter(job => {
+          return job.lineItems && job.lineItems.length > 0 
+            && job.lineItems.some(item => !item.logoApproved);
+        });
+      default:
+        return allProductionJobs;
+    }
+  })();
+
   const pageTitle = machineId 
     ? `${getMachineName(machineId)} Orders` 
     : "Production Queue";
@@ -379,7 +400,11 @@ export default function Dashboard() {
         {/* At-a-Glance Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {/* Overdue Orders */}
-          <Card className="hover-elevate">
+          <Card 
+            className={`hover-elevate active-elevate-2 cursor-pointer transition-all ${activeFilter === 'overdue' ? 'ring-2 ring-destructive' : ''}`}
+            onClick={() => setActiveFilter(activeFilter === 'overdue' ? null : 'overdue')}
+            data-testid="card-filter-overdue"
+          >
             <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -390,6 +415,9 @@ export default function Dashboard() {
                   <AlertCircle className="h-6 w-6 text-destructive" />
                 </div>
               </div>
+              {activeFilter === 'overdue' && (
+                <p className="text-xs text-destructive mt-2 font-medium">Click to clear filter</p>
+              )}
             </div>
           </Card>
 
@@ -512,16 +540,38 @@ export default function Dashboard() {
 
         {/* Production Queue - All Jobs (Active + Pending) */}
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">All Jobs in Production</h2>
-          {allProductionJobs.length === 0 ? (
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-foreground">
+              {activeFilter === 'overdue' && 'Overdue Orders'}
+              {activeFilter === '3-4-days' && 'Jobs Due in 3-4 Days'}
+              {activeFilter === 'logo-setups' && 'Jobs Awaiting Logo Approval'}
+              {!activeFilter && 'All Jobs in Production'}
+            </h2>
+            {activeFilter && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setActiveFilter(null)}
+                data-testid="button-clear-filter"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Clear Filter
+              </Button>
+            )}
+          </div>
+          {displayedJobs.length === 0 ? (
             <div className="border rounded-md p-12 text-center">
               <p className="text-muted-foreground">
-                {searchTerm ? "No jobs match your search." : "No jobs found. Click 'New Order' to create one."}
+                {activeFilter 
+                  ? "No jobs match this filter." 
+                  : searchTerm 
+                    ? "No jobs match your search." 
+                    : "No jobs found. Click 'New Order' to create one."}
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="grid-production-queue">
-              {allProductionJobs.map((job) => {
+              {displayedJobs.map((job) => {
                 const customer = customers.find(c => c.id === job.customerId);
                 if (!customer) return null;
                 return (
