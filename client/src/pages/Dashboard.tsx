@@ -1,19 +1,20 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, AlertCircle, Clock } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobEditDialog } from "@/components/JobEditDialog";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
+import { LogoSetupDialog } from "@/components/LogoSetupDialog";
 import { JobRow } from "@/components/JobRow";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
-import type { Customer, Job, JobWithLineItems, Staff } from "@shared/schema";
+import type { Customer, Job, JobWithLineItems, Staff, LogoSetup } from "@shared/schema";
 import { canViewPrices } from "@shared/schema";
 import { useParams } from "wouter";
-import { isPast, isToday } from "date-fns";
+import { isPast, isToday, format } from "date-fns";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -44,6 +45,10 @@ export default function Dashboard() {
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithLineItems[]>({
     queryKey: machineId ? ["/api/jobs", `?machineId=${machineId}`] : ["/api/jobs"],
+  });
+
+  const { data: logoSetups = [], isLoading: logoSetupsLoading } = useQuery<LogoSetup[]>({
+    queryKey: ["/api/logo-setups"],
   });
 
   const createCustomerMutation = useMutation({
@@ -126,6 +131,51 @@ export default function Dashboard() {
       toast({
         title: "Error",
         description: error.message || "Failed to update order",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveLogoSetupMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("PATCH", `/api/logo-setups/${id}`, {
+        approved: true,
+        approvedAt: new Date().toISOString(),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/logo-setups"] });
+      toast({
+        title: "Success",
+        description: "Logo set-up approved successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to approve logo set-up",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteLogoSetupMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/logo-setups/${id}`);
+      return res;
+    },
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/logo-setups"] });
+      toast({
+        title: "Success",
+        description: "Logo set-up removed successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove logo set-up",
         variant: "destructive",
       });
     },
@@ -309,6 +359,78 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Logo Set-Up Queue */}
+        {logoSetups.filter(ls => !ls.approved).length > 0 && (
+          <div className="border border-primary/30 rounded-md p-4 bg-primary/5 mb-6" data-testid="section-logo-setups">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Palette className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold text-primary">
+                  Logo Set-Up Queue ({logoSetups.filter(ls => !ls.approved).length})
+                </h3>
+              </div>
+              <LogoSetupDialog
+                trigger={
+                  <Button variant="outline" size="sm" data-testid="button-add-logo-setup">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Logo Set-Up
+                  </Button>
+                }
+                customers={customers}
+              />
+            </div>
+            <div className="space-y-2">
+              {logoSetups
+                .filter(ls => !ls.approved)
+                .map((setup) => {
+                  const customer = customers.find(c => c.id === setup.customerId);
+                  return (
+                    <div
+                      key={setup.id}
+                      className="flex items-center justify-between bg-background rounded-md p-3"
+                      data-testid={`logo-setup-${setup.id}`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{customer?.name || "Unknown Customer"}</span>
+                          <span className="text-muted-foreground">-</span>
+                          <span className="text-sm">{setup.jobName}</span>
+                        </div>
+                        {setup.notes && (
+                          <p className="text-xs text-muted-foreground mt-1">{setup.notes}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Added {format(new Date(setup.createdAt), "MMM d, yyyy")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => approveLogoSetupMutation.mutate(setup.id)}
+                          disabled={approveLogoSetupMutation.isPending}
+                          data-testid={`button-approve-${setup.id}`}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Approve (£10)
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => deleteLogoSetupMutation.mutate(setup.id)}
+                          disabled={deleteLogoSetupMutation.isPending}
+                          data-testid={`button-delete-${setup.id}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
           </div>
         )}
 
