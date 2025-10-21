@@ -1,8 +1,19 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobEditDialog } from "@/components/JobEditDialog";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
@@ -22,6 +33,10 @@ export default function Dashboard() {
   const machineId = params.id ? parseInt(params.id) : null;
   const [searchTerm, setSearchTerm] = useState("");
   const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [showCustomerDialog, setShowCustomerDialog] = useState(false);
+  const [showLogoSetupDialog, setShowLogoSetupDialog] = useState(false);
+  const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
+  const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
 
   // Fetch current user
   const { data: currentUser } = useQuery<{ id: string; email: string; firstName?: string; lastName?: string; role?: string }>({
@@ -295,15 +310,6 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex gap-2">
-            <CustomerFormDialog
-              trigger={
-                <Button variant="outline" data-testid="button-add-customer">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Customer
-                </Button>
-              }
-              onSubmit={(data) => createCustomerMutation.mutate(data)}
-            />
             <JobFormDialog
               trigger={
                 <Button data-testid="button-add-order">
@@ -314,13 +320,34 @@ export default function Dashboard() {
               customers={customers}
               staff={staff}
             />
-            <LogoSetupDialog
-              trigger={
-                <Button variant="outline" data-testid="button-add-logo-setup-header">
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Logo Set-Up
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" data-testid="button-more-actions">
+                  <MoreVertical className="h-4 w-4" />
                 </Button>
-              }
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowCustomerDialog(true)} data-testid="menu-add-customer">
+                  <Users className="h-4 w-4 mr-2" />
+                  Add Customer
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowLogoSetupDialog(true)} data-testid="menu-add-logo-setup">
+                  <Palette className="h-4 w-4 mr-2" />
+                  New Logo Set-Up
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <CustomerFormDialog
+              open={showCustomerDialog}
+              onOpenChange={setShowCustomerDialog}
+              onSubmit={(data) => {
+                createCustomerMutation.mutate(data);
+                setShowCustomerDialog(false);
+              }}
+            />
+            <LogoSetupDialog
+              open={showLogoSetupDialog}
+              onOpenChange={setShowLogoSetupDialog}
               customers={customers}
             />
           </div>
@@ -537,11 +564,19 @@ export default function Dashboard() {
 
         {/* Pending Orders Section - Orders that need attention */}
         {sortedPendingJobs.length > 0 && (
-          <div className="mt-8">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertCircle className="h-5 w-5 text-amber-500" />
-              <h2 className="text-xl font-semibold text-foreground">Pending Orders - Awaiting Information</h2>
-            </div>
+          <Collapsible open={pendingOrdersOpen} onOpenChange={setPendingOrdersOpen} className="mt-8">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="flex w-full items-center justify-between p-0 hover:bg-transparent mb-4" data-testid="button-toggle-pending">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-amber-500" />
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Pending Orders - Awaiting Information ({sortedPendingJobs.length})
+                  </h2>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform ${pendingOrdersOpen ? 'rotate-180' : ''}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
             <div className="border rounded-md overflow-hidden bg-amber-50 dark:bg-amber-950/20">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -608,13 +643,25 @@ export default function Dashboard() {
                 </table>
               </div>
             </div>
-          </div>
+            </CollapsibleContent>
+          </Collapsible>
         )}
 
         {/* Completed Orders Section */}
         {sortedCompletedJobs.length > 0 && (
-          <div className="mt-8">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Completed Orders</h2>
+          <Collapsible open={completedOrdersOpen} onOpenChange={setCompletedOrdersOpen} className="mt-8">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="flex w-full items-center justify-between p-0 hover:bg-transparent mb-4" data-testid="button-toggle-completed">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Completed Orders ({sortedCompletedJobs.length})
+                  </h2>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform ${completedOrdersOpen ? 'rotate-180' : ''}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
             <div className="border rounded-md overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -684,7 +731,8 @@ export default function Dashboard() {
                 </table>
               </div>
             </div>
-          </div>
+            </CollapsibleContent>
+          </Collapsible>
         )}
 
         <JobEditDialog

@@ -41,13 +41,19 @@ const formSchema = insertLogoSetupSchema.extend({
 type LogoSetupFormData = z.infer<typeof formSchema>;
 
 interface LogoSetupDialogProps {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   customers: Customer[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function LogoSetupDialog({ trigger, customers }: LogoSetupDialogProps) {
-  const [open, setOpen] = useState(false);
+export function LogoSetupDialog({ trigger, customers, open: controlledOpen, onOpenChange }: LogoSetupDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const { toast } = useToast();
+  
+  // Use controlled state if provided, otherwise use internal state
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = onOpenChange || setInternalOpen;
 
   const form = useForm<LogoSetupFormData>({
     resolver: zodResolver(formSchema),
@@ -87,7 +93,7 @@ export function LogoSetupDialog({ trigger, customers }: LogoSetupDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Add Logo Set-Up Request</DialogTitle>
