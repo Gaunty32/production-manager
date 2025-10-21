@@ -314,6 +314,15 @@ export default function Dashboard() {
               customers={customers}
               staff={staff}
             />
+            <LogoSetupDialog
+              trigger={
+                <Button variant="outline" data-testid="button-add-logo-setup-header">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Logo Set-Up
+                </Button>
+              }
+              customers={customers}
+            />
           </div>
         </div>
 
