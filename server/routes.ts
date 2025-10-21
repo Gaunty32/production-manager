@@ -940,7 +940,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
 
+      // Add approved logo setups for this customer
+      const approvedLogoSetups = await storage.getLogoSetups();
+      const customerLogoSetups = approvedLogoSetups.filter(
+        setup => setup.customerId === job.customerId && setup.approved && setup.approvedAt
+      );
+      
+      for (const setup of customerLogoSetups) {
+        lineItemsWithPricing.push({
+          jobName: "Logo Set-Up",
+          poNumber: null,
+          description: `Logo Set-Up - ${setup.jobName}`,
+          quantity: 1,
+          unitPrice: 10, // £10 per approved logo setup
+          stitchCount: 0,
+          itemCode: "OTHER", // Use OTHER item code for logo setups
+        });
+      }
+
       const invoice = await xeroService.createInvoice(job, customer, lineItemsWithPricing);
+      
+      // Only delete logo setups after successful invoice creation
+      for (const setup of customerLogoSetups) {
+        await storage.deleteLogoSetup(setup.id);
+      }
+      
       res.json(invoice);
     } catch (error) {
       console.error("Xero invoice creation error:", error);
@@ -1081,6 +1105,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Cannot create invoice with TBA shipping costs. Please contact support for shipping pricing on orders with more than 4 boxes." });
       }
 
+      // Add approved logo setups for this customer
+      const approvedLogoSetups = await storage.getLogoSetups();
+      const customerLogoSetups = approvedLogoSetups.filter(
+        setup => setup.customerId === customerId && setup.approved && setup.approvedAt
+      );
+      
+      for (const setup of customerLogoSetups) {
+        lineItemsWithPricing.push({
+          jobName: "Logo Set-Up",
+          poNumber: null,
+          description: `Logo Set-Up - ${setup.jobName}`,
+          quantity: 1,
+          unitPrice: 10, // £10 per approved logo setup
+          stitchCount: 0,
+          itemCode: "OTHER", // Use OTHER item code for logo setups
+        });
+      }
+
       // Create consolidated invoice in Xero
       const invoiceResponse = await xeroService.createConsolidatedInvoice(
         selectedJobs,
@@ -1091,6 +1133,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract invoice ID from Xero response
       const invoiceId = invoiceResponse.Invoices?.[0]?.InvoiceID || "unknown";
       const invoiceNumber = invoiceResponse.Invoices?.[0]?.InvoiceNumber || null;
+
+      // Only delete logo setups after successful invoice creation
+      for (const setup of customerLogoSetups) {
+        await storage.deleteLogoSetup(setup.id);
+      }
 
       // Update all jobs with invoice status
       const now = new Date();
