@@ -917,6 +917,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice as number;
         }
         
+        // Determine item code based on job type
+        let itemCode = "EMB"; // Default to embroidery
+        if (lineItem.jobType === "print") {
+          itemCode = "PRINT";
+        } else if (lineItem.jobType === "bagging") {
+          itemCode = "BAG";
+        } else if (lineItem.jobType === "other") {
+          itemCode = "OTHER";
+        }
+        
         return {
           jobName: job.jobName,
           poNumber: job.poNumber,
@@ -924,6 +934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity: lineItem.quantity,
           unitPrice,
           stitchCount: lineItem.stitchCount,
+          itemCode,
         };
       });
 
@@ -981,7 +992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
 
       // Get line items and calculate pricing for each job
-      const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number }> = [];
+      const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number; itemCode: string }> = [];
       let hasPOA = false;
       let hasTBA = false;
 
@@ -1018,6 +1029,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             unitPrice = 0;
           }
           
+          // Determine item code based on job type
+          let itemCode = "EMB"; // Default to embroidery
+          if (lineItem.jobType === "print") {
+            itemCode = "PRINT";
+          } else if (lineItem.jobType === "bagging") {
+            itemCode = "BAG";
+          } else if (lineItem.jobType === "other") {
+            itemCode = "OTHER";
+          }
+          
           lineItemsWithPricing.push({
             jobName: job.jobName,
             poNumber: job.poNumber,
@@ -1025,6 +1046,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             quantity: lineItem.quantity,
             unitPrice,
             stitchCount: lineItem.stitchCount,
+            itemCode,
           });
         });
 
@@ -1039,6 +1061,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               quantity: 1,
               unitPrice: shippingCost,
               stitchCount: 0, // No stitch count for shipping
+              itemCode: "CARRIAGE", // Xero item code for shipping
             });
           }
         } else if (job.shippingCost === "TBA") {

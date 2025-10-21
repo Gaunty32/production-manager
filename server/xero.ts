@@ -340,7 +340,7 @@ export class XeroService {
   async createInvoice(
     job: Job, 
     customer: Customer, 
-    lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number }>
+    lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number; itemCode: string }>
   ): Promise<any> {
     if (!this.isConfigured()) {
       throw new Error("Xero is not configured");
@@ -353,12 +353,14 @@ export class XeroService {
 
     // Create line items with proper descriptions
     const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => ({
-      description: `${item.jobName}, ${item.stitchCount} Stitches${item.poNumber ? ` (PO: ${item.poNumber})` : ''}`,
+      description: item.itemCode === "CARRIAGE" 
+        ? item.description // Use the full description for shipping
+        : `${item.jobName}, ${item.stitchCount} Stitches${item.poNumber ? ` (PO: ${item.poNumber})` : ''}`,
       quantity: item.quantity,
       unitAmount: item.unitPrice,
       accountCode: "4002",
       taxType: "OUTPUT2", // 20% VAT on income
-      itemCode: "EMB", // Embroidery
+      itemCode: item.itemCode, // Use the item code from the line item
     }));
 
     const invoice: XeroInvoice = {
@@ -396,7 +398,7 @@ export class XeroService {
   async createConsolidatedInvoice(
     jobs: Job[], 
     customer: Customer, 
-    lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number }>
+    lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number; itemCode: string }>
   ): Promise<any> {
     if (!this.isConfigured()) {
       // Return mock response for demo/testing purposes
@@ -421,12 +423,14 @@ export class XeroService {
 
     // Create line items from job line items
     const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => ({
-      description: `${item.jobName}, ${item.stitchCount} Stitches${item.poNumber ? ` (PO: ${item.poNumber})` : ''}`,
+      description: item.itemCode === "CARRIAGE" 
+        ? item.description // Use the full description for shipping
+        : `${item.jobName}, ${item.stitchCount} Stitches${item.poNumber ? ` (PO: ${item.poNumber})` : ''}`,
       quantity: item.quantity,
       unitAmount: item.unitPrice,
       accountCode: "4002",
       taxType: "OUTPUT2", // 20% VAT on income
-      itemCode: "EMB", // Embroidery
+      itemCode: item.itemCode, // Use the item code from the line item
     }));
 
     // Get the most recent dates for invoice date and due date
