@@ -1,6 +1,7 @@
 import { format, isPast, isToday } from "date-fns";
-import { Pencil, Trash2, StickyNote, Circle } from "lucide-react";
+import { Pencil, Trash2, StickyNote, CheckCircle2, XCircle, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -88,72 +89,88 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isC
       <td className="py-2 px-3">{job.customerName}</td>
       <td className="py-2 px-3">
         <div className="flex items-center gap-2">
-          <span>{job.jobName}</span>
-          
-          {/* Traffic light indicators */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button 
-                className="inline-flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
-                aria-label={allLogosApproved ? "All logos approved" : "Logos not approved"}
-                data-testid={`indicator-logo-${job.id}`}
-              >
-                <Circle className={cn(
-                  "h-3 w-3 fill-current",
-                  allLogosApproved ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
-                )} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              <p className="text-xs">
-                {allLogosApproved ? "All logos approved ✓" : "Logos not approved"}
-              </p>
-            </TooltipContent>
-          </Tooltip>
-          
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button 
-                className="inline-flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
-                aria-label={hasGoodsReceived ? "Goods received recorded" : "Goods not yet received"}
-                data-testid={`indicator-date-${job.id}`}
-              >
-                <Circle className={cn(
-                  "h-3 w-3 fill-current",
-                  hasGoodsReceived ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
-                )} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              <p className="text-xs">
-                {hasGoodsReceived && job.goodsReceived ? `Goods Received: ${format(job.goodsReceived, "PPP")}` : "Goods not yet received"}
-              </p>
-            </TooltipContent>
-          </Tooltip>
-          
-          {job.notes && job.notes.trim() && (
+          <span className="truncate">{job.jobName}</span>
+          <div className="flex items-center gap-1">
+            {/* Compact status badges */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button 
-                  className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
-                  aria-label="View notes"
-                  data-testid={`button-notes-${job.id}`}
+                <button
+                  className="inline-flex focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
+                  aria-label={allLogosApproved ? "All logos approved" : "Logos not approved"}
+                  tabIndex={0}
                 >
-                  <StickyNote className="h-3.5 w-3.5" />
+                  <Badge
+                    variant={allLogosApproved ? "default" : "destructive"}
+                    className="h-5 px-1.5 text-xs gap-0.5 cursor-help"
+                    data-testid={`indicator-logo-${job.id}`}
+                  >
+                    {allLogosApproved ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                    <span className="sr-only">Logo status</span>
+                  </Badge>
                 </button>
               </TooltipTrigger>
-              <TooltipContent 
-                side="top" 
-                className="max-w-md whitespace-pre-wrap"
-                data-testid={`tooltip-notes-${job.id}`}
-              >
-                <div className="space-y-1">
-                  <p className="font-semibold text-xs">Notes:</p>
-                  <p className="text-sm">{job.notes}</p>
-                </div>
+              <TooltipContent side="top">
+                <p className="text-xs">
+                  {allLogosApproved ? "All logos approved ✓" : "Logos not approved"}
+                </p>
               </TooltipContent>
             </Tooltip>
-          )}
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="inline-flex focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
+                  aria-label={hasGoodsReceived ? "Goods received recorded" : "Goods not yet received"}
+                  tabIndex={0}
+                >
+                  <Badge
+                    variant={hasGoodsReceived ? "default" : "destructive"}
+                    className="h-5 px-1.5 text-xs gap-0.5 cursor-help"
+                    data-testid={`indicator-date-${job.id}`}
+                  >
+                    {hasGoodsReceived ? <Package className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                    <span className="sr-only">Goods received status</span>
+                  </Badge>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">
+                  {hasGoodsReceived && job.goodsReceived ? `Goods Received: ${format(job.goodsReceived, "PPP")}` : "Goods not yet received"}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+            
+            {job.notes && job.notes.trim() && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="inline-flex focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-sm"
+                    aria-label="View notes"
+                    tabIndex={0}
+                  >
+                    <Badge
+                      variant="outline"
+                      className="h-5 px-1.5 text-xs gap-0.5 cursor-help"
+                      data-testid={`button-notes-${job.id}`}
+                    >
+                      <StickyNote className="h-3 w-3" />
+                      <span className="sr-only">Notes</span>
+                    </Badge>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent 
+                  side="top" 
+                  className="max-w-md whitespace-pre-wrap"
+                  data-testid={`tooltip-notes-${job.id}`}
+                >
+                  <div className="space-y-1">
+                    <p className="font-semibold text-xs">Notes:</p>
+                    <p className="text-sm">{job.notes}</p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </div>
       </td>
       <td className="py-2 px-3 font-mono">{job.poNumber}</td>
