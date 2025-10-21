@@ -19,6 +19,7 @@ import { JobEditDialog } from "@/components/JobEditDialog";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { LogoSetupDialog } from "@/components/LogoSetupDialog";
 import { JobRow } from "@/components/JobRow";
+import { JobCard } from "@/components/JobCard";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
@@ -485,75 +486,34 @@ export default function Dashboard() {
         </div>
 
         {/* Production Queue - Active Orders */}
-        <div className="border rounded-md overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted sticky top-0">
-                <tr>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Customer
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Job Name
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    PO #
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Qty
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Machine
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Production
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Price
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Dispatch
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    On Time
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Completed By
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-card divide-y divide-border">
-                {sortedActiveJobs.length === 0 ? (
-                  <tr>
-                    <td colSpan={11} className="py-8 text-center text-muted-foreground">
-                      {searchTerm ? "No active orders match your search." : "No active orders found. Click 'New Order' to create one."}
-                    </td>
-                  </tr>
-                ) : (
-                  sortedActiveJobs.map((job) => {
-                    const customer = customers.find(c => c.id === job.customerId);
-                    return (
-                      <JobRow
-                        key={job.id}
-                        job={{
-                          ...job,
-                          goodsReceived: new Date(job.goodsReceived!),
-                          requiredDispatchDate: new Date(job.requiredDispatchDate!),
-                        }}
-                        customer={customer}
-                        showPrices={canViewPrices(currentUser?.role)}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                      />
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-foreground mb-4">Production Queue</h2>
+          {sortedActiveJobs.length === 0 ? (
+            <div className="border rounded-md p-12 text-center">
+              <p className="text-muted-foreground">
+                {searchTerm ? "No active orders match your search." : "No active orders found. Click 'New Order' to create one."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="grid-production-queue">
+              {sortedActiveJobs.map((job) => {
+                const customer = customers.find(c => c.id === job.customerId);
+                if (!customer) return null;
+                return (
+                  <JobCard
+                    key={job.id}
+                    job={{
+                      ...job,
+                      goodsReceived: job.goodsReceived ? new Date(job.goodsReceived) : null,
+                      requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
+                    }}
+                    customer={customer}
+                    onClick={() => handleEdit(job.id)}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Pending Orders Section - Orders that need attention */}
