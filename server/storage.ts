@@ -9,6 +9,7 @@ import {
   jobLineItems,
   staffMachineAllocations,
   userStars,
+  logoSetups,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -26,7 +27,9 @@ import {
   type JobLineItem,
   type InsertJobLineItem,
   type StaffMachineAllocation,
-  type InsertStaffMachineAllocation
+  type InsertStaffMachineAllocation,
+  type LogoSetup,
+  type InsertLogoSetup
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
@@ -81,6 +84,11 @@ export interface IStorage {
   awardStar(userId: string, starType: "yellow" | "red"): Promise<any>;
   getStarsLeaderboard(): Promise<any[]>;
   getStaffProductionMetrics(staffId?: string): Promise<any[]>;
+  
+  getLogoSetups(): Promise<LogoSetup[]>;
+  createLogoSetup(logoSetup: InsertLogoSetup): Promise<LogoSetup>;
+  updateLogoSetup(id: string, logoSetup: Partial<LogoSetup>): Promise<LogoSetup>;
+  deleteLogoSetup(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -614,6 +622,31 @@ export class DatabaseStorage implements IStorage {
     );
 
     return metrics.sort((a, b) => b.stitchesPerHour - a.stitchesPerHour);
+  }
+
+  async getLogoSetups(): Promise<LogoSetup[]> {
+    return await db.select().from(logoSetups);
+  }
+
+  async createLogoSetup(insertLogoSetup: InsertLogoSetup): Promise<LogoSetup> {
+    const [logoSetup] = await db
+      .insert(logoSetups)
+      .values(insertLogoSetup)
+      .returning();
+    return logoSetup;
+  }
+
+  async updateLogoSetup(id: string, updateData: Partial<LogoSetup>): Promise<LogoSetup> {
+    const [logoSetup] = await db
+      .update(logoSetups)
+      .set(updateData)
+      .where(eq(logoSetups.id, id))
+      .returning();
+    return logoSetup;
+  }
+
+  async deleteLogoSetup(id: string): Promise<void> {
+    await db.delete(logoSetups).where(eq(logoSetups.id, id));
   }
 }
 
