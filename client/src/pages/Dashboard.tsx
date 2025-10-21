@@ -470,7 +470,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="mb-4">
+        <div className="mb-6">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -558,7 +558,7 @@ export default function Dashboard() {
 
         {/* Pending Orders Section - Orders that need attention */}
         {sortedPendingJobs.length > 0 && (
-          <Collapsible open={pendingOrdersOpen} onOpenChange={setPendingOrdersOpen} className="mt-8">
+          <Collapsible open={pendingOrdersOpen} onOpenChange={setPendingOrdersOpen}>
             <CollapsibleTrigger asChild>
               <Button variant="ghost" className="flex w-full items-center justify-between p-0 hover:bg-transparent mb-4" data-testid="button-toggle-pending">
                 <div className="flex items-center gap-2">
