@@ -17,7 +17,9 @@ import {
   insertJobLineItemSchema,
   updateJobLineItemSchema,
   insertStaffMachineAllocationSchema,
-  updateStaffMachineAllocationSchema
+  updateStaffMachineAllocationSchema,
+  insertLogoSetupSchema,
+  updateLogoSetupSchema
 } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
@@ -1111,6 +1113,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: error instanceof Error ? error.message : "Failed to create consolidated invoice" 
       });
+    }
+  });
+
+  // Logo Setup routes
+  app.get("/api/logo-setups", optionalAuth, async (req, res) => {
+    try {
+      const logoSetups = await storage.getLogoSetups();
+      res.json(logoSetups);
+    } catch (error) {
+      console.error("Error fetching logo setups:", error);
+      res.status(500).json({ error: "Failed to fetch logo setups" });
+    }
+  });
+
+  app.post("/api/logo-setups", optionalAuth, async (req, res) => {
+    try {
+      const parsed = insertLogoSetupSchema.parse(req.body);
+      const logoSetup = await storage.createLogoSetup(parsed);
+      res.status(201).json(logoSetup);
+    } catch (error) {
+      console.error("Error creating logo setup:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create logo setup" });
+    }
+  });
+
+  app.patch("/api/logo-setups/:id", optionalAuth, async (req, res) => {
+    try {
+      const parsed = updateLogoSetupSchema.parse(req.body);
+      const logoSetup = await storage.updateLogoSetup(req.params.id, parsed);
+      res.json(logoSetup);
+    } catch (error) {
+      console.error("Error updating logo setup:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update logo setup" });
+    }
+  });
+
+  app.delete("/api/logo-setups/:id", optionalAuth, async (req, res) => {
+    try {
+      await storage.deleteLogoSetup(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting logo setup:", error);
+      res.status(500).json({ error: "Failed to delete logo setup" });
     }
   });
 
