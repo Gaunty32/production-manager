@@ -135,6 +135,16 @@ export const userStars = pgTable("user_stars", {
   redStars: integer("red_stars").notNull().default(0),
 });
 
+export const logoSetups = pgTable("logo_setups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id),
+  jobName: text("job_name").notNull(),
+  approved: boolean("approved").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+});
+
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
 });
@@ -512,3 +522,26 @@ export const updateStaffMachineAllocationSchema = z.object({
 
 export type InsertStaffMachineAllocation = z.infer<typeof insertStaffMachineAllocationSchema>;
 export type StaffMachineAllocation = typeof staffMachineAllocations.$inferSelect;
+
+export const insertLogoSetupSchema = createInsertSchema(logoSetups).omit({
+  id: true,
+  createdAt: true,
+  approvedAt: true,
+}).extend({
+  jobName: z.string().min(1, "Job name is required"),
+  customerId: z.string().min(1, "Customer is required"),
+  notes: z.string().optional(),
+});
+
+export const updateLogoSetupSchema = z.object({
+  jobName: z.string().optional(),
+  approved: z.boolean().optional(),
+  approvedAt: z.preprocess(
+    (val) => val ? new Date(val as string) : undefined,
+    z.date().optional()
+  ),
+  notes: z.string().optional(),
+});
+
+export type InsertLogoSetup = z.infer<typeof insertLogoSetupSchema>;
+export type LogoSetup = typeof logoSetups.$inferSelect;
