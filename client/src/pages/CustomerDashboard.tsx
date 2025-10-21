@@ -45,7 +45,7 @@ export default function CustomerDashboard() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("/api/customer-auth/logout", "POST", {});
+      return await apiRequest("POST", "/api/customer-auth/logout", {});
     },
     onSuccess: () => {
       queryClient.clear();

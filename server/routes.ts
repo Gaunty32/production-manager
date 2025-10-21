@@ -219,7 +219,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertCustomerUserSchema.extend({
         customerId: z.string(),
-        password: z.string().min(6),
       }).parse(req.body);
       
       const customerUser = await registerCustomer(data);

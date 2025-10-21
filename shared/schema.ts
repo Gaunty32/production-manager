@@ -586,6 +586,7 @@ export type LogoSetup = typeof logoSetups.$inferSelect;
 // Customer portal schemas
 export const insertCustomerUserSchema = createInsertSchema(customerUsers).omit({
   id: true,
+  passwordHash: true,
   createdAt: true,
   lastLoginAt: true,
 }).extend({
