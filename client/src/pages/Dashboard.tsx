@@ -506,13 +506,7 @@ export default function Dashboard() {
                     Machine
                   </th>
                   <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Runs
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Time/Run
-                  </th>
-                  <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                    Total
+                    Production
                   </th>
                   <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
                     Price
@@ -534,7 +528,7 @@ export default function Dashboard() {
               <tbody className="bg-card divide-y divide-border">
                 {sortedActiveJobs.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={11} className="py-8 text-center text-muted-foreground">
                       {searchTerm ? "No active orders match your search." : "No active orders found. Click 'New Order' to create one."}
                     </td>
                   </tr>
@@ -598,13 +592,7 @@ export default function Dashboard() {
                         Machine
                       </th>
                       <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Runs
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Time/Run
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Total
+                        Production
                       </th>
                       <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
                         Price
@@ -683,13 +671,7 @@ export default function Dashboard() {
                         Machine
                       </th>
                       <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Runs
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Time/Run
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Total
+                        Production
                       </th>
                       <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
                         Price

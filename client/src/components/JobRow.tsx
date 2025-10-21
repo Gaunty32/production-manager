@@ -220,14 +220,25 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isC
       <td className="py-2 px-3">
         <MachineBadge machineId={job.machineId} />
       </td>
-      <td className="py-2 px-3 font-mono">
-        {metrics ? metrics.runs : "-"}
-      </td>
-      <td className="py-2 px-3 font-mono">
-        {metrics ? `${metrics.timePerRunMinutes}m` : "-"}
-      </td>
-      <td className="py-2 px-3 font-mono">
-        {metrics ? formatTimeDisplay(metrics.totalTimeMinutes) : "-"}
+      <td className="py-2 px-3">
+        {metrics ? (
+          <div className="font-mono text-xs space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-12">Runs:</span>
+              <span>{metrics.runs}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-12">Time:</span>
+              <span>{metrics.timePerRunMinutes}m</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-12">Total:</span>
+              <span className="font-semibold">{formatTimeDisplay(metrics.totalTimeMinutes)}</span>
+            </div>
+          </div>
+        ) : (
+          <span className="text-muted-foreground text-sm">-</span>
+        )}
       </td>
       <td className="py-2 px-3 font-mono whitespace-nowrap">
         {showPrices ? (
