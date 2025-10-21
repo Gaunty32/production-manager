@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -26,7 +27,7 @@ import { getMachineName } from "@shared/machines";
 import type { Customer, Job, JobWithLineItems, Staff, LogoSetup } from "@shared/schema";
 import { canViewPrices } from "@shared/schema";
 import { useParams } from "wouter";
-import { isPast, isToday, format } from "date-fns";
+import { isPast, isToday, format, addDays, startOfDay, endOfDay } from "date-fns";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -279,14 +280,35 @@ export default function Dashboard() {
     return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
   });
 
-  // Calculate overdue and due today orders (only from active jobs)
-  const overdueOrders = sortedActiveJobs.filter(job => 
+  // Combine all non-completed jobs for unified production queue
+  const allProductionJobs = [...activeJobs, ...pendingJobs].sort((a, b) => {
+    // Sort by dispatch date if both have it, otherwise pending jobs go to end
+    if (a.requiredDispatchDate && b.requiredDispatchDate) {
+      return new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
+    }
+    if (a.requiredDispatchDate) return -1;
+    if (b.requiredDispatchDate) return 1;
+    return a.customerName.localeCompare(b.customerName);
+  });
+
+  // Calculate key metrics for at-a-glance view
+  const overdueOrders = allProductionJobs.filter(job => 
     job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate)
   );
   
-  const dueTodayOrders = sortedActiveJobs.filter(job => 
-    job.requiredDispatchDate && isToday(job.requiredDispatchDate)
-  );
+  // Jobs due in next 3-4 days (using calendar boundaries)
+  const now = new Date();
+  const day3Start = startOfDay(addDays(now, 3));
+  const day4End = endOfDay(addDays(now, 4));
+  
+  const jobsDueNext3To4Days = allProductionJobs.filter(job => {
+    if (!job.requiredDispatchDate) return false;
+    const dispatchDate = new Date(job.requiredDispatchDate);
+    // Within calendar days 3-4 from now
+    return dispatchDate >= day3Start && dispatchDate <= day4End;
+  });
+  
+  const pendingLogoSetups = logoSetups.filter(ls => !ls.approved);
 
   const pageTitle = machineId 
     ? `${getMachineName(machineId)} Orders` 
@@ -354,50 +376,53 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Urgent Orders Summary */}
-        {(overdueOrders.length > 0 || dueTodayOrders.length > 0) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {/* Overdue Orders */}
-            {overdueOrders.length > 0 && (
-              <div className="border border-destructive/50 rounded-md p-4 bg-destructive/5" data-testid="section-overdue-orders">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                  <h3 className="font-semibold text-destructive">
-                    Overdue Orders ({overdueOrders.length})
-                  </h3>
+        {/* At-a-Glance Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {/* Overdue Orders */}
+          <Card className="hover-elevate">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Overdue Orders</p>
+                  <h3 className="text-3xl font-bold text-destructive mt-2">{overdueOrders.length}</h3>
                 </div>
-                <div className="space-y-2">
-                  {overdueOrders.map((job) => (
-                    <div key={job.id} className="text-sm" data-testid={`overdue-summary-${job.id}`}>
-                      <span className="font-medium">{job.customerName}</span>
-                      <span className="text-muted-foreground"> - {job.jobName}</span>
-                    </div>
-                  ))}
+                <div className="h-12 w-12 bg-destructive/10 rounded-full flex items-center justify-center">
+                  <AlertCircle className="h-6 w-6 text-destructive" />
                 </div>
               </div>
-            )}
+            </div>
+          </Card>
 
-            {/* Orders Due Today */}
-            {dueTodayOrders.length > 0 && (
-              <div className="border border-amber-500/50 rounded-md p-4 bg-amber-500/5" data-testid="section-due-today-orders">
-                <div className="flex items-center gap-2 mb-3">
-                  <Clock className="h-5 w-5 text-amber-600 dark:text-amber-500" />
-                  <h3 className="font-semibold text-amber-600 dark:text-amber-500">
-                    Due Today ({dueTodayOrders.length})
-                  </h3>
+          {/* Logo Set-Ups */}
+          <Card className="hover-elevate">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Logo Set-Ups</p>
+                  <h3 className="text-3xl font-bold text-primary mt-2">{pendingLogoSetups.length}</h3>
                 </div>
-                <div className="space-y-2">
-                  {dueTodayOrders.map((job) => (
-                    <div key={job.id} className="text-sm" data-testid={`due-today-summary-${job.id}`}>
-                      <span className="font-medium">{job.customerName}</span>
-                      <span className="text-muted-foreground"> - {job.jobName}</span>
-                    </div>
-                  ))}
+                <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
+                  <Palette className="h-6 w-6 text-primary" />
                 </div>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          </Card>
+
+          {/* Jobs Due Next 3-4 Days */}
+          <Card className="hover-elevate">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Due in 3-4 Days</p>
+                  <h3 className="text-3xl font-bold text-foreground mt-2">{jobsDueNext3To4Days.length}</h3>
+                </div>
+                <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center">
+                  <Clock className="h-6 w-6 text-muted-foreground" />
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
 
         {/* Logo Set-Up Queue */}
         {logoSetups.filter(ls => !ls.approved).length > 0 && (
@@ -485,18 +510,18 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Production Queue - Active Orders */}
+        {/* Production Queue - All Jobs (Active + Pending) */}
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Production Queue</h2>
-          {sortedActiveJobs.length === 0 ? (
+          <h2 className="text-xl font-semibold text-foreground mb-4">All Jobs in Production</h2>
+          {allProductionJobs.length === 0 ? (
             <div className="border rounded-md p-12 text-center">
               <p className="text-muted-foreground">
-                {searchTerm ? "No active orders match your search." : "No active orders found. Click 'New Order' to create one."}
+                {searchTerm ? "No jobs match your search." : "No jobs found. Click 'New Order' to create one."}
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="grid-production-queue">
-              {sortedActiveJobs.map((job) => {
+              {allProductionJobs.map((job) => {
                 const customer = customers.find(c => c.id === job.customerId);
                 if (!customer) return null;
                 return (
@@ -515,167 +540,6 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-
-        {/* Pending Orders Section - Orders that need attention */}
-        {sortedPendingJobs.length > 0 && (
-          <Collapsible open={pendingOrdersOpen} onOpenChange={setPendingOrdersOpen}>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" className="flex w-full items-center justify-between p-0 hover:bg-transparent mb-4" data-testid="button-toggle-pending">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-amber-500" />
-                  <h2 className="text-xl font-semibold text-foreground">
-                    Pending Orders - Awaiting Information ({sortedPendingJobs.length})
-                  </h2>
-                </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${pendingOrdersOpen ? 'rotate-180' : ''}`} />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-            <div className="border rounded-md overflow-hidden bg-amber-50 dark:bg-amber-950/20">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted sticky top-0">
-                    <tr>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Customer
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Job Name
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        PO #
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Qty
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Machine
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Production
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Price
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Dispatch
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Status
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-card divide-y divide-border">
-                    {sortedPendingJobs.map((job) => {
-                      const customer = customers.find(c => c.id === job.customerId);
-                      return (
-                        <JobRow
-                          key={job.id}
-                          job={{
-                            ...job,
-                            goodsReceived: job.goodsReceived ? new Date(job.goodsReceived) : null,
-                            requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
-                          }}
-                          customer={customer}
-                          showPrices={canViewPrices(currentUser?.role)}
-                          onEdit={handleEdit}
-                          onDelete={handleDelete}
-                          isCompleted={false}
-                        />
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-
-        {/* Completed Orders Section */}
-        {sortedCompletedJobs.length > 0 && (
-          <Collapsible open={completedOrdersOpen} onOpenChange={setCompletedOrdersOpen} className="mt-8">
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" className="flex w-full items-center justify-between p-0 hover:bg-transparent mb-4" data-testid="button-toggle-completed">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <h2 className="text-xl font-semibold text-foreground">
-                    Completed Orders ({sortedCompletedJobs.length})
-                  </h2>
-                </div>
-                <ChevronDown className={`h-5 w-5 transition-transform ${completedOrdersOpen ? 'rotate-180' : ''}`} />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-            <div className="border rounded-md overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted sticky top-0">
-                    <tr>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Customer
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Job Name
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        PO #
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Qty
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Machine
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Production
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Price
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Dispatch
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        On Time
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Completed By
-                      </th>
-                      <th className="py-2 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                        Invoice Ref
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-card divide-y divide-border">
-                    {sortedCompletedJobs.map((job) => {
-                      const customer = customers.find(c => c.id === job.customerId);
-                      return (
-                        <JobRow
-                          key={job.id}
-                          job={{
-                            ...job,
-                            goodsReceived: job.goodsReceived ? new Date(job.goodsReceived) : null,
-                            requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
-                          }}
-                          customer={customer}
-                          showPrices={canViewPrices(currentUser?.role)}
-                          onEdit={handleEdit}
-                          onDelete={handleDelete}
-                          isCompleted={true}
-                        />
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            </CollapsibleContent>
-          </Collapsible>
-        )}
 
         <JobEditDialog
           open={editingJob !== null}
