@@ -39,7 +39,7 @@ export default function Dashboard() {
   const [showLogoSetupDialog, setShowLogoSetupDialog] = useState(false);
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
   const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'overdue' | 'logo-setups' | '3-4-days' | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'overdue' | 'logo-setups' | '3-days' | null>(null);
 
   // Fetch current user
   const { data: currentUser } = useQuery<{ id: string; email: string; firstName?: string; lastName?: string; role?: string }>({
@@ -297,16 +297,16 @@ export default function Dashboard() {
     job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate)
   );
   
-  // Jobs due in next 3-4 days (using calendar boundaries)
+  // Jobs due in 3 days (using calendar boundaries)
   const now = new Date();
   const day3Start = startOfDay(addDays(now, 3));
-  const day4End = endOfDay(addDays(now, 4));
+  const day3End = endOfDay(addDays(now, 3));
   
-  const jobsDueNext3To4Days = allProductionJobs.filter(job => {
+  const jobsDueIn3Days = allProductionJobs.filter(job => {
     if (!job.requiredDispatchDate) return false;
     const dispatchDate = new Date(job.requiredDispatchDate);
-    // Within calendar days 3-4 from now
-    return dispatchDate >= day3Start && dispatchDate <= day4End;
+    // Within calendar day 3 from now
+    return dispatchDate >= day3Start && dispatchDate <= day3End;
   });
   
   const pendingLogoSetups = logoSetups.filter(ls => !ls.approved);
@@ -318,8 +318,8 @@ export default function Dashboard() {
     switch (activeFilter) {
       case 'overdue':
         return overdueOrders;
-      case '3-4-days':
-        return jobsDueNext3To4Days;
+      case '3-days':
+        return jobsDueIn3Days;
       case 'logo-setups':
         // Filter jobs that have line items without logo approval
         return allProductionJobs.filter(job => {
@@ -436,18 +436,25 @@ export default function Dashboard() {
             </div>
           </Card>
 
-          {/* Jobs Due Next 3-4 Days */}
-          <Card className="hover-elevate">
+          {/* Jobs Due in 3 Days */}
+          <Card 
+            className={`hover-elevate active-elevate-2 cursor-pointer transition-all ${activeFilter === '3-days' ? 'ring-2 ring-primary' : ''}`}
+            onClick={() => setActiveFilter(activeFilter === '3-days' ? null : '3-days')}
+            data-testid="card-filter-3-days"
+          >
             <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Due in 3-4 Days</p>
-                  <h3 className="text-3xl font-bold text-foreground mt-2">{jobsDueNext3To4Days.length}</h3>
+                  <p className="text-sm font-medium text-muted-foreground">Due in 3 Days</p>
+                  <h3 className="text-3xl font-bold text-foreground mt-2">{jobsDueIn3Days.length}</h3>
                 </div>
                 <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center">
                   <Clock className="h-6 w-6 text-muted-foreground" />
                 </div>
               </div>
+              {activeFilter === '3-days' && (
+                <p className="text-xs text-primary mt-2 font-medium">Click to clear filter</p>
+              )}
             </div>
           </Card>
         </div>
@@ -543,7 +550,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-foreground">
               {activeFilter === 'overdue' && 'Overdue Orders'}
-              {activeFilter === '3-4-days' && 'Jobs Due in 3-4 Days'}
+              {activeFilter === '3-days' && 'Jobs Due in 3 Days'}
               {activeFilter === 'logo-setups' && 'Jobs Awaiting Logo Approval'}
               {!activeFilter && 'All Jobs in Production'}
             </h2>
