@@ -10,6 +10,9 @@ import {
   staffMachineAllocations,
   userStars,
   logoSetups,
+  customerUsers,
+  jobMessages,
+  jobFiles,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -29,7 +32,12 @@ import {
   type StaffMachineAllocation,
   type InsertStaffMachineAllocation,
   type LogoSetup,
-  type InsertLogoSetup
+  type InsertLogoSetup,
+  type CustomerUser,
+  type JobMessage,
+  type InsertJobMessage,
+  type JobFile,
+  type InsertJobFile
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
@@ -89,6 +97,18 @@ export interface IStorage {
   createLogoSetup(logoSetup: InsertLogoSetup): Promise<LogoSetup>;
   updateLogoSetup(id: string, logoSetup: Partial<LogoSetup>): Promise<LogoSetup>;
   deleteLogoSetup(id: string): Promise<void>;
+  
+  // Customer portal methods
+  createCustomerUser(customerUser: Omit<CustomerUser, 'id' | 'createdAt' | 'lastLoginAt'>): Promise<CustomerUser>;
+  getCustomerUserById(id: string): Promise<CustomerUser | undefined>;
+  getCustomerUserByEmail(email: string): Promise<CustomerUser | undefined>;
+  updateCustomerLastLogin(id: string): Promise<void>;
+  getJobMessages(jobId: string): Promise<JobMessage[]>;
+  createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
+  markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void>;
+  getJobFiles(jobId: string): Promise<JobFile[]>;
+  createJobFile(file: InsertJobFile): Promise<JobFile>;
+  deleteJobFile(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -647,6 +667,74 @@ export class DatabaseStorage implements IStorage {
 
   async deleteLogoSetup(id: string): Promise<void> {
     await db.delete(logoSetups).where(eq(logoSetups.id, id));
+  }
+
+  // Customer portal methods
+  async createCustomerUser(customerUser: Omit<CustomerUser, 'id' | 'createdAt' | 'lastLoginAt'>): Promise<CustomerUser> {
+    const [user] = await db
+      .insert(customerUsers)
+      .values(customerUser)
+      .returning();
+    return user;
+  }
+
+  async getCustomerUserById(id: string): Promise<CustomerUser | undefined> {
+    const [user] = await db.select().from(customerUsers).where(eq(customerUsers.id, id));
+    return user;
+  }
+
+  async getCustomerUserByEmail(email: string): Promise<CustomerUser | undefined> {
+    const [user] = await db.select().from(customerUsers).where(eq(customerUsers.email, email));
+    return user;
+  }
+
+  async updateCustomerLastLogin(id: string): Promise<void> {
+    await db
+      .update(customerUsers)
+      .set({ lastLoginAt: new Date() })
+      .where(eq(customerUsers.id, id));
+  }
+
+  async getJobMessages(jobId: string): Promise<JobMessage[]> {
+    return await db.select().from(jobMessages).where(eq(jobMessages.jobId, jobId));
+  }
+
+  async createJobMessage(message: InsertJobMessage): Promise<JobMessage> {
+    const [newMessage] = await db
+      .insert(jobMessages)
+      .values(message)
+      .returning();
+    return newMessage;
+  }
+
+  async markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void> {
+    if (readerType === 'staff') {
+      await db
+        .update(jobMessages)
+        .set({ readByStaff: true })
+        .where(eq(jobMessages.jobId, jobId));
+    } else {
+      await db
+        .update(jobMessages)
+        .set({ readByCustomer: true })
+        .where(eq(jobMessages.jobId, jobId));
+    }
+  }
+
+  async getJobFiles(jobId: string): Promise<JobFile[]> {
+    return await db.select().from(jobFiles).where(eq(jobFiles.jobId, jobId));
+  }
+
+  async createJobFile(file: InsertJobFile): Promise<JobFile> {
+    const [newFile] = await db
+      .insert(jobFiles)
+      .values(file)
+      .returning();
+    return newFile;
+  }
+
+  async deleteJobFile(id: string): Promise<void> {
+    await db.delete(jobFiles).where(eq(jobFiles.id, id));
   }
 }
 

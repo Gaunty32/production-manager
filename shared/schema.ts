@@ -145,6 +145,43 @@ export const logoSetups = pgTable("logo_setups", {
   notes: text("notes"),
 });
 
+// Customer portal: customer user accounts
+export const customerUsers = pgTable("customer_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  email: varchar("email").notNull().unique(),
+  passwordHash: varchar("password_hash").notNull(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastLoginAt: timestamp("last_login_at"),
+});
+
+// Customer portal: job messages (chat)
+export const jobMessages = pgTable("job_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  senderType: varchar("sender_type").notNull(), // 'customer' or 'staff'
+  senderId: varchar("sender_id").notNull(), // customerUserId or userId
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  readByStaff: boolean("read_by_staff").notNull().default(false),
+  readByCustomer: boolean("read_by_customer").notNull().default(false),
+});
+
+// Customer portal: job file uploads
+export const jobFiles = pgTable("job_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  fileName: varchar("file_name").notNull(),
+  fileUrl: varchar("file_url").notNull(),
+  fileSize: integer("file_size").notNull(),
+  fileType: varchar("file_type").notNull(),
+  uploadedBy: varchar("uploaded_by").notNull(), // 'customer' or 'staff'
+  uploaderId: varchar("uploader_id").notNull(), // customerUserId or userId
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
 });
@@ -545,3 +582,47 @@ export const updateLogoSetupSchema = z.object({
 
 export type InsertLogoSetup = z.infer<typeof insertLogoSetupSchema>;
 export type LogoSetup = typeof logoSetups.$inferSelect;
+
+// Customer portal schemas
+export const insertCustomerUserSchema = createInsertSchema(customerUsers).omit({
+  id: true,
+  createdAt: true,
+  lastLoginAt: true,
+}).extend({
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+});
+
+export const customerLoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
+});
+
+export const insertJobMessageSchema = createInsertSchema(jobMessages).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  message: z.string().min(1, "Message cannot be empty"),
+  senderType: z.enum(["customer", "staff"]),
+});
+
+export const insertJobFileSchema = createInsertSchema(jobFiles).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  fileName: z.string().min(1),
+  fileUrl: z.string().url(),
+  fileSize: z.number().int().positive(),
+  fileType: z.string().min(1),
+  uploadedBy: z.enum(["customer", "staff"]),
+});
+
+export type InsertCustomerUser = z.infer<typeof insertCustomerUserSchema>;
+export type CustomerUser = typeof customerUsers.$inferSelect;
+export type CustomerLogin = z.infer<typeof customerLoginSchema>;
+export type InsertJobMessage = z.infer<typeof insertJobMessageSchema>;
+export type JobMessage = typeof jobMessages.$inferSelect;
+export type InsertJobFile = z.infer<typeof insertJobFileSchema>;
+export type JobFile = typeof jobFiles.$inferSelect;
