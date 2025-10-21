@@ -25,8 +25,8 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
-import { loginCustomer, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
-import { customerLoginSchema } from "@shared/schema";
+import { loginCustomer, registerCustomer, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
+import { customerLoginSchema, insertCustomerUserSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
@@ -215,6 +215,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await seedCustomers();
 
   // Customer Portal Authentication Routes
+  app.post("/api/customer-auth/register", async (req, res) => {
+    try {
+      const data = insertCustomerUserSchema.extend({
+        customerId: z.string(),
+        password: z.string().min(6),
+      }).parse(req.body);
+      
+      const customerUser = await registerCustomer(data);
+      res.json(customerUser);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Registration failed" });
+      }
+    }
+  });
+
   app.post("/api/customer-auth/login", async (req, res) => {
     try {
       const data = customerLoginSchema.parse(req.body);

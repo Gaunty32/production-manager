@@ -19,6 +19,8 @@ import Schedule from "@/pages/Schedule";
 import Leaderboard from "@/pages/Leaderboard";
 import InvoicingQueue from "@/pages/InvoicingQueue";
 import Landing from "@/pages/Landing";
+import CustomerLogin from "@/pages/CustomerLogin";
+import CustomerDashboard from "@/pages/CustomerDashboard";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import logoImage from "@assets/Selectuniforms960_1759932224049.jpg";
@@ -41,6 +43,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 function Router() {
   return (
     <Switch>
+      {/* Staff Portal Routes */}
       <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/orders" component={() => <ProtectedRoute component={Dashboard} />} />
@@ -57,6 +60,9 @@ function Router() {
 }
 
 export default function App() {
+  const [location] = useLocation();
+  const isCustomerPortal = location.startsWith("/customer");
+  
   const style = {
     "--sidebar-width": "16rem",
   };
@@ -65,11 +71,25 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider>
-          <AuthenticatedApp style={style} />
+          {isCustomerPortal ? (
+            <CustomerPortalApp />
+          ) : (
+            <AuthenticatedApp style={style} />
+          )}
           <Toaster />
         </ThemeProvider>
       </TooltipProvider>
     </QueryClientProvider>
+  );
+}
+
+function CustomerPortalApp() {
+  return (
+    <Switch>
+      <Route path="/customer/login" component={CustomerLogin} />
+      <Route path="/customer/dashboard" component={CustomerDashboard} />
+      <Route component={NotFound} />
+    </Switch>
   );
 }
 
