@@ -352,16 +352,40 @@ export class XeroService {
     const xeroContact = await this.findContact(customer);
 
     // Create line items with proper descriptions
-    const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => ({
-      description: item.itemCode === "CARRIAGE" 
-        ? item.description // Use the full description for shipping
-        : `${item.jobName}, ${item.stitchCount} Stitches${item.poNumber ? ` (PO: ${item.poNumber})` : ''}`,
-      quantity: item.quantity,
-      unitAmount: item.unitPrice,
-      accountCode: "4002",
-      taxType: "OUTPUT2", // 20% VAT on income
-      itemCode: item.itemCode, // Use the item code from the line item
-    }));
+    const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => {
+      let description = '';
+      
+      if (item.itemCode === "CARRIAGE") {
+        description = item.description; // Use the full description for shipping
+      } else if (item.itemCode === "PRINT") {
+        // For print jobs, don't mention stitches
+        description = item.description || item.jobName;
+        if (item.poNumber) {
+          description += ` (PO: ${item.poNumber})`;
+        }
+      } else if (item.itemCode === "OTHER" || item.itemCode === "BAG") {
+        // For other jobs and bagging, use the description or job name
+        description = item.description || item.jobName;
+        if (item.poNumber) {
+          description += ` (PO: ${item.poNumber})`;
+        }
+      } else {
+        // For embroidery (EMB), include stitch count
+        description = `${item.jobName}, ${item.stitchCount} Stitches`;
+        if (item.poNumber) {
+          description += ` (PO: ${item.poNumber})`;
+        }
+      }
+      
+      return {
+        description,
+        quantity: item.quantity,
+        unitAmount: item.unitPrice,
+        accountCode: "4002",
+        taxType: "OUTPUT2", // 20% VAT on income
+        itemCode: item.itemCode, // Use the item code from the line item
+      };
+    });
 
     const invoice: XeroInvoice = {
       type: "ACCREC",
@@ -422,16 +446,40 @@ export class XeroService {
     const xeroContact = await this.findContact(customer);
 
     // Create line items from job line items
-    const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => ({
-      description: item.itemCode === "CARRIAGE" 
-        ? item.description // Use the full description for shipping
-        : `${item.jobName}, ${item.stitchCount} Stitches${item.poNumber ? ` (PO: ${item.poNumber})` : ''}`,
-      quantity: item.quantity,
-      unitAmount: item.unitPrice,
-      accountCode: "4002",
-      taxType: "OUTPUT2", // 20% VAT on income
-      itemCode: item.itemCode, // Use the item code from the line item
-    }));
+    const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => {
+      let description = '';
+      
+      if (item.itemCode === "CARRIAGE") {
+        description = item.description; // Use the full description for shipping
+      } else if (item.itemCode === "PRINT") {
+        // For print jobs, don't mention stitches
+        description = item.description || item.jobName;
+        if (item.poNumber) {
+          description += ` (PO: ${item.poNumber})`;
+        }
+      } else if (item.itemCode === "OTHER" || item.itemCode === "BAG") {
+        // For other jobs and bagging, use the description or job name
+        description = item.description || item.jobName;
+        if (item.poNumber) {
+          description += ` (PO: ${item.poNumber})`;
+        }
+      } else {
+        // For embroidery (EMB), include stitch count
+        description = `${item.jobName}, ${item.stitchCount} Stitches`;
+        if (item.poNumber) {
+          description += ` (PO: ${item.poNumber})`;
+        }
+      }
+      
+      return {
+        description,
+        quantity: item.quantity,
+        unitAmount: item.unitPrice,
+        accountCode: "4002",
+        taxType: "OUTPUT2", // 20% VAT on income
+        itemCode: item.itemCode, // Use the item code from the line item
+      };
+    });
 
     // Get the most recent dates for invoice date and due date
     const mostRecentDate = jobs.reduce((latest, job) => {
