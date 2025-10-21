@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { CheckCircle2, XCircle, Package, AlertCircle, Clock, Layers } from "lucide-react";
+import { CheckCircle2, XCircle, Package, AlertCircle, Clock, Layers, StickyNote } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { calculateProductionMetrics } from "@shared/machines";
 import type { JobLineItem, Customer } from "@shared/schema";
@@ -241,13 +241,14 @@ export function JobCard({ job, customer, onClick }: JobCardProps) {
             {job.notes && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="h-auto p-0 text-xs text-muted-foreground hover:bg-transparent no-default-active-elevate truncate w-full text-left"
-                    onClick={(e) => e.stopPropagation()}
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-left w-full hover:text-foreground transition-colors"
+                    data-testid={`button-notes-${job.id}`}
                   >
-                    📝 {job.notes}
-                  </Button>
+                    <StickyNote className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{job.notes}</span>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="text-xs max-w-xs">{job.notes}</p>
