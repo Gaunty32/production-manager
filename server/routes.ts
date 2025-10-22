@@ -188,6 +188,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/staff-production/daily", optionalAuth, async (req, res) => {
+    try {
+      const dailyMetrics = await storage.getDailyStaffProductionMetrics();
+      res.json(dailyMetrics);
+    } catch (error) {
+      console.error("Error fetching daily production metrics:", error);
+      res.status(500).json({ error: "Failed to fetch daily production metrics" });
+    }
+  });
+
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
     try {

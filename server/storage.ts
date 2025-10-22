@@ -649,6 +649,143 @@ export class DatabaseStorage implements IStorage {
     return metrics.sort((a, b) => b.stitchesPerHour - a.stitchesPerHour);
   }
 
+  async getDailyStaffProductionMetrics(): Promise<any[]> {
+    // Get all completed line items with associated job and staff information
+    const completedLineItems = await db
+      .select({
+        lineItemId: jobLineItems.id,
+        jobId: jobLineItems.jobId,
+        completedById: jobLineItems.completedById,
+        completedAt: jobLineItems.completedAt,
+        stitchCount: jobLineItems.stitchCount,
+        quantity: jobLineItems.quantity,
+        machineId: jobLineItems.machineId,
+        jobName: jobs.jobName,
+        customerId: jobs.customerId,
+      })
+      .from(jobLineItems)
+      .leftJoin(jobs, eq(jobLineItems.jobId, jobs.id))
+      .where(and(
+        eq(jobLineItems.completed, true),
+        sql`${jobLineItems.completedById} IS NOT NULL`,
+        sql`${jobLineItems.completedAt} IS NOT NULL`
+      ));
+
+    // Group by staff ID and date (YYYY-MM-DD)
+    const dailyMetrics: Record<string, Record<string, {
+      jobsCompleted: Set<string>;
+      totalStitches: number;
+      totalItems: number;
+      totalMinutes: number;
+      machineTypes: Record<string, number>; // Track time per machine type
+    }>> = {};
+
+    for (const item of completedLineItems) {
+      if (!item.completedById || !item.completedAt) continue;
+
+      const staffId = item.completedById;
+      const completedDate = new Date(item.completedAt);
+      const dateKey = completedDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      if (!dailyMetrics[staffId]) {
+        dailyMetrics[staffId] = {};
+      }
+      if (!dailyMetrics[staffId][dateKey]) {
+        dailyMetrics[staffId][dateKey] = {
+          jobsCompleted: new Set(),
+          totalStitches: 0,
+          totalItems: 0,
+          totalMinutes: 0,
+          machineTypes: {},
+        };
+      }
+
+      const dayData = dailyMetrics[staffId][dateKey];
+      
+      // Track unique jobs completed
+      if (item.jobId) {
+        dayData.jobsCompleted.add(item.jobId);
+      }
+
+      // Calculate stitches and items
+      const lineItemStitches = (item.stitchCount || 0) * (item.quantity || 0);
+      dayData.totalStitches += lineItemStitches;
+      dayData.totalItems += item.quantity || 0;
+
+      // Calculate production time based on machine
+      if (item.machineId && lineItemStitches > 0) {
+        const STITCHES_PER_MINUTE = 750;
+        const CHANGEOVER_TIME_MINUTES = 3;
+        const machineHeads = MACHINE_HEADS[item.machineId] || 6;
+        
+        const runs = Math.ceil((item.quantity || 0) / machineHeads);
+        const embroideryTimePerRun = (item.stitchCount || 0) / STITCHES_PER_MINUTE;
+        const timePerRunMinutes = embroideryTimePerRun + CHANGEOVER_TIME_MINUTES;
+        const totalMinutes = Math.ceil((runs * timePerRunMinutes) / 10) * 10;
+        
+        dayData.totalMinutes += totalMinutes;
+        
+        // Track which machine type was used
+        const machineType = machineHeads === 8 ? '8-head' : '6-head';
+        dayData.machineTypes[machineType] = (dayData.machineTypes[machineType] || 0) + totalMinutes;
+      }
+    }
+
+    // Convert to array format with detailed stats
+    const results: any[] = [];
+    
+    for (const [staffId, dates] of Object.entries(dailyMetrics)) {
+      // Get staff and user info
+      const staffMember = await db.select().from(staff).where(eq(staff.id, staffId)).limit(1);
+      if (!staffMember[0]) continue;
+
+      let userInfo = {
+        firstName: '',
+        lastName: '',
+        email: '',
+      };
+
+      if (staffMember[0].userId) {
+        const user = await db.select().from(users).where(eq(users.id, staffMember[0].userId)).limit(1);
+        if (user[0]) {
+          userInfo = {
+            firstName: user[0].firstName || '',
+            lastName: user[0].lastName || '',
+            email: user[0].email || '',
+          };
+        }
+      }
+
+      // Process each day's metrics
+      for (const [date, data] of Object.entries(dates)) {
+        const hours = data.totalMinutes / 60;
+        const stitchesPerHour = hours > 0 ? Math.round(data.totalStitches / hours) : 0;
+
+        results.push({
+          staffId,
+          staffName: staffMember[0].name,
+          userId: staffMember[0].userId,
+          ...userInfo,
+          date,
+          jobsCompleted: data.jobsCompleted.size,
+          totalStitches: data.totalStitches,
+          totalItems: data.totalItems,
+          totalHours: Math.round(hours * 10) / 10,
+          stitchesPerHour,
+          machineTypes: data.machineTypes,
+        });
+      }
+    }
+
+    // Sort by date (most recent first), then by stitches per hour
+    return results.sort((a, b) => {
+      if (a.date !== b.date) {
+        return b.date.localeCompare(a.date);
+      }
+      return b.stitchesPerHour - a.stitchesPerHour;
+    });
+  }
+
   async getLogoSetups(): Promise<LogoSetup[]> {
     return await db.select().from(logoSetups);
   }
