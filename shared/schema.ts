@@ -228,7 +228,7 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
     },
     z.union([z.number().int().min(1).max(4), z.null()])
   ),
-  quantity: z.coerce.number().int().min(1),
+  quantity: z.coerce.number().int().min(0),
 });
 
 export const updateJobSchema = z.object({
@@ -238,7 +238,7 @@ export const updateJobSchema = z.object({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
-  quantity: z.coerce.number().int().min(1).optional(),
+  quantity: z.coerce.number().int().min(0).optional(),
   goodsReceived: z.preprocess(
     (val) => {
       if (val === "" || val === null) return null;
