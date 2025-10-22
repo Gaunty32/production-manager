@@ -44,24 +44,25 @@ function Router() {
   return (
     <Switch>
       {/* Staff Portal Routes */}
-      <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/orders" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route path="/customers" component={() => <ProtectedRoute component={Customers} />} />
-      <Route path="/staff" component={() => <ProtectedRoute component={StaffPage} />} />
-      <Route path="/users" component={() => <ProtectedRoute component={UsersPage} />} />
-      <Route path="/schedule" component={() => <ProtectedRoute component={Schedule} />} />
-      <Route path="/leaderboard" component={() => <ProtectedRoute component={Leaderboard} />} />
-      <Route path="/invoicing" component={() => <ProtectedRoute component={InvoicingQueue} />} />
-      <Route path="/machine/:id" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route component={NotFound} />
+      <Route path="/"><Dashboard /></Route>
+      <Route path="/dashboard"><Dashboard /></Route>
+      <Route path="/orders"><Dashboard /></Route>
+      <Route path="/customers"><Customers /></Route>
+      <Route path="/staff"><StaffPage /></Route>
+      <Route path="/users"><UsersPage /></Route>
+      <Route path="/schedule"><Schedule /></Route>
+      <Route path="/leaderboard"><Leaderboard /></Route>
+      <Route path="/invoicing"><InvoicingQueue /></Route>
+      <Route path="/machine/:id"><Dashboard /></Route>
+      <Route><NotFound /></Route>
     </Switch>
   );
 }
 
 export default function App() {
   const [location] = useLocation();
-  const isCustomerPortal = location.startsWith("/customer");
+  // Fix: Only match /customer/* routes, not /customers
+  const isCustomerPortal = location.startsWith("/customer/") || location === "/customer";
   
   const style = {
     "--sidebar-width": "16rem",
