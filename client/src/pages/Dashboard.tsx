@@ -5,6 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -20,7 +27,6 @@ import { JobEditDialog } from "@/components/JobEditDialog";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { LogoSetupDialog } from "@/components/LogoSetupDialog";
 import { JobRow } from "@/components/JobRow";
-import { JobCard } from "@/components/JobCard";
 import { ProductionWorksheet } from "@/components/ProductionWorksheet";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -580,25 +586,25 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="border rounded-md overflow-hidden" data-testid="table-production-queue">
-              <table className="w-full">
-                <thead className="bg-muted/50">
-                  <tr className="text-xs text-muted-foreground uppercase tracking-wider">
-                    <th className="py-3 px-3 text-left font-medium">Customer</th>
-                    <th className="py-3 px-3 text-left font-medium">Job</th>
-                    <th className="py-3 px-3 text-left font-medium">PO #</th>
-                    <th className="py-3 px-3 text-left font-medium">Qty</th>
-                    <th className="py-3 px-3 text-left font-medium">Machine</th>
-                    <th className="py-3 px-3 text-left font-medium">Production</th>
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow className="text-xs text-muted-foreground uppercase tracking-wider">
+                    <TableHead className="py-3 px-3">Customer</TableHead>
+                    <TableHead className="py-3 px-3">Job</TableHead>
+                    <TableHead className="py-3 px-3">PO #</TableHead>
+                    <TableHead className="py-3 px-3">Qty</TableHead>
+                    <TableHead className="py-3 px-3">Machine</TableHead>
+                    <TableHead className="py-3 px-3">Production</TableHead>
                     {canViewPrices(currentUser?.role) && (
-                      <th className="py-3 px-3 text-left font-medium">Price</th>
+                      <TableHead className="py-3 px-3">Price</TableHead>
                     )}
-                    <th className="py-3 px-3 text-left font-medium">Date Required</th>
-                    <th className="py-3 px-3 text-left font-medium">Status</th>
-                    <th className="py-3 px-3 text-left font-medium">Completed By</th>
-                    <th className="py-3 px-3 text-left font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+                    <TableHead className="py-3 px-3">Date Required</TableHead>
+                    <TableHead className="py-3 px-3">Status</TableHead>
+                    <TableHead className="py-3 px-3">Completed By</TableHead>
+                    <TableHead className="py-3 px-3">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {displayedJobs.map((job) => {
                     const customer = customers.find(c => c.id === job.customerId);
                     if (!customer) return null;
@@ -627,8 +633,8 @@ export default function Dashboard() {
                       />
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>
