@@ -1,5 +1,5 @@
 import { format, isPast, isToday } from "date-fns";
-import { Pencil, Trash2, StickyNote, CheckCircle2, XCircle, Package } from "lucide-react";
+import { Pencil, Trash2, StickyNote, CheckCircle2, XCircle, Package, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,10 +37,11 @@ interface JobRowProps {
   showPrices?: boolean;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onPrintWorksheet?: (id: string) => void;
   isCompleted?: boolean;
 }
 
-export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isCompleted = false }: JobRowProps) {
+export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, onPrintWorksheet, isCompleted = false }: JobRowProps) {
   const isOverdue = job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = job.requiredDispatchDate && isToday(job.requiredDispatchDate);
   
@@ -281,6 +282,24 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isC
           </span>
         ) : (
           <div className="flex gap-1">
+            {onPrintWorksheet && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => onPrintWorksheet(job.id)}
+                    data-testid={`button-print-worksheet-${job.id}`}
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Print production worksheet</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
             <Button
               variant="ghost"
               size="icon"

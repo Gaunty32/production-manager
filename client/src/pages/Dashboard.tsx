@@ -579,34 +579,56 @@ export default function Dashboard() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="grid-production-queue">
-              {displayedJobs.map((job) => {
-                const customer = customers.find(c => c.id === job.customerId);
-                if (!customer) return null;
-                return (
-                  <JobCard
-                    key={job.id}
-                    job={{
-                      ...job,
-                      goodsReceived: job.goodsReceived ? new Date(job.goodsReceived) : null,
-                      requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
-                    }}
-                    customer={customer}
-                    onClick={() => handleEdit(job.id)}
-                    onDelete={(jobId) => {
-                      if (window.confirm(`Are you sure you want to delete this job: ${job.jobName}?`)) {
-                        deleteJobMutation.mutate(jobId);
-                      }
-                    }}
-                    onPrintWorksheet={(jobId) => {
-                      const fullJob = jobs.find(j => j.id === jobId);
-                      if (fullJob) {
-                        setWorksheetJob(fullJob);
-                      }
-                    }}
-                  />
-                );
-              })}
+            <div className="border rounded-md overflow-hidden" data-testid="table-production-queue">
+              <table className="w-full">
+                <thead className="bg-muted/50">
+                  <tr className="text-xs text-muted-foreground uppercase tracking-wider">
+                    <th className="py-3 px-3 text-left font-medium">Customer</th>
+                    <th className="py-3 px-3 text-left font-medium">Job</th>
+                    <th className="py-3 px-3 text-left font-medium">PO #</th>
+                    <th className="py-3 px-3 text-left font-medium">Qty</th>
+                    <th className="py-3 px-3 text-left font-medium">Machine</th>
+                    <th className="py-3 px-3 text-left font-medium">Production</th>
+                    {canViewPrices(currentUser?.role) && (
+                      <th className="py-3 px-3 text-left font-medium">Price</th>
+                    )}
+                    <th className="py-3 px-3 text-left font-medium">Date Required</th>
+                    <th className="py-3 px-3 text-left font-medium">Status</th>
+                    <th className="py-3 px-3 text-left font-medium">Completed By</th>
+                    <th className="py-3 px-3 text-left font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedJobs.map((job) => {
+                    const customer = customers.find(c => c.id === job.customerId);
+                    if (!customer) return null;
+                    return (
+                      <JobRow
+                        key={job.id}
+                        job={{
+                          ...job,
+                          goodsReceived: job.goodsReceived ? new Date(job.goodsReceived) : null,
+                          requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
+                        }}
+                        customer={customer}
+                        showPrices={canViewPrices(currentUser?.role)}
+                        onEdit={handleEdit}
+                        onDelete={(jobId) => {
+                          if (window.confirm(`Are you sure you want to delete this job: ${job.jobName}?`)) {
+                            deleteJobMutation.mutate(jobId);
+                          }
+                        }}
+                        onPrintWorksheet={(jobId) => {
+                          const fullJob = jobs.find(j => j.id === jobId);
+                          if (fullJob) {
+                            setWorksheetJob(fullJob);
+                          }
+                        }}
+                      />
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
