@@ -394,7 +394,7 @@ export class XeroService {
         : { name: customer.name },
       lineItems: xeroLineItems,
       date: job.goodsReceived ? new Date(job.goodsReceived).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      dueDate: new Date(job.requiredDispatchDate).toISOString().split('T')[0],
+      dueDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       reference: job.poNumber || undefined,
       status: "DRAFT",
     };
@@ -488,9 +488,10 @@ export class XeroService {
     }, jobs[0].goodsReceived ? new Date(jobs[0].goodsReceived) : new Date());
 
     const mostRecentDueDate = jobs.reduce((latest, job) => {
+      if (!job.requiredDispatchDate) return latest;
       const jobDueDate = new Date(job.requiredDispatchDate);
       return jobDueDate > latest ? jobDueDate : latest;
-    }, new Date(jobs[0].requiredDispatchDate));
+    }, jobs[0].requiredDispatchDate ? new Date(jobs[0].requiredDispatchDate) : new Date());
 
     // Combine all PO numbers for reference
     const poNumbers = jobs

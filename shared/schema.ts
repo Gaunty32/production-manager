@@ -48,6 +48,7 @@ export const staff = pgTable("staff", {
 
 export const jobs = pgTable("jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobNumber: integer("job_number").unique(),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   jobName: text("job_name").notNull(),
   poNumber: text("po_number"),
@@ -207,6 +208,7 @@ export const updateStaffSchema = z.object({
 
 export const insertJobSchema = createInsertSchema(jobs).omit({
   id: true,
+  jobNumber: true,
 }).extend({
   poNumber: z.preprocess(
     (val) => val === "" ? null : val,

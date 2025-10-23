@@ -223,10 +223,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createJob(insertJob: InsertJob): Promise<Job> {
+    // Get the maximum job number and increment by 1
+    const maxJobNumberResult = await db
+      .select({ maxJobNumber: sql<number>`COALESCE(MAX(job_number), 0)` })
+      .from(jobs);
+    const nextJobNumber = (maxJobNumberResult[0]?.maxJobNumber || 0) + 1;
+    
     const [job] = await db
       .insert(jobs)
       .values({
         ...insertJob,
+        jobNumber: nextJobNumber,
         goodsReceived: insertJob.goodsReceived ? new Date(insertJob.goodsReceived) : null,
         requiredDispatchDate: insertJob.requiredDispatchDate ? new Date(insertJob.requiredDispatchDate) : null,
       })
