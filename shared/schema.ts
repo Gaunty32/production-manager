@@ -70,6 +70,8 @@ export const jobs = pgTable("jobs", {
   packageType: text("package_type"),
   shippingCost: text("shipping_cost"),
   consolidatedShipmentId: varchar("consolidated_shipment_id"),
+  deliveryAddressType: text("delivery_address_type").default("customer"),
+  deliveryAddress: text("delivery_address"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {
