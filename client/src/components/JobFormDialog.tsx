@@ -88,7 +88,18 @@ const formSchema = insertJobSchema.extend({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
-});
+}).refine(
+  (data) => {
+    if (data.deliveryAddressType === "custom") {
+      return !!data.deliveryAddress && data.deliveryAddress.trim().length > 0;
+    }
+    return true;
+  },
+  {
+    message: "Delivery address is required when using custom delivery",
+    path: ["deliveryAddress"],
+  }
+);
 
 interface JobFormDialogProps {
   trigger: React.ReactNode;
@@ -400,7 +411,18 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   const canProceedFromStep2 = () => {
     const customerId = form.watch("customerId");
     const jobName = form.watch("jobName");
-    return !!customerId && !!jobName;
+    const deliveryAddressType = form.watch("deliveryAddressType");
+    const deliveryAddress = form.watch("deliveryAddress");
+    
+    if (!customerId || !jobName) {
+      return false;
+    }
+    
+    if (deliveryAddressType === "custom") {
+      return !!deliveryAddress && deliveryAddress.trim().length > 0;
+    }
+    
+    return true;
   };
 
   const canProceedFromStep3 = () => {

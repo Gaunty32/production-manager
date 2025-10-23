@@ -91,7 +91,18 @@ const formSchema = z.object({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
-});
+}).refine(
+  (data) => {
+    if (data.deliveryAddressType === "custom") {
+      return !!data.deliveryAddress && data.deliveryAddress.trim().length > 0;
+    }
+    return true;
+  },
+  {
+    message: "Delivery address is required when using custom delivery",
+    path: ["deliveryAddress"],
+  }
+);
 
 interface JobEditDialogProps {
   open: boolean;
@@ -109,6 +120,8 @@ interface JobEditDialogProps {
     completedOnTime: boolean | null;
     completedById: string | null;
     notes?: string | null;
+    deliveryAddressType?: string | null;
+    deliveryAddress?: string | null;
   } | null;
   customers: Array<{ id: string; name: string; address?: string | null }>;
   staff: Array<{ id: string; name: string }>;
@@ -187,6 +200,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         completedOnTime: job.completedOnTime,
         completedById: job.completedById,
         notes: job.notes || "",
+        deliveryAddressType: (job.deliveryAddressType as "customer" | "custom") || "customer",
+        deliveryAddress: job.deliveryAddress || "",
       });
     }
   }, [job, form]);
