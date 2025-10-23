@@ -83,6 +83,11 @@ const formSchema = insertJobSchema.extend({
     (val) => val === "" ? null : val,
     z.union([z.string(), z.null()]).optional()
   ),
+  deliveryAddressType: z.enum(["customer", "custom"]).optional(),
+  deliveryAddress: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
 });
 
 interface JobFormDialogProps {
@@ -113,6 +118,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       completedById: null,
       completedOnTime: null,
       notes: "",
+      deliveryAddressType: "customer",
+      deliveryAddress: "",
     },
   });
 
@@ -646,6 +653,62 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                     </FormItem>
                   )}
                 />
+
+                {/* Delivery Address */}
+                <FormField
+                  control={form.control}
+                  name="deliveryAddressType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Delivery Address</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "customer"}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-delivery-address-type">
+                            <SelectValue placeholder="Select delivery option" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="customer">Ship back to customer</SelectItem>
+                          <SelectItem value="custom">Custom delivery address</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Show customer address when "customer" is selected */}
+                {form.watch("deliveryAddressType") === "customer" && form.watch("customerId") && (
+                  <div className="border rounded-lg p-3 bg-muted/20">
+                    <p className="text-sm font-medium mb-1">Customer Address:</p>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {customers.find(c => c.id === form.watch("customerId"))?.address || "No address on file"}
+                    </p>
+                  </div>
+                )}
+
+                {/* Custom delivery address field */}
+                {form.watch("deliveryAddressType") === "custom" && (
+                  <FormField
+                    control={form.control}
+                    name="deliveryAddress"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Custom Delivery Address</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            {...field} 
+                            value={field.value || ""} 
+                            placeholder="Enter the delivery address..."
+                            className="min-h-[80px]"
+                            data-testid="input-delivery-address"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {/* Bulk Logo Approval Toggle */}
                 <div className="flex flex-col space-y-2">

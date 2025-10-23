@@ -86,6 +86,11 @@ const formSchema = z.object({
   dhlTrackingNumber: z.string().nullable().optional(),
   packageCount: z.number().nullable().optional(),
   packageType: z.string().nullable().optional(),
+  deliveryAddressType: z.enum(["customer", "custom"]).optional(),
+  deliveryAddress: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
 });
 
 interface JobEditDialogProps {
@@ -105,7 +110,7 @@ interface JobEditDialogProps {
     completedById: string | null;
     notes?: string | null;
   } | null;
-  customers: Array<{ id: string; name: string }>;
+  customers: Array<{ id: string; name: string; address?: string | null }>;
   staff: Array<{ id: string; name: string }>;
   onSubmit: (id: string, data: z.infer<typeof formSchema>) => void;
 }
@@ -147,6 +152,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       completedOnTime: null,
       completedById: null,
       notes: "",
+      deliveryAddressType: "customer",
+      deliveryAddress: "",
     },
   });
 
@@ -624,6 +631,62 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                   </FormItem>
                 )}
               />
+
+              {/* Delivery Address */}
+              <FormField
+                control={form.control}
+                name="deliveryAddressType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Delivery Address</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "customer"}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-delivery-address-type">
+                          <SelectValue placeholder="Select delivery option" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="customer">Ship back to customer</SelectItem>
+                        <SelectItem value="custom">Custom delivery address</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Show customer address or custom address field */}
+              {form.watch("deliveryAddressType") === "customer" && form.watch("customerId") && (
+                <div className="border rounded-lg p-3 bg-muted/20">
+                  <p className="text-sm font-medium mb-1">Customer Address:</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {customers.find(c => c.id === form.watch("customerId"))?.address || "No address on file"}
+                  </p>
+                </div>
+              )}
+
+              {/* Custom delivery address field */}
+              {form.watch("deliveryAddressType") === "custom" && (
+                <FormField
+                  control={form.control}
+                  name="deliveryAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Custom Delivery Address</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          value={field.value || ""} 
+                          placeholder="Enter the delivery address..."
+                          className="min-h-[80px]"
+                          data-testid="input-edit-delivery-address"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <div className="md:col-span-2">
                 <FormLabel>Line Items</FormLabel>
