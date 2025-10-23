@@ -18,6 +18,7 @@ import type { JobLineItem, Customer } from "@shared/schema";
 interface JobRowProps {
   job: {
     id: string;
+    jobNumber: number | null;
     customerId: string;
     customerName: string;
     jobName: string;
@@ -89,7 +90,11 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, isC
       <td className="py-2 px-3">{job.customerName}</td>
       <td className="py-2 px-3">
         <div className="flex items-center gap-2">
-          <span className="truncate">{job.jobName}</span>
+          <span className="truncate">
+            {job.jobNumber && <span className="font-semibold text-primary">#{job.jobNumber}</span>}
+            {job.jobNumber && " - "}
+            {job.jobName}
+          </span>
           <div className="flex items-center gap-1">
             {/* Compact status badges */}
             <Tooltip>

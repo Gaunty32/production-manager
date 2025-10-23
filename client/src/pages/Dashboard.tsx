@@ -21,6 +21,7 @@ import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { LogoSetupDialog } from "@/components/LogoSetupDialog";
 import { JobRow } from "@/components/JobRow";
 import { JobCard } from "@/components/JobCard";
+import { ProductionWorksheet } from "@/components/ProductionWorksheet";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
@@ -40,6 +41,7 @@ export default function Dashboard() {
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
   const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'overdue' | 'logo-setups' | '3-days' | null>(null);
+  const [worksheetJob, setWorksheetJob] = useState<JobWithLineItems | null>(null);
 
   // Fetch current user
   const { data: currentUser } = useQuery<{ id: string; email: string; firstName?: string; lastName?: string; role?: string }>({
@@ -596,6 +598,12 @@ export default function Dashboard() {
                         deleteJobMutation.mutate(jobId);
                       }
                     }}
+                    onPrintWorksheet={(jobId) => {
+                      const fullJob = jobs.find(j => j.id === jobId);
+                      if (fullJob) {
+                        setWorksheetJob(fullJob);
+                      }
+                    }}
                   />
                 );
               })}
@@ -615,6 +623,14 @@ export default function Dashboard() {
           staff={staff}
           onSubmit={(id, data) => updateJobMutation.mutate({ id, data })}
         />
+
+        {worksheetJob && (
+          <ProductionWorksheet
+            job={worksheetJob}
+            customer={customers.find(c => c.id === worksheetJob.customerId)!}
+            onClose={() => setWorksheetJob(null)}
+          />
+        )}
       </div>
     </div>
   );

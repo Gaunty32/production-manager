@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { CheckCircle2, XCircle, Package, AlertCircle, Clock, Layers, StickyNote, Trash2 } from "lucide-react";
+import { CheckCircle2, XCircle, Package, AlertCircle, Clock, Layers, StickyNote, Trash2, Printer } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { calculateProductionMetrics } from "@shared/machines";
 import type { JobLineItem, Customer } from "@shared/schema";
@@ -10,6 +10,7 @@ import type { JobLineItem, Customer } from "@shared/schema";
 interface JobCardProps {
   job: {
     id: string;
+    jobNumber: number | null;
     customerId: string;
     customerName: string;
     jobName: string;
@@ -27,6 +28,7 @@ interface JobCardProps {
   customer: Customer;
   onClick: () => void;
   onDelete?: (jobId: string) => void;
+  onPrintWorksheet?: (jobId: string) => void;
 }
 
 const JOB_TYPE_LABELS: Record<string, string> = {
@@ -36,7 +38,7 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-export function JobCard({ job, customer, onClick, onDelete }: JobCardProps) {
+export function JobCard({ job, customer, onClick, onDelete, onPrintWorksheet }: JobCardProps) {
   const isOverdue = job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = job.requiredDispatchDate && isToday(job.requiredDispatchDate);
   
@@ -101,6 +103,8 @@ export function JobCard({ job, customer, onClick, onDelete }: JobCardProps) {
                 {customer.name}
               </h3>
               <p className="text-sm text-muted-foreground truncate" data-testid={`text-jobname-${job.id}`}>
+                {job.jobNumber && <span className="font-semibold text-primary">#{job.jobNumber}</span>}
+                {job.jobNumber && " - "}
                 {job.jobName}
               </p>
             </div>
@@ -110,6 +114,28 @@ export function JobCard({ job, customer, onClick, onDelete }: JobCardProps) {
               <Badge variant="secondary">
                 {JOB_TYPE_LABELS[primaryJobType] || primaryJobType}
               </Badge>
+              
+              {/* Print Worksheet Button */}
+              {onPrintWorksheet && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPrintWorksheet(job.id);
+                      }}
+                      aria-label="Print production worksheet"
+                      data-testid={`button-print-worksheet-${job.id}`}
+                    >
+                      <Printer className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Print production worksheet</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               
               {/* Delete Button */}
               {onDelete && (
