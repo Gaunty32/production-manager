@@ -357,8 +357,8 @@ export class XeroService {
       
       if (item.itemCode === "CARRIAGE") {
         description = item.description; // Use the full description for shipping
-      } else if (item.itemCode === "PRINT") {
-        // For print jobs, don't mention stitches
+      } else if (item.itemCode === "Print DTF" || item.itemCode === "PRINT") {
+        // For print jobs, don't mention stitches (support both old and new item codes)
         description = item.description || item.jobName;
         if (item.poNumber) {
           description += ` (PO: ${item.poNumber})`;
@@ -451,8 +451,8 @@ export class XeroService {
       
       if (item.itemCode === "CARRIAGE") {
         description = item.description; // Use the full description for shipping
-      } else if (item.itemCode === "PRINT") {
-        // For print jobs, don't mention stitches
+      } else if (item.itemCode === "Print DTF" || item.itemCode === "PRINT") {
+        // For print jobs, don't mention stitches (support both old and new item codes)
         description = item.description || item.jobName;
         if (item.poNumber) {
           description += ` (PO: ${item.poNumber})`;

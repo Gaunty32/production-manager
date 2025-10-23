@@ -1008,7 +1008,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Determine item code based on job type
         let itemCode = "EMB"; // Default to embroidery
         if (lineItem.jobType === "print") {
-          itemCode = "PRINT";
+          itemCode = "Print DTF";
         } else if (lineItem.jobType === "bagging") {
           itemCode = "BAG";
         } else if (lineItem.jobType === "other") {
@@ -1144,7 +1144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Determine item code based on job type
           let itemCode = "EMB"; // Default to embroidery
           if (lineItem.jobType === "print") {
-            itemCode = "PRINT";
+            itemCode = "Print DTF";
           } else if (lineItem.jobType === "bagging") {
             itemCode = "BAG";
           } else if (lineItem.jobType === "other") {
