@@ -4,13 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck } from "lucide-react";
+import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette } from "lucide-react";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import { canViewPrices, type Job, type Customer } from "@shared/schema";
+import { canViewPrices, type Job, type Customer, type LogoSetup } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -44,6 +44,10 @@ export default function InvoicingQueue() {
 
   const { data: allLineItems = [] } = useQuery<LineItem[]>({
     queryKey: ["/api/job-line-items"],
+  });
+
+  const { data: logoSetups = [] } = useQuery<LogoSetup[]>({
+    queryKey: ["/api/logo-setups"],
   });
 
   useEffect(() => {
@@ -114,6 +118,10 @@ export default function InvoicingQueue() {
     return allLineItems.filter(item => item.jobId === jobId);
   };
 
+  const getCustomerApprovedLogos = (customerId: string) => {
+    return logoSetups.filter(ls => ls.customerId === customerId && ls.approved);
+  };
+
   const needsManualPrice = (lineItem: LineItem) => {
     return lineItem.quantity >= 1000 || lineItem.stitchCount >= 50000;
   };
@@ -158,6 +166,8 @@ export default function InvoicingQueue() {
 
   const getTotalPrice = (customerJobs: Job[]): number | "POA" | "TBA" | null => {
     const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
+    if (selectedCustomerJobs.length === 0) return null;
+    
     let total = 0;
     let hasPOA = false;
     let hasTBA = false;
@@ -182,6 +192,13 @@ export default function InvoicingQueue() {
         }
       }
     });
+
+    // Add approved logo setup charges (£10 each) if any jobs are selected for this customer
+    if (selectedCustomerJobs.length > 0) {
+      const customerId = selectedCustomerJobs[0].customerId;
+      const approvedLogos = getCustomerApprovedLogos(customerId);
+      total += approvedLogos.length * 10;
+    }
 
     // If any item is TBA or POA, return that
     if (hasTBA) return "TBA";
@@ -534,6 +551,48 @@ export default function InvoicingQueue() {
                           </div>
                         );
                       })}
+
+                      {/* Approved Logo Setups */}
+                      {(() => {
+                        const approvedLogos = getCustomerApprovedLogos(customerId);
+                        if (approvedLogos.length === 0) return null;
+                        
+                        return (
+                          <div className="mt-6 pt-6 border-t">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Palette className="h-4 w-4 text-primary" />
+                              <h4 className="font-semibold text-sm">Approved Logo Set-Ups</h4>
+                              <Badge variant="outline" className="ml-auto">
+                                Will be added to invoice
+                              </Badge>
+                            </div>
+                            <div className="space-y-2">
+                              {approvedLogos.map((logo) => (
+                                <div
+                                  key={logo.id}
+                                  className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20"
+                                  data-testid={`logo-setup-${logo.id}`}
+                                >
+                                  <div className="flex-1">
+                                    <p className="font-medium text-sm">{logo.jobName}</p>
+                                    {logo.notes && (
+                                      <p className="text-xs text-muted-foreground mt-1">{logo.notes}</p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Approved: {format(new Date(logo.approvedAt!), 'MMM d, yyyy')}
+                                    </p>
+                                  </div>
+                                  {canViewPrices(user?.role) && (
+                                    <Badge variant="secondary" className="text-base shrink-0">
+                                      £10.00
+                                    </Badge>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </CardContent>
                 </Card>
