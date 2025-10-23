@@ -578,9 +578,11 @@ export default function InvoicingQueue() {
                                     {logo.notes && (
                                       <p className="text-xs text-muted-foreground mt-1">{logo.notes}</p>
                                     )}
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      Approved: {format(new Date(logo.approvedAt!), 'MMM d, yyyy')}
-                                    </p>
+                                    {logo.approvedAt && (
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        Approved: {format(new Date(logo.approvedAt), 'MMM d, yyyy')}
+                                      </p>
+                                    )}
                                   </div>
                                   {canViewPrices(user?.role) && (
                                     <Badge variant="secondary" className="text-base shrink-0">
