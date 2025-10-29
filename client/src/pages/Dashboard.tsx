@@ -305,6 +305,11 @@ export default function Dashboard() {
     job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate)
   );
   
+  // Jobs due today
+  const jobsDueToday = allProductionJobs.filter(job =>
+    job.requiredDispatchDate && isToday(job.requiredDispatchDate)
+  );
+  
   // Jobs due in 3 days (using calendar boundaries)
   const now = new Date();
   const day3Start = startOfDay(addDays(now, 3));
@@ -407,7 +412,7 @@ export default function Dashboard() {
 
         {/* At-a-Glance Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {/* Overdue Orders */}
+          {/* Overdue + Due Today Orders */}
           <Card 
             className={`hover-elevate active-elevate-2 cursor-pointer transition-all ${activeFilter === 'overdue' ? 'ring-2 ring-destructive' : ''}`}
             onClick={() => setActiveFilter(activeFilter === 'overdue' ? null : 'overdue')}
@@ -416,8 +421,11 @@ export default function Dashboard() {
             <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Overdue Orders</p>
-                  <h3 className="text-3xl font-bold text-destructive mt-2">{overdueOrders.length}</h3>
+                  <p className="text-sm font-medium text-muted-foreground">Overdue / Due Today</p>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <h3 className="text-3xl font-bold text-destructive">{overdueOrders.length}</h3>
+                    <span className="text-xl font-semibold text-amber-500">/ {jobsDueToday.length}</span>
+                  </div>
                 </div>
                 <div className="h-12 w-12 bg-destructive/10 rounded-full flex items-center justify-center">
                   <AlertCircle className="h-6 w-6 text-destructive" />
@@ -426,21 +434,6 @@ export default function Dashboard() {
               {activeFilter === 'overdue' && (
                 <p className="text-xs text-destructive mt-2 font-medium">Click to clear filter</p>
               )}
-            </div>
-          </Card>
-
-          {/* Logo Set-Ups */}
-          <Card className="hover-elevate">
-            <div className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Logo Set-Ups</p>
-                  <h3 className="text-3xl font-bold text-primary mt-2">{pendingLogoSetups.length}</h3>
-                </div>
-                <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
-                  <Palette className="h-6 w-6 text-primary" />
-                </div>
-              </div>
             </div>
           </Card>
 
@@ -465,79 +458,22 @@ export default function Dashboard() {
               )}
             </div>
           </Card>
-        </div>
 
-        {/* Logo Set-Up Queue */}
-        {logoSetups.filter(ls => !ls.approved).length > 0 && (
-          <div className="border border-primary/30 rounded-md p-4 bg-primary/5 mb-6" data-testid="section-logo-setups">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Palette className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold text-primary">
-                  Logo Set-Up Queue ({logoSetups.filter(ls => !ls.approved).length})
-                </h3>
+          {/* Logo Set-Ups */}
+          <Card className="hover-elevate">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Logo Set-Ups</p>
+                  <h3 className="text-3xl font-bold text-primary mt-2">{pendingLogoSetups.length}</h3>
+                </div>
+                <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
+                  <Palette className="h-6 w-6 text-primary" />
+                </div>
               </div>
-              <LogoSetupDialog
-                trigger={
-                  <Button variant="outline" size="sm" data-testid="button-add-logo-setup">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Logo Set-Up
-                  </Button>
-                }
-                customers={customers}
-              />
             </div>
-            <div className="space-y-2">
-              {logoSetups
-                .filter(ls => !ls.approved)
-                .map((setup) => {
-                  const customer = customers.find(c => c.id === setup.customerId);
-                  return (
-                    <div
-                      key={setup.id}
-                      className="flex items-center justify-between bg-background rounded-md p-3"
-                      data-testid={`logo-setup-${setup.id}`}
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{customer?.name || "Unknown Customer"}</span>
-                          <span className="text-muted-foreground">-</span>
-                          <span className="text-sm">{setup.jobName}</span>
-                        </div>
-                        {setup.notes && (
-                          <p className="text-xs text-muted-foreground mt-1">{setup.notes}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Added {format(new Date(setup.createdAt), "MMM d, yyyy")}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => approveLogoSetupMutation.mutate(setup.id)}
-                          disabled={approveLogoSetupMutation.isPending}
-                          data-testid={`button-approve-${setup.id}`}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Approve (£10)
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => deleteLogoSetupMutation.mutate(setup.id)}
-                          disabled={deleteLogoSetupMutation.isPending}
-                          data-testid={`button-delete-${setup.id}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        )}
+          </Card>
+        </div>
 
         <div className="mb-6">
           <div className="relative max-w-md">
@@ -556,12 +492,21 @@ export default function Dashboard() {
         {/* Production Queue - All Jobs (Active + Pending) */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-foreground">
-              {activeFilter === 'overdue' && 'Overdue Orders'}
-              {activeFilter === '3-days' && 'Jobs Due in 3 Days'}
-              {activeFilter === 'logo-setups' && 'Jobs Awaiting Logo Approval'}
-              {!activeFilter && 'All Jobs in Production'}
-            </h2>
+            <div>
+              <h2 className="text-xl font-semibold text-foreground">
+                {activeFilter === 'overdue' && 'Overdue Orders'}
+                {activeFilter === '3-days' && 'Jobs Due in 3 Days'}
+                {activeFilter === 'logo-setups' && 'Jobs Awaiting Logo Approval'}
+                {!activeFilter && 'Production Queue'}
+              </h2>
+              {!activeFilter && (overdueOrders.length > 0 || jobsDueToday.length > 0) && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  <span className="text-destructive font-medium">{overdueOrders.length} overdue</span>
+                  {overdueOrders.length > 0 && jobsDueToday.length > 0 && <span className="mx-1">•</span>}
+                  {jobsDueToday.length > 0 && <span className="text-amber-600 font-medium">{jobsDueToday.length} due today</span>}
+                </p>
+              )}
+            </div>
             {activeFilter && (
               <Button 
                 variant="outline" 
@@ -638,6 +583,78 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+
+        {/* Logo Set-Up Queue */}
+        {logoSetups.filter(ls => !ls.approved).length > 0 && (
+          <div className="border border-primary/30 rounded-md p-4 bg-primary/5 mb-6" data-testid="section-logo-setups">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Palette className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold text-primary">
+                  Logo Set-Up Queue ({logoSetups.filter(ls => !ls.approved).length})
+                </h3>
+              </div>
+              <LogoSetupDialog
+                trigger={
+                  <Button variant="outline" size="sm" data-testid="button-add-logo-setup">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Logo Set-Up
+                  </Button>
+                }
+                customers={customers}
+              />
+            </div>
+            <div className="space-y-2">
+              {logoSetups
+                .filter(ls => !ls.approved)
+                .map((setup) => {
+                  const customer = customers.find(c => c.id === setup.customerId);
+                  return (
+                    <div
+                      key={setup.id}
+                      className="flex items-center justify-between bg-background rounded-md p-3"
+                      data-testid={`logo-setup-${setup.id}`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{customer?.name || "Unknown Customer"}</span>
+                          <span className="text-muted-foreground">-</span>
+                          <span className="text-sm">{setup.jobName}</span>
+                        </div>
+                        {setup.notes && (
+                          <p className="text-xs text-muted-foreground mt-1">{setup.notes}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Added {format(new Date(setup.createdAt), "MMM d, yyyy")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => approveLogoSetupMutation.mutate(setup.id)}
+                          disabled={approveLogoSetupMutation.isPending}
+                          data-testid={`button-approve-${setup.id}`}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Approve (£10)
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => deleteLogoSetupMutation.mutate(setup.id)}
+                          disabled={deleteLogoSetupMutation.isPending}
+                          data-testid={`button-delete-${setup.id}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
 
         <JobEditDialog
           open={editingJob !== null}
