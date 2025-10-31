@@ -161,6 +161,16 @@ export const customerUsers = pgTable("customer_users", {
   lastLoginAt: timestamp("last_login_at"),
 });
 
+// Password reset tokens for staff
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: varchar("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  used: boolean("used").notNull().default(false),
+});
+
 // Customer portal: job messages (chat)
 export const jobMessages = pgTable("job_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -649,3 +659,17 @@ export const staffRegisterSchema = z.object({
 
 export type StaffLogin = z.infer<typeof staffLoginSchema>;
 export type StaffRegister = z.infer<typeof staffRegisterSchema>;
+
+// Password reset schemas
+export const passwordResetRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+export const passwordResetConfirmSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export type PasswordResetRequest = z.infer<typeof passwordResetRequestSchema>;
+export type PasswordResetConfirm = z.infer<typeof passwordResetConfirmSchema>;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
