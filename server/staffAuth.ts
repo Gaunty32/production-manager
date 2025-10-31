@@ -33,7 +33,7 @@ export async function loginStaff(data: StaffLogin) {
   // Find user by email
   const user = await storage.getUserByEmail(data.email);
   
-  if (!user) {
+  if (!user || !user.password) {
     throw new Error("Invalid email or password");
   }
   
