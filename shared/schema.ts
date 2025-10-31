@@ -14,10 +14,11 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table for Replit Auth
+// User storage table for staff authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
+  email: varchar("email").unique().notNull(),
+  password: varchar("password").notNull(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
@@ -631,3 +632,20 @@ export type InsertJobMessage = z.infer<typeof insertJobMessageSchema>;
 export type JobMessage = typeof jobMessages.$inferSelect;
 export type InsertJobFile = z.infer<typeof insertJobFileSchema>;
 export type JobFile = typeof jobFiles.$inferSelect;
+
+// Staff authentication schemas
+export const staffLoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
+});
+
+export const staffRegisterSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  role: z.enum(["super_admin", "admin", "manager", "staff"]).default("staff"),
+});
+
+export type StaffLogin = z.infer<typeof staffLoginSchema>;
+export type StaffRegister = z.infer<typeof staffRegisterSchema>;
