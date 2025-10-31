@@ -518,7 +518,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-[90vw] mx-4">
+        <DialogContent className="w-full max-w-[95vw] md:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Production Order</DialogTitle>
             <DialogDescription>
