@@ -28,6 +28,7 @@ import { loginCustomer, registerCustomer, isCustomerAuthenticated, attachCustome
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
 import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
+import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Production database setup endpoint (only in production)
@@ -39,9 +40,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/staff-auth/login", async (req, res) => {
     try {
       const data = staffLoginSchema.parse(req.body);
+      
+      // Rate limiting: 5 attempts per email per 15 minutes
+      const rateLimitKey = `login:${data.email}`;
+      if (!checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000)) {
+        return res.status(429).json({ 
+          error: "Too many login attempts. Please try again in 15 minutes." 
+        });
+      }
+      
       const user = await loginStaff(data);
-      req.session.userId = user.id;
-      res.json(user);
+      
+      // Reset rate limit on successful login
+      resetRateLimit(rateLimitKey);
+      
+      // Regenerate session to prevent session fixation attacks
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error("Session regeneration error:", err);
+          return res.status(500).json({ error: "Login failed" });
+        }
+        
+        req.session.userId = user.id;
+        req.session.save((err) => {
+          if (err) {
+            console.error("Session save error:", err);
+            return res.status(500).json({ error: "Login failed" });
+          }
+          res.json(user);
+        });
+      });
     } catch (error: any) {
       console.error("Login error:", error);
       res.status(401).json({ error: error.message || "Login failed" });
@@ -69,6 +97,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (err) {
         return res.status(500).json({ error: "Logout failed" });
       }
+      // Clear the session cookie
+      res.clearCookie("connect.sid");
       res.json({ message: "Logged out successfully" });
     });
   });
