@@ -13,6 +13,7 @@ import {
   customerUsers,
   jobMessages,
   jobFiles,
+  passwordResetTokens,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -112,6 +113,12 @@ export interface IStorage {
   getJobFiles(jobId: string): Promise<JobFile[]>;
   createJobFile(file: InsertJobFile): Promise<JobFile>;
   deleteJobFile(id: string): Promise<void>;
+  
+  // Password reset methods
+  createPasswordResetToken(data: { userId: string; token: string; expiresAt: Date }): Promise<any>;
+  getPasswordResetToken(token: string): Promise<any | undefined>;
+  updateUserPassword(userId: string, passwordHash: string): Promise<void>;
+  markPasswordResetTokenUsed(tokenId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -899,6 +906,37 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobFile(id: string): Promise<void> {
     await db.delete(jobFiles).where(eq(jobFiles.id, id));
+  }
+
+  // Password reset methods
+  async createPasswordResetToken(data: { userId: string; token: string; expiresAt: Date }): Promise<any> {
+    const [token] = await db
+      .insert(passwordResetTokens)
+      .values(data)
+      .returning();
+    return token;
+  }
+
+  async getPasswordResetToken(token: string): Promise<any | undefined> {
+    const [resetToken] = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.token, token));
+    return resetToken;
+  }
+
+  async updateUserPassword(userId: string, passwordHash: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ password: passwordHash })
+      .where(eq(users.id, userId));
+  }
+
+  async markPasswordResetTokenUsed(tokenId: string): Promise<void> {
+    await db
+      .update(passwordResetTokens)
+      .set({ used: true })
+      .where(eq(passwordResetTokens.id, tokenId));
   }
 }
 
