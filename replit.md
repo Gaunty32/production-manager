@@ -16,7 +16,7 @@ The dashboard uses a card-based "scorecard" layout for at-a-glance production vi
 
 ### Technical Implementations
 
-The frontend uses React with TypeScript, Vite, `shadcn/ui`, and Tailwind CSS. State management is handled by TanStack React Query for server state and React Hook Form with Zod for form validation. The backend is built with Express.js on Node.js, using TypeScript, following a RESTful API design. Authentication is managed via Replit Auth (OpenID Connect) with session-based authentication and Passport.js for staff portal, and bcrypt password hashing with session-based authentication for customer portal. Request/response validation uses Zod schemas. Data storage uses PostgreSQL (Neon serverless database) with Drizzle ORM.
+The frontend uses React with TypeScript, Vite, `shadcn/ui`, and Tailwind CSS. State management is handled by TanStack React Query for server state and React Hook Form with Zod for form validation. The backend is built with Express.js on Node.js, using TypeScript, following a RESTful API design. Authentication uses email/password with bcrypt hashing and session-based authentication for both staff and customer portals. Staff authentication includes session regeneration on login (prevents session fixation), rate limiting (5 attempts per email per 15 minutes), and proper cookie clearing on logout. Only super_admin users can create new staff accounts. Request/response validation uses Zod schemas. Data storage uses PostgreSQL (Neon serverless database) with Drizzle ORM.
 
 ### Feature Specifications
 
@@ -28,7 +28,7 @@ Logo setup queue management tracks customer logo approval requests with £10 cha
 
 A gamification system tracks staff performance with a star system and a leaderboard. The leaderboard includes two views: (1) Star Leaderboard showing yellow stars for on-time completions and red stars for late completions, with normalized stitches per head-hour metrics, and (2) Daily Production view showing detailed daily breakdowns per staff member including jobs completed, total stitches, total items produced, hours worked, and stitches per hour rate. The daily production view accounts for machine types (8-head vs 6-head machines) and groups metrics by staff member and date, providing comprehensive performance visibility. Daily production tracking requires line items to have `completed_at` timestamps for accurate date-based grouping. A `super_admin` role provides user management and role editing. The production queue displays traffic light indicators for logo approval and goods received status, with color-coded urgency for required dispatch dates. Job types include Embroidery, Print, Bagging, and Other, with pricing currently calculated for Embroidery and Print types. "Date Received" is now "Goods Received," and the system calculates and visually indicates production time, highlighting urgent orders. Job completion requires all line items to be completed first, with automatic status resets if line items become incomplete. The goods received date field is optional.
 
-**Customer Portal**: A separate customer-facing interface allows customers to log in and view their orders. Customer authentication uses email/password with bcrypt hashing and session-based authentication (separate from staff Replit Auth). The customer portal includes:
+**Customer Portal**: A separate customer-facing interface allows customers to log in and view their orders. Customer authentication uses email/password with bcrypt hashing and session-based authentication (separate from staff authentication). The customer portal includes:
 - Login page at `/customer/login` with email and password fields
 - Customer dashboard at `/customer/dashboard` showing all jobs for the logged-in customer
 - Job cards display job name, status, dispatch date, production metrics, line items, and notes
@@ -45,7 +45,7 @@ A gamification system tracks staff performance with a star system and a leaderbo
 - **Form Management & Validation**: React Hook Form, Zod, @hookform/resolvers
 - **Styling**: Tailwind CSS, `class-variance-authority`, `clsx`, `tailwind-merge`
 - **Build Tools**: Vite, esbuild
-- **Authentication**: Replit Auth, Passport.js
+- **Authentication**: Email/password with bcrypt, Express sessions
 - **State Management**: TanStack React Query
 - **Routing**: Wouter
 - **External APIs**: Xero API
