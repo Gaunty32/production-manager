@@ -200,7 +200,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         completedOnTime: job.completedOnTime,
         completedById: job.completedById,
         notes: job.notes || "",
-        deliveryAddressType: (job.deliveryAddressType as "customer" | "custom") || "customer",
+        deliveryAddressType: (job.deliveryAddressType as "customer" | "custom" | "collection" | "undecided") || "customer",
         deliveryAddress: job.deliveryAddress || "",
       });
     }
