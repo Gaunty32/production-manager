@@ -26,9 +26,11 @@ import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
 import { loginCustomer, registerCustomer, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
-import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema } from "@shared/schema";
+import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
+import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
+import { sendPasswordResetEmail } from "./emailService";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Production database setup endpoint (only in production)
@@ -114,6 +116,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ error: "Failed to fetch user" });
+    }
+  });
+
+  // Password reset routes
+  app.post("/api/staff-auth/request-reset", async (req, res) => {
+    try {
+      const data = passwordResetRequestSchema.parse(req.body);
+      const token = await requestPasswordReset(data);
+      
+      // Send email with reset link
+      await sendPasswordResetEmail(data.email, token);
+      
+      // Always return success to prevent email enumeration
+      res.json({ message: "If an account exists with this email, you will receive a password reset link." });
+    } catch (error: any) {
+      console.error("Password reset request error:", error);
+      // Always return success to prevent email enumeration
+      res.json({ message: "If an account exists with this email, you will receive a password reset link." });
+    }
+  });
+
+  app.post("/api/staff-auth/confirm-reset", async (req, res) => {
+    try {
+      const data = passwordResetConfirmSchema.parse(req.body);
+      await confirmPasswordReset(data);
+      res.json({ message: "Password reset successfully" });
+    } catch (error: any) {
+      console.error("Password reset confirm error:", error);
+      res.status(400).json({ error: error.message || "Password reset failed" });
     }
   });
 

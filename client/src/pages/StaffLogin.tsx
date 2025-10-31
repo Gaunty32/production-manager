@@ -132,6 +132,17 @@ export default function StaffLogin() {
               >
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
+              <div className="text-center">
+                <Button
+                  type="button"
+                  variant="link"
+                  onClick={() => setLocation("/forgot-password")}
+                  className="text-sm"
+                  data-testid="link-forgot-password"
+                >
+                  Forgot password?
+                </Button>
+              </div>
             </form>
           </Form>
         </CardContent>

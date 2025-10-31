@@ -21,6 +21,8 @@ import InvoicingQueue from "@/pages/InvoicingQueue";
 import Landing from "@/pages/Landing";
 import CustomerLogin from "@/pages/CustomerLogin";
 import StaffLogin from "@/pages/StaffLogin";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import CustomerDashboard from "@/pages/CustomerDashboard";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
@@ -100,6 +102,7 @@ function CustomerPortalApp() {
 function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   const { isAuthenticated, isLoading, user } = useAuth();
   const { toast } = useToast();
+  const [location] = useLocation();
 
   if (isLoading) {
     return (
@@ -109,8 +112,14 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
     );
   }
 
-  // Show login page if not authenticated
+  // Show password reset pages without authentication
   if (!isAuthenticated) {
+    if (location === "/forgot-password") {
+      return <ForgotPassword />;
+    }
+    if (location === "/reset-password" || location.startsWith("/reset-password?")) {
+      return <ResetPassword />;
+    }
     return <StaffLogin />;
   }
 
