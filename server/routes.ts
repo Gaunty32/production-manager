@@ -22,49 +22,79 @@ import {
   updateLogoSetupSchema
 } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated } from "./replitAuth";
 import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
 import { loginCustomer, registerCustomer, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
-import { customerLoginSchema, insertCustomerUserSchema } from "@shared/schema";
+import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
+import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup authentication
-  await setupAuth(app);
-
   // Production database setup endpoint (only in production)
   if (process.env.NODE_ENV === 'production') {
     app.get('/api/setup-production', setupProductionDatabase);
   }
 
-  // Optional auth middleware - allows both authenticated and guest access
-  const optionalAuth = (req: any, res: any, next: any) => {
-    // Skip authentication check, allow all requests
-    next();
-  };
-
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  // Staff authentication routes
+  app.post("/api/staff-auth/login", async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
+      const data = staffLoginSchema.parse(req.body);
+      const user = await loginStaff(data);
+      req.session.userId = user.id;
       res.json(user);
+    } catch (error: any) {
+      console.error("Login error:", error);
+      res.status(401).json({ error: error.message || "Login failed" });
+    }
+  });
+
+  app.post("/api/staff-auth/register", isStaffAuthenticated, async (req, res) => {
+    try {
+      const currentUser = await storage.getUser(req.session.userId!);
+      if (!currentUser || currentUser.role !== "super_admin") {
+        return res.status(403).json({ error: "Only super admins can register new staff" });
+      }
+
+      const data = staffRegisterSchema.parse(req.body);
+      const user = await registerStaff(data);
+      res.json(user);
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      res.status(400).json({ error: error.message || "Registration failed" });
+    }
+  });
+
+  app.post("/api/staff-auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  app.get("/api/staff-auth/user", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
     } catch (error) {
       console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+      res.status(500).json({ error: "Failed to fetch user" });
     }
   });
 
   // Middleware to check if user is super admin
   const requireSuperAdmin = async (req: any, res: any, next: any) => {
     try {
-      if (!req.user) {
+      if (!req.session?.userId) {
         return res.status(401).json({ error: "Authentication required" });
       }
       
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
+      const user = await storage.getUser(req.session.userId);
       
       if (!user || user.role !== "super_admin") {
         return res.status(403).json({ error: "Super admin access required" });
@@ -78,7 +108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // User management routes - protected for super admins only
-  app.get("/api/users", isAuthenticated, requireSuperAdmin, async (req, res) => {
+  app.get("/api/users", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
       res.json(users);
@@ -88,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/users/:id/role", isAuthenticated, requireSuperAdmin, async (req, res) => {
+  app.patch("/api/users/:id/role", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
     try {
       const { role } = req.body;
       
@@ -107,7 +137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Star management routes
-  app.post("/api/users/:userId/stars", optionalAuth, async (req, res) => {
+  app.post("/api/users/:userId/stars", isStaffAuthenticated, async (req, res) => {
     try {
       const { userId } = req.params;
       const { starType } = req.body;
@@ -124,7 +154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/stars/leaderboard", optionalAuth, async (req, res) => {
+  app.get("/api/stars/leaderboard", isStaffAuthenticated, async (req, res) => {
     try {
       const [stars, productionMetrics] = await Promise.all([
         storage.getStarsLeaderboard(),
@@ -194,7 +224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/staff-production/daily", optionalAuth, async (req, res) => {
+  app.get("/api/staff-production/daily", isStaffAuthenticated, async (req, res) => {
     try {
       const dailyMetrics = await storage.getDailyStaffProductionMetrics();
       res.json(dailyMetrics);
@@ -305,7 +335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Customer routes
-  app.get("/api/customers", optionalAuth, async (req, res) => {
+  app.get("/api/customers", isStaffAuthenticated, async (req, res) => {
     try {
       const customers = await storage.getCustomers();
       res.json(customers);
@@ -314,7 +344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/customers", optionalAuth, async (req, res) => {
+  app.post("/api/customers", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertCustomerSchema.parse(req.body);
       const customer = await storage.createCustomer(data);
@@ -328,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/customers/:id", optionalAuth, async (req, res) => {
+  app.patch("/api/customers/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateCustomerSchema.parse(req.body);
       const customer = await storage.updateCustomer(req.params.id, data);
@@ -344,7 +374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/customers/:id", optionalAuth, async (req, res) => {
+  app.delete("/api/customers/:id", isStaffAuthenticated, async (req, res) => {
     try {
       await storage.deleteCustomer(req.params.id);
       res.json({ success: true });
@@ -358,7 +388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Staff routes
-  app.get("/api/staff", optionalAuth, async (req, res) => {
+  app.get("/api/staff", isStaffAuthenticated, async (req, res) => {
     try {
       const staff = await storage.getStaff();
       res.json(staff);
@@ -367,7 +397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/staff", optionalAuth, async (req, res) => {
+  app.post("/api/staff", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertStaffSchema.parse(req.body);
       const staffMember = await storage.createStaff(data);
@@ -381,7 +411,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/staff/:id", optionalAuth, async (req, res) => {
+  app.patch("/api/staff/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateStaffSchema.parse(req.body);
       const staffMember = await storage.updateStaff(req.params.id, data);
@@ -397,7 +427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/staff/:id", optionalAuth, async (req, res) => {
+  app.delete("/api/staff/:id", isStaffAuthenticated, async (req, res) => {
     try {
       await storage.deleteStaff(req.params.id);
       res.json({ success: true });
@@ -409,7 +439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Job routes
-  app.get("/api/jobs/:id", optionalAuth, async (req, res) => {
+  app.get("/api/jobs/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const job = await storage.getJob(id);
@@ -424,7 +454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/jobs", optionalAuth, async (req, res) => {
+  app.get("/api/jobs", isStaffAuthenticated, async (req, res) => {
     try {
       const { machineId } = req.query;
       
@@ -449,7 +479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/jobs", optionalAuth, async (req, res) => {
+  app.post("/api/jobs", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertJobSchema.parse(req.body);
       const job = await storage.createJob(data);
@@ -463,7 +493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/jobs/:id", optionalAuth, async (req, res) => {
+  app.patch("/api/jobs/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const data = updateJobSchema.parse(req.body);
@@ -555,7 +585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/jobs/:id", optionalAuth, async (req, res) => {
+  app.delete("/api/jobs/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteJob(id);
@@ -566,7 +596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Job line item routes
-  app.get("/api/job-line-items", optionalAuth, async (req, res) => {
+  app.get("/api/job-line-items", isStaffAuthenticated, async (req, res) => {
     try {
       const lineItems = await storage.getAllJobLineItems();
       console.log(`GET /api/job-line-items: Returning ${lineItems.length} line items`, 
@@ -578,7 +608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/jobs/:jobId/line-items", optionalAuth, async (req, res) => {
+  app.get("/api/jobs/:jobId/line-items", isStaffAuthenticated, async (req, res) => {
     try {
       const { jobId } = req.params;
       const lineItems = await storage.getJobLineItems(jobId);
@@ -588,7 +618,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/jobs/:jobId/line-items", optionalAuth, async (req, res) => {
+  app.post("/api/jobs/:jobId/line-items", isStaffAuthenticated, async (req, res) => {
     try {
       const { jobId } = req.params;
       const data = insertJobLineItemSchema.parse({ ...req.body, jobId });
@@ -603,7 +633,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/job-line-items/:id", optionalAuth, async (req, res) => {
+  app.patch("/api/job-line-items/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateJobLineItemSchema.parse(req.body);
       const updates = Object.fromEntries(
@@ -622,7 +652,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/job-line-items/:id", optionalAuth, async (req, res) => {
+  app.delete("/api/job-line-items/:id", isStaffAuthenticated, async (req, res) => {
     try {
       await storage.deleteJobLineItem(req.params.id);
       res.json({ success: true });
@@ -632,7 +662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Staff shift routes
-  app.get("/api/staff-shifts", optionalAuth, async (req, res) => {
+  app.get("/api/staff-shifts", isStaffAuthenticated, async (req, res) => {
     try {
       const { staffId, startDate, endDate } = req.query;
       const shifts = await storage.getStaffShifts(
@@ -646,7 +676,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/staff-shifts", optionalAuth, async (req, res) => {
+  app.post("/api/staff-shifts", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertStaffShiftSchema.parse(req.body);
       const shift = await storage.createStaffShift(data);
@@ -660,7 +690,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/staff-shifts/:id", optionalAuth, async (req, res) => {
+  app.patch("/api/staff-shifts/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateStaffShiftSchema.parse(req.body);
       const updates = Object.fromEntries(
@@ -679,7 +709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/staff-shifts/:id", optionalAuth, async (req, res) => {
+  app.delete("/api/staff-shifts/:id", isStaffAuthenticated, async (req, res) => {
     try {
       await storage.deleteStaffShift(req.params.id);
       res.json({ success: true });
@@ -691,7 +721,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Machine schedule block routes
-  app.get("/api/machine-schedule-blocks", optionalAuth, async (req, res) => {
+  app.get("/api/machine-schedule-blocks", isStaffAuthenticated, async (req, res) => {
     try {
       const { machineId, startDate, endDate } = req.query;
       const blocks = await storage.getMachineScheduleBlocks(
@@ -705,7 +735,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/machine-schedule-blocks", optionalAuth, async (req, res) => {
+  app.post("/api/machine-schedule-blocks", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertMachineScheduleBlockSchema.parse(req.body);
       const block = await storage.createMachineScheduleBlock(data);
@@ -719,7 +749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/machine-schedule-blocks/:id", optionalAuth, async (req, res) => {
+  app.patch("/api/machine-schedule-blocks/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateMachineScheduleBlockSchema.parse(req.body);
       const updates = Object.fromEntries(
@@ -738,7 +768,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/machine-schedule-blocks/:id", optionalAuth, async (req, res) => {
+  app.delete("/api/machine-schedule-blocks/:id", isStaffAuthenticated, async (req, res) => {
     try {
       await storage.deleteMachineScheduleBlock(req.params.id);
       res.json({ success: true });
@@ -750,7 +780,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Job schedule routes
-  app.get("/api/job-schedules", optionalAuth, async (req, res) => {
+  app.get("/api/job-schedules", isStaffAuthenticated, async (req, res) => {
     try {
       const { jobId, machineId, staffId, startDate, endDate } = req.query;
       const schedules = await storage.getJobSchedules(
@@ -766,7 +796,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/job-schedules", optionalAuth, async (req, res) => {
+  app.post("/api/job-schedules", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertJobScheduleSchema.parse(req.body);
       const schedule = await storage.createJobSchedule(data);
@@ -780,7 +810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/job-schedules/:id", optionalAuth, async (req, res) => {
+  app.patch("/api/job-schedules/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateJobScheduleSchema.parse(req.body);
       const updates = Object.fromEntries(
@@ -799,7 +829,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/job-schedules/:id", optionalAuth, async (req, res) => {
+  app.delete("/api/job-schedules/:id", isStaffAuthenticated, async (req, res) => {
     try {
       await storage.deleteJobSchedule(req.params.id);
       res.json({ success: true });
@@ -811,7 +841,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Schedule suggestion route
-  app.post("/api/suggest-schedule", optionalAuth, async (req, res) => {
+  app.post("/api/suggest-schedule", isStaffAuthenticated, async (req, res) => {
     try {
       const { machineId, quantity, stitchCount, requiredDispatchDate } = req.body;
       
@@ -895,7 +925,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Staff machine allocation routes
-  app.get("/api/staff-machine-allocations", optionalAuth, async (req, res) => {
+  app.get("/api/staff-machine-allocations", isStaffAuthenticated, async (req, res) => {
     try {
       const { staffId, machineId, startDate, endDate } = req.query;
       const allocations = await storage.getStaffMachineAllocations(
@@ -910,7 +940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/staff-machine-allocations", optionalAuth, async (req, res) => {
+  app.post("/api/staff-machine-allocations", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertStaffMachineAllocationSchema.parse(req.body);
       const allocation = await storage.createStaffMachineAllocation(data);
@@ -924,7 +954,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/staff-machine-allocations/:id", optionalAuth, async (req, res) => {
+  app.patch("/api/staff-machine-allocations/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateStaffMachineAllocationSchema.parse(req.body);
       const allocation = await storage.updateStaffMachineAllocation(req.params.id, data);
@@ -940,7 +970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/staff-machine-allocations/:id", optionalAuth, async (req, res) => {
+  app.delete("/api/staff-machine-allocations/:id", isStaffAuthenticated, async (req, res) => {
     try {
       await storage.deleteStaffMachineAllocation(req.params.id);
       res.json({ success: true });
@@ -950,7 +980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Xero integration routes
-  app.get("/api/xero/status", optionalAuth, async (req, res) => {
+  app.get("/api/xero/status", isStaffAuthenticated, async (req, res) => {
     res.json({ 
       configured: xeroService.isConfigured(),
       message: xeroService.isConfigured() 
@@ -959,7 +989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/xero/invoice/:jobId", optionalAuth, async (req, res) => {
+  app.post("/api/xero/invoice/:jobId", isStaffAuthenticated, async (req, res) => {
     try {
       const { jobId } = req.params;
       const { manualPrices } = req.body; // Optional manual prices: { lineItemId: unitPrice }
@@ -1066,7 +1096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/xero/consolidated-invoice", optionalAuth, async (req, res) => {
+  app.post("/api/xero/consolidated-invoice", isStaffAuthenticated, async (req, res) => {
     try {
       const { jobIds, customerId, manualPrices } = req.body; // Optional manual prices: { lineItemId: unitPrice }
 
@@ -1256,7 +1286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Logo Setup routes
-  app.get("/api/logo-setups", optionalAuth, async (req, res) => {
+  app.get("/api/logo-setups", isStaffAuthenticated, async (req, res) => {
     try {
       const logoSetups = await storage.getLogoSetups();
       res.json(logoSetups);
@@ -1266,7 +1296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/logo-setups", optionalAuth, async (req, res) => {
+  app.post("/api/logo-setups", isStaffAuthenticated, async (req, res) => {
     try {
       const parsed = insertLogoSetupSchema.parse(req.body);
       const logoSetup = await storage.createLogoSetup(parsed);
@@ -1280,7 +1310,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/logo-setups/:id", optionalAuth, async (req, res) => {
+  app.patch("/api/logo-setups/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const parsed = updateLogoSetupSchema.parse(req.body);
       const logoSetup = await storage.updateLogoSetup(req.params.id, parsed);
@@ -1294,7 +1324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/logo-setups/:id", optionalAuth, async (req, res) => {
+  app.delete("/api/logo-setups/:id", isStaffAuthenticated, async (req, res) => {
     try {
       await storage.deleteLogoSetup(req.params.id);
       res.status(204).send();
@@ -1305,14 +1335,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Xero OAuth routes
-  app.get("/api/xero/auth/status", optionalAuth, async (req, res) => {
+  app.get("/api/xero/auth/status", isStaffAuthenticated, async (req, res) => {
     res.json({
       configured: xeroService.isConfigured(),
       connected: xeroService.isConnected(),
     });
   });
 
-  app.get("/api/xero/auth/connect", optionalAuth, async (req, res) => {
+  app.get("/api/xero/auth/connect", isStaffAuthenticated, async (req, res) => {
     try {
       if (!xeroService.isConfigured()) {
         return res.status(400).json({ error: "Xero is not configured. Please contact your administrator." });
@@ -1350,7 +1380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/xero/auth/callback", optionalAuth, async (req, res) => {
+  app.get("/api/xero/auth/callback", isStaffAuthenticated, async (req, res) => {
     try {
       const { code, state } = req.query;
 
