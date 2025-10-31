@@ -86,7 +86,7 @@ const formSchema = z.object({
   dhlTrackingNumber: z.string().nullable().optional(),
   packageCount: z.number().nullable().optional(),
   packageType: z.string().nullable().optional(),
-  deliveryAddressType: z.enum(["customer", "custom"]).optional(),
+  deliveryAddressType: z.enum(["customer", "custom", "collection", "undecided"]).optional(),
   deliveryAddress: z.preprocess(
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
@@ -663,6 +663,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                       <SelectContent>
                         <SelectItem value="customer">Ship back to customer</SelectItem>
                         <SelectItem value="custom">Custom delivery address</SelectItem>
+                        <SelectItem value="collection">Customer collection</SelectItem>
+                        <SelectItem value="undecided">Undecided</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
