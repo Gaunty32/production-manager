@@ -518,7 +518,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-[90vw] mx-4">
           <DialogHeader>
             <DialogTitle>Edit Production Order</DialogTitle>
             <DialogDescription>
@@ -884,7 +884,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                       
                       {/* Completion Tracking - Show when item is completed */}
                       {item.completed && (
-                        <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t">
                           <div>
                             <label className="text-xs text-muted-foreground">Completed By</label>
                             <Select 

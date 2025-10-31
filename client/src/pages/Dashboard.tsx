@@ -531,55 +531,57 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="border rounded-md overflow-hidden" data-testid="table-production-queue">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow className="text-xs text-muted-foreground uppercase tracking-wider">
-                    <TableHead className="py-3 px-3">Customer</TableHead>
-                    <TableHead className="py-3 px-3">Job</TableHead>
-                    <TableHead className="py-3 px-3">PO #</TableHead>
-                    <TableHead className="py-3 px-3">Qty</TableHead>
-                    <TableHead className="py-3 px-3">Machine</TableHead>
-                    <TableHead className="py-3 px-3">Production</TableHead>
-                    {canViewPrices(currentUser?.role) && (
-                      <TableHead className="py-3 px-3">Price</TableHead>
-                    )}
-                    <TableHead className="py-3 px-3">Date Required</TableHead>
-                    <TableHead className="py-3 px-3">Status</TableHead>
-                    <TableHead className="py-3 px-3">Completed By</TableHead>
-                    <TableHead className="py-3 px-3">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayedJobs.map((job) => {
-                    const customer = customers.find(c => c.id === job.customerId);
-                    if (!customer) return null;
-                    return (
-                      <JobRow
-                        key={job.id}
-                        job={{
-                          ...job,
-                          goodsReceived: job.goodsReceived ? new Date(job.goodsReceived) : null,
-                          requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
-                        }}
-                        customer={customer}
-                        showPrices={canViewPrices(currentUser?.role)}
-                        onEdit={handleEdit}
-                        onDelete={(jobId) => {
-                          if (window.confirm(`Are you sure you want to delete this job: ${job.jobName}?`)) {
-                            deleteJobMutation.mutate(jobId);
-                          }
-                        }}
-                        onPrintWorksheet={(jobId) => {
-                          const fullJob = jobs.find(j => j.id === jobId);
-                          if (fullJob) {
-                            setWorksheetJob(fullJob);
-                          }
-                        }}
-                      />
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow className="text-xs text-muted-foreground uppercase tracking-wider">
+                      <TableHead className="py-3 px-3">Customer</TableHead>
+                      <TableHead className="py-3 px-3">Job</TableHead>
+                      <TableHead className="py-3 px-3">PO #</TableHead>
+                      <TableHead className="py-3 px-3">Qty</TableHead>
+                      <TableHead className="py-3 px-3">Machine</TableHead>
+                      <TableHead className="py-3 px-3">Production</TableHead>
+                      {canViewPrices(currentUser?.role) && (
+                        <TableHead className="py-3 px-3">Price</TableHead>
+                      )}
+                      <TableHead className="py-3 px-3">Date Required</TableHead>
+                      <TableHead className="py-3 px-3">Status</TableHead>
+                      <TableHead className="py-3 px-3">Completed By</TableHead>
+                      <TableHead className="py-3 px-3">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {displayedJobs.map((job) => {
+                      const customer = customers.find(c => c.id === job.customerId);
+                      if (!customer) return null;
+                      return (
+                        <JobRow
+                          key={job.id}
+                          job={{
+                            ...job,
+                            goodsReceived: job.goodsReceived ? new Date(job.goodsReceived) : null,
+                            requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
+                          }}
+                          customer={customer}
+                          showPrices={canViewPrices(currentUser?.role)}
+                          onEdit={handleEdit}
+                          onDelete={(jobId) => {
+                            if (window.confirm(`Are you sure you want to delete this job: ${job.jobName}?`)) {
+                              deleteJobMutation.mutate(jobId);
+                            }
+                          }}
+                          onPrintWorksheet={(jobId) => {
+                            const fullJob = jobs.find(j => j.id === jobId);
+                            if (fullJob) {
+                              setWorksheetJob(fullJob);
+                            }
+                          }}
+                        />
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </div>

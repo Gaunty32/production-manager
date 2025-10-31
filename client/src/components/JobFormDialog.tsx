@@ -432,7 +432,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto sm:max-w-[90vw] mx-4">
         <DialogHeader>
           <DialogTitle>Create New Order</DialogTitle>
           <DialogDescription>
@@ -474,7 +474,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Required Dispatch Date */}
                   <FormField
                     control={form.control}
@@ -1006,7 +1006,7 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                 {/* Order Summary */}
                 <div className="border rounded-lg p-4 bg-muted/20 space-y-3">
                   <h4 className="font-semibold">Order Summary</h4>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                     <div className="text-muted-foreground">Customer:</div>
                     <div className="font-medium">{customers.find(c => c.id === form.watch("customerId"))?.name || "-"}</div>
                     
