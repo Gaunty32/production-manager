@@ -27,10 +27,16 @@ import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
 import { loginCustomer, registerCustomer, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { customerLoginSchema, insertCustomerUserSchema } from "@shared/schema";
+import { setupProductionDatabase } from "./setup-production";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   await setupAuth(app);
+
+  // Production database setup endpoint (only in production)
+  if (process.env.NODE_ENV === 'production') {
+    app.get('/api/setup-production', setupProductionDatabase);
+  }
 
   // Optional auth middleware - allows both authenticated and guest access
   const optionalAuth = (req: any, res: any, next: any) => {
