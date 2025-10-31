@@ -83,7 +83,7 @@ const formSchema = insertJobSchema.extend({
     (val) => val === "" ? null : val,
     z.union([z.string(), z.null()]).optional()
   ),
-  deliveryAddressType: z.enum(["customer", "custom"]).optional(),
+  deliveryAddressType: z.enum(["customer", "custom", "collection", "undecided"]).optional(),
   deliveryAddress: z.preprocess(
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
@@ -692,6 +692,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                         <SelectContent>
                           <SelectItem value="customer">Ship back to customer</SelectItem>
                           <SelectItem value="custom">Custom delivery address</SelectItem>
+                          <SelectItem value="collection">Customer collection</SelectItem>
+                          <SelectItem value="undecided">Undecided</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
