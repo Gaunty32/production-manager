@@ -3,9 +3,9 @@ import type { User } from "@shared/schema";
 
 export function useAuth() {
   const { data: user, isLoading } = useQuery<User | null>({
-    queryKey: ["/api/auth/user"],
+    queryKey: ["/api/staff-auth/user"],
     queryFn: async () => {
-      const res = await fetch("/api/auth/user", {
+      const res = await fetch("/api/staff-auth/user", {
         credentials: "include",
       });
       

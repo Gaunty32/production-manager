@@ -20,9 +20,12 @@ import Leaderboard from "@/pages/Leaderboard";
 import InvoicingQueue from "@/pages/InvoicingQueue";
 import Landing from "@/pages/Landing";
 import CustomerLogin from "@/pages/CustomerLogin";
+import StaffLogin from "@/pages/StaffLogin";
 import CustomerDashboard from "@/pages/CustomerDashboard";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import logoImage from "@assets/Selectuniforms960_1759932224049.jpg";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -96,6 +99,7 @@ function CustomerPortalApp() {
 
 function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const { toast } = useToast();
 
   if (isLoading) {
     return (
@@ -105,7 +109,24 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
     );
   }
 
-  // Always show the full app with sidebar (guest access enabled)
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return <StaffLogin />;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await apiRequest("POST", "/api/staff-auth/logout", {});
+      window.location.href = "/";
+    } catch (error) {
+      toast({
+        title: "Logout failed",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
@@ -125,37 +146,27 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
             </div>
             <div className="flex items-center gap-3">
               <ThemeToggle />
-              {isAuthenticated ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" data-testid="button-user-menu">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={user?.profileImageUrl || undefined} />
-                        <AvatarFallback>
-                          {user?.email?.[0]?.toUpperCase() || "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem 
-                      onClick={() => window.location.href = "/api/logout"}
-                      data-testid="button-logout"
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <Button 
-                  variant="outline" 
-                  onClick={() => window.location.href = "/api/login"}
-                  data-testid="button-login-header"
-                >
-                  Sign In
-                </Button>
-              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="button-user-menu">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={user?.profileImageUrl || undefined} />
+                      <AvatarFallback>
+                        {user?.email?.[0]?.toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem 
+                    onClick={handleLogout}
+                    data-testid="button-logout"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
           <main className="flex-1 overflow-hidden">
