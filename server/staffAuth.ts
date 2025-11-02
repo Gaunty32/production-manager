@@ -30,18 +30,23 @@ export async function registerStaff(data: StaffRegister) {
 }
 
 export async function loginStaff(data: StaffLogin) {
-  // Find user by email
-  const user = await storage.getUserByEmail(data.email);
+  // Find user by email or username
+  let user = await storage.getUserByEmail(data.email);
+  
+  // If not found by email, try username
+  if (!user) {
+    user = await storage.getUserByUsername(data.email);
+  }
   
   if (!user || !user.password) {
-    throw new Error("Invalid email or password");
+    throw new Error("Invalid username or password");
   }
   
   // Verify password
   const isValid = await bcrypt.compare(data.password, user.password);
   
   if (!isValid) {
-    throw new Error("Invalid email or password");
+    throw new Error("Invalid username or password");
   }
   
   // Return without password

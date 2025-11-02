@@ -26,7 +26,7 @@ import { LogIn } from "lucide-react";
 import { useLocation } from "wouter";
 
 const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
+  email: z.string().min(1, "Username or email is required"),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -93,11 +93,11 @@ export default function StaffLogin() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>Username or Email</FormLabel>
                     <FormControl>
                       <Input
-                        type="email"
-                        placeholder="your@email.com"
+                        type="text"
+                        placeholder="username or email"
                         data-testid="input-email"
                         {...field}
                       />
