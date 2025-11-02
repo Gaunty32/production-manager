@@ -54,12 +54,13 @@ export default function StaffLogin() {
         title: "Welcome back",
         description: "You have been logged in successfully",
       });
-      setLocation("/");
+      // Force reload to ensure session is recognized
+      window.location.href = "/";
     },
     onError: (error: any) => {
       toast({
         title: "Login Failed",
-        description: error.message || "Invalid email or password",
+        description: error.message || "Invalid username or password",
         variant: "destructive",
       });
     },
