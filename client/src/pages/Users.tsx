@@ -7,13 +7,67 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { UserRole, type User } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { UserPlus } from "lucide-react";
+
+const createUserSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  role: z.enum([UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]),
+});
+
+type CreateUserFormData = z.infer<typeof createUserSchema>;
 
 export default function Users() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
+  });
+
+  const createUserForm = useForm<CreateUserFormData>({
+    resolver: zodResolver(createUserSchema),
+    defaultValues: {
+      username: "",
+      email: "",
+      password: "",
+      firstName: "",
+      lastName: "",
+      role: UserRole.STAFF,
+    },
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (data: CreateUserFormData) => {
+      const res = await apiRequest("POST", "/api/users", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "User created",
+        description: "New user account has been successfully created.",
+      });
+      setCreateDialogOpen(false);
+      createUserForm.reset();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user",
+        variant: "destructive",
+      });
+    },
   });
 
   const updateRoleMutation = useMutation({
@@ -41,6 +95,10 @@ export default function Users() {
     updateRoleMutation.mutate({ userId, role: newRole });
   };
 
+  const onCreateUser = (data: CreateUserFormData) => {
+    createUserMutation.mutate(data);
+  };
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -52,9 +110,164 @@ export default function Users() {
   return (
     <div className="h-full overflow-auto p-6">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">User Management</h1>
-          <p className="text-muted-foreground">Manage user roles and permissions</p>
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">User Management</h1>
+            <p className="text-muted-foreground">Manage user roles and permissions</p>
+          </div>
+          {currentUser?.role === UserRole.SUPER_ADMIN && (
+            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-create-user">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Create User
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Create New User</DialogTitle>
+                  <DialogDescription>
+                    Add a new staff member to the system
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...createUserForm}>
+                  <form onSubmit={createUserForm.handleSubmit(onCreateUser)} className="space-y-4">
+                    <FormField
+                      control={createUserForm.control}
+                      name="username"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Username</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="username"
+                              data-testid="input-username"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={createUserForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="email"
+                              placeholder="user@example.com"
+                              data-testid="input-email"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={createUserForm.control}
+                        name="firstName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>First Name</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="John"
+                                data-testid="input-firstname"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={createUserForm.control}
+                        name="lastName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Last Name</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Doe"
+                                data-testid="input-lastname"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <FormField
+                      control={createUserForm.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="••••••••"
+                              data-testid="input-password"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={createUserForm.control}
+                      name="role"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Role</FormLabel>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-role">
+                                <SelectValue placeholder="Select role" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value={UserRole.ADMIN}>Admin</SelectItem>
+                              <SelectItem value={UserRole.MANAGER}>Manager</SelectItem>
+                              <SelectItem value={UserRole.STAFF}>Staff</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex justify-end gap-2 pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setCreateDialogOpen(false)}
+                        data-testid="button-cancel"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={createUserMutation.isPending}
+                        data-testid="button-submit"
+                      >
+                        {createUserMutation.isPending ? "Creating..." : "Create User"}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         <Card>

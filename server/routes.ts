@@ -179,6 +179,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/users", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const createUserSchema = z.object({
+        username: z.string().min(3, "Username must be at least 3 characters"),
+        email: z.string().email("Invalid email address"),
+        password: z.string().min(8, "Password must be at least 8 characters"),
+        firstName: z.string().min(1, "First name is required"),
+        lastName: z.string().min(1, "Last name is required"),
+        role: z.enum(["admin", "manager", "staff"]),
+      });
+
+      const data = createUserSchema.parse(req.body);
+      
+      // Check if username or email already exists
+      const existingByUsername = await storage.getUserByUsername(data.username);
+      const existingByEmail = await storage.getUserByEmail(data.email);
+      
+      if (existingByUsername || existingByEmail) {
+        return res.status(400).json({ 
+          error: "A user with this username or email already exists" 
+        });
+      }
+
+      const user = await registerStaff({
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        role: data.role,
+      });
+
+      res.json(user);
+    } catch (error: any) {
+      console.error("Error creating user:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: error.errors[0]?.message || "Invalid input" });
+      }
+      res.status(500).json({ error: error.message || "Failed to create user" });
+    }
+  });
+
   app.patch("/api/users/:id/role", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
     try {
       const { role } = req.body;
