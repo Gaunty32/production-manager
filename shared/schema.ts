@@ -646,8 +646,8 @@ export type JobFile = typeof jobFiles.$inferSelect;
 
 // Staff authentication schemas
 export const staffLoginSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
+  email: z.string().min(1, "Username or email is required"),
+  password: z.string().min(1, "Password is required"),
 });
 
 export const staffRegisterSchema = z.object({
