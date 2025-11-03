@@ -5,10 +5,15 @@ import type { StaffLogin, StaffRegister } from "@shared/schema";
 const SALT_ROUNDS = 10;
 
 export async function registerStaff(data: StaffRegister) {
-  // Check if user already exists
-  const existingUser = await storage.getUserByEmail(data.email);
-  if (existingUser) {
+  // Check if user already exists by email or username
+  const existingUserByEmail = await storage.getUserByEmail(data.email);
+  if (existingUserByEmail) {
     throw new Error("Email already registered");
+  }
+  
+  const existingUserByUsername = await storage.getUserByUsername(data.username);
+  if (existingUserByUsername) {
+    throw new Error("Username already taken");
   }
 
   // Hash the password
@@ -16,6 +21,7 @@ export async function registerStaff(data: StaffRegister) {
   
   // Create user
   const user = await storage.createUser({
+    username: data.username,
     email: data.email,
     password: passwordHash,
     firstName: data.firstName,

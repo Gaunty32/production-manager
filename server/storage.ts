@@ -52,6 +52,8 @@ export interface IStorage {
   createUser(user: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserRole(id: string, role: string): Promise<User>;
+  updateUserUsername(id: string, username: string): Promise<void>;
+  ensureUsernameColumn(): Promise<void>;
   getCustomers(): Promise<Customer[]>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   updateCustomer(id: string, customer: Partial<Customer>): Promise<Customer>;
@@ -172,6 +174,26 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user;
+  }
+
+  async updateUserUsername(id: string, username: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ username, updatedAt: new Date() })
+      .where(eq(users.id, id));
+  }
+
+  async ensureUsernameColumn(): Promise<void> {
+    try {
+      // Add username column if it doesn't exist
+      await db.execute(sql`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS username VARCHAR(255)
+      `);
+    } catch (error) {
+      console.error("Error adding username column:", error);
+      // Column might already exist, which is fine
+    }
   }
 
   async getCustomers(): Promise<Customer[]> {

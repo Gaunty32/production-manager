@@ -651,6 +651,7 @@ export const staffLoginSchema = z.object({
 });
 
 export const staffRegisterSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
   email: z.string().email(),
   password: z.string().min(8, "Password must be at least 8 characters"),
   firstName: z.string().min(1, "First name is required"),

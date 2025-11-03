@@ -38,6 +38,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     app.get('/api/setup-production', setupProductionDatabase);
   }
 
+  // Quick setup endpoint to create initial admin user (use once, then remove)
+  app.get('/api/create-admin', async (req, res) => {
+    try {
+      // First, ensure the username column exists in the users table
+      await storage.ensureUsernameColumn();
+      
+      // Check if chris user already exists
+      const existingUser = await storage.getUserByEmail('chris@selectuniforms.co.uk');
+      
+      if (existingUser) {
+        // Update existing user to have username if missing
+        if (!existingUser.username) {
+          await storage.updateUserUsername(existingUser.id, 'chris');
+        }
+        return res.json({ 
+          message: "Admin user already exists and has been updated", 
+          username: "chris",
+          canLogin: true 
+        });
+      }
+
+      // Create the chris user
+      const user = await registerStaff({
+        username: 'chris',
+        email: 'chris@selectuniforms.co.uk',
+        password: 'SelectUniforms2024!',
+        firstName: 'Chris',
+        lastName: 'User',
+        role: 'super_admin',
+      });
+
+      res.json({ 
+        message: "Admin user created successfully!", 
+        username: "chris",
+        canLogin: true 
+      });
+    } catch (error: any) {
+      console.error("Error creating admin user:", error);
+      res.status(500).json({ 
+        error: error.message || "Failed to create admin user",
+        details: error.toString()
+      });
+    }
+  });
+
   // Staff authentication routes
   app.post("/api/staff-auth/login", async (req, res) => {
     try {
