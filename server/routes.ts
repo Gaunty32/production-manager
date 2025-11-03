@@ -133,6 +133,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Test login endpoint - try to login via GET request
+  app.get('/api/test-login', async (req, res) => {
+    try {
+      // Try to login with chris credentials
+      const user = await loginStaff({
+        email: 'chris',
+        password: 'SelectUniforms2024!',
+      });
+
+      // Set userId in session
+      req.session.userId = user.id;
+      
+      await new Promise((resolve, reject) => {
+        req.session.save((err: any) => {
+          if (err) reject(err);
+          else resolve(true);
+        });
+      });
+
+      res.json({
+        success: true,
+        message: 'Login successful',
+        userId: user.id,
+        sessionId: req.sessionID,
+        username: user.username,
+      });
+    } catch (error: any) {
+      res.status(401).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  });
+
   // Staff authentication routes
   app.post("/api/staff-auth/login", async (req, res) => {
     try {
