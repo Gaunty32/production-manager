@@ -93,6 +93,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sessionId: req.sessionID,
         hasSession: !!req.session,
         sessionUserId: req.session?.userId,
+        fullSession: req.session,
+        cookieHeaders: req.headers.cookie,
         cookieConfig: {
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
@@ -114,6 +116,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
+  });
+
+  // Test endpoint to manually set session
+  app.get('/api/test-session', (req, res) => {
+    if (!req.session.testCounter) {
+      req.session.testCounter = 0;
+    }
+    req.session.testCounter++;
+    
+    res.json({
+      message: 'Session test',
+      counter: req.session.testCounter,
+      sessionId: req.sessionID,
+      cookiesSent: res.getHeaders()['set-cookie'],
+    });
   });
 
   // Staff authentication routes
