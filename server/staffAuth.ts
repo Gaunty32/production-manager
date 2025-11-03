@@ -62,9 +62,12 @@ export async function loginStaff(data: StaffLogin) {
 
 // Middleware to check if staff is authenticated
 export function isStaffAuthenticated(req: any, res: any, next: any) {
+  console.log(`[AUTH] Checking authentication - SessionID: ${req.sessionID}, UserId: ${req.session?.userId}, Session: ${JSON.stringify(req.session)}`);
   if (!req.session?.userId) {
+    console.log(`[AUTH] No userId in session, returning 401`);
     return res.status(401).json({ error: "Authentication required" });
   }
+  console.log(`[AUTH] User authenticated: ${req.session.userId}`);
   next();
 }
 

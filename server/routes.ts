@@ -83,9 +83,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Diagnostic endpoint to check session and database status
+  app.get('/api/diagnostics', async (req, res) => {
+    try {
+      const diagnostics: any = {
+        nodeEnv: process.env.NODE_ENV,
+        hasDatabaseUrl: !!process.env.DATABASE_URL,
+        hasSessionSecret: !!process.env.SESSION_SECRET,
+        sessionId: req.sessionID,
+        hasSession: !!req.session,
+        sessionUserId: req.session?.userId,
+        cookieConfig: {
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+        },
+      };
+
+      // Check if we can query the database
+      try {
+        const users = await storage.getAllUsers();
+        diagnostics.databaseConnection = 'OK';
+        diagnostics.userCount = users.length;
+        diagnostics.usersWithUsername = users.filter(u => u.username).length;
+      } catch (dbError: any) {
+        diagnostics.databaseConnection = 'ERROR';
+        diagnostics.databaseError = dbError.message;
+      }
+
+      res.json(diagnostics);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Staff authentication routes
   app.post("/api/staff-auth/login", async (req, res) => {
     try {
+      console.log(`[LOGIN] Attempt for user: ${req.body.email}, NODE_ENV: ${process.env.NODE_ENV}`);
       const data = staffLoginSchema.parse(req.body);
       
       // Rate limiting: 5 attempts per email per 15 minutes
@@ -97,6 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const user = await loginStaff(data);
+      console.log(`[LOGIN] User authenticated: ${user.id}`);
       
       // Reset rate limit on successful login
       resetRateLimit(rateLimitKey);
@@ -104,21 +139,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Regenerate session to prevent session fixation attacks
       req.session.regenerate((err) => {
         if (err) {
-          console.error("Session regeneration error:", err);
+          console.error("[LOGIN] Session regeneration error:", err);
           return res.status(500).json({ error: "Login failed" });
         }
         
+        console.log(`[LOGIN] Session regenerated, setting userId: ${user.id}`);
         req.session.userId = user.id;
         req.session.save((err) => {
           if (err) {
-            console.error("Session save error:", err);
+            console.error("[LOGIN] Session save error:", err);
             return res.status(500).json({ error: "Login failed" });
           }
+          console.log(`[LOGIN] Session saved successfully, sessionID: ${req.sessionID}`);
           res.json(user);
         });
       });
     } catch (error: any) {
-      console.error("Login error:", error);
+      console.error("[LOGIN] Login error:", error);
       res.status(401).json({ error: error.message || "Login failed" });
     }
   });
