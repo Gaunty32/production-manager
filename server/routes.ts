@@ -136,11 +136,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test login endpoint - try to login via GET request
   app.get('/api/test-login', async (req, res) => {
     try {
+      console.log('[TEST-LOGIN] Attempting test login...');
+      
+      // First check if user exists
+      const userByUsername = await storage.getUserByUsername('chris');
+      const userByEmail = await storage.getUserByEmail('chris@selectuniforms.co.uk');
+      
+      console.log('[TEST-LOGIN] User by username:', userByUsername ? 'Found' : 'Not found');
+      console.log('[TEST-LOGIN] User by email:', userByEmail ? 'Found' : 'Not found');
+      
       // Try to login with chris credentials
       const user = await loginStaff({
         email: 'chris',
         password: 'SelectUniforms2024!',
       });
+
+      console.log('[TEST-LOGIN] Login successful, userId:', user.id);
 
       // Set userId in session
       req.session.userId = user.id;
@@ -158,11 +169,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: user.id,
         sessionId: req.sessionID,
         username: user.username,
+        userByUsername: !!userByUsername,
+        userByEmail: !!userByEmail,
       });
     } catch (error: any) {
+      console.error('[TEST-LOGIN] Error:', error.message);
       res.status(401).json({
         success: false,
         error: error.message,
+        stack: error.stack,
       });
     }
   });
