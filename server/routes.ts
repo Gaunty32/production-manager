@@ -119,7 +119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test endpoint to manually set session
-  app.get('/api/test-session', (req, res) => {
+  app.get('/api/test-session', (req: any, res) => {
     if (!req.session.testCounter) {
       req.session.testCounter = 0;
     }
