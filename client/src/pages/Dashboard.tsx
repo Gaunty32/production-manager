@@ -546,7 +546,6 @@ export default function Dashboard() {
                       )}
                       <TableHead className="py-3 px-3">Date Required</TableHead>
                       <TableHead className="py-3 px-3">Status</TableHead>
-                      <TableHead className="py-3 px-3">Completed By</TableHead>
                       <TableHead className="py-3 px-3">Actions</TableHead>
                     </TableRow>
                   </TableHeader>

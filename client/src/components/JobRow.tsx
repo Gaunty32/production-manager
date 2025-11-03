@@ -274,7 +274,6 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, onP
       <td className="py-2 px-3">
         <StatusBadge status={job.completedOnTime} type="ontime" />
       </td>
-      <td className="py-2 px-3">{job.completedByName || "-"}</td>
       <td className="py-2 px-3">
         {isCompleted ? (
           <span className="text-sm" data-testid={`text-invoice-ref-${job.id}`}>
