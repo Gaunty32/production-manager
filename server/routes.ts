@@ -145,6 +145,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[TEST-LOGIN] User by username:', userByUsername ? 'Found' : 'Not found');
       console.log('[TEST-LOGIN] User by email:', userByEmail ? 'Found' : 'Not found');
       
+      // Return diagnostic info even if login fails
+      const diagnostics = {
+        userExistsByUsername: !!userByUsername,
+        userExistsByEmail: !!userByEmail,
+        usernameData: userByUsername ? {
+          id: userByUsername.id,
+          username: userByUsername.username,
+          email: userByUsername.email,
+          passwordHashPrefix: userByUsername.password?.substring(0, 10) || 'NO_PASSWORD',
+        } : null,
+        emailData: userByEmail ? {
+          id: userByEmail.id,
+          username: userByEmail.username,
+          email: userByEmail.email,
+          passwordHashPrefix: userByEmail.password?.substring(0, 10) || 'NO_PASSWORD',
+        } : null,
+      };
+      
       // Try to login with chris credentials
       const user = await loginStaff({
         email: 'chris',
@@ -169,15 +187,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: user.id,
         sessionId: req.sessionID,
         username: user.username,
-        userByUsername: !!userByUsername,
-        userByEmail: !!userByEmail,
+        diagnostics,
       });
     } catch (error: any) {
       console.error('[TEST-LOGIN] Error:', error.message);
+      
+      // Still return diagnostic info on failure
+      const userByUsername = await storage.getUserByUsername('chris');
+      const userByEmail = await storage.getUserByEmail('chris@selectuniforms.co.uk');
+      
       res.status(401).json({
         success: false,
         error: error.message,
-        stack: error.stack,
+        diagnostics: {
+          userExistsByUsername: !!userByUsername,
+          userExistsByEmail: !!userByEmail,
+          usernameData: userByUsername ? {
+            id: userByUsername.id,
+            username: userByUsername.username,
+            email: userByUsername.email,
+            passwordHashPrefix: userByUsername.password?.substring(0, 10) || 'NO_PASSWORD',
+          } : null,
+          emailData: userByEmail ? {
+            id: userByEmail.id,
+            username: userByEmail.username,
+            email: userByEmail.email,
+            passwordHashPrefix: userByEmail.password?.substring(0, 10) || 'NO_PASSWORD',
+          } : null,
+        },
       });
     }
   });
