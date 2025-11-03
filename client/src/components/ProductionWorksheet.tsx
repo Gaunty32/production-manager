@@ -16,6 +16,11 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
     window.print();
   };
 
+  // Calculate if all line items have logos approved
+  const allLogosApproved = job.lineItems && job.lineItems.length > 0 
+    ? job.lineItems.every(item => item.logoApproved) 
+    : false;
+
   return (
     <div className="fixed inset-0 bg-background z-50 overflow-auto">
       {/* Print button bar - hide when printing */}
@@ -36,23 +41,23 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
       {/* Worksheet content - optimized for printing */}
       <div className="max-w-4xl mx-auto p-8 print:p-0">
         <div className="bg-white text-black print:shadow-none">
-          {/* Header Section */}
-          <div className="border-b-4 border-black pb-4 mb-6">
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <h1 className="text-2xl font-bold">
-                  Required: {job.requiredDispatchDate ? format(job.requiredDispatchDate, "dd/MM/yyyy") : "TBA"}
+          {/* Header Section - Top Quarter of Page */}
+          <div className="border-b-4 border-black pb-6 mb-6 min-h-[25vh]">
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex-1">
+                <h1 className="text-5xl font-bold text-red-600 mb-4">
+                  REQUIRED: {job.requiredDispatchDate ? format(job.requiredDispatchDate, "dd/MM/yyyy") : "TBA"}
                 </h1>
-                <p className="text-xl font-semibold mt-1">{customer.name}</p>
+                <p className="text-4xl font-bold text-red-600 mb-2">{customer.name}</p>
+                <h2 className="text-3xl font-bold text-red-600">{job.jobName}</h2>
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-600">Job Number</p>
-                <p className="text-3xl font-bold">#{job.jobNumber || "N/A"}</p>
+                <p className="text-4xl font-bold">#{job.jobNumber || "N/A"}</p>
               </div>
             </div>
-            <h2 className="text-xl font-semibold mt-2">{job.jobName}</h2>
             {job.poNumber && (
-              <p className="text-sm text-gray-600 mt-1">PO Number: {job.poNumber}</p>
+              <p className="text-lg text-gray-600 mt-2">PO Number: {job.poNumber}</p>
             )}
           </div>
 
@@ -76,6 +81,14 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
                     <td className="py-2 font-medium">Dispatch Required:</td>
                     <td className="py-2 text-right font-semibold">
                       {job.requiredDispatchDate ? format(job.requiredDispatchDate, "dd/MM/yyyy") : "TBA"}
+                    </td>
+                  </tr>
+                  <tr className="border-b">
+                    <td className="py-2 font-medium">All Logos Approved:</td>
+                    <td className="py-2 text-right">
+                      <span className={allLogosApproved ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
+                        {allLogosApproved ? "YES ✓" : "NO ✗"}
+                      </span>
                     </td>
                   </tr>
                 </tbody>
@@ -109,6 +122,36 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Shipping/Delivery Information */}
+          <div className="mb-6 p-4 border-2 border-gray-300 bg-gray-50">
+            <h3 className="font-semibold text-sm uppercase text-gray-600 mb-2">Shipping & Delivery</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-medium">Delivery Type:</p>
+                <p className="mt-1">
+                  {job.deliveryAddressType === "customer" && "Ship to Customer Address"}
+                  {job.deliveryAddressType === "custom" && "Custom Delivery Address"}
+                  {job.deliveryAddressType === "collection" && "Customer Collection (Pickup)"}
+                  {job.deliveryAddressType === "undecided" && "Undecided"}
+                </p>
+              </div>
+              <div>
+                <p className="font-medium">Shipping Method:</p>
+                <p className="mt-1">{job.shippingMethod || "Not specified"}</p>
+              </div>
+            </div>
+            {(job.deliveryAddressType === "customer" || job.deliveryAddressType === "custom") && (
+              <div className="mt-3 pt-3 border-t border-gray-300">
+                <p className="font-medium mb-1">Delivery Address:</p>
+                <p className="whitespace-pre-wrap">
+                  {job.deliveryAddressType === "customer" 
+                    ? customer.address 
+                    : job.deliveryAddress || "No address specified"}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Line Items Section */}
