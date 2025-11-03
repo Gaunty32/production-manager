@@ -204,6 +204,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Force logout endpoint - clears ALL sessions (both OAuth and staff)
+  app.get("/api/force-logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error("Session destroy error:", err);
+      }
+      // Clear the session cookie
+      res.clearCookie("connect.sid", { path: "/" });
+      res.send(`
+        <html>
+          <body>
+            <h1>Logged Out</h1>
+            <p>Your session has been cleared.</p>
+            <p><a href="/staff/login">Click here to go to Staff Login</a></p>
+            <script>
+              // Also clear any local storage
+              localStorage.clear();
+              sessionStorage.clear();
+            </script>
+          </body>
+        </html>
+      `);
+    });
+  });
+
   app.get("/api/staff-auth/user", isStaffAuthenticated, async (req: any, res) => {
     try {
       const user = await storage.getUser(req.session.userId);
