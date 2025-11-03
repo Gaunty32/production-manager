@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import bcrypt from "bcrypt";
 import { 
   insertCustomerSchema, 
   updateCustomerSchema, 
@@ -131,6 +132,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       sessionId: req.sessionID,
       cookiesSent: res.getHeaders()['set-cookie'],
     });
+  });
+
+  // Fix chris password - update existing user with password hash
+  app.get('/api/fix-chris-password', async (req, res) => {
+    try {
+      const password = 'SelectUniforms2024!';
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      // Update the chris user with the password
+      await storage.updateUserPassword('46418210', hashedPassword);
+      
+      res.json({
+        success: true,
+        message: 'Password updated successfully for chris',
+        userId: '46418210',
+        note: 'You can now login with chris / SelectUniforms2024!',
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        stack: error.stack,
+      });
+    }
   });
 
   // Test login endpoint - try to login via GET request
