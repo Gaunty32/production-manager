@@ -12,7 +12,7 @@ import {
 import { Link, useLocation } from "wouter";
 import { MACHINE_NAMES } from "@shared/machines";
 import { useAuth } from "@/hooks/useAuth";
-import { isSuperAdmin } from "@shared/schema";
+import { isSuperAdmin, canViewPrices } from "@shared/schema";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
@@ -35,6 +35,7 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
   const isUserSuperAdmin = isSuperAdmin(user?.role);
+  const userCanViewPrices = canViewPrices(user?.role);
 
   return (
     <Sidebar>
@@ -43,16 +44,18 @@ export function AppSidebar() {
           <SidebarGroupLabel>Production Manager</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={location === item.url}>
-                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {menuItems
+                .filter(item => item.url !== "/invoicing" || userCanViewPrices)
+                .map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={location === item.url}>
+                      <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
               {isUserSuperAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/users"}>
