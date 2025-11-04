@@ -48,6 +48,8 @@ The production queue displays traffic light indicators for logo approval and goo
   - Machine Assignment (displays machine name or "Unassigned")
   - Date Required (dispatch date)
   - Status (badges showing In Progress, Completed, Overdue, Due Today)
+- Jobs are sorted by required dispatch date in descending order (newest first), with undated jobs appearing at the end
+- Filter tabs allow customers to view "In Progress" (default), "Completed", or "All Orders"
 - Visual grouping of line items under their parent job for clear hierarchy
 - Logout functionality that clears the session and returns to login
 - Separate routing and layout from staff portal (no sidebar, simplified header)
