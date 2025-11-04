@@ -277,6 +277,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
             -webkit-print-color-adjust: exact;
           }
           @page {
+            size: A4;
             margin: 1cm;
           }
         }
