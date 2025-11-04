@@ -334,14 +334,21 @@ export default function Dashboard() {
       if (job.lineItems) {
         // Get customer for this job to determine pricing table
         const customer = customers.find(c => c.id === job.customerId);
-        const pricingTable: PricingTable = customer?.pricingTable2025 ? "2025" : "2026";
+        
+        // Determine pricing table: use 2025 if explicitly set, otherwise 2026 if explicitly set, otherwise default to 2026
+        let pricingTable: PricingTable = "2026";
+        if (customer?.pricingTable2025) {
+          pricingTable = "2025";
+        } else if (customer?.pricingTable2026) {
+          pricingTable = "2026";
+        }
 
         job.lineItems.forEach(lineItem => {
           totalQuantity += lineItem.quantity || 0;
 
           // Calculate price based on job type
           try {
-            let itemPrice = 0;
+            let itemPrice: number | "POA" = 0;
 
             if (lineItem.jobType === "Bagging") {
               const result = getBaggingPrice(lineItem.quantity, pricingTable);
@@ -355,14 +362,15 @@ export default function Dashboard() {
             } else if (lineItem.stitchCount) {
               // Embroidery or Other with stitch count
               const result = getPrice(lineItem.quantity, lineItem.stitchCount, pricingTable);
-              if (result.totalPrice !== "POA") {
-                itemPrice = result.totalPrice;
-              }
+              itemPrice = result.totalPrice; // Can be "POA"
             }
 
-            totalValue += itemPrice;
+            // Only add to total if it's a number (not POA)
+            if (typeof itemPrice === "number") {
+              totalValue += itemPrice;
+            }
           } catch (error) {
-            // Skip items that can't be priced (e.g., POA, missing data)
+            // Skip items that can't be priced (e.g., missing data, invalid params)
           }
         });
       }
