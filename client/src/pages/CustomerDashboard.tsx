@@ -8,6 +8,7 @@ import { useLocation } from "wouter";
 import { LogOut, Package, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -16,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type LineItem = {
   id: string;
@@ -53,6 +55,7 @@ type CustomerUser = {
 export default function CustomerDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed">("in_progress");
 
   const { data: customerUser, isLoading: isLoadingUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
@@ -62,6 +65,23 @@ export default function CustomerDashboard() {
     queryKey: ["/api/customer-portal/jobs"],
     enabled: !!customerUser,
   });
+
+  // Sort jobs by required dispatch date (newest first) and filter by status
+  const filteredJobs = jobs
+    .filter(job => {
+      if (statusFilter === "all") return true;
+      if (statusFilter === "completed") return job.completed;
+      if (statusFilter === "in_progress") return !job.completed;
+      return true;
+    })
+    .sort((a, b) => {
+      // Sort by required dispatch date descending (newest first)
+      // Jobs without dates go to the end
+      if (!a.requiredDispatchDate && !b.requiredDispatchDate) return 0;
+      if (!a.requiredDispatchDate) return 1;
+      if (!b.requiredDispatchDate) return -1;
+      return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
+    });
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -155,18 +175,36 @@ export default function CustomerDashboard() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold text-foreground mb-2">Production Queue</h2>
-          <p className="text-sm text-muted-foreground">
-            View the status and progress of your orders in production
-          </p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground mb-2">Production Queue</h2>
+            <p className="text-sm text-muted-foreground">
+              View the status and progress of your orders in production
+            </p>
+          </div>
+          
+          <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
+            <TabsList data-testid="tabs-status-filter">
+              <TabsTrigger value="in_progress" data-testid="tab-in-progress">
+                In Progress
+              </TabsTrigger>
+              <TabsTrigger value="completed" data-testid="tab-completed">
+                Completed
+              </TabsTrigger>
+              <TabsTrigger value="all" data-testid="tab-all">
+                All Orders
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
-        {jobs.length === 0 ? (
+        {filteredJobs.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No orders found</p>
+              <p className="text-muted-foreground">
+                {jobs.length === 0 ? "No orders found" : `No ${statusFilter.replace('_', ' ')} orders`}
+              </p>
             </CardContent>
           </Card>
         ) : (
@@ -184,7 +222,7 @@ export default function CustomerDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {jobs.map((job) => {
+                  {filteredJobs.map((job) => {
                     const lineItems = job.lineItems || [];
                     
                     if (lineItems.length === 0) {
