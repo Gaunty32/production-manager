@@ -782,6 +782,13 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                                 £2.50 per item
                               </div>
                             </>
+                          ) : item.jobType === "Bagging" ? (
+                            <>
+                              <label className="text-xs text-muted-foreground">Price</label>
+                              <div className="mt-1 px-3 py-2 rounded-md bg-muted/30 border text-sm font-semibold text-primary">
+                                {customers.find(c => c.id === job?.customerId)?.pricingTable2025 ? "£0.30 per item" : "£0.40 per item"}
+                              </div>
+                            </>
                           ) : (
                             <>
                               <label className="text-xs text-muted-foreground">Stitch Count</label>
@@ -800,7 +807,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             </>
                           )}
                         </div>
-                        {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && (
+                        {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
                           <div className="flex-1">
                             <label className="text-xs text-muted-foreground">Machine</label>
                             <Select 

@@ -403,6 +403,22 @@ export function getFlatRatePrice(
   };
 }
 
+export function getBaggingPrice(
+  quantity: number,
+  pricingTable: PricingTable = "2026"
+): FlatRatePriceLookupResult {
+  // 30p for 2025 table, 40p for 2026 table
+  const unitPrice = pricingTable === "2025" ? 0.30 : 0.40;
+  const totalPrice = unitPrice * quantity;
+
+  return {
+    unitPrice,
+    totalPrice: parseFloat(totalPrice.toFixed(2)),
+    tier: "Flat Rate",
+    jobType: "Bagging",
+  };
+}
+
 export function calculateJobPrice(
   lineItems: Array<{ quantity: number; stitchCount: number; jobType?: string }>,
   pricingTable: PricingTable = "2026"
@@ -411,6 +427,10 @@ export function calculateJobPrice(
   totalPrice: number | "POA";
 } {
   const lineItemPrices = lineItems.map((item) => {
+    // For bagging (30p or 40p per item based on pricing table)
+    if (item.jobType === "Bagging") {
+      return getBaggingPrice(item.quantity, pricingTable);
+    }
     // For flat-rate job types (£2.50 each)
     if (item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name") {
       return getFlatRatePrice(item.quantity, item.jobType);

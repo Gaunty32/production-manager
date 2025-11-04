@@ -205,33 +205,59 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       return null;
     }
 
-    // Calculate pricing for Embroidery and Print line items
+    // Calculate pricing for Embroidery, Print, and Bagging line items
     const lineItemPricing = lineItems.map(item => {
-      // Only calculate pricing for Embroidery and Print types
-      if (item.jobType !== "Embroidery" && item.jobType !== "Print") {
+      // Skip items with no quantity
+      if (!item.quantity || item.quantity === 0) {
         return null;
       }
-      
-      // Skip pricing if stitch count is not set (0 or missing)
-      if (!item.stitchCount || item.stitchCount === 0) {
-        return null;
-      }
-      
+
       try {
-        if (item.jobType === "Print") {
+        if (item.jobType === "Bagging") {
+          // Use bagging pricing (30p for 2025, 40p for 2026)
+          const unitPrice = pricingTable === "2025" ? 0.30 : 0.40;
+          const totalPrice = unitPrice * item.quantity;
+          return {
+            unitPrice,
+            totalPrice: parseFloat(totalPrice.toFixed(2)),
+            tier: "Flat Rate",
+            lineTotal: parseFloat(totalPrice.toFixed(2)),
+          };
+        } else if (item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name") {
+          // Use flat rate pricing (£2.50)
+          const unitPrice = 2.50;
+          const totalPrice = unitPrice * item.quantity;
+          return {
+            unitPrice,
+            totalPrice: parseFloat(totalPrice.toFixed(2)),
+            tier: "Flat Rate",
+            lineTotal: parseFloat(totalPrice.toFixed(2)),
+          };
+        } else if (item.jobType === "Print") {
+          // Skip pricing if size is not set
+          if (!item.stitchCount || item.stitchCount === 0) {
+            return null;
+          }
           // Use print pricing
           const pricing = getPrintPrice(item.quantity, item.stitchCount, pricingTable);
           return {
             ...pricing,
             lineTotal: pricing.totalPrice as number,
           };
-        } else {
+        } else if (item.jobType === "Embroidery") {
+          // Skip pricing if stitch count is not set (0 or missing)
+          if (!item.stitchCount || item.stitchCount === 0) {
+            return null;
+          }
           // Use embroidery pricing
           const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
           return {
             ...pricing,
             lineTotal: pricing.totalPrice as number | "POA",
           };
+        } else {
+          // Other job types don't have pricing
+          return null;
         }
       } catch (error) {
         return null;
@@ -861,6 +887,13 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                                 £2.50 per item
                               </div>
                             </>
+                          ) : item.jobType === "Bagging" ? (
+                            <>
+                              <label className="text-xs text-muted-foreground font-medium">Price</label>
+                              <div className="mt-1 px-3 py-2 rounded-md bg-muted/30 border text-sm font-semibold text-primary">
+                                {selectedCustomer?.pricingTable2025 ? "£0.30 per item" : "£0.40 per item"}
+                              </div>
+                            </>
                           ) : (
                             <>
                               <label className="text-xs text-muted-foreground font-medium">Stitch Count</label>
@@ -879,7 +912,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             </>
                           )}
                         </div>
-                        {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && (
+                        {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
                           <div className="flex-1">
                             <label className="text-xs text-muted-foreground font-medium">Machine</label>
                             <Select 
