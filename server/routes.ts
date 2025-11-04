@@ -474,6 +474,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/users/:id", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const { updateUserSchema } = await import("@shared/schema");
+      const data = updateUserSchema.parse(req.body);
+      
+      // Check if username or email is being changed and if it conflicts with existing users
+      if (data.username) {
+        const existingUser = await storage.getUserByUsername(data.username);
+        if (existingUser && existingUser.id !== req.params.id) {
+          return res.status(400).json({ error: "Username already in use" });
+        }
+      }
+      
+      if (data.email) {
+        const existingUser = await storage.getUserByEmail(data.email);
+        if (existingUser && existingUser.id !== req.params.id) {
+          return res.status(400).json({ error: "Email already in use" });
+        }
+      }
+      
+      const user = await storage.updateUser(req.params.id, data);
+      res.json(user);
+    } catch (error: any) {
+      console.error("Error updating user:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ error: error.errors[0]?.message || "Invalid input" });
+      }
+      res.status(500).json({ error: error.message || "Failed to update user" });
+    }
+  });
+
   // Star management routes
   app.post("/api/users/:userId/stars", isStaffAuthenticated, async (req, res) => {
     try {

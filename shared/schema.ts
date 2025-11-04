@@ -659,8 +659,16 @@ export const staffRegisterSchema = z.object({
   role: z.enum(["super_admin", "admin", "manager", "staff"]).default("staff"),
 });
 
+export const updateUserSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters").optional(),
+  email: z.string().email("Invalid email address").optional(),
+  firstName: z.string().min(1, "First name is required").optional(),
+  lastName: z.string().min(1, "Last name is required").optional(),
+});
+
 export type StaffLogin = z.infer<typeof staffLoginSchema>;
 export type StaffRegister = z.infer<typeof staffRegisterSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
 
 // Password reset schemas
 export const passwordResetRequestSchema = z.object({
