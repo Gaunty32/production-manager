@@ -103,24 +103,20 @@ export function LineItemRow({
       )}
       data-testid={`row-line-item-${lineItem.id}`}
     >
-      {/* Customer - only show on first line item */}
+      {/* Customer - replicate on all rows */}
       <td className="py-2 px-3">
-        {isFirstLineItem ? (
-          customerName
-        ) : (
-          <span className="text-muted-foreground/50">↳</span>
-        )}
+        {customerName}
       </td>
 
-      {/* Job - show full info on first line item, compact on others */}
+      {/* Job - show full info on first line item, badges only on first */}
       <td className="py-2 px-3">
-        {isFirstLineItem ? (
-          <div className="flex items-center gap-2">
-            <span className="truncate">
-              {jobNumber && <span className="font-semibold text-primary">#{jobNumber}</span>}
-              {jobNumber && " - "}
-              {jobName}
-            </span>
+        <div className="flex items-center gap-2">
+          <span className="truncate">
+            {jobNumber && <span className="font-semibold text-primary">#{jobNumber}</span>}
+            {jobNumber && " - "}
+            {jobName}
+          </span>
+          {isFirstLineItem && (
             <div className="flex items-center gap-1">
               {/* Compact status badges */}
               <Tooltip>
@@ -202,13 +198,8 @@ export function LineItemRow({
                 </Tooltip>
               )}
             </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground/50">↳</span>
-            <span className="text-sm text-muted-foreground">{lineItem.description || `Line item ${lineItemIndex + 1}`}</span>
-          </div>
-        )}
+          )}
+        </div>
       </td>
 
       {/* PO Number - only show on first line item */}

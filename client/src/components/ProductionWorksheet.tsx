@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Printer, X } from "lucide-react";
 import type { JobWithLineItems, Customer } from "@shared/schema";
-import { getMachineName } from "@shared/machines";
+import { getMachineName, calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
 
 interface ProductionWorksheetProps {
   job: JobWithLineItems;
@@ -20,6 +20,20 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
   const allLogosApproved = job.lineItems && job.lineItems.length > 0 
     ? job.lineItems.every(item => item.logoApproved) 
     : false;
+
+  // Calculate total production metrics across all line items
+  const totalProductionMetrics = job.lineItems && job.lineItems.length > 0
+    ? job.lineItems.reduce((acc, item) => {
+        const itemMetrics = calculateProductionMetrics(item.quantity, item.stitchCount, item.machineId);
+        if (itemMetrics) {
+          return {
+            totalRuns: acc.totalRuns + itemMetrics.runs,
+            totalMinutes: acc.totalMinutes + itemMetrics.totalTimeMinutes,
+          };
+        }
+        return acc;
+      }, { totalRuns: 0, totalMinutes: 0 })
+    : null;
 
   return (
     <div className="fixed inset-0 bg-background z-50 overflow-auto">
@@ -224,6 +238,29 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
               <p className="text-xs text-gray-600 mt-1">Date</p>
             </div>
           </div>
+
+          {/* Production Metrics Section */}
+          {totalProductionMetrics && totalProductionMetrics.totalMinutes > 0 && (
+            <div className="mt-6 p-4 bg-gray-50 border-2 border-gray-300">
+              <h3 className="font-semibold text-sm uppercase text-gray-600 mb-3">
+                Estimated Production Time
+              </h3>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-600 mb-1">Total Runs:</p>
+                  <p className="text-2xl font-bold">{totalProductionMetrics.totalRuns}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600 mb-1">Total Minutes:</p>
+                  <p className="text-2xl font-bold">{totalProductionMetrics.totalMinutes}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600 mb-1">Total Time:</p>
+                  <p className="text-2xl font-bold">{formatTimeDisplay(totalProductionMetrics.totalMinutes)}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="mt-8 pt-4 border-t text-xs text-gray-500 text-center print:block">
