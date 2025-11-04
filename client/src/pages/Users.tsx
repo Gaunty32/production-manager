@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Pencil } from "lucide-react";
 
 const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -24,12 +24,22 @@ const createUserSchema = z.object({
   role: z.enum([UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]),
 });
 
+const editUserSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Invalid email address"),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+});
+
 type CreateUserFormData = z.infer<typeof createUserSchema>;
+type EditUserFormData = z.infer<typeof editUserSchema>;
 
 export default function Users() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -44,6 +54,16 @@ export default function Users() {
       firstName: "",
       lastName: "",
       role: UserRole.STAFF,
+    },
+  });
+
+  const editUserForm = useForm<EditUserFormData>({
+    resolver: zodResolver(editUserSchema),
+    defaultValues: {
+      username: "",
+      email: "",
+      firstName: "",
+      lastName: "",
     },
   });
 
@@ -91,12 +111,59 @@ export default function Users() {
     },
   });
 
+  const editUserMutation = useMutation({
+    mutationFn: async ({ userId, data }: { userId: string; data: EditUserFormData }) => {
+      const res = await apiRequest("PATCH", `/api/users/${userId}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "User updated",
+        description: "User details have been successfully updated.",
+      });
+      setEditDialogOpen(false);
+      setEditingUser(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleRoleChange = (userId: string, newRole: string) => {
     updateRoleMutation.mutate({ userId, role: newRole });
   };
 
   const onCreateUser = (data: CreateUserFormData) => {
     createUserMutation.mutate(data);
+  };
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+    editUserForm.reset({
+      username: user.username || "",
+      email: user.email,
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const onEditUser = (data: EditUserFormData) => {
+    if (editingUser) {
+      // Convert empty strings to undefined for optional fields
+      const cleanedData = {
+        username: data.username,
+        email: data.email,
+        firstName: data.firstName || undefined,
+        lastName: data.lastName || undefined,
+      };
+      editUserMutation.mutate({ userId: editingUser.id, data: cleanedData });
+    }
   };
 
   if (isLoading) {
@@ -293,6 +360,15 @@ export default function Users() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditUser(user)}
+                      data-testid={`button-edit-user-${user.id}`}
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
                     <Select
                       value={user.role}
                       onValueChange={(value) => handleRoleChange(user.id, value)}
@@ -323,6 +399,110 @@ export default function Users() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Edit User Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit User</DialogTitle>
+              <DialogDescription>
+                Update user information
+              </DialogDescription>
+            </DialogHeader>
+            <Form {...editUserForm}>
+              <form onSubmit={editUserForm.handleSubmit(onEditUser)} className="space-y-4">
+                <FormField
+                  control={editUserForm.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Username</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="username"
+                          data-testid="input-edit-username"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editUserForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="user@example.com"
+                          data-testid="input-edit-email"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={editUserForm.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>First Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="John"
+                            data-testid="input-edit-firstname"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editUserForm.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Doe"
+                            data-testid="input-edit-lastname"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditDialogOpen(false)}
+                    data-testid="button-cancel-edit"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={editUserMutation.isPending}
+                    data-testid="button-submit-edit"
+                  >
+                    {editUserMutation.isPending ? "Updating..." : "Update User"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
