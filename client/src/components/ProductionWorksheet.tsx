@@ -245,14 +245,10 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
               <h3 className="font-semibold text-sm uppercase text-gray-600 mb-3">
                 Estimated Production Time
               </h3>
-              <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-gray-600 mb-1">Total Runs:</p>
                   <p className="text-2xl font-bold">{totalProductionMetrics.totalRuns}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600 mb-1">Total Minutes:</p>
-                  <p className="text-2xl font-bold">{totalProductionMetrics.totalMinutes}</p>
                 </div>
                 <div>
                   <p className="text-gray-600 mb-1">Total Time:</p>
