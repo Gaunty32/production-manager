@@ -39,6 +39,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     app.get('/api/setup-production', setupProductionDatabase);
   }
 
+  // Temporary utility endpoint to generate password hash
+  app.post('/api/util/generate-hash', async (req, res) => {
+    try {
+      const { password } = req.body;
+      if (!password) {
+        return res.status(400).json({ error: "Password is required" });
+      }
+      
+      const hash = await bcrypt.hash(password, 10);
+      
+      res.json({ 
+        password,
+        hash,
+        sql: `UPDATE customer_users SET password_hash = '${hash}' WHERE email = 'accounts@shirtworks.co.uk';`
+      });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to generate hash" });
+    }
+  });
+
   // Quick setup endpoint to create initial admin user (use once, then remove)
   app.get('/api/create-admin', async (req, res) => {
     try {
