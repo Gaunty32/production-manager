@@ -939,8 +939,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   <Plus className="mr-2 h-4 w-4" /> Add Line Item
                 </Button>
 
-                {/* Pricing Summary */}
-                {pricingData && (
+                {/* Pricing Summary - Only visible to super admins */}
+                {pricingData && user?.role === 'super_admin' && (
                   <div className="border rounded-lg p-4 bg-primary/5">
                     <h4 className="font-semibold mb-2">Pricing Summary ({pricingData.pricingTable} Table)</h4>
                     <div className="flex justify-between items-center">
@@ -1055,8 +1055,8 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
                   </div>
                 </div>
 
-                {/* Pricing Summary */}
-                {pricingData && (
+                {/* Pricing Summary - Only visible to super admins */}
+                {pricingData && user?.role === 'super_admin' && (
                   <div className="border rounded-lg p-4 bg-primary/5">
                     <h4 className="font-semibold mb-2">Pricing Summary ({pricingData.pricingTable} Table)</h4>
                     <div className="flex justify-between items-center">
