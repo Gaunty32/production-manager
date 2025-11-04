@@ -26,7 +26,7 @@ import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobEditDialog } from "@/components/JobEditDialog";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { LogoSetupDialog } from "@/components/LogoSetupDialog";
-import { JobRow } from "@/components/JobRow";
+import { LineItemRow } from "@/components/LineItemRow";
 import { ProductionWorksheet } from "@/components/ProductionWorksheet";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -550,17 +550,45 @@ export default function Dashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayedJobs.map((job) => {
+                    {displayedJobs.flatMap((job) => {
                       const customer = customers.find(c => c.id === job.customerId);
-                      if (!customer) return null;
-                      return (
-                        <JobRow
-                          key={job.id}
-                          job={{
-                            ...job,
-                            goodsReceived: job.goodsReceived ? new Date(job.goodsReceived) : null,
-                            requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
-                          }}
+                      if (!customer) return [];
+                      
+                      // Check if all line items have logo approved
+                      const allLogosApproved = job.lineItems && job.lineItems.length > 0 
+                        ? job.lineItems.every(item => item.logoApproved === true)
+                        : false;
+                      
+                      // If no line items, show a single row for the job
+                      if (!job.lineItems || job.lineItems.length === 0) {
+                        return (
+                          <tr key={job.id}>
+                            <td colSpan={canViewPrices(currentUser?.role) ? 10 : 9} className="py-2 px-3 text-muted-foreground text-center">
+                              Job has no line items
+                            </td>
+                          </tr>
+                        );
+                      }
+                      
+                      // Render a row for each line item
+                      return job.lineItems.map((lineItem, index) => (
+                        <LineItemRow
+                          key={lineItem.id}
+                          jobId={job.id}
+                          jobNumber={job.jobNumber}
+                          customerId={job.customerId}
+                          customerName={job.customerName}
+                          jobName={job.jobName}
+                          poNumber={job.poNumber}
+                          totalJobQuantity={job.quantity}
+                          lineItemCount={job.lineItems!.length}
+                          lineItemIndex={index}
+                          lineItem={lineItem}
+                          goodsReceived={job.goodsReceived ? new Date(job.goodsReceived) : null}
+                          requiredDispatchDate={job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null}
+                          completedOnTime={job.completedOnTime}
+                          notes={job.notes}
+                          allLogosApproved={allLogosApproved}
                           customer={customer}
                           showPrices={canViewPrices(currentUser?.role)}
                           onEdit={handleEdit}
@@ -576,7 +604,7 @@ export default function Dashboard() {
                             }
                           }}
                         />
-                      );
+                      ));
                     })}
                   </TableBody>
                 </Table>
