@@ -43,6 +43,7 @@ const shippingSchema = z.object({
   packageCount: z.coerce.number().int().min(1).optional(),
   packageType: z.enum(["boxes", "bags"]).optional(),
   consolidatedJobIds: z.array(z.string()).optional(),
+  actualProductionTime: z.coerce.number().min(0, "Production time must be 0 or greater").optional(),
 }).refine((data) => {
   if (data.shippingMethod === "consolidated" || data.shippingMethod === "direct_delivery") {
     return data.dhlTrackingNumber && data.dhlTrackingNumber.trim().length > 0;
@@ -109,6 +110,7 @@ export function ShippingInfoDialog({
       packageCount: undefined,
       packageType: undefined,
       consolidatedJobIds: [],
+      actualProductionTime: undefined,
     },
   });
 
@@ -258,6 +260,32 @@ export function ShippingInfoDialog({
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Actual Production Time */}
+            <FormField
+              control={form.control}
+              name="actualProductionTime"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Actual Production Time (hours)</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      placeholder="e.g. 2.5"
+                      disabled={isPending || isSubmitting}
+                      data-testid="input-actual-production-time"
+                    />
+                  </FormControl>
+                  <FormDescription className="text-xs">
+                    Record how many hours this order actually took to produce
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

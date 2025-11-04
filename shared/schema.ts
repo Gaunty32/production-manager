@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, index, jsonb, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -74,6 +74,7 @@ export const jobs = pgTable("jobs", {
   consolidatedShipmentId: varchar("consolidated_shipment_id"),
   deliveryAddressType: text("delivery_address_type").default("customer"),
   deliveryAddress: text("delivery_address"),
+  actualProductionTime: real("actual_production_time"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {
@@ -315,6 +316,14 @@ export const updateJobSchema = z.object({
   consolidatedShipmentId: z.preprocess(
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
+  ),
+  actualProductionTime: z.preprocess(
+    (val) => {
+      if (val === "" || val === null || val === undefined) return null;
+      if (typeof val === "string") return parseFloat(val);
+      return val;
+    },
+    z.number().min(0).nullable().optional()
   ),
   // This is not a database field - used to specify which jobs to consolidate together
   consolidatedJobIds: z.array(z.string()).optional(),

@@ -1127,6 +1127,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           packageCount: shippingData.packageCount || null,
           packageType: shippingData.packageType || null,
           consolidatedJobIds: shippingData.consolidatedJobIds || [],
+          actualProductionTime: shippingData.actualProductionTime || null,
         } as any);
         setShippingDialogOpen(false);
       }}
