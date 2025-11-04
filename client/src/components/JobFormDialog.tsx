@@ -105,9 +105,10 @@ interface JobFormDialogProps {
   trigger: React.ReactNode;
   customers: Customer[];
   staff: Array<{ id: string; name: string }>;
+  onJobCreated?: (jobId: string) => void;
 }
 
-export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps) {
+export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFormDialogProps) {
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
@@ -385,6 +386,11 @@ export function JobFormDialog({ trigger, customers, staff }: JobFormDialogProps)
       form.reset();
       setCurrentStep(1);
       setLineItems([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
+      
+      // Open the production worksheet after job creation
+      if (onJobCreated) {
+        onJobCreated(createdJob.id);
+      }
     } catch (error) {
       toast({
         title: "Error",
