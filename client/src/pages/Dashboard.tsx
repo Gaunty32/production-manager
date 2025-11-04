@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, Package, Coins } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -50,8 +50,8 @@ export default function Dashboard() {
   const [worksheetJob, setWorksheetJob] = useState<JobWithLineItems | null>(null);
 
   // Fetch current user
-  const { data: currentUser } = useQuery<{ id: string; email: string; firstName?: string; lastName?: string; role?: string }>({
-    queryKey: ["/api/auth/user"],
+  const { data: currentUser } = useQuery<{ id: string; username?: string; email: string; firstName?: string; lastName?: string; role?: string }>({
+    queryKey: ["/api/staff-auth/user"],
     retry: false,
   });
 
@@ -324,6 +324,23 @@ export default function Dashboard() {
   
   const pendingLogoSetups = logoSetups.filter(ls => !ls.approved);
 
+  // Calculate total quantity and total value for production queue
+  const productionQueueMetrics = (() => {
+    let totalQuantity = 0;
+    let totalValue = 0;
+
+    allProductionJobs.forEach(job => {
+      if (job.lineItems) {
+        job.lineItems.forEach(lineItem => {
+          totalQuantity += lineItem.quantity || 0;
+          totalValue += lineItem.price || 0;
+        });
+      }
+    });
+
+    return { totalQuantity, totalValue };
+  })();
+
   // Apply active filter to production jobs
   const displayedJobs = (() => {
     if (!activeFilter) return allProductionJobs;
@@ -423,7 +440,7 @@ export default function Dashboard() {
         </div>
 
         {/* At-a-Glance Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className={`grid grid-cols-1 gap-4 mb-6 ${currentUser?.role === 'super_admin' ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
           {/* Overdue + Due Today Orders */}
           <Card 
             className={`hover-elevate active-elevate-2 cursor-pointer transition-all ${activeFilter === 'overdue' ? 'ring-2 ring-destructive' : ''}`}
@@ -485,6 +502,42 @@ export default function Dashboard() {
               </div>
             </div>
           </Card>
+
+          {/* Total Quantity - All Users */}
+          <Card className="hover-elevate">
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Quantity</p>
+                  <h3 className="text-3xl font-bold text-foreground mt-2" data-testid="text-total-quantity">
+                    {productionQueueMetrics.totalQuantity.toLocaleString()}
+                  </h3>
+                </div>
+                <div className="h-12 w-12 bg-blue-500/10 rounded-full flex items-center justify-center">
+                  <Package className="h-6 w-6 text-blue-500" />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Total Value - Super Admin Only */}
+          {currentUser?.role === 'super_admin' && (
+            <Card className="hover-elevate">
+              <div className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total Value</p>
+                    <h3 className="text-3xl font-bold text-foreground mt-2" data-testid="text-total-value">
+                      £{productionQueueMetrics.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </h3>
+                  </div>
+                  <div className="h-12 w-12 bg-green-500/10 rounded-full flex items-center justify-center">
+                    <Coins className="h-6 w-6 text-green-500" />
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
 
         <div className="mb-6">
