@@ -35,6 +35,7 @@ import type { Customer, Job, JobWithLineItems, Staff, LogoSetup } from "@shared/
 import { canViewPrices } from "@shared/schema";
 import { useParams } from "wouter";
 import { isPast, isToday, format, addDays, startOfDay, endOfDay } from "date-fns";
+import { getPrice, getPrintPrice, getFlatRatePrice, getBaggingPrice, type PricingTable } from "@shared/pricing";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -331,9 +332,38 @@ export default function Dashboard() {
 
     allProductionJobs.forEach(job => {
       if (job.lineItems) {
+        // Get customer for this job to determine pricing table
+        const customer = customers.find(c => c.id === job.customerId);
+        const pricingTable: PricingTable = customer?.pricingTable2025 ? "2025" : "2026";
+
         job.lineItems.forEach(lineItem => {
           totalQuantity += lineItem.quantity || 0;
-          totalValue += lineItem.price || 0;
+
+          // Calculate price based on job type
+          try {
+            let itemPrice = 0;
+
+            if (lineItem.jobType === "Bagging") {
+              const result = getBaggingPrice(lineItem.quantity, pricingTable);
+              itemPrice = result.totalPrice;
+            } else if (lineItem.jobType === "Print Initials/Name" || lineItem.jobType === "Embroidery Initials/Name") {
+              const result = getFlatRatePrice(lineItem.quantity, lineItem.jobType);
+              itemPrice = result.totalPrice;
+            } else if (lineItem.jobType === "Print" && lineItem.stitchCount) {
+              const result = getPrintPrice(lineItem.quantity, lineItem.stitchCount, pricingTable);
+              itemPrice = result.totalPrice;
+            } else if (lineItem.stitchCount) {
+              // Embroidery or Other with stitch count
+              const result = getPrice(lineItem.quantity, lineItem.stitchCount, pricingTable);
+              if (result.totalPrice !== "POA") {
+                itemPrice = result.totalPrice;
+              }
+            }
+
+            totalValue += itemPrice;
+          } catch (error) {
+            // Skip items that can't be priced (e.g., POA, missing data)
+          }
         });
       }
     });
