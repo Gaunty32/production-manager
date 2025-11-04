@@ -40,8 +40,15 @@ The production queue displays traffic light indicators for logo approval and goo
 
 **Customer Portal**: A separate customer-facing interface allows customers to log in and view their orders. Customer authentication uses email/password with bcrypt hashing and session-based authentication (separate from staff authentication). The customer portal includes:
 - Login page at `/customer/login` with email and password fields
-- Customer dashboard at `/customer/dashboard` showing all jobs for the logged-in customer
-- Job cards display job name, status, dispatch date, production metrics, line items, and notes
+- Customer dashboard at `/customer/dashboard` showing production queue for the logged-in customer
+- Production queue displays jobs in a table format with one row per line item, showing:
+  - Job Name (first line item only, subsequent items show arrow indicator ↳)
+  - Item Description (job type and description)
+  - Quantity (per line item)
+  - Machine Assignment (displays machine name or "Unassigned")
+  - Date Required (dispatch date)
+  - Status (badges showing In Progress, Completed, Overdue, Due Today)
+- Visual grouping of line items under their parent job for clear hierarchy
 - Logout functionality that clears the session and returns to login
 - Separate routing and layout from staff portal (no sidebar, simplified header)
 - Current implementation is read-only; future enhancements will include job submission, file uploads, and messaging

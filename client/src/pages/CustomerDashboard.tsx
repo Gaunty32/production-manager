@@ -7,6 +7,25 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { LogOut, Package, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
+import { getMachineName } from "@shared/machines";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+type LineItem = {
+  id: string;
+  jobId: string;
+  jobType: string;
+  quantity: number;
+  description: string | null;
+  machineId: number | null;
+  completed: boolean;
+};
 
 type Job = {
   id: string;
@@ -20,6 +39,7 @@ type Job = {
   status: string;
   notes: string | null;
   invoiceStatus: string;
+  lineItems: LineItem[];
 };
 
 type CustomerUser = {
@@ -136,9 +156,9 @@ export default function CustomerDashboard() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-foreground mb-2">Your Orders</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-2">Production Queue</h2>
           <p className="text-sm text-muted-foreground">
-            Track the status and progress of your orders
+            View the status and progress of your orders in production
           </p>
         </div>
 
@@ -150,56 +170,104 @@ export default function CustomerDashboard() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {jobs.map((job) => (
-              <Card key={job.id} className="hover-elevate" data-testid={`card-job-${job.id}`}>
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-lg truncate" data-testid={`text-jobname-${job.id}`}>
-                        {job.jobName}
-                      </CardTitle>
-                      {job.poNumber && (
-                        <p className="text-sm text-muted-foreground">PO: {job.poNumber}</p>
-                      )}
-                    </div>
-                    {getStatusBadge(job)}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Quantity:</span>
-                    <span className="font-medium">{job.quantity}</span>
-                  </div>
-
-                  {job.requiredDispatchDate && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Dispatch Date:</span>
-                      <span className="font-medium" data-testid={`text-dispatch-${job.id}`}>
-                        {format(new Date(job.requiredDispatchDate), "MMM d, yyyy")}
-                      </span>
-                    </div>
-                  )}
-
-                  {job.goodsReceived && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Goods Received:</span>
-                      <span className="font-medium">
-                        {format(new Date(job.goodsReceived), "MMM d, yyyy")}
-                      </span>
-                    </div>
-                  )}
-
-                  {job.notes && (
-                    <div className="pt-2 border-t">
-                      <p className="text-xs text-muted-foreground">Notes:</p>
-                      <p className="text-sm mt-1">{job.notes}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <Card>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Job Name</TableHead>
+                    <TableHead>Item Description</TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead>Machine</TableHead>
+                    <TableHead>Date Required</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {jobs.map((job) => {
+                    const lineItems = job.lineItems || [];
+                    
+                    if (lineItems.length === 0) {
+                      // Show job even if no line items
+                      return (
+                        <TableRow key={job.id} data-testid={`row-job-${job.id}`}>
+                          <TableCell className="font-medium" data-testid={`text-jobname-${job.id}`}>
+                            {job.jobName}
+                            {job.poNumber && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                (PO: {job.poNumber})
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">—</TableCell>
+                          <TableCell className="text-right">{job.quantity}</TableCell>
+                          <TableCell>—</TableCell>
+                          <TableCell data-testid={`text-dispatch-${job.id}`}>
+                            {job.requiredDispatchDate
+                              ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
+                              : "Not set"}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(job)}</TableCell>
+                        </TableRow>
+                      );
+                    }
+                    
+                    // Show one row per line item
+                    return lineItems.map((lineItem, index) => (
+                      <TableRow
+                        key={lineItem.id}
+                        data-testid={`row-lineitem-${lineItem.id}`}
+                        className={index > 0 ? "border-t-0" : ""}
+                      >
+                        <TableCell className="font-medium">
+                          {index === 0 && (
+                            <>
+                              <span data-testid={`text-jobname-${job.id}`}>{job.jobName}</span>
+                              {job.poNumber && (
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  (PO: {job.poNumber})
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {index > 0 && (
+                            <span className="text-muted-foreground text-sm ml-4">↳</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium text-sm">{lineItem.jobType}</div>
+                            {lineItem.description && (
+                              <div className="text-xs text-muted-foreground">
+                                {lineItem.description}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">{lineItem.quantity}</TableCell>
+                        <TableCell data-testid={`text-machine-${lineItem.id}`}>
+                          {getMachineName(lineItem.machineId)}
+                        </TableCell>
+                        <TableCell>
+                          {index === 0 && job.requiredDispatchDate && (
+                            <span data-testid={`text-dispatch-${job.id}`}>
+                              {format(new Date(job.requiredDispatchDate), "MMM d, yyyy")}
+                            </span>
+                          )}
+                          {index === 0 && !job.requiredDispatchDate && (
+                            <span className="text-muted-foreground">Not set</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {index === 0 && getStatusBadge(job)}
+                        </TableCell>
+                      </TableRow>
+                    ));
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
         )}
       </main>
     </div>

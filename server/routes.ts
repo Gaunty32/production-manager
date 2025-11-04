@@ -686,7 +686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Customer Portal - Jobs (read-only for now)
+  // Customer Portal - Jobs with Line Items (read-only for now)
   app.get("/api/customer-portal/jobs", isCustomerAuthenticated, async (req: any, res) => {
     try {
       const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
@@ -696,7 +696,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get all jobs for this customer
       const jobs = await storage.getJobsByCustomerId(customerUser.customerId);
-      res.json(jobs);
+      
+      // Get line items for each job
+      const jobsWithLineItems = await Promise.all(
+        jobs.map(async (job) => {
+          const lineItems = await storage.getJobLineItems(job.id);
+          return {
+            ...job,
+            lineItems,
+          };
+        })
+      );
+      
+      res.json(jobsWithLineItems);
     } catch (error) {
       console.error("Error fetching customer jobs:", error);
       res.status(500).json({ error: "Failed to fetch jobs" });
