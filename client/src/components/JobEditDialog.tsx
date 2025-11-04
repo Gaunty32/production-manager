@@ -269,6 +269,19 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean | null) => {
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
+    
+    // When marking as completed, auto-fill completedById and completedAt with current user/time
+    if (field === 'completed' && value === true && !updated[index].completedById) {
+      updated[index].completedById = currentUserStaff?.id || null;
+      updated[index].completedAt = new Date().toISOString();
+    }
+    
+    // When unmarking as completed, clear completedById and completedAt
+    if (field === 'completed' && value === false) {
+      updated[index].completedById = null;
+      updated[index].completedAt = null;
+    }
+    
     setLineItems(updated);
   };
 
@@ -1064,14 +1077,6 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                   const isCurrentlyCompleted = form.watch('completed');
                   if (!isCurrentlyCompleted) {
                     // Marking as complete - open shipping dialog first
-                    if (!currentUserStaff?.id) {
-                      toast({
-                        title: "Error",
-                        description: "You must be associated with a staff member to mark orders as complete",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
                     setShippingDialogOpen(true);
                   } else {
                     // Unmarking - directly call handleSubmit with updated data
