@@ -766,6 +766,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/staff/by-user/:userId", isStaffAuthenticated, async (req, res) => {
+    try {
+      const staff = await storage.getStaff();
+      const userStaff = staff.find(s => s.userId === req.params.userId);
+      if (!userStaff) {
+        return res.status(404).json({ error: "No staff member found for this user" });
+      }
+      res.json(userStaff);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch staff member" });
+    }
+  });
+
   app.post("/api/staff", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertStaffSchema.parse(req.body);

@@ -145,11 +145,12 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     enabled: !!user?.id,
     queryFn: async () => {
       if (!user?.id) return null;
-      // Staff endpoint returns all staff, we need to find the one with matching userId
-      const response = await fetch('/api/staff', { credentials: 'include' });
-      if (!response.ok) return null;
-      const allStaff = await response.json();
-      return allStaff.find((s: any) => s.userId === user.id) || null;
+      const response = await fetch(`/api/staff/by-user/${user.id}`, { credentials: 'include' });
+      if (!response.ok) {
+        if (response.status === 404) return null; // No staff member for this user
+        throw new Error('Failed to fetch staff member');
+      }
+      return response.json();
     },
   });
 
