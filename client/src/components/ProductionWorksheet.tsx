@@ -53,8 +53,8 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
       </div>
 
       {/* Worksheet content - optimized for printing */}
-      <div className="max-w-4xl mx-auto p-8 print:p-0">
-        <div className="bg-white text-black print:shadow-none">
+      <div className="max-w-4xl mx-auto p-8 print:p-0 print:pt-0">
+        <div className="bg-white text-black print:bg-transparent print:shadow-none">
           {/* Header Section - Top Quarter of Page */}
           <div className="border-b-4 border-black pb-6 mb-6 min-h-[25vh]">
             <div className="flex justify-between items-start mb-4">
@@ -139,7 +139,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
           </div>
 
           {/* Shipping/Delivery Information */}
-          <div className="mb-6 p-4 border-2 border-gray-300 bg-gray-50">
+          <div className="mb-6 p-4 border-2 border-gray-300 bg-gray-50 print:bg-transparent">
             <h3 className="font-semibold text-sm uppercase text-gray-600 mb-2">Shipping & Delivery</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
@@ -175,7 +175,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
             </h3>
             <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="bg-gray-100 border-b-2 border-black">
+                <tr className="bg-gray-100 print:bg-transparent border-b-2 border-black">
                   <th className="text-left py-2 px-2 font-semibold">Type</th>
                   <th className="text-center py-2 px-2 font-semibold">Qty</th>
                   <th className="text-center py-2 px-2 font-semibold">Stitch Count</th>
@@ -241,7 +241,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
 
           {/* Production Metrics Section */}
           {totalProductionMetrics && totalProductionMetrics.totalMinutes > 0 && (
-            <div className="mt-6 p-4 bg-gray-50 border-2 border-gray-300">
+            <div className="mt-6 p-4 bg-gray-50 print:bg-transparent border-2 border-gray-300">
               <h3 className="font-semibold text-sm uppercase text-gray-600 mb-3">
                 Estimated Production Time
               </h3>
@@ -271,10 +271,18 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
           body {
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
+            background: white !important;
           }
           @page {
-            size: A4;
-            margin: 1cm;
+            size: A4 portrait;
+            margin-top: 5cm;
+            margin-bottom: 2cm;
+            margin-left: 1.5cm;
+            margin-right: 1.5cm;
+          }
+          * {
+            background: transparent !important;
+            background-color: transparent !important;
           }
         }
       `}</style>
