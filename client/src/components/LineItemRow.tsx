@@ -108,13 +108,17 @@ export function LineItemRow({
       data-testid={`row-line-item-${lineItem.id}`}
     >
       {/* Checkbox - only show on first line item */}
-      <td className="py-2 px-3">
+      <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
         {isFirstLineItem && onToggleSelect && (
           <input
             type="checkbox"
             checked={isSelected}
-            onChange={() => onToggleSelect(jobId)}
-            className="h-4 w-4 rounded border-muted-foreground"
+            onChange={(e) => {
+              e.stopPropagation();
+              onToggleSelect(jobId);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 rounded border-muted-foreground cursor-pointer"
             data-testid={`checkbox-select-${jobId}`}
           />
         )}

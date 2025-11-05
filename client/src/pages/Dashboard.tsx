@@ -699,18 +699,20 @@ export default function Dashboard() {
                 <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow className="text-xs text-muted-foreground uppercase tracking-wider">
-                      <TableHead className="py-3 px-3 w-10">
+                      <TableHead className="py-3 px-3 w-10" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={displayedJobs.length > 0 && displayedJobs.every(j => selectedJobIds.has(j.id))}
                           onChange={(e) => {
+                            e.stopPropagation();
                             if (e.target.checked) {
                               setSelectedJobIds(new Set(displayedJobs.map(j => j.id)));
                             } else {
                               setSelectedJobIds(new Set());
                             }
                           }}
-                          className="h-4 w-4 rounded border-muted-foreground"
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4 w-4 rounded border-muted-foreground cursor-pointer"
                           data-testid="checkbox-select-all"
                         />
                       </TableHead>
