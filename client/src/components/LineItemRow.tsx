@@ -33,6 +33,8 @@ interface LineItemRowProps {
   allLogosApproved: boolean;
   customer?: Customer;
   showPrices?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (jobId: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onPrintWorksheet?: (id: string) => void;
@@ -57,6 +59,8 @@ export function LineItemRow({
   allLogosApproved,
   customer,
   showPrices = true,
+  isSelected = false,
+  onToggleSelect,
   onEdit,
   onDelete,
   onPrintWorksheet,
@@ -80,7 +84,7 @@ export function LineItemRow({
         return lineItem.quantity * 2.5; // £2.50 per item
       } else {
         const pricing = getPrice(lineItem.quantity, lineItem.stitchCount, pricingTable);
-        return pricing.unitPrice * lineItem.quantity;
+        return typeof pricing.unitPrice === 'number' ? pricing.unitPrice * lineItem.quantity : null;
       }
     } catch (error) {
       console.error("Failed to calculate line item price:", error);
@@ -103,6 +107,19 @@ export function LineItemRow({
       )}
       data-testid={`row-line-item-${lineItem.id}`}
     >
+      {/* Checkbox - only show on first line item */}
+      <td className="py-2 px-3">
+        {isFirstLineItem && onToggleSelect && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect(jobId)}
+            className="h-4 w-4 rounded border-muted-foreground"
+            data-testid={`checkbox-select-${jobId}`}
+          />
+        )}
+      </td>
+
       {/* Customer - replicate on all rows */}
       <td className="py-2 px-3">
         {customerName}

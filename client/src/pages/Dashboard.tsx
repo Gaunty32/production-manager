@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, Package, Coins } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, Package, Coins, ArrowUpDown, Printer } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -49,6 +49,8 @@ export default function Dashboard() {
   const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'overdue' | 'logo-setups' | '3-days' | null>(null);
   const [worksheetJob, setWorksheetJob] = useState<JobWithLineItems | null>(null);
+  const [sortOrder, setSortOrder] = useState<'date' | 'customer' | 'jobNumber'>('date');
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
 
   // Fetch current user
   const { data: currentUser } = useQuery<{ id: string; username?: string; email: string; firstName?: string; lastName?: string; role?: string }>({
@@ -290,15 +292,26 @@ export default function Dashboard() {
     return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
   });
 
-  // Combine all non-completed jobs for unified production queue
+  // Combine all non-completed jobs for unified production queue with configurable sorting
   const allProductionJobs = [...activeJobs, ...pendingJobs].sort((a, b) => {
-    // Sort by dispatch date if both have it, otherwise pending jobs go to end
-    if (a.requiredDispatchDate && b.requiredDispatchDate) {
-      return new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
+    switch (sortOrder) {
+      case 'customer':
+        return a.customerName.localeCompare(b.customerName);
+      case 'jobNumber':
+        if (a.jobNumber === null && b.jobNumber === null) return 0;
+        if (a.jobNumber === null) return 1;
+        if (b.jobNumber === null) return -1;
+        return a.jobNumber - b.jobNumber;
+      case 'date':
+      default:
+        // Sort by dispatch date if both have it, otherwise pending jobs go to end
+        if (a.requiredDispatchDate && b.requiredDispatchDate) {
+          return new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
+        }
+        if (a.requiredDispatchDate) return -1;
+        if (b.requiredDispatchDate) return 1;
+        return a.customerName.localeCompare(b.customerName);
     }
-    if (a.requiredDispatchDate) return -1;
-    if (b.requiredDispatchDate) return 1;
-    return a.customerName.localeCompare(b.customerName);
   });
 
   // Calculate key metrics for at-a-glance view
@@ -610,17 +623,65 @@ export default function Dashboard() {
                 </p>
               )}
             </div>
-            {activeFilter && (
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setActiveFilter(null)}
-                data-testid="button-clear-filter"
-              >
-                <X className="h-4 w-4 mr-2" />
-                Clear Filter
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {selectedJobIds.size > 0 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => {
+                    const selectedJobs = jobs.filter(j => selectedJobIds.has(j.id));
+                    selectedJobs.forEach((job, index) => {
+                      setTimeout(() => {
+                        setWorksheetJob(job);
+                        setTimeout(() => {
+                          window.print();
+                        }, 100);
+                      }, index * 500);
+                    });
+                  }}
+                  data-testid="button-print-selected"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print {selectedJobIds.size} Worksheet{selectedJobIds.size > 1 ? 's' : ''}
+                </Button>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-sort-order">
+                    <ArrowUpDown className="h-4 w-4 mr-2" />
+                    Sort: {sortOrder === 'date' ? 'Date' : sortOrder === 'customer' ? 'Customer' : 'Job #'}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setSortOrder('date')} data-testid="menu-sort-date">
+                    {sortOrder === 'date' && <CheckCircle className="h-4 w-4 mr-2" />}
+                    {sortOrder !== 'date' && <span className="w-4 mr-2" />}
+                    Sort by Date
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortOrder('customer')} data-testid="menu-sort-customer">
+                    {sortOrder === 'customer' && <CheckCircle className="h-4 w-4 mr-2" />}
+                    {sortOrder !== 'customer' && <span className="w-4 mr-2" />}
+                    Sort by Customer
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortOrder('jobNumber')} data-testid="menu-sort-job-number">
+                    {sortOrder === 'jobNumber' && <CheckCircle className="h-4 w-4 mr-2" />}
+                    {sortOrder !== 'jobNumber' && <span className="w-4 mr-2" />}
+                    Sort by Job #
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {activeFilter && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setActiveFilter(null)}
+                  data-testid="button-clear-filter"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Filter
+                </Button>
+              )}
+            </div>
           </div>
           {displayedJobs.length === 0 ? (
             <div className="border rounded-md p-12 text-center">
@@ -638,6 +699,21 @@ export default function Dashboard() {
                 <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow className="text-xs text-muted-foreground uppercase tracking-wider">
+                      <TableHead className="py-3 px-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={displayedJobs.length > 0 && displayedJobs.every(j => selectedJobIds.has(j.id))}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedJobIds(new Set(displayedJobs.map(j => j.id)));
+                            } else {
+                              setSelectedJobIds(new Set());
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-muted-foreground"
+                          data-testid="checkbox-select-all"
+                        />
+                      </TableHead>
                       <TableHead className="py-3 px-3">Customer</TableHead>
                       <TableHead className="py-3 px-3">Job</TableHead>
                       <TableHead className="py-3 px-3">Job #</TableHead>
@@ -667,7 +743,7 @@ export default function Dashboard() {
                       if (!job.lineItems || job.lineItems.length === 0) {
                         return (
                           <tr key={job.id}>
-                            <td colSpan={canViewPrices(currentUser?.role) ? 11 : 10} className="py-2 px-3 text-muted-foreground text-center">
+                            <td colSpan={canViewPrices(currentUser?.role) ? 12 : 11} className="py-2 px-3 text-muted-foreground text-center">
                               Job has no line items
                             </td>
                           </tr>
@@ -695,6 +771,16 @@ export default function Dashboard() {
                           allLogosApproved={allLogosApproved}
                           customer={customer}
                           showPrices={canViewPrices(currentUser?.role)}
+                          isSelected={selectedJobIds.has(job.id)}
+                          onToggleSelect={(jobId) => {
+                            const newSelected = new Set(selectedJobIds);
+                            if (newSelected.has(jobId)) {
+                              newSelected.delete(jobId);
+                            } else {
+                              newSelected.add(jobId);
+                            }
+                            setSelectedJobIds(newSelected);
+                          }}
                           onEdit={handleEdit}
                           onDelete={(jobId) => {
                             if (window.confirm(`Are you sure you want to delete this job: ${job.jobName}?`)) {
