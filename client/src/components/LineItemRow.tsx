@@ -112,8 +112,6 @@ export function LineItemRow({
       <td className="py-2 px-3">
         <div className="flex items-center gap-2">
           <span className="truncate">
-            {jobNumber && <span className="font-semibold text-primary">#{jobNumber}</span>}
-            {jobNumber && " - "}
             {jobName}
           </span>
           {isFirstLineItem && (
@@ -200,6 +198,15 @@ export function LineItemRow({
             </div>
           )}
         </div>
+      </td>
+
+      {/* Job Number - only show on first line item */}
+      <td className="py-2 px-3 font-mono">
+        {isFirstLineItem && jobNumber ? (
+          <span className="font-semibold text-primary" data-testid={`text-job-number-${jobId}`}>
+            #{jobNumber}
+          </span>
+        ) : isFirstLineItem ? "-" : ""}
       </td>
 
       {/* PO Number - only show on first line item */}

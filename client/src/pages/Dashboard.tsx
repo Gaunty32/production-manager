@@ -640,6 +640,7 @@ export default function Dashboard() {
                     <TableRow className="text-xs text-muted-foreground uppercase tracking-wider">
                       <TableHead className="py-3 px-3">Customer</TableHead>
                       <TableHead className="py-3 px-3">Job</TableHead>
+                      <TableHead className="py-3 px-3">Job #</TableHead>
                       <TableHead className="py-3 px-3">PO #</TableHead>
                       <TableHead className="py-3 px-3">Qty</TableHead>
                       <TableHead className="py-3 px-3">Machine</TableHead>
@@ -666,7 +667,7 @@ export default function Dashboard() {
                       if (!job.lineItems || job.lineItems.length === 0) {
                         return (
                           <tr key={job.id}>
-                            <td colSpan={canViewPrices(currentUser?.role) ? 10 : 9} className="py-2 px-3 text-muted-foreground text-center">
+                            <td colSpan={canViewPrices(currentUser?.role) ? 11 : 10} className="py-2 px-3 text-muted-foreground text-center">
                               Job has no line items
                             </td>
                           </tr>
