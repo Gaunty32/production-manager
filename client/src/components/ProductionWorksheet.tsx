@@ -268,21 +268,27 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
       {/* Print styles */}
       <style>{`
         @media print {
-          body {
-            print-color-adjust: exact;
-            -webkit-print-color-adjust: exact;
+          html, body {
             background: white !important;
+            height: auto !important;
           }
           @page {
             size: A4 portrait;
-            margin-top: 5cm;
-            margin-bottom: 2cm;
-            margin-left: 1.5cm;
-            margin-right: 1.5cm;
+            margin-top: 5cm !important;
+            margin-bottom: 2cm !important;
+            margin-left: 1.5cm !important;
+            margin-right: 1.5cm !important;
           }
-          * {
+          /* Remove all backgrounds */
+          *, *::before, *::after {
             background: transparent !important;
             background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+          }
+          /* Keep borders visible */
+          .border, .border-2, .border-4, .border-b, .border-b-2, .border-b-4, .border-t, .border-t-2 {
+            border-color: black !important;
           }
         }
       `}</style>
