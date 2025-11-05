@@ -356,33 +356,38 @@
 
 /* Print styles for production worksheet */
 @media print {
-  /* Make worksheet static and add top margin */
+  /* Set page margins for A4 */
+  @page {
+    margin-top: 5cm;
+    margin-bottom: 2cm;
+    margin-left: 1.5cm;
+    margin-right: 1.5cm;
+    size: A4 portrait;
+  }
+  
+  /* Make worksheet static */
   #production-worksheet-root {
     position: static !important;
     inset: unset !important;
     overflow: visible !important;
-    margin-top: 5cm !important;
-    margin-left: 1.5cm !important;
-    margin-right: 1.5cm !important;
-    margin-bottom: 2cm !important;
   }
   
-  /* Remove all gray backgrounds */
-  .bg-gray-50,
-  .bg-gray-100,
-  .bg-gray-200,
-  .bg-background,
-  #production-worksheet-root * {
-    background-color: transparent !important;
+  /* Remove ALL backgrounds aggressively */
+  html, body, #root, #production-worksheet-root,
+  #production-worksheet-root *,
+  div, section, header, main, article, aside,
+  table, thead, tbody, tr, td, th {
+    background-color: white !important;
     background-image: none !important;
   }
   
-  /* Ensure page is white */
-  html, body {
-    background: white !important;
+  /* Override all Tailwind background utility classes */
+  [class*="bg-"] {
+    background-color: white !important;
+    background-image: none !important;
   }
   
-  /* Keep borders visible */
+  /* Keep borders visible and dark */
   .border,
   .border-2,
   .border-4,
