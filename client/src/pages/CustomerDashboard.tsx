@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Circle, CircleCheck, CircleX } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
 import { useState } from "react";
@@ -27,6 +27,7 @@ type LineItem = {
   description: string | null;
   machineId: number | null;
   completed: boolean;
+  logoApproved: boolean;
 };
 
 type Job = {
@@ -66,7 +67,7 @@ export default function CustomerDashboard() {
     enabled: !!customerUser,
   });
 
-  // Sort jobs by required dispatch date (newest first) and filter by status
+  // Sort jobs by required dispatch date (oldest first) and filter by status
   const filteredJobs = jobs
     .filter(job => {
       if (statusFilter === "all") return true;
@@ -75,12 +76,12 @@ export default function CustomerDashboard() {
       return true;
     })
     .sort((a, b) => {
-      // Sort by required dispatch date descending (newest first)
+      // Sort by required dispatch date ascending (oldest first)
       // Jobs without dates go to the end
       if (!a.requiredDispatchDate && !b.requiredDispatchDate) return 0;
       if (!a.requiredDispatchDate) return 1;
       if (!b.requiredDispatchDate) return -1;
-      return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
+      return new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
     });
 
   const logoutMutation = useMutation({
@@ -217,6 +218,8 @@ export default function CustomerDashboard() {
                     <TableHead>Item Description</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
                     <TableHead>Machine</TableHead>
+                    <TableHead className="text-center">Goods Rcvd</TableHead>
+                    <TableHead className="text-center">Logo</TableHead>
                     <TableHead>Date Required</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -236,10 +239,23 @@ export default function CustomerDashboard() {
                                 (PO: {job.poNumber})
                               </span>
                             )}
+                            {job.notes && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Note: {job.notes}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="text-muted-foreground">—</TableCell>
                           <TableCell className="text-right">{job.quantity}</TableCell>
                           <TableCell>—</TableCell>
+                          <TableCell className="text-center">
+                            {job.goodsReceived ? (
+                              <CircleCheck className="h-4 w-4 text-green-600 inline" data-testid={`icon-goods-received-${job.id}`} />
+                            ) : (
+                              <CircleX className="h-4 w-4 text-red-600 inline" data-testid={`icon-goods-not-received-${job.id}`} />
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">—</TableCell>
                           <TableCell data-testid={`text-dispatch-${job.id}`}>
                             {job.requiredDispatchDate
                               ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
@@ -266,6 +282,11 @@ export default function CustomerDashboard() {
                                   (PO: {job.poNumber})
                                 </span>
                               )}
+                              {job.notes && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Note: {job.notes}
+                                </div>
+                              )}
                             </>
                           )}
                           {index > 0 && (
@@ -285,6 +306,22 @@ export default function CustomerDashboard() {
                         <TableCell className="text-right">{lineItem.quantity}</TableCell>
                         <TableCell data-testid={`text-machine-${lineItem.id}`}>
                           {getMachineName(lineItem.machineId)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {index === 0 && (
+                            job.goodsReceived ? (
+                              <CircleCheck className="h-4 w-4 text-green-600 inline" data-testid={`icon-goods-received-${job.id}`} />
+                            ) : (
+                              <CircleX className="h-4 w-4 text-red-600 inline" data-testid={`icon-goods-not-received-${job.id}`} />
+                            )
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {lineItem.logoApproved ? (
+                            <CircleCheck className="h-4 w-4 text-green-600 inline" data-testid={`icon-logo-approved-${lineItem.id}`} />
+                          ) : (
+                            <CircleX className="h-4 w-4 text-amber-600 inline" data-testid={`icon-logo-not-approved-${lineItem.id}`} />
+                          )}
                         </TableCell>
                         <TableCell>
                           {index === 0 && job.requiredDispatchDate && (

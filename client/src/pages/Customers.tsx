@@ -3,6 +3,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -97,6 +99,27 @@ export default function Customers() {
     },
   });
 
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/customers/${id}`, { active });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      toast({
+        title: "Success",
+        description: "Customer status updated",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update customer status",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleDelete = (id: string) => {
     setCustomerToDelete(id);
   };
@@ -142,10 +165,12 @@ export default function Customers() {
           </div>
         ) : (
           <div className="space-y-3">
-            {customers.map((customer) => (
+            {customers.map((customer) => {
+              const isInactive = customer.active === false;
+              return (
               <Card 
                 key={customer.id} 
-                className={`hover-elevate ${customer.pricingTable2025 ? 'bg-orange-50 dark:bg-orange-950/20' : ''}`}
+                className={`hover-elevate ${customer.pricingTable2025 ? 'bg-orange-50 dark:bg-orange-950/20' : ''} ${isInactive ? 'opacity-60' : ''}`}
                 data-testid={`card-customer-${customer.id}`}
               >
                 <CardContent className="p-4">
@@ -157,6 +182,15 @@ export default function Customers() {
                           {customer.name}
                         </h3>
                         <div className="flex items-center gap-1 flex-wrap" data-testid={`text-pricing-table-${customer.id}`}>
+                          {isInactive && (
+                            <Badge 
+                              variant="outline" 
+                              className="bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
+                              data-testid={`badge-inactive-${customer.id}`}
+                            >
+                              Inactive
+                            </Badge>
+                          )}
                           {customer.pricingTable2025 && (
                             <Badge 
                               variant="outline" 
@@ -211,30 +245,44 @@ export default function Customers() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setCustomerToEdit(customer)}
-                        data-testid={`button-edit-customer-${customer.id}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleDelete(customer.id)}
-                        data-testid={`button-delete-customer-${customer.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setCustomerToEdit(customer)}
+                          data-testid={`button-edit-customer-${customer.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleDelete(customer.id)}
+                          data-testid={`button-delete-customer-${customer.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={`active-${customer.id}`} className="text-xs text-muted-foreground cursor-pointer">
+                          Active
+                        </Label>
+                        <Switch
+                          id={`active-${customer.id}`}
+                          checked={customer.active !== false}
+                          onCheckedChange={(checked) => toggleActiveMutation.mutate({ id: customer.id, active: checked })}
+                          data-testid={`switch-active-${customer.id}`}
+                        />
+                      </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            );
+            })}
           </div>
         )}
 

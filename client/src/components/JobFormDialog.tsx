@@ -647,8 +647,11 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                   control={form.control}
                   name="customerId"
                   render={({ field }) => {
-                    const customersWithPricing = customers.filter(c => c.pricingTable2025 || c.pricingTable2026);
-                    const customersWithoutPricing = customers.length - customersWithPricing.length;
+                    // Only show active customers with pricing tables
+                    const activeCustomers = customers.filter(c => c.active !== false);
+                    const customersWithPricing = activeCustomers.filter(c => c.pricingTable2025 || c.pricingTable2026);
+                    const activeWithoutPricing = activeCustomers.length - customersWithPricing.length;
+                    const inactiveCount = customers.length - activeCustomers.length;
                     
                     return (
                       <FormItem>
@@ -667,9 +670,11 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             ))}
                           </SelectContent>
                         </Select>
-                        {customersWithoutPricing > 0 && (
+                        {(activeWithoutPricing > 0 || inactiveCount > 0) && (
                           <FormDescription>
-                            {customersWithoutPricing} customer{customersWithoutPricing !== 1 ? 's' : ''} hidden (no pricing table)
+                            {activeWithoutPricing > 0 && `${activeWithoutPricing} customer${activeWithoutPricing !== 1 ? 's' : ''} hidden (no pricing table)`}
+                            {activeWithoutPricing > 0 && inactiveCount > 0 && ', '}
+                            {inactiveCount > 0 && `${inactiveCount} inactive`}
                           </FormDescription>
                         )}
                         <FormMessage />
@@ -891,7 +896,11 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             <>
                               <label className="text-xs text-muted-foreground font-medium">Price</label>
                               <div className="mt-1 px-3 py-2 rounded-md bg-muted/30 border text-sm font-semibold text-primary">
-                                {selectedCustomer?.pricingTable2025 ? "£0.30 per item" : "£0.40 per item"}
+                                {(() => {
+                                  const customerId = form.watch("customerId");
+                                  const customer = customers.find(c => c.id === customerId);
+                                  return customer?.pricingTable2025 ? "£0.30 per item" : "£0.40 per item";
+                                })()}
                               </div>
                             </>
                           ) : (
