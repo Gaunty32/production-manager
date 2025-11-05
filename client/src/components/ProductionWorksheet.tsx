@@ -36,7 +36,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
     : null;
 
   return (
-    <div className="fixed inset-0 bg-background z-50 overflow-auto">
+    <div className="fixed inset-0 bg-background print:bg-white z-50 overflow-auto">
       {/* Print button bar - hide when printing */}
       <div className="print:hidden sticky top-0 z-10 bg-background border-b p-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Production Worksheet</h2>
