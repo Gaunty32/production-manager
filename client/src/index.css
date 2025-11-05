@@ -353,3 +353,44 @@
     inset: -1px;
   }
 }
+
+/* Print styles for production worksheet */
+@media print {
+  /* Make worksheet static and add top margin */
+  #production-worksheet-root {
+    position: static !important;
+    inset: unset !important;
+    overflow: visible !important;
+    margin-top: 5cm !important;
+    margin-left: 1.5cm !important;
+    margin-right: 1.5cm !important;
+    margin-bottom: 2cm !important;
+  }
+  
+  /* Remove all gray backgrounds */
+  .bg-gray-50,
+  .bg-gray-100,
+  .bg-gray-200,
+  .bg-background,
+  #production-worksheet-root * {
+    background-color: transparent !important;
+    background-image: none !important;
+  }
+  
+  /* Ensure page is white */
+  html, body {
+    background: white !important;
+  }
+  
+  /* Keep borders visible */
+  .border,
+  .border-2,
+  .border-4,
+  .border-b,
+  .border-b-2,
+  .border-b-4,
+  .border-t,
+  .border-t-2 {
+    border-color: black !important;
+  }
+}

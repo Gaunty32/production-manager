@@ -36,7 +36,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
     : null;
 
   return (
-    <div className="fixed inset-0 bg-background print:bg-white z-50 overflow-auto">
+    <div id="production-worksheet-root" className="fixed inset-0 bg-background z-50 overflow-auto">
       {/* Print button bar - hide when printing */}
       <div className="print:hidden sticky top-0 z-10 bg-background border-b p-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Production Worksheet</h2>
@@ -53,8 +53,8 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
       </div>
 
       {/* Worksheet content - optimized for printing */}
-      <div className="max-w-4xl mx-auto p-8 print:pt-[5cm] print:px-0 print:pb-0">
-        <div className="bg-white text-black print:bg-transparent print:shadow-none">
+      <div className="max-w-4xl mx-auto p-8 print:p-0">
+        <div className="bg-white text-black">
           {/* Header Section - Top Quarter of Page */}
           <div className="border-b-4 border-black pb-6 mb-6 min-h-[25vh]">
             <div className="flex justify-between items-start mb-4">
@@ -139,7 +139,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
           </div>
 
           {/* Shipping/Delivery Information */}
-          <div className="mb-6 p-4 border-2 border-gray-300 bg-gray-50 print:bg-transparent">
+          <div className="mb-6 p-4 border-2 border-gray-300 bg-gray-50">
             <h3 className="font-semibold text-sm uppercase text-gray-600 mb-2">Shipping & Delivery</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
@@ -175,7 +175,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
             </h3>
             <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="bg-gray-100 print:bg-transparent border-b-2 border-black">
+                <tr className="bg-gray-100 border-b-2 border-black">
                   <th className="text-left py-2 px-2 font-semibold">Type</th>
                   <th className="text-center py-2 px-2 font-semibold">Qty</th>
                   <th className="text-center py-2 px-2 font-semibold">Stitch Count</th>
@@ -241,7 +241,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
 
           {/* Production Metrics Section */}
           {totalProductionMetrics && totalProductionMetrics.totalMinutes > 0 && (
-            <div className="mt-6 p-4 bg-gray-50 print:bg-transparent border-2 border-gray-300">
+            <div className="mt-6 p-4 bg-gray-50 border-2 border-gray-300">
               <h3 className="font-semibold text-sm uppercase text-gray-600 mb-3">
                 Estimated Production Time
               </h3>
@@ -265,30 +265,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
         </div>
       </div>
 
-      {/* Print styles */}
-      <style>{`
-        @media print {
-          html, body {
-            background: white !important;
-            height: auto !important;
-          }
-          @page {
-            size: A4 portrait;
-            margin: 1cm 1.5cm !important;
-          }
-          /* Remove all backgrounds */
-          *, *::before, *::after {
-            background: transparent !important;
-            background-color: transparent !important;
-            background-image: none !important;
-            box-shadow: none !important;
-          }
-          /* Keep borders visible */
-          .border, .border-2, .border-4, .border-b, .border-b-2, .border-b-4, .border-t, .border-t-2 {
-            border-color: black !important;
-          }
-        }
-      `}</style>
+      {/* Print styles defined in index.css */}
     </div>
   );
 }
