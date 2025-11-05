@@ -53,7 +53,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
       </div>
 
       {/* Worksheet content - optimized for printing */}
-      <div className="max-w-4xl mx-auto p-8 print:p-0 print:pt-0">
+      <div className="max-w-4xl mx-auto p-8 print:pt-[5cm] print:px-0 print:pb-0">
         <div className="bg-white text-black print:bg-transparent print:shadow-none">
           {/* Header Section - Top Quarter of Page */}
           <div className="border-b-4 border-black pb-6 mb-6 min-h-[25vh]">
@@ -274,10 +274,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
           }
           @page {
             size: A4 portrait;
-            margin-top: 5cm !important;
-            margin-bottom: 2cm !important;
-            margin-left: 1.5cm !important;
-            margin-right: 1.5cm !important;
+            margin: 1cm 1.5cm !important;
           }
           /* Remove all backgrounds */
           *, *::before, *::after {
