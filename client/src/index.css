@@ -381,8 +381,8 @@
     width: 100% !important;
   }
   
-  /* Enable color printing */
-  * {
+  /* Preserve text colors and borders in print */
+  #production-worksheet-root * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;

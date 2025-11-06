@@ -139,7 +139,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
           </div>
 
           {/* Shipping/Delivery Information */}
-          <div className="mb-6 p-4 border-2 border-gray-300 bg-gray-50">
+          <div className="mb-6 p-4 border-2 border-gray-300 bg-gray-50 print:bg-white">
             <h3 className="font-semibold text-sm uppercase text-gray-600 mb-2">Shipping & Delivery</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
@@ -175,7 +175,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
             </h3>
             <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="bg-gray-100 border-b-2 border-black">
+                <tr className="bg-gray-100 border-b-2 border-black print:bg-white">
                   <th className="text-left py-2 px-2 font-semibold">Type</th>
                   <th className="text-center py-2 px-2 font-semibold">Qty</th>
                   <th className="text-center py-2 px-2 font-semibold">Stitch Count</th>
@@ -241,7 +241,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
 
           {/* Production Metrics Section */}
           {totalProductionMetrics && totalProductionMetrics.totalMinutes > 0 && (
-            <div className="mt-6 p-4 bg-gray-50 border-2 border-gray-300">
+            <div className="mt-6 p-4 bg-gray-50 border-2 border-gray-300 print:bg-white">
               <h3 className="font-semibold text-sm uppercase text-gray-600 mb-3">
                 Estimated Production Time
               </h3>
@@ -260,7 +260,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
 
           {/* Actual Production Time Section */}
           {job.actualProductionTime !== null && job.actualProductionTime !== undefined && (
-            <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-300">
+            <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-300 print:bg-white print:border-black">
               <h3 className="font-semibold text-sm uppercase text-gray-600 mb-3">
                 Actual Production Time
               </h3>
