@@ -1,4 +1,4 @@
-import { Plus, Trash2, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil, UserPlus } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
+import { CustomerUserDialog } from "@/components/CustomerUserDialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Customer } from "@shared/schema";
@@ -120,6 +121,26 @@ export default function Customers() {
     },
   });
 
+  const createCustomerUserMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/customer-auth/register", data);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `Customer portal login created successfully for ${data.email}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create customer login",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleDelete = (id: string) => {
     setCustomerToDelete(id);
   };
@@ -145,18 +166,30 @@ export default function Customers() {
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Customers</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Manage your customer list
+              Manage your customer list and portal access
             </p>
           </div>
-          <CustomerFormDialog
-            trigger={
-              <Button data-testid="button-add-customer">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Customer
-              </Button>
-            }
-            onSubmit={(data) => createCustomerMutation.mutate(data)}
-          />
+          <div className="flex gap-2">
+            <CustomerUserDialog
+              trigger={
+                <Button variant="outline" data-testid="button-create-customer-login">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Create Portal Login
+                </Button>
+              }
+              customers={customers}
+              onSubmit={(data) => createCustomerUserMutation.mutate(data)}
+            />
+            <CustomerFormDialog
+              trigger={
+                <Button data-testid="button-add-customer">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Customer
+                </Button>
+              }
+              onSubmit={(data) => createCustomerMutation.mutate(data)}
+            />
+          </div>
         </div>
 
         {customers.length === 0 ? (
