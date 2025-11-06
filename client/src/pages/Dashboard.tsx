@@ -302,7 +302,14 @@ export default function Dashboard() {
         if (a.jobNumber === null && b.jobNumber === null) return 0;
         if (a.jobNumber === null) return 1;
         if (b.jobNumber === null) return -1;
-        return a.jobNumber - b.jobNumber;
+        // Handle both numeric and string job numbers
+        const aNum = typeof a.jobNumber === 'number' ? a.jobNumber : parseInt(a.jobNumber) || 0;
+        const bNum = typeof b.jobNumber === 'number' ? b.jobNumber : parseInt(b.jobNumber) || 0;
+        if (aNum !== bNum) {
+          return aNum - bNum;
+        }
+        // If numeric parts are equal, do string comparison for full job number
+        return String(a.jobNumber).localeCompare(String(b.jobNumber));
       case 'date':
       default:
         // Sort by dispatch date if both have it, otherwise pending jobs go to end
