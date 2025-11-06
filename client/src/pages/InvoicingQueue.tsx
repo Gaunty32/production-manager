@@ -207,6 +207,24 @@ export default function InvoicingQueue() {
     return total;
   };
 
+  // Calculate total value of all draft invoices (excluding shipping)
+  const totalDraftInvoiceValue = (() => {
+    let total = 0;
+    
+    readyJobs.forEach(job => {
+      const price = getJobPrice(job);
+      if (typeof price === 'number') {
+        total += price;
+      }
+    });
+
+    // Add all approved logo setups
+    const allApprovedLogos = logoSetups.filter(ls => ls.approved);
+    total += allApprovedLogos.length * 10;
+
+    return total;
+  })();
+
   const handleConnectXero = async () => {
     setConnectingXero(true);
     try {
@@ -324,20 +342,30 @@ export default function InvoicingQueue() {
               </p>
             </div>
             {xeroStatus && (
-              <div className="flex items-center gap-2">
-                {xeroStatus.connected ? (
-                  <Badge variant="outline" className="gap-1.5" data-testid="badge-xero-connected">
-                    <LinkIcon className="h-3.5 w-3.5" />
-                    Xero Connected
-                  </Badge>
-                ) : (
-                  <Button
-                    onClick={handleConnectXero}
-                    disabled={connectingXero}
-                    data-testid="button-connect-xero"
-                  >
-                    {connectingXero ? "Connecting..." : "Connect to Xero"}
-                  </Button>
+              <div className="flex flex-col items-end gap-3">
+                <div className="flex items-center gap-2">
+                  {xeroStatus.connected ? (
+                    <Badge variant="outline" className="gap-1.5" data-testid="badge-xero-connected">
+                      <LinkIcon className="h-3.5 w-3.5" />
+                      Xero Connected
+                    </Badge>
+                  ) : (
+                    <Button
+                      onClick={handleConnectXero}
+                      disabled={connectingXero}
+                      data-testid="button-connect-xero"
+                    >
+                      {connectingXero ? "Connecting..." : "Connect to Xero"}
+                    </Button>
+                  )}
+                </div>
+                {readyJobs.length > 0 && user && canViewPrices(user.role) && (
+                  <div className="text-right">
+                    <p className="text-sm text-muted-foreground">Total Draft Value (excl. shipping)</p>
+                    <p className="text-2xl font-bold text-foreground" data-testid="text-total-draft-value">
+                      £{totalDraftInvoiceValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -454,10 +482,12 @@ export default function InvoicingQueue() {
                                     </p>
                                   )}
                                   <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                                    <div className="flex items-center gap-1">
-                                      <Calendar className="h-3 w-3" />
-                                      <span>{format(new Date(job.requiredDispatchDate), 'MMM d, yyyy')}</span>
-                                    </div>
+                                    {job.requiredDispatchDate && (
+                                      <div className="flex items-center gap-1">
+                                        <Calendar className="h-3 w-3" />
+                                        <span>{format(new Date(job.requiredDispatchDate), 'MMM d, yyyy')}</span>
+                                      </div>
+                                    )}
                                     <div className="flex items-center gap-1">
                                       <Package className="h-3 w-3" />
                                       <span>{lineItems.length} {lineItems.length === 1 ? 'item' : 'items'}</span>
