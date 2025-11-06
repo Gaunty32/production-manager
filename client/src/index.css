@@ -358,44 +358,46 @@
 @media print {
   /* Set page margins for A4 */
   @page {
-    margin-top: 5cm;
-    margin-bottom: 2cm;
-    margin-left: 1.5cm;
-    margin-right: 1.5cm;
+    margin: 1cm;
     size: A4 portrait;
   }
   
-  /* Make worksheet static */
+  /* HIDE EVERYTHING by default */
+  body * {
+    visibility: hidden !important;
+  }
+  
+  /* ONLY show the production worksheet */
+  #production-worksheet-root,
+  #production-worksheet-root * {
+    visibility: visible !important;
+  }
+  
+  /* Make worksheet take full page */
   #production-worksheet-root {
-    position: static !important;
-    inset: unset !important;
-    overflow: visible !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    background: white !important;
   }
   
-  /* Remove ALL backgrounds aggressively */
-  html, body, #root, #production-worksheet-root,
-  #production-worksheet-root *,
-  div, section, header, main, article, aside,
-  table, thead, tbody, tr, td, th {
+  /* Reset backgrounds to white for print */
+  #production-worksheet-root,
+  #production-worksheet-root * {
     background-color: white !important;
     background-image: none !important;
   }
   
-  /* Override all Tailwind background utility classes */
-  [class*="bg-"] {
-    background-color: white !important;
-    background-image: none !important;
-  }
-  
-  /* Keep borders visible and dark */
-  .border,
-  .border-2,
-  .border-4,
-  .border-b,
-  .border-b-2,
-  .border-b-4,
-  .border-t,
-  .border-t-2 {
+  /* Keep text colors and borders */
+  #production-worksheet-root .border,
+  #production-worksheet-root .border-2,
+  #production-worksheet-root .border-4,
+  #production-worksheet-root .border-b,
+  #production-worksheet-root .border-b-2,
+  #production-worksheet-root .border-b-4,
+  #production-worksheet-root .border-t,
+  #production-worksheet-root .border-t-2 {
     border-color: black !important;
   }
 }
