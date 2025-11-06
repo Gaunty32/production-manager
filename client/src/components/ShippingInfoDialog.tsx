@@ -266,30 +266,64 @@ export function ShippingInfoDialog({
             />
 
             {/* Actual Production Time */}
-            <FormField
-              control={form.control}
-              name="actualProductionTime"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Actual Production Time (hours)</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      placeholder="e.g. 2.5"
-                      disabled={isPending || isSubmitting}
-                      data-testid="input-actual-production-time"
-                    />
-                  </FormControl>
-                  <FormDescription className="text-xs">
-                    Record how many hours this order actually took to produce
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="space-y-2">
+              <FormLabel>Actual Production Time</FormLabel>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="actualProductionTime"
+                  render={({ field }) => {
+                    const hours = field.value ? Math.floor(field.value) : 0;
+                    const minutes = field.value ? Math.round((field.value - hours) * 60) : 0;
+                    
+                    return (
+                      <>
+                        <FormItem>
+                          <FormLabel className="text-xs text-muted-foreground">Hours</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={hours || ""}
+                              onChange={(e) => {
+                                const newHours = parseInt(e.target.value) || 0;
+                                const currentMinutes = field.value ? Math.round((field.value - Math.floor(field.value)) * 60) : 0;
+                                field.onChange(newHours + (currentMinutes / 60));
+                              }}
+                              placeholder="0"
+                              disabled={isPending || isSubmitting}
+                              data-testid="input-actual-time-hours"
+                            />
+                          </FormControl>
+                        </FormItem>
+                        <FormItem>
+                          <FormLabel className="text-xs text-muted-foreground">Minutes</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="59"
+                              value={minutes || ""}
+                              onChange={(e) => {
+                                const newMinutes = parseInt(e.target.value) || 0;
+                                const currentHours = field.value ? Math.floor(field.value) : 0;
+                                field.onChange(currentHours + (newMinutes / 60));
+                              }}
+                              placeholder="0"
+                              disabled={isPending || isSubmitting}
+                              data-testid="input-actual-time-minutes"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      </>
+                    );
+                  }}
+                />
+              </div>
+              <FormDescription className="text-xs">
+                Record how long this order actually took to produce
+              </FormDescription>
+            </div>
 
             {/* Show existing shipments option for consolidated method */}
             {selectedMethod === "consolidated" && existingShipments.length > 0 && (
