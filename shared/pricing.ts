@@ -475,7 +475,7 @@ export function calculateShippingCost(
 ): ShippingCostResult {
   if (packageType === "bags") {
     return {
-      cost: 0,
+      cost: 6.50,
       description: "1 Bag",
     };
   }
