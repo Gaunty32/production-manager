@@ -377,6 +377,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
         item.stitchCount > 0 && 
         item.quantity > item.stitchCount &&
         item.jobType !== "Bagging" && // Bagging doesn't use stitch count
+        item.jobType !== "Print" && // Print doesn't use stitch count
         !item.jobType.includes("Initials/Name") // Flat-rate items don't compare these
       );
     
@@ -1188,6 +1189,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
             item.stitchCount > 0 && 
             item.quantity > item.stitchCount &&
             item.jobType !== "Bagging" &&
+            item.jobType !== "Print" &&
             !item.jobType.includes("Initials/Name")
           )
           .map(item => ({
