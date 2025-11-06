@@ -237,7 +237,8 @@ export default function Dashboard() {
     return (
       job.customerName.toLowerCase().includes(searchLower) ||
       job.jobName.toLowerCase().includes(searchLower) ||
-      (job.poNumber && job.poNumber.toLowerCase().includes(searchLower))
+      (job.poNumber && job.poNumber.toLowerCase().includes(searchLower)) ||
+      (job.jobNumber !== null && job.jobNumber.toString().toLowerCase().includes(searchLower))
     );
   });
 
@@ -596,7 +597,7 @@ export default function Dashboard() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search by customer, job name, or PO number..."
+              placeholder="Search by customer, job name, job #, or PO number..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
@@ -716,9 +717,27 @@ export default function Dashboard() {
                           data-testid="checkbox-select-all"
                         />
                       </TableHead>
-                      <TableHead className="py-3 px-3">Customer</TableHead>
+                      <TableHead 
+                        className="py-3 px-3 cursor-pointer hover-elevate select-none" 
+                        onClick={() => setSortOrder('customer')}
+                        data-testid="header-customer"
+                      >
+                        <div className="flex items-center gap-1">
+                          Customer
+                          {sortOrder === 'customer' && <ArrowUpDown className="h-3 w-3" />}
+                        </div>
+                      </TableHead>
                       <TableHead className="py-3 px-3">Job</TableHead>
-                      <TableHead className="py-3 px-3">Job #</TableHead>
+                      <TableHead 
+                        className="py-3 px-3 cursor-pointer hover-elevate select-none" 
+                        onClick={() => setSortOrder('jobNumber')}
+                        data-testid="header-job-number"
+                      >
+                        <div className="flex items-center gap-1">
+                          Job #
+                          {sortOrder === 'jobNumber' && <ArrowUpDown className="h-3 w-3" />}
+                        </div>
+                      </TableHead>
                       <TableHead className="py-3 px-3">PO #</TableHead>
                       <TableHead className="py-3 px-3">Qty</TableHead>
                       <TableHead className="py-3 px-3">Machine</TableHead>
@@ -726,7 +745,16 @@ export default function Dashboard() {
                       {canViewPrices(currentUser?.role) && (
                         <TableHead className="py-3 px-3">Price</TableHead>
                       )}
-                      <TableHead className="py-3 px-3">Date Required</TableHead>
+                      <TableHead 
+                        className="py-3 px-3 cursor-pointer hover-elevate select-none" 
+                        onClick={() => setSortOrder('date')}
+                        data-testid="header-date-required"
+                      >
+                        <div className="flex items-center gap-1">
+                          Date Required
+                          {sortOrder === 'date' && <ArrowUpDown className="h-3 w-3" />}
+                        </div>
+                      </TableHead>
                       <TableHead className="py-3 px-3">Status</TableHead>
                       <TableHead className="py-3 px-3">Actions</TableHead>
                     </TableRow>
