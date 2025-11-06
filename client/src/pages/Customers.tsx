@@ -126,10 +126,10 @@ export default function Customers() {
       const res = await apiRequest("POST", "/api/customer-auth/register", data);
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       toast({
         title: "Success",
-        description: `Customer portal login created successfully for ${data.email}`,
+        description: `Customer portal login created successfully${variables.email ? ` for ${variables.email}` : ''}`,
       });
     },
     onError: (error: Error) => {
@@ -178,7 +178,15 @@ export default function Customers() {
                 </Button>
               }
               customers={customers}
-              onSubmit={(data) => createCustomerUserMutation.mutate(data)}
+              onSubmit={async (data) => {
+                return new Promise((resolve, reject) => {
+                  createCustomerUserMutation.mutate(data, {
+                    onSuccess: () => resolve(),
+                    onError: (error) => reject(error),
+                  });
+                });
+              }}
+              isPending={createCustomerUserMutation.isPending}
             />
             <CustomerFormDialog
               trigger={

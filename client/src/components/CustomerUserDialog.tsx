@@ -42,9 +42,10 @@ const customerUserSchema = z.object({
 interface CustomerUserDialogProps {
   trigger?: React.ReactNode;
   customers: Customer[];
-  onSubmit: (data: z.infer<typeof customerUserSchema>) => void;
+  onSubmit: (data: z.infer<typeof customerUserSchema>) => Promise<void> | void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  isPending?: boolean;
 }
 
 export function CustomerUserDialog({ 
@@ -52,11 +53,13 @@ export function CustomerUserDialog({
   customers,
   onSubmit, 
   open: controlledOpen, 
-  onOpenChange 
+  onOpenChange,
+  isPending = false,
 }: CustomerUserDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof customerUserSchema>>({
     resolver: zodResolver(customerUserSchema),
@@ -78,12 +81,21 @@ export function CustomerUserDialog({
         firstName: "",
         lastName: "",
       });
+      setIsSubmitting(false);
     }
   }, [open, form]);
 
-  const handleSubmit = (data: z.infer<typeof customerUserSchema>) => {
-    onSubmit(data);
-    setOpen(false);
+  const handleSubmit = async (data: z.infer<typeof customerUserSchema>) => {
+    setIsSubmitting(true);
+    try {
+      await onSubmit(data);
+      setOpen(false);
+      form.reset();
+    } catch (error) {
+      // Error is handled by the mutation, keep dialog open
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -157,7 +169,7 @@ export function CustomerUserDialog({
                   <FormLabel>Password *</FormLabel>
                   <FormControl>
                     <Input 
-                      type="text" 
+                      type="password" 
                       placeholder="Minimum 8 characters" 
                       {...field} 
                       data-testid="input-password"
@@ -214,13 +226,14 @@ export function CustomerUserDialog({
                 type="button" 
                 variant="outline" 
                 onClick={() => setOpen(false)}
+                disabled={isSubmitting}
                 data-testid="button-cancel"
               >
                 Cancel
               </Button>
-              <Button type="submit" data-testid="button-create-login">
+              <Button type="submit" disabled={isSubmitting} data-testid="button-create-login">
                 <UserPlus className="mr-2 h-4 w-4" />
-                Create Login
+                {isSubmitting ? "Creating..." : "Create Login"}
               </Button>
             </div>
           </form>
