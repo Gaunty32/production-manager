@@ -258,6 +258,31 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
             </div>
           )}
 
+          {/* Actual Production Time Section */}
+          {job.actualProductionTime !== null && job.actualProductionTime !== undefined && (
+            <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-300">
+              <h3 className="font-semibold text-sm uppercase text-gray-600 mb-3">
+                Actual Production Time
+              </h3>
+              <div className="text-sm">
+                <p className="text-gray-600 mb-1">Time Taken:</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {(() => {
+                    const hours = Math.floor(job.actualProductionTime);
+                    const minutes = Math.round((job.actualProductionTime - hours) * 60);
+                    if (hours === 0) {
+                      return `${minutes}m`;
+                    } else if (minutes === 0) {
+                      return `${hours}h`;
+                    } else {
+                      return `${hours}h ${minutes}m`;
+                    }
+                  })()}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Footer */}
           <div className="mt-8 pt-4 border-t text-xs text-gray-500 text-center print:block">
             Printed: {format(new Date(), "dd/MM/yyyy HH:mm")}
