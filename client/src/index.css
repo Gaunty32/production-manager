@@ -379,25 +379,12 @@
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
-    background: white !important;
   }
   
-  /* Reset backgrounds to white for print */
-  #production-worksheet-root,
-  #production-worksheet-root * {
-    background-color: white !important;
-    background-image: none !important;
-  }
-  
-  /* Keep text colors and borders */
-  #production-worksheet-root .border,
-  #production-worksheet-root .border-2,
-  #production-worksheet-root .border-4,
-  #production-worksheet-root .border-b,
-  #production-worksheet-root .border-b-2,
-  #production-worksheet-root .border-b-4,
-  #production-worksheet-root .border-t,
-  #production-worksheet-root .border-t-2 {
-    border-color: black !important;
+  /* Enable color printing */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
 }
