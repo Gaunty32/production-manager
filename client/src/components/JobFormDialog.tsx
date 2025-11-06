@@ -46,6 +46,7 @@ import {
 import { CalendarIcon, Plus, Trash2, Info, ChevronRight, ChevronLeft, Check } from "lucide-react";
 import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { cn } from "@/lib/utils";
+import { QuackingDuckDialog } from "@/components/QuackingDuckDialog";
 
 type LineItem = {
   jobType: string;
@@ -113,6 +114,9 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const [currentStep, setCurrentStep] = useState(1);
   const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDuckDialog, setShowDuckDialog] = useState(false);
+  const [duckConfirmed, setDuckConfirmed] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<z.infer<typeof formSchema> | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -365,6 +369,24 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
     if (isSubmitting) return; // Prevent double submission
     
+    // Check for suspicious data: quantity > stitch count (likely swapped)
+    const suspiciousItems = lineItems
+      .map((item, index) => ({ ...item, index }))
+      .filter(item => 
+        item.quantity > 0 && 
+        item.stitchCount > 0 && 
+        item.quantity > item.stitchCount &&
+        item.jobType !== "Bagging" && // Bagging doesn't use stitch count
+        !item.jobType.includes("Initials/Name") // Flat-rate items don't compare these
+      );
+    
+    // If suspicious data found and not yet confirmed, show duck dialog
+    if (suspiciousItems.length > 0 && !duckConfirmed) {
+      setPendingFormData(data);
+      setShowDuckDialog(true);
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
       const totalQuantity = getTotalQuantity();
@@ -375,6 +397,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
           description: "Please add at least one line item with quantity greater than 0",
           variant: "destructive",
         });
+        setIsSubmitting(false);
         return;
       }
 
@@ -428,10 +451,21 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
     }
   };
 
+  const handleDuckConfirm = () => {
+    setDuckConfirmed(true);
+    setShowDuckDialog(false);
+    // Re-submit with the pending data
+    if (pendingFormData) {
+      handleSubmit(pendingFormData);
+    }
+  };
+
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
     if (!newOpen) {
       setCurrentStep(1);
+      setDuckConfirmed(false);
+      setPendingFormData(null);
     }
   };
 
@@ -462,6 +496,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="w-full max-w-[95vw] md:max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -1141,5 +1176,26 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
         </Form>
       </DialogContent>
     </Dialog>
+
+      <QuackingDuckDialog
+        open={showDuckDialog}
+        onOpenChange={setShowDuckDialog}
+        onConfirm={handleDuckConfirm}
+        suspiciousItems={lineItems
+          .map((item, index) => ({ ...item, index }))
+          .filter(item => 
+            item.quantity > 0 && 
+            item.stitchCount > 0 && 
+            item.quantity > item.stitchCount &&
+            item.jobType !== "Bagging" &&
+            !item.jobType.includes("Initials/Name")
+          )
+          .map(item => ({
+            index: item.index,
+            quantity: item.quantity,
+            stitchCount: item.stitchCount
+          }))}
+      />
+    </>
   );
 }
