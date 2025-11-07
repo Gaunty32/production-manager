@@ -520,6 +520,13 @@ export class XeroService {
       status: "DRAFT",
     };
 
+    const payload = { Invoices: [invoice] };
+    
+    console.log("=== XERO INVOICE CREATION ===");
+    console.log("Sending invoice to Xero for customer:", customer.name);
+    console.log("Line items count:", xeroLineItems.length);
+    console.log("Line items:", JSON.stringify(xeroLineItems, null, 2));
+    
     const response = await fetch(`${this.apiUrl}/Invoices`, {
       method: "POST",
       headers: {
@@ -528,13 +535,37 @@ export class XeroService {
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
-      body: JSON.stringify({ Invoices: [invoice] }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
-      throw new Error("Failed to create invoice in Xero. Please check your connection.");
+      const errorText = await response.text();
+      console.error("=== XERO API ERROR ===");
+      console.error("Status:", response.status);
+      console.error("Response:", errorText);
+      
+      // Try to parse the error response
+      let errorMessage = "Failed to create invoice in Xero";
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.Elements && errorData.Elements[0]?.ValidationErrors) {
+          const validationErrors = errorData.Elements[0].ValidationErrors;
+          errorMessage = validationErrors.map((e: any) => e.Message).join("; ");
+        } else if (errorData.Message) {
+          errorMessage = errorData.Message;
+        }
+      } catch (e) {
+        // If parsing fails, use the raw error text
+        errorMessage = errorText || errorMessage;
+      }
+      
+      console.error("Parsed error:", errorMessage);
+      console.error("======================");
+      throw new Error(errorMessage);
     }
 
+    console.log("Invoice created successfully!");
+    console.log("=============================");
     return response.json();
   }
 
