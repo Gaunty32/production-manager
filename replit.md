@@ -41,3 +41,46 @@ The production queue uses traffic light indicators for logo approval and goods r
 - **State Management**: TanStack React Query
 - **Routing**: Wouter
 - **External APIs**: Xero API
+
+## Configuration & Deployment
+
+### Xero OAuth Integration
+
+The application integrates with Xero for automated invoice creation. To configure Xero OAuth:
+
+1. **Xero Developer Portal Setup**:
+   - Create an OAuth 2.0 app in the Xero Developer Portal (https://developer.xero.com/)
+   - Configure the following redirect URIs in your Xero app:
+     - **Development**: `https://[your-dev-domain].replit.dev/api/xero/auth/callback`
+     - **Production**: `https://[your-deployment-url].replit.app/api/xero/auth/callback`
+   - Example production URL: `https://selectuniforms-productionplanning.replit.app/api/xero/auth/callback`
+   - Both URIs must be registered for OAuth to work in both environments
+
+2. **Environment Variables**:
+   - `XERO_CLIENT_ID`: Your Xero OAuth app client ID
+   - `XERO_CLIENT_SECRET`: Your Xero OAuth app client secret
+   - These must be set in both development and production environments
+
+3. **Environment Detection**:
+   - The app automatically detects whether it's running in production (`REPLIT_DEPLOYMENT=1`) or development
+   - In production: Uses the production domain from request headers for OAuth callbacks
+   - In development: Uses `REPLIT_DEV_DOMAIN` for OAuth callbacks
+   - This ensures the correct redirect URI is used for Xero OAuth flows
+
+4. **Testing the Connection**:
+   - Navigate to the Draft Invoicing Queue page
+   - Click "Connect to Xero" button
+   - Authorize the connection in Xero
+   - You should be redirected back with a success message
+
+**Important**: If Xero connection fails, verify that:
+- Both redirect URIs (dev and prod) are registered in your Xero app
+- The redirect URIs match exactly (including protocol, domain, and path)
+- Environment variables are set correctly in both environments
+
+### Customer Portal Security
+
+New customer portal features (as of recent updates):
+- **Forced Password Reset**: New customer logins must reset their password on first login
+- **Access Control**: Staff can enable/disable customer portal access via toggle switch
+- Database fields: `customer_users.must_reset_password` and `customer_users.active`

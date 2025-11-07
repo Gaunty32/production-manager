@@ -1810,18 +1810,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Xero is not configured. Please contact your administrator." });
       }
 
-      // Use Replit dev domain if available, otherwise fall back to request headers
-      const replitDevDomain = process.env.REPLIT_DEV_DOMAIN;
+      // Determine redirect URI based on environment
+      // In production (REPLIT_DEPLOYMENT=1), use the actual domain from request headers
+      // In development, use REPLIT_DEV_DOMAIN if available
+      const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
       let redirectUri: string;
       
-      if (replitDevDomain) {
-        redirectUri = `https://${replitDevDomain}/api/xero/auth/callback`;
-      } else {
-        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      if (isProduction) {
+        // Production: Use request headers to get the production domain
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers.host;
         redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
+        console.log("Production mode - using domain from request:", host);
+      } else {
+        // Development: Use REPLIT_DEV_DOMAIN if available, otherwise fall back to request headers
+        const replitDevDomain = process.env.REPLIT_DEV_DOMAIN;
+        if (replitDevDomain) {
+          redirectUri = `https://${replitDevDomain}/api/xero/auth/callback`;
+          console.log("Development mode - using REPLIT_DEV_DOMAIN:", replitDevDomain);
+        } else {
+          const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+          const host = req.headers.host;
+          redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
+          console.log("Development mode - using domain from request:", host);
+        }
       }
       
+      console.log("Xero OAuth redirect URI:", redirectUri);
       const { authUrl, state } = xeroService.getAuthorizationUrl(redirectUri);
       
       // Store state in session to survive server restarts
@@ -1871,19 +1886,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Clear the state from session after validation
       delete (req.session as any).xeroOAuthState;
 
-      // Use Replit dev domain if available, otherwise fall back to request headers
-      const replitDevDomain = process.env.REPLIT_DEV_DOMAIN;
+      // Determine redirect URI based on environment (must match the one used in /connect)
+      const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
       let redirectUri: string;
       
-      if (replitDevDomain) {
-        redirectUri = `https://${replitDevDomain}/api/xero/auth/callback`;
-      } else {
-        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      if (isProduction) {
+        // Production: Use request headers to get the production domain
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers.host;
         redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
+      } else {
+        // Development: Use REPLIT_DEV_DOMAIN if available, otherwise fall back to request headers
+        const replitDevDomain = process.env.REPLIT_DEV_DOMAIN;
+        if (replitDevDomain) {
+          redirectUri = `https://${replitDevDomain}/api/xero/auth/callback`;
+        } else {
+          const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+          const host = req.headers.host;
+          redirectUri = `${protocol}://${host}/api/xero/auth/callback`;
+        }
       }
 
       console.log("Redirect URI:", redirectUri);
+      console.log("Environment:", isProduction ? "Production" : "Development");
       console.log("Exchanging code for tokens...");
 
       await xeroService.exchangeCodeForTokens(code, redirectUri);
