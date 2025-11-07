@@ -56,6 +56,12 @@ export class XeroService {
     return !!(this.tokens?.access_token && this.tokens?.tenant_id);
   }
 
+  disconnect(): void {
+    console.log("Disconnecting from Xero...");
+    this.tokens = null;
+    console.log("Xero connection cleared");
+  }
+
   private generateState(): string {
     return Math.random().toString(36).substring(2) + Date.now().toString(36);
   }

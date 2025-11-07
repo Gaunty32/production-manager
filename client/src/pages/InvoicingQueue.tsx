@@ -257,6 +257,26 @@ export default function InvoicingQueue() {
     }
   };
 
+  const handleDisconnectXero = async () => {
+    try {
+      const response = await apiRequest("POST", "/api/xero/auth/disconnect");
+      if (response.ok) {
+        await queryClient.invalidateQueries({ queryKey: ["/api/xero/auth/status"] });
+        toast({
+          title: "Disconnected",
+          description: "Successfully disconnected from Xero",
+        });
+      }
+    } catch (error) {
+      console.error("Error disconnecting from Xero:", error);
+      toast({
+        title: "Disconnection Failed",
+        description: "Failed to disconnect from Xero. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleCreateInvoice = async (customerId: string) => {
     const customerJobs = jobsByCustomer[customerId] || [];
     const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
@@ -355,10 +375,20 @@ export default function InvoicingQueue() {
               <div className="flex flex-col items-end gap-3">
                 <div className="flex items-center gap-2">
                   {xeroStatus.connected ? (
-                    <Badge variant="outline" className="gap-1.5" data-testid="badge-xero-connected">
-                      <LinkIcon className="h-3.5 w-3.5" />
-                      Xero Connected
-                    </Badge>
+                    <>
+                      <Badge variant="outline" className="gap-1.5" data-testid="badge-xero-connected">
+                        <LinkIcon className="h-3.5 w-3.5" />
+                        Xero Connected
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleDisconnectXero}
+                        data-testid="button-disconnect-xero"
+                      >
+                        Disconnect
+                      </Button>
+                    </>
                   ) : (
                     <Button
                       onClick={handleConnectXero}

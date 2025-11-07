@@ -1923,6 +1923,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/xero/auth/disconnect", isStaffAuthenticated, async (req, res) => {
+    try {
+      xeroService.disconnect();
+      res.json({ success: true, message: "Disconnected from Xero" });
+    } catch (error) {
+      console.error("Error disconnecting from Xero:", error);
+      res.status(500).json({ error: "Failed to disconnect from Xero" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
