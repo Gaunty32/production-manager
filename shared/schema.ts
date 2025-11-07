@@ -160,6 +160,8 @@ export const customerUsers = pgTable("customer_users", {
   passwordHash: varchar("password_hash").notNull(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
+  mustResetPassword: boolean("must_reset_password").notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
 });
