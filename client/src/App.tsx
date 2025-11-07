@@ -24,6 +24,7 @@ import StaffLogin from "@/pages/StaffLogin";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import CustomerDashboard from "@/pages/CustomerDashboard";
+import CustomerPasswordReset from "@/pages/CustomerPasswordReset";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -93,7 +94,9 @@ function CustomerPortalApp() {
   return (
     <Switch>
       <Route path="/customer/login" component={CustomerLogin} />
+      <Route path="/customer/reset-password" component={CustomerPasswordReset} />
       <Route path="/customer/dashboard" component={CustomerDashboard} />
+      <Route path="/customer" component={CustomerDashboard} />
       <Route component={NotFound} />
     </Switch>
   );

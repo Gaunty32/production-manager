@@ -25,7 +25,7 @@ import {
 import { z } from "zod";
 import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
-import { loginCustomer, registerCustomer, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
+import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
 import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
@@ -688,6 +688,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/customer-auth/logout", (req, res) => {
     (req.session as any).customerUserId = undefined;
     res.json({ success: true });
+  });
+
+  app.post("/api/customer-auth/reset-password", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const { newPassword } = z.object({
+        newPassword: z.string().min(8, "Password must be at least 8 characters"),
+      }).parse(req.body);
+      
+      const customerUserId = (req.session as any).customerUserId;
+      await resetCustomerPassword(customerUserId, newPassword);
+      
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Password reset failed" });
+      }
+    }
+  });
+
+  app.patch("/api/customer-users/:id/toggle-active", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { active } = z.object({
+        active: z.boolean(),
+      }).parse(req.body);
+      
+      await storage.updateCustomerActive(id, active);
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to update customer status" });
+      }
+    }
   });
 
   app.get("/api/customer-auth/user", isCustomerAuthenticated, async (req: any, res) => {

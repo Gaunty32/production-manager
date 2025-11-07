@@ -107,10 +107,12 @@ export interface IStorage {
   deleteLogoSetup(id: string): Promise<void>;
   
   // Customer portal methods
-  createCustomerUser(customerUser: Omit<CustomerUser, 'id' | 'createdAt' | 'lastLoginAt'>): Promise<CustomerUser>;
+  createCustomerUser(customerUser: Omit<CustomerUser, 'id' | 'createdAt' | 'lastLoginAt'> & { mustResetPassword?: boolean; active?: boolean }): Promise<CustomerUser>;
   getCustomerUserById(id: string): Promise<CustomerUser | undefined>;
   getCustomerUserByEmail(email: string): Promise<CustomerUser | undefined>;
   updateCustomerLastLogin(id: string): Promise<void>;
+  updateCustomerPassword(id: string, passwordHash: string): Promise<void>;
+  updateCustomerActive(id: string, active: boolean): Promise<void>;
   getJobMessages(jobId: string): Promise<JobMessage[]>;
   createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
   markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void>;
@@ -901,6 +903,20 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(customerUsers)
       .set({ lastLoginAt: new Date() })
+      .where(eq(customerUsers.id, id));
+  }
+
+  async updateCustomerPassword(id: string, passwordHash: string): Promise<void> {
+    await db
+      .update(customerUsers)
+      .set({ passwordHash, mustResetPassword: false })
+      .where(eq(customerUsers.id, id));
+  }
+
+  async updateCustomerActive(id: string, active: boolean): Promise<void> {
+    await db
+      .update(customerUsers)
+      .set({ active })
       .where(eq(customerUsers.id, id));
   }
 
