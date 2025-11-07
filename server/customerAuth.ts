@@ -58,6 +58,7 @@ export async function resetCustomerPassword(customerUserId: string, newPassword:
   
   // Update password and clear the mustResetPassword flag
   await storage.updateCustomerPassword(customerUserId, passwordHash);
+  await storage.updateCustomerMustResetPassword(customerUserId, false);
   
   return { success: true };
 }

@@ -110,9 +110,11 @@ export interface IStorage {
   createCustomerUser(customerUser: Omit<CustomerUser, 'id' | 'createdAt' | 'lastLoginAt'> & { mustResetPassword?: boolean; active?: boolean }): Promise<CustomerUser>;
   getCustomerUserById(id: string): Promise<CustomerUser | undefined>;
   getCustomerUserByEmail(email: string): Promise<CustomerUser | undefined>;
+  getCustomerUsersByCustomerId(customerId: string): Promise<CustomerUser[]>;
   updateCustomerLastLogin(id: string): Promise<void>;
   updateCustomerPassword(id: string, passwordHash: string): Promise<void>;
   updateCustomerActive(id: string, active: boolean): Promise<void>;
+  updateCustomerMustResetPassword(id: string, mustResetPassword: boolean): Promise<void>;
   getJobMessages(jobId: string): Promise<JobMessage[]>;
   createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
   markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void>;
@@ -899,10 +901,28 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getCustomerUsersByCustomerId(customerId: string): Promise<CustomerUser[]> {
+    return await db.select().from(customerUsers).where(eq(customerUsers.customerId, customerId));
+  }
+
   async updateCustomerLastLogin(id: string): Promise<void> {
     await db
       .update(customerUsers)
       .set({ lastLoginAt: new Date() })
+      .where(eq(customerUsers.id, id));
+  }
+
+  async updateCustomerActive(id: string, active: boolean): Promise<void> {
+    await db
+      .update(customerUsers)
+      .set({ active })
+      .where(eq(customerUsers.id, id));
+  }
+
+  async updateCustomerMustResetPassword(id: string, mustResetPassword: boolean): Promise<void> {
+    await db
+      .update(customerUsers)
+      .set({ mustResetPassword })
       .where(eq(customerUsers.id, id));
   }
 

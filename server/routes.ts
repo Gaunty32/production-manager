@@ -825,6 +825,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/customers/:customerId/users", isStaffAuthenticated, async (req, res) => {
+    try {
+      const customerUsers = await storage.getCustomerUsersByCustomerId(req.params.customerId);
+      // Return without password hashes
+      const safeUsers = customerUsers.map(({ passwordHash: _, ...user }) => user);
+      res.json(safeUsers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch customer users" });
+    }
+  });
+
   // Staff routes
   app.get("/api/staff", isStaffAuthenticated, async (req, res) => {
     try {

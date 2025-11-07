@@ -1,4 +1,4 @@
-import { Plus, Trash2, Pencil, UserPlus } from "lucide-react";
+import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { CustomerUserDialog } from "@/components/CustomerUserDialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Customer } from "@shared/schema";
+import { useMemo } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,8 +32,39 @@ export default function Customers() {
     queryKey: ["/api/customers"],
   });
 
+  // Fetch all customer users (for all customers)
+  const { data: allCustomerUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/customer-users/all"],
+    queryFn: async () => {
+      // Fetch customer users for each customer
+      const users: any[] = [];
+      for (const customer of customersData) {
+        try {
+          const response = await fetch(`/api/customers/${customer.id}/users`);
+          if (response.ok) {
+            const customerUsers = await response.json();
+            users.push(...customerUsers);
+          }
+        } catch (error) {
+          console.error(`Failed to fetch users for customer ${customer.id}:`, error);
+        }
+      }
+      return users;
+    },
+    enabled: customersData.length > 0,
+  });
+
   // Sort customers alphabetically by name
   const customers = [...customersData].sort((a, b) => a.name.localeCompare(b.name));
+
+  // Map customer users by customer ID for quick lookup
+  const customerUsersMap = useMemo(() => {
+    const map = new Map<string, any>();
+    allCustomerUsers.forEach((user) => {
+      map.set(user.customerId, user);
+    });
+    return map;
+  }, [allCustomerUsers]);
 
   const createCustomerMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -127,6 +159,7 @@ export default function Customers() {
       return res.json();
     },
     onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-users/all"] });
       toast({
         title: "Success",
         description: `Customer portal login created successfully${variables.email ? ` for ${variables.email}` : ''}`,
@@ -136,6 +169,27 @@ export default function Customers() {
       toast({
         title: "Error",
         description: error.message || "Failed to create customer login",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const togglePortalAccessMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/customer-users/${id}/toggle-active`, { active });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-users/all"] });
+      toast({
+        title: "Success",
+        description: "Portal access updated",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update portal access",
         variant: "destructive",
       });
     },
@@ -208,6 +262,10 @@ export default function Customers() {
           <div className="space-y-3">
             {customers.map((customer) => {
               const isInactive = customer.active === false;
+              const portalUser = customerUsersMap.get(customer.id);
+              const hasPortalLogin = !!portalUser;
+              const portalActive = portalUser?.active !== false;
+              
               return (
               <Card 
                 key={customer.id} 
@@ -283,6 +341,21 @@ export default function Customers() {
                           <span data-testid={`text-address-${customer.id}`}>{customer.address}</span>
                         </div>
                       )}
+
+                      {/* Portal Login Status */}
+                      {hasPortalLogin && (
+                        <div className="flex items-center gap-2 text-sm">
+                          {portalActive ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-gray-400" />
+                          )}
+                          <span className="text-muted-foreground">
+                            Portal Login: {portalUser.email}
+                            {!portalActive && " (Disabled)"}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}
@@ -318,6 +391,19 @@ export default function Customers() {
                           data-testid={`switch-active-${customer.id}`}
                         />
                       </div>
+                      {hasPortalLogin && (
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`portal-${customer.id}`} className="text-xs text-muted-foreground cursor-pointer">
+                            Portal
+                          </Label>
+                          <Switch
+                            id={`portal-${customer.id}`}
+                            checked={portalActive}
+                            onCheckedChange={(checked) => togglePortalAccessMutation.mutate({ id: portalUser.id, active: checked })}
+                            data-testid={`switch-portal-${customer.id}`}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
