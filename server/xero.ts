@@ -6,7 +6,7 @@ export interface XeroInvoiceLineItem {
   unitAmount: number;
   accountCode?: string;
   taxType?: string;
-  itemCode?: string;
+  // itemCode removed - our internal codes (EMB, PRINT, BAG, OTHER, CARRIAGE) are not recognized by Xero
 }
 
 export interface XeroInvoice {
@@ -389,7 +389,8 @@ export class XeroService {
         unitAmount: item.unitPrice,
         accountCode: "4002",
         taxType: "OUTPUT2", // 20% VAT on income
-        itemCode: item.itemCode, // Use the item code from the line item
+        // Note: itemCode removed - our internal codes (EMB, PRINT, BAG, OTHER, CARRIAGE) 
+        // are not recognized by Xero. accountCode is sufficient for categorization.
       };
     });
 
@@ -486,7 +487,8 @@ export class XeroService {
         unitAmount: item.unitPrice,
         accountCode: "4002",
         taxType: "OUTPUT2", // 20% VAT on income
-        itemCode: item.itemCode, // Use the item code from the line item
+        // Note: itemCode removed - our internal codes (EMB, PRINT, BAG, OTHER, CARRIAGE) 
+        // are not recognized by Xero. accountCode is sufficient for categorization.
       };
     });
 
