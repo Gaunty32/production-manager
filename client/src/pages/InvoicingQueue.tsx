@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette } from "lucide-react";
+import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search } from "lucide-react";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +33,7 @@ export default function InvoicingQueue() {
   const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
   const [connectingXero, setConnectingXero] = useState(false);
   const [manualPrices, setManualPrices] = useState<Record<string, string>>({});
+  const [searchTerm, setSearchTerm] = useState("");
   
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
@@ -86,6 +87,15 @@ export default function InvoicingQueue() {
       acc[job.customerId] = [];
     }
     acc[job.customerId].push(job);
+    return acc;
+  }, {} as Record<string, Job[]>);
+
+  // Filter customers by search term
+  const filteredJobsByCustomer = Object.entries(jobsByCustomer).reduce((acc, [customerId, customerJobs]) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (customer && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+      acc[customerId] = customerJobs;
+    }
     return acc;
   }, {} as Record<string, Job[]>);
 
@@ -381,6 +391,22 @@ export default function InvoicingQueue() {
           </Alert>
         )}
 
+        {Object.keys(jobsByCustomer).length > 0 && (
+          <div className="mb-6">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search by customer name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9"
+                data-testid="input-customer-search"
+              />
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
@@ -397,9 +423,19 @@ export default function InvoicingQueue() {
               </div>
             </CardContent>
           </Card>
+        ) : Object.keys(filteredJobsByCustomer).length === 0 ? (
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center text-muted-foreground">
+                <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                <p>No customers found matching "{searchTerm}"</p>
+                <p className="text-sm mt-2">Try a different search term</p>
+              </div>
+            </CardContent>
+          </Card>
         ) : (
           <div className="space-y-6">
-            {Object.entries(jobsByCustomer).map(([customerId, customerJobs]) => {
+            {Object.entries(filteredJobsByCustomer).map(([customerId, customerJobs]) => {
               const customer = customers.find(c => c.id === customerId);
               if (!customer) return null;
 
