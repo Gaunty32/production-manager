@@ -49,13 +49,21 @@ export default function CustomerLogin() {
     mutationFn: async (data: LoginFormData) => {
       return await apiRequest("POST", "/api/customer-auth/login", data);
     },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "You have been logged in successfully",
-      });
-      // Redirect to customer dashboard
-      setLocation("/customer/dashboard");
+    onSuccess: (customerUser: any) => {
+      // Check if password reset is required
+      if (customerUser.mustResetPassword) {
+        toast({
+          title: "Password Reset Required",
+          description: "Please set a new password to continue",
+        });
+        setLocation("/customer/reset-password");
+      } else {
+        toast({
+          title: "Success",
+          description: "You have been logged in successfully",
+        });
+        setLocation("/customer/dashboard");
+      }
     },
     onError: (error: any) => {
       toast({
