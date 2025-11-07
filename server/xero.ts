@@ -451,6 +451,9 @@ export class XeroService {
     // Try to find existing contact in Xero
     const xeroContact = await this.findContact(customer);
 
+    // Get sales account code from environment or use default
+    const salesAccountCode = process.env.XERO_SALES_ACCOUNT_CODE || "200";
+
     // Create line items from job line items
     const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => {
       let description = '';
