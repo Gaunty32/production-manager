@@ -1,0 +1,361 @@
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Clock, FileText, MessageSquare, Package, CheckCircle, XCircle, Calendar } from "lucide-react";
+import { format } from "date-fns";
+
+type Job = {
+  id: string;
+  jobName: string;
+  poNumber: string | null;
+  quantity: number;
+  requiredDispatchDate: string | null;
+  notes: string | null;
+  deliveryAddress: string | null;
+  submittedAt: string;
+  files?: { id: string; fileName: string; fileSize: number }[];
+  messages?: { id: string; senderType: string; message: string; createdAt: string }[];
+};
+
+type DialogState = {
+  type: "approve" | "reject" | null;
+  jobId: string | null;
+  jobName: string | null;
+};
+
+export default function StaffHoldingArea() {
+  const { toast } = useToast();
+  const [dialogState, setDialogState] = useState<DialogState>({ type: null, jobId: null, jobName: null });
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [rejectionMessage, setRejectionMessage] = useState("");
+
+  const { data: pendingJobs = [], isLoading } = useQuery<Job[]>({
+    queryKey: ["/api/staff/jobs/pending"],
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/approve`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/jobs/pending"] });
+      toast({
+        title: "Job approved",
+        description: "The job has been approved and moved to production",
+      });
+      setDialogState({ type: null, jobId: null, jobName: null });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to approve job",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: async ({ jobId, reason, message }: { jobId: string; reason: string; message?: string }) => {
+      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/reject`, {
+        reason,
+        message,
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/jobs/pending"] });
+      toast({
+        title: "Job rejected",
+        description: "The customer has been notified",
+      });
+      setDialogState({ type: null, jobId: null, jobName: null });
+      setRejectionReason("");
+      setRejectionMessage("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reject job",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleApprove = (jobId: string, jobName: string) => {
+    setDialogState({ type: "approve", jobId, jobName });
+  };
+
+  const handleReject = (jobId: string, jobName: string) => {
+    setDialogState({ type: "reject", jobId, jobName });
+  };
+
+  const confirmApprove = () => {
+    if (dialogState.jobId) {
+      approveMutation.mutate(dialogState.jobId);
+    }
+  };
+
+  const confirmReject = () => {
+    if (dialogState.jobId && rejectionReason.trim()) {
+      rejectMutation.mutate({
+        jobId: dialogState.jobId,
+        reason: rejectionReason,
+        message: rejectionMessage.trim() || undefined,
+      });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-foreground mb-2">Customer Job Submissions</h1>
+        <p className="text-muted-foreground">
+          Review and approve customer job requests
+        </p>
+      </div>
+
+      {pendingJobs.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">
+              No pending submissions
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {pendingJobs.map((job) => (
+            <Card key={job.id} data-testid={`card-job-${job.id}`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg mb-1" data-testid={`text-jobname-${job.id}`}>
+                      {job.jobName}
+                    </CardTitle>
+                    {job.poNumber && (
+                      <p className="text-sm text-muted-foreground">PO: {job.poNumber}</p>
+                    )}
+                  </div>
+                  <Badge variant="secondary" className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Pending
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Quantity</p>
+                    <p className="font-medium">{job.quantity}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Required Date</p>
+                    <p className="font-medium text-sm">
+                      {job.requiredDispatchDate
+                        ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
+                        : "Not set"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Submitted</p>
+                    <p className="font-medium text-sm">
+                      {format(new Date(job.submittedAt), "MMM d, yyyy")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Files</p>
+                    <div className="flex items-center gap-1">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{job.files?.length || 0}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {job.deliveryAddress && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Delivery Address</p>
+                    <p className="text-sm whitespace-pre-line">{job.deliveryAddress}</p>
+                  </div>
+                )}
+
+                {job.notes && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Notes</p>
+                    <div className="p-3 bg-muted rounded-md">
+                      <p className="text-sm whitespace-pre-line">{job.notes}</p>
+                    </div>
+                  </div>
+                )}
+
+                {job.files && job.files.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-2">Attached Files</p>
+                    <div className="space-y-1">
+                      {job.files.map((file) => (
+                        <div
+                          key={file.id}
+                          className="flex items-center gap-2 text-sm p-2 bg-muted rounded"
+                        >
+                          <FileText className="h-3 w-3 text-muted-foreground" />
+                          <span className="truncate">{file.fileName}</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({Math.round(file.fileSize / 1024)} KB)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(job.messages?.length || 0) > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <MessageSquare className="h-4 w-4" />
+                    <span>{job.messages?.length} message{job.messages && job.messages.length > 1 ? 's' : ''} from customer</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    onClick={() => handleApprove(job.id, job.jobName)}
+                    className="flex-1"
+                    data-testid={`button-approve-${job.id}`}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Approve
+                  </Button>
+                  <Button
+                    onClick={() => handleReject(job.id, job.jobName)}
+                    variant="destructive"
+                    className="flex-1"
+                    data-testid={`button-reject-${job.id}`}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Reject
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Approve Confirmation Dialog */}
+      <Dialog
+        open={dialogState.type === "approve"}
+        onOpenChange={(open) => !open && setDialogState({ type: null, jobId: null, jobName: null })}
+      >
+        <DialogContent data-testid="dialog-approve">
+          <DialogHeader>
+            <DialogTitle>Approve Job</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to approve "{dialogState.jobName}"? This will move it to the production queue.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDialogState({ type: null, jobId: null, jobName: null })}
+              data-testid="button-cancel-approve"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmApprove}
+              disabled={approveMutation.isPending}
+              data-testid="button-confirm-approve"
+            >
+              {approveMutation.isPending ? "Approving..." : "Approve Job"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Confirmation Dialog */}
+      <Dialog
+        open={dialogState.type === "reject"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDialogState({ type: null, jobId: null, jobName: null });
+            setRejectionReason("");
+            setRejectionMessage("");
+          }
+        }}
+      >
+        <DialogContent data-testid="dialog-reject">
+          <DialogHeader>
+            <DialogTitle>Reject Job</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting "{dialogState.jobName}". The customer will be notified.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Rejection Reason *</label>
+              <Textarea
+                placeholder="e.g., Incomplete information, out of scope, etc."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                rows={3}
+                data-testid="input-rejection-reason"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">Message to Customer (Optional)</label>
+              <Textarea
+                placeholder="Add any additional context or instructions..."
+                value={rejectionMessage}
+                onChange={(e) => setRejectionMessage(e.target.value)}
+                rows={3}
+                data-testid="input-rejection-message"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDialogState({ type: null, jobId: null, jobName: null });
+                setRejectionReason("");
+                setRejectionMessage("");
+              }}
+              data-testid="button-cancel-reject"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmReject}
+              disabled={!rejectionReason.trim() || rejectMutation.isPending}
+              data-testid="button-confirm-reject"
+            >
+              {rejectMutation.isPending ? "Rejecting..." : "Reject Job"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -17,6 +17,7 @@ import { isSuperAdmin, canViewPrices } from "@shared/schema";
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "All Orders", url: "/orders", icon: ClipboardList },
+  { title: "Holding Area", url: "/holding-area", icon: Inbox },
   { title: "Invoicing", url: "/invoicing", icon: FileText },
   { title: "Schedule", url: "/schedule", icon: Calendar },
   { title: "Leaderboard", url: "/leaderboard", icon: Trophy },

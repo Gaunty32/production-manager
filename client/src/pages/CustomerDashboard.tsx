@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Circle, CircleCheck, CircleX } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Circle, CircleCheck, CircleX, Plus, FileText } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
 import { useState } from "react";
@@ -176,27 +176,47 @@ export default function CustomerDashboard() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground mb-2">Production Queue</h2>
-            <p className="text-sm text-muted-foreground">
-              View the status and progress of your orders in production
-            </p>
+        <div className="mb-6 flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => setLocation("/customer/submit")}
+              data-testid="button-submit-job"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Submit New Job
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/customer/pending")}
+              data-testid="button-view-pending"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Pending Submissions
+            </Button>
           </div>
-          
-          <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
-            <TabsList data-testid="tabs-status-filter">
-              <TabsTrigger value="in_progress" data-testid="tab-in-progress">
-                In Progress
-              </TabsTrigger>
-              <TabsTrigger value="completed" data-testid="tab-completed">
-                Completed
-              </TabsTrigger>
-              <TabsTrigger value="all" data-testid="tab-all">
-                All Orders
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-foreground mb-2">Production Queue</h2>
+              <p className="text-sm text-muted-foreground">
+                View the status and progress of your orders in production
+              </p>
+            </div>
+            
+            <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
+              <TabsList data-testid="tabs-status-filter">
+                <TabsTrigger value="in_progress" data-testid="tab-in-progress">
+                  In Progress
+                </TabsTrigger>
+                <TabsTrigger value="completed" data-testid="tab-completed">
+                  Completed
+                </TabsTrigger>
+                <TabsTrigger value="all" data-testid="tab-all">
+                  All Orders
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
         {filteredJobs.length === 0 ? (

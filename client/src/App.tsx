@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Router } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -18,12 +18,16 @@ import UsersPage from "@/pages/Users";
 import Schedule from "@/pages/Schedule";
 import Leaderboard from "@/pages/Leaderboard";
 import InvoicingQueue from "@/pages/InvoicingQueue";
+import StaffHoldingArea from "@/pages/StaffHoldingArea";
 import Landing from "@/pages/Landing";
 import CustomerLogin from "@/pages/CustomerLogin";
 import StaffLogin from "@/pages/StaffLogin";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import CustomerDashboard from "@/pages/CustomerDashboard";
+import CustomerSubmitJob from "@/pages/CustomerSubmitJob";
+import CustomerPendingJobs from "@/pages/CustomerPendingJobs";
+import CustomerJobDetail from "@/pages/CustomerJobDetail";
 import CustomerPasswordReset from "@/pages/CustomerPasswordReset";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,7 +50,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   return <Component />;
 }
 
-function Router() {
+function StaffRouter() {
   return (
     <Switch>
       {/* Staff Portal Routes */}
@@ -59,30 +63,36 @@ function Router() {
       <Route path="/schedule"><Schedule /></Route>
       <Route path="/leaderboard"><Leaderboard /></Route>
       <Route path="/invoicing"><InvoicingQueue /></Route>
+      <Route path="/holding-area"><StaffHoldingArea /></Route>
       <Route path="/machine/:id"><Dashboard /></Route>
       <Route><NotFound /></Route>
     </Switch>
   );
 }
 
-export default function App() {
+function AppRouter() {
   const [location] = useLocation();
-  // Fix: Only match /customer/* routes, not /customers
   const isCustomerPortal = location.startsWith("/customer/") || location === "/customer";
   
   const style = {
     "--sidebar-width": "16rem",
   };
 
+  if (isCustomerPortal) {
+    return <CustomerPortalApp />;
+  }
+
+  return <AuthenticatedApp style={style} />;
+}
+
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider>
-          {isCustomerPortal ? (
-            <CustomerPortalApp />
-          ) : (
-            <AuthenticatedApp style={style} />
-          )}
+          <Router>
+            <AppRouter />
+          </Router>
           <Toaster />
         </ThemeProvider>
       </TooltipProvider>
@@ -95,6 +105,9 @@ function CustomerPortalApp() {
     <Switch>
       <Route path="/customer/login" component={CustomerLogin} />
       <Route path="/customer/reset-password" component={CustomerPasswordReset} />
+      <Route path="/customer/submit" component={CustomerSubmitJob} />
+      <Route path="/customer/pending" component={CustomerPendingJobs} />
+      <Route path="/customer/job/:id" component={CustomerJobDetail} />
       <Route path="/customer/dashboard" component={CustomerDashboard} />
       <Route path="/customer" component={CustomerDashboard} />
       <Route component={NotFound} />
@@ -182,7 +195,7 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
             </div>
           </header>
           <main className="flex-1 overflow-hidden">
-            <Router />
+            <StaffRouter />
           </main>
         </div>
       </div>
