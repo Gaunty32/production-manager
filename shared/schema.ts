@@ -640,6 +640,8 @@ export const customerLoginSchema = z.object({
 export const insertJobMessageSchema = createInsertSchema(jobMessages).omit({
   id: true,
   createdAt: true,
+  readByStaff: true,
+  readByCustomer: true,
 }).extend({
   message: z.string().min(1, "Message cannot be empty"),
   senderType: z.enum(["customer", "staff"]),
