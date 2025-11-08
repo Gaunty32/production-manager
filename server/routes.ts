@@ -807,21 +807,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer Portal - Submit new job
   app.post("/api/customer-portal/jobs", isCustomerAuthenticated, async (req: any, res) => {
     try {
-      const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
+      console.log('[JOB SUBMISSION] Starting job submission process');
+      const customerUserId = (req.session as any).customerUserId;
+      console.log('[JOB SUBMISSION] Customer User ID:', customerUserId);
+      
+      const customerUser = await storage.getCustomerUserById(customerUserId);
       if (!customerUser) {
+        console.log('[JOB SUBMISSION] Customer user not found:', customerUserId);
         return res.status(404).json({ error: "Customer user not found" });
       }
+      console.log('[JOB SUBMISSION] Customer user found:', customerUser.email);
 
       const data = customerJobSubmissionSchema.parse(req.body);
+      console.log('[JOB SUBMISSION] Request data parsed:', data);
       
       // Get customer to use their address as default
       const customers = await storage.getCustomers();
+      console.log('[JOB SUBMISSION] Fetched customers, count:', customers.length);
       const customer = customers.find(c => c.id === customerUser.customerId);
       if (!customer) {
+        console.log('[JOB SUBMISSION] Customer not found for customerId:', customerUser.customerId);
+        console.log('[JOB SUBMISSION] Available customer IDs:', customers.map(c => c.id));
         return res.status(404).json({ error: "Customer not found" });
       }
+      console.log('[JOB SUBMISSION] Customer found:', customer.name);
 
       // Create job with pending status
+      console.log('[JOB SUBMISSION] Creating job...');
       const job = await storage.createJob({
         customerId: customerUser.customerId,
         jobName: data.jobName,
@@ -833,9 +845,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         notes: data.notes || null,
         status: 'pending_customer_approval',
         deliveryAddress: data.deliveryAddress || customer.address || null,
-        submittedById: (req.session as any).customerUserId,
+        submittedById: customerUserId,
         submittedAt: new Date() as any,
       });
+      console.log('[JOB SUBMISSION] Job created successfully:', job.id);
 
       // Send email notification to staff
       try {
