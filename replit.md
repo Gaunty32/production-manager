@@ -160,8 +160,13 @@ Customers can now submit new job requests through their portal. Jobs enter a hol
 
 **Customer-Staff Messaging:**
 - Location: Customer Job Detail page (`/customer/job/:jobId`)
-- Features: Real-time chat with 3-second polling, message history
+- Features: Real-time chat with 3-second polling, message history, popup notifications
 - Access: Click any job in "Pending Submissions" or "My Jobs" to view details and chat
+- **Popup Notifications:**
+  - Customers receive toast notifications when staff sends new messages (on job detail page)
+  - Staff receive toast notifications when customers send new messages (on holding area page)
+  - Notifications show message count and job name
+  - Automatically appear when polling detects new messages
 
 **Email Notification System (Implemented):**
 

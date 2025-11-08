@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +44,8 @@ export default function CustomerJobDetail() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [newMessage, setNewMessage] = useState("");
+  const previousStaffMessageCountRef = useRef<number>(0);
+  const isInitialLoadRef = useRef<boolean>(true);
 
   const jobId = params?.id;
 
@@ -62,6 +64,34 @@ export default function CustomerJobDetail() {
     enabled: !!jobId,
     refetchInterval: 3000, // Poll every 3 seconds for real-time chat
   });
+
+  // Show popup notification when new staff messages arrive
+  useEffect(() => {
+    if (isLoadingMessages) return;
+
+    const staffMessages = messages.filter(m => m.senderType === "staff");
+    const currentStaffMessageCount = staffMessages.length;
+
+    // Skip notification on initial load
+    if (isInitialLoadRef.current) {
+      previousStaffMessageCountRef.current = currentStaffMessageCount;
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    // Show notification if there are new staff messages
+    if (currentStaffMessageCount > previousStaffMessageCountRef.current) {
+      const newMessagesCount = currentStaffMessageCount - previousStaffMessageCountRef.current;
+      toast({
+        title: "New message from staff",
+        description: newMessagesCount === 1 
+          ? "You have a new message" 
+          : `You have ${newMessagesCount} new messages`,
+      });
+    }
+
+    previousStaffMessageCountRef.current = currentStaffMessageCount;
+  }, [messages, isLoadingMessages, toast]);
 
   const sendMessageMutation = useMutation({
     mutationFn: async (message: string) => {

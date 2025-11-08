@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,10 +41,52 @@ export default function StaffHoldingArea() {
   const [dialogState, setDialogState] = useState<DialogState>({ type: null, jobId: null, jobName: null });
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionMessage, setRejectionMessage] = useState("");
+  const previousMessageCountsRef = useRef<Record<string, number>>({});
+  const isInitialLoadRef = useRef<boolean>(true);
 
   const { data: pendingJobs = [], isLoading } = useQuery<Job[]>({
     queryKey: ["/api/staff/jobs/pending"],
+    refetchInterval: 5000, // Poll every 5 seconds for new messages
   });
+
+  // Show popup notification when new customer messages arrive
+  useEffect(() => {
+    if (isLoading) return;
+
+    const currentMessageCounts: Record<string, number> = {};
+    let totalNewMessages = 0;
+    const jobsWithNewMessages: string[] = [];
+
+    // Count customer messages for each job
+    pendingJobs.forEach(job => {
+      const customerMessages = (job.messages || []).filter(m => m.senderType === "customer");
+      const count = customerMessages.length;
+      currentMessageCounts[job.id] = count;
+
+      // Skip notification on initial load
+      if (!isInitialLoadRef.current) {
+        const previousCount = previousMessageCountsRef.current[job.id] || 0;
+        if (count > previousCount) {
+          const newCount = count - previousCount;
+          totalNewMessages += newCount;
+          jobsWithNewMessages.push(job.jobName);
+        }
+      }
+    });
+
+    // Show notification if there are new customer messages
+    if (!isInitialLoadRef.current && totalNewMessages > 0) {
+      toast({
+        title: "New customer message",
+        description: jobsWithNewMessages.length === 1
+          ? `${jobsWithNewMessages[0]} has ${totalNewMessages} new message${totalNewMessages > 1 ? 's' : ''}`
+          : `${totalNewMessages} new messages from ${jobsWithNewMessages.length} jobs`,
+      });
+    }
+
+    previousMessageCountsRef.current = currentMessageCounts;
+    isInitialLoadRef.current = false;
+  }, [pendingJobs, isLoading, toast]);
 
   const approveMutation = useMutation({
     mutationFn: async (jobId: string) => {
