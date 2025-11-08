@@ -31,7 +31,7 @@ import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffR
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail } from "./emailService";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Production database setup endpoint (only in production)
@@ -837,6 +837,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         submittedAt: new Date() as any,
       });
 
+      // Send email notification to staff
+      try {
+        const allStaff = await storage.getStaff();
+        const staffEmails = allStaff
+          .filter(s => s.email && s.email.trim().length > 0)
+          .map(s => s.email!);
+        
+        if (staffEmails.length > 0) {
+          const dispatchDate = job.requiredDispatchDate ? new Date(job.requiredDispatchDate).toLocaleDateString('en-GB') : 'Not specified';
+          await sendNewJobSubmissionEmail(staffEmails, {
+            jobName: job.jobName,
+            customerName: customer.name,
+            quantity: job.quantity,
+            poNumber: job.poNumber,
+            requiredDispatchDate: dispatchDate,
+            jobId: job.id,
+          });
+        }
+      } catch (emailError) {
+        console.error('Failed to send job submission notification email:', emailError);
+        // Don't fail the request if email fails
+      }
+
       res.json(job);
     } catch (error) {
       console.error("Error creating job submission:", error);
@@ -1016,6 +1039,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         approvedAt: new Date() as any,
       });
 
+      // Send email notification to customer
+      try {
+        if (job.submittedById) {
+          const customerUser = await storage.getCustomerUserById(job.submittedById);
+          if (customerUser && customerUser.email) {
+            const customers = await storage.getCustomers();
+            const customer = customers.find(c => c.id === job.customerId);
+            await sendJobApprovedEmail(customerUser.email, {
+              jobName: job.jobName,
+              customerName: customer?.name || 'Customer',
+              jobId: job.id,
+            });
+          }
+        }
+      } catch (emailError) {
+        console.error('Failed to send job approval notification email:', emailError);
+        // Don't fail the request if email fails
+      }
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error approving job:", error);
@@ -1047,6 +1089,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           senderId: req.user?.id,
           message: req.body.message,
         });
+      }
+
+      // Send email notification to customer
+      try {
+        if (job.submittedById) {
+          const customerUser = await storage.getCustomerUserById(job.submittedById);
+          if (customerUser && customerUser.email) {
+            const customers = await storage.getCustomers();
+            const customer = customers.find(c => c.id === job.customerId);
+            await sendJobRejectedEmail(customerUser.email, {
+              jobName: job.jobName,
+              customerName: customer?.name || 'Customer',
+              jobId: job.id,
+              rejectionReason: req.body.reason || null,
+              rejectionMessage: req.body.message || null,
+            });
+          }
+        }
+      } catch (emailError) {
+        console.error('Failed to send job rejection notification email:', emailError);
+        // Don't fail the request if email fails
       }
 
       res.json({ success: true });
