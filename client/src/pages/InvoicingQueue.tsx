@@ -626,11 +626,29 @@ export default function InvoicingQueue() {
                                           <span className="text-muted-foreground">
                                             {job.packageCount} {job.packageType === 'boxes' ? (job.packageCount === 1 ? 'Box' : 'Boxes') : (job.packageCount === 1 ? 'Bag' : 'Bags')}
                                           </span>
-                                          {job.shippingCost && (
+                                          {job.shippingCost === 'TBA' ? (
+                                            <div className="flex items-center gap-2 ml-2">
+                                              <Badge variant="secondary">Shipping: TBA</Badge>
+                                              <span className="text-sm text-muted-foreground">£</span>
+                                              <Input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                placeholder="Enter cost"
+                                                value={manualShippingCosts[job.id] || ''}
+                                                onChange={(e) => setManualShippingCosts({
+                                                  ...manualShippingCosts,
+                                                  [job.id]: e.target.value
+                                                })}
+                                                className="w-24 h-7"
+                                                data-testid={`input-shipping-cost-${job.id}`}
+                                              />
+                                            </div>
+                                          ) : job.shippingCost ? (
                                             <Badge variant="secondary" className="ml-2">
-                                              Shipping: {job.shippingCost === 'TBA' ? 'TBA' : formatPrice(parseFloat(job.shippingCost))}
+                                              Shipping: {formatPrice(parseFloat(job.shippingCost))}
                                             </Badge>
-                                          )}
+                                          ) : null}
                                         </div>
                                       )}
                                     </div>

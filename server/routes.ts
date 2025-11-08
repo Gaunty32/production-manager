@@ -1560,10 +1560,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/xero/consolidated-invoice", isStaffAuthenticated, async (req, res) => {
     try {
-      const { jobIds, customerId, manualPrices } = req.body; // Optional manual prices: { lineItemId: unitPrice }
+      const { jobIds, customerId, manualPrices, manualShippingCosts } = req.body; // Optional manual prices: { lineItemId: unitPrice }, optional manual shipping: { jobId: shippingCost }
 
       if (!Array.isArray(jobIds) || jobIds.length === 0) {
         return res.status(400).json({ error: "jobIds must be a non-empty array" });
+      }
+      
+      // Validate manual shipping costs if provided
+      if (manualShippingCosts) {
+        for (const [jobId, cost] of Object.entries(manualShippingCosts)) {
+          const numCost = Number(cost);
+          if (isNaN(numCost) || numCost < 0) {
+            return res.status(400).json({ error: `Invalid manual shipping cost for job ${jobId}` });
+          }
+        }
       }
 
       // Fetch all jobs and customer
@@ -1661,21 +1671,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         // Add shipping cost as a separate line item if available
-        if (job.shippingCost && job.shippingCost !== "TBA") {
-          const shippingCost = parseFloat(job.shippingCost);
-          if (!isNaN(shippingCost) && shippingCost > 0) {
-            lineItemsWithPricing.push({
-              jobName: job.jobName,
-              poNumber: job.poNumber,
-              description: `Shipping - ${job.shippingMethod === 'customer_collection' ? 'Customer Collection' : job.shippingMethod === 'consolidated' ? 'Consolidated Back to Customer' : 'Direct Delivery'}`,
-              quantity: 1,
-              unitPrice: shippingCost,
-              stitchCount: 0, // No stitch count for shipping
-              itemCode: "CARRIAGE", // Xero item code for shipping
-            });
+        let shippingCost: number | null = null;
+        
+        if (job.shippingCost === "TBA") {
+          // Use manual shipping cost if provided
+          if (manualShippingCosts && manualShippingCosts[job.id]) {
+            shippingCost = Number(manualShippingCosts[job.id]);
+          } else {
+            hasTBA = true;
           }
-        } else if (job.shippingCost === "TBA") {
-          hasTBA = true;
+        } else if (job.shippingCost) {
+          // Use the stored shipping cost
+          shippingCost = parseFloat(job.shippingCost);
+        }
+        
+        if (shippingCost !== null && !isNaN(shippingCost) && shippingCost > 0) {
+          lineItemsWithPricing.push({
+            jobName: job.jobName,
+            poNumber: job.poNumber,
+            description: `Shipping - ${job.shippingMethod === 'customer_collection' ? 'Customer Collection' : job.shippingMethod === 'consolidated' ? 'Consolidated Back to Customer' : 'Direct Delivery'}`,
+            quantity: 1,
+            unitPrice: shippingCost,
+            stitchCount: 0, // No stitch count for shipping
+            itemCode: "CARRIAGE", // Xero item code for shipping
+          });
         }
       }
       
@@ -1684,9 +1703,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Manual prices required for POA items" });
       }
 
-      // If we have TBA shipping costs, reject
+      // If we have TBA shipping costs and no manual shipping costs provided, reject
       if (hasTBA) {
-        return res.status(400).json({ error: "Cannot create invoice with TBA shipping costs. Please contact support for shipping pricing on orders with more than 4 boxes." });
+        return res.status(400).json({ error: "Manual shipping costs required for TBA shipping. Please enter shipping costs for all orders with TBA shipping." });
       }
 
       // Add approved logo setups for this customer
