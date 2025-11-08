@@ -163,23 +163,56 @@ Customers can now submit new job requests through their portal. Jobs enter a hol
 - Features: Real-time chat with 3-second polling, message history
 - Access: Click any job in "Pending Submissions" or "My Jobs" to view details and chat
 
-**Current Notification System:**
-- **No automated email notifications** are currently implemented
-- Staff must manually check the "Holding Area" in the sidebar to see new submissions
-- Job submissions appear immediately in:
-  - Staff Holding Area (`/dashboard/holding-area`)
-  - Production Queue dashboard (after approval)
+**Email Notification System (Implemented):**
 
-**Recommended Enhancements:**
-1. **Email Notifications via Resend Integration:**
-   - Notify staff when new jobs are submitted
-   - Notify customers when jobs are approved/rejected
-   - Alert staff of new customer messages
-   
-2. **Dashboard Badge/Counter:**
+The application now sends automated email notifications using the Resend integration:
+
+1. **New Job Submission** (Customer → Staff):
+   - Triggered when customer submits new job via customer portal
+   - Recipients: All staff users with valid email addresses
+   - Contains: Job name, customer name, quantity, PO number, dispatch date
+   - Action link: Direct link to Staff Holding Area
+   - Subject: "New Job Submission: [Job Name]"
+
+2. **Job Approved** (Staff → Customer):
+   - Triggered when staff approves a pending job
+   - Recipient: Customer user who submitted the job
+   - Contains: Job name, approval confirmation
+   - Action link: Direct link to job detail page
+   - Subject: "Job Approved: [Job Name]"
+
+3. **Job Rejected** (Staff → Customer):
+   - Triggered when staff rejects a pending job
+   - Recipient: Customer user who submitted the job
+   - Contains: Job name, rejection reason, optional message from staff
+   - Action link: Direct link to job detail page
+   - Subject: "Job Update Required: [Job Name]"
+
+**Security:**
+- All user-controlled fields (job names, customer names, messages, etc.) are sanitized to prevent HTML injection attacks
+- Email failures are logged but don't block critical operations (job submission, approval, rejection)
+
+**Email Templates:**
+- Professional HTML design with Select Uniforms branding colors
+- Responsive layout for mobile and desktop email clients
+- Clear call-to-action buttons
+- Organized job details in styled tables
+
+**Implementation Details:**
+- Service: `server/emailService.ts` (uses Resend integration)
+- Routes: Email triggers integrated into job submission, approval, and rejection endpoints
+- Error handling: Non-blocking - email failures won't prevent job operations
+- Sanitization: `sanitizeHtml()` function escapes HTML special characters
+
+**Recommended Future Enhancements:**
+1. **Dashboard Badge/Counter:**
    - Add notification badge on "Holding Area" sidebar item showing pending count
    - Real-time polling to update pending job count
 
-3. **Browser Push Notifications:**
+2. **Browser Push Notifications:**
    - Optional: Desktop notifications for new submissions (staff side)
    - Requires service worker setup
+
+3. **Email Preferences:**
+   - Allow staff to opt-out of certain email types
+   - Configurable notification preferences per user
