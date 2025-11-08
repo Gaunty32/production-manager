@@ -33,6 +33,7 @@ export default function InvoicingQueue() {
   const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
   const [connectingXero, setConnectingXero] = useState(false);
   const [manualPrices, setManualPrices] = useState<Record<string, string>>({});
+  const [manualShippingCosts, setManualShippingCosts] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState("");
   
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
@@ -313,6 +314,23 @@ export default function InvoicingQueue() {
       return;
     }
 
+    // Check if any selected job has TBA shipping that needs manual cost
+    const jobsNeedingShippingCosts: string[] = [];
+    for (const job of selectedCustomerJobs) {
+      if (job.shippingCost === "TBA" && !manualShippingCosts[job.id]) {
+        jobsNeedingShippingCosts.push(job.id);
+      }
+    }
+
+    if (jobsNeedingShippingCosts.length > 0) {
+      toast({
+        title: "Manual Shipping Costs Required",
+        description: "Please enter shipping costs for all orders with TBA shipping",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setCreatingInvoice(customerId);
     
     try {
@@ -326,10 +344,19 @@ export default function InvoicingQueue() {
         }
       });
       
+      // Build manual shipping costs object, converting strings to numbers
+      const manualShippingForAPI: Record<string, number> = {};
+      Object.entries(manualShippingCosts).forEach(([jobId, cost]) => {
+        if (cost) {
+          manualShippingForAPI[jobId] = parseFloat(cost);
+        }
+      });
+      
       const response = await apiRequest("POST", "/api/xero/consolidated-invoice", {
         jobIds,
         customerId,
         manualPrices: Object.keys(manualPricesForAPI).length > 0 ? manualPricesForAPI : undefined,
+        manualShippingCosts: Object.keys(manualShippingForAPI).length > 0 ? manualShippingForAPI : undefined,
       }) as unknown as { success: boolean; invoiceId: string; invoiceNumber: string | null; jobsInvoiced: number };
 
       toast({
@@ -342,15 +369,18 @@ export default function InvoicingQueue() {
       selectedCustomerJobs.forEach(job => newSelected.delete(job.id));
       setSelectedJobs(newSelected);
 
-      // Clear manual prices for this customer's jobs
+      // Clear manual prices and shipping costs for this customer's jobs
       const newManualPrices = { ...manualPrices };
+      const newManualShipping = { ...manualShippingCosts };
       for (const job of selectedCustomerJobs) {
         const lineItems = getJobLineItems(job.id);
         lineItems.forEach(item => {
           delete newManualPrices[item.id];
         });
+        delete newManualShipping[job.id];
       }
       setManualPrices(newManualPrices);
+      setManualShippingCosts(newManualShipping);
 
       // Refresh jobs list
       await queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
