@@ -1,5 +1,5 @@
 // Referenced from blueprint:javascript_object_storage
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import Uppy from "@uppy/core";
 import { DashboardModal } from "@uppy/react";
@@ -55,23 +55,38 @@ export function ObjectUploader({
       })
   );
 
+  const handleOpenModal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+  };
+
   return (
     <div>
       <Button 
         type="button"
-        onClick={() => setShowModal(true)} 
+        onClick={handleOpenModal}
         className={buttonClassName} 
         data-testid="button-upload-files"
       >
         {children}
       </Button>
 
-      <DashboardModal
-        uppy={uppy}
-        open={showModal}
-        onRequestClose={() => setShowModal(false)}
-        proudlyDisplayPoweredByUppy={false}
-      />
+      {showModal && (
+        <DashboardModal
+          uppy={uppy}
+          open={showModal}
+          onRequestClose={handleCloseModal}
+          proudlyDisplayPoweredByUppy={false}
+          closeModalOnClickOutside={true}
+          disablePageScrollWhenModalOpen={true}
+          animateOpenClose={false}
+        />
+      )}
     </div>
   );
 }
