@@ -182,7 +182,7 @@ export default function CustomerSubmitJob() {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/jobs/pending"] });
       toast({
         title: "Job Submitted Successfully",
-        description: "We will review and confirm your order within 7 days",
+        description: "We will review and confirm your order within 24 Hours",
       });
       setLocation("/customer/pending");
     },
