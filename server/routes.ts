@@ -27,7 +27,7 @@ import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
-import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema } from "@shared/schema";
+import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
@@ -743,7 +743,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Customer Portal - Jobs with Line Items (read-only for now)
+  // Customer Portal - Jobs with Line Items
   app.get("/api/customer-portal/jobs", isCustomerAuthenticated, async (req: any, res) => {
     try {
       const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
@@ -751,12 +751,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Customer user not found" });
       }
       
-      // Get all jobs for this customer
+      // Get all jobs for this customer that are in production or completed
       const jobs = await storage.getJobsByCustomerId(customerUser.customerId);
+      const productionJobs = jobs.filter(j => j.status === 'production' || j.completed);
       
       // Get line items for each job
       const jobsWithLineItems = await Promise.all(
-        jobs.map(async (job) => {
+        productionJobs.map(async (job) => {
           const lineItems = await storage.getJobLineItems(job.id);
           return {
             ...job,
@@ -769,6 +770,289 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching customer jobs:", error);
       res.status(500).json({ error: "Failed to fetch jobs" });
+    }
+  });
+
+  // Customer Portal - Get pending jobs (awaiting approval)
+  app.get("/api/customer-portal/jobs/pending", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
+      if (!customerUser) {
+        return res.status(404).json({ error: "Customer user not found" });
+      }
+      
+      const jobs = await storage.getJobsByCustomerId(customerUser.customerId);
+      const pendingJobs = jobs.filter(j => j.status === 'pending_customer_approval');
+      
+      // Get files for each pending job
+      const jobsWithDetails = await Promise.all(
+        pendingJobs.map(async (job) => {
+          const files = await storage.getJobFiles(job.id);
+          const messages = await storage.getJobMessages(job.id);
+          return {
+            ...job,
+            files,
+            messages,
+          };
+        })
+      );
+      
+      res.json(jobsWithDetails);
+    } catch (error) {
+      console.error("Error fetching pending jobs:", error);
+      res.status(500).json({ error: "Failed to fetch pending jobs" });
+    }
+  });
+
+  // Customer Portal - Submit new job
+  app.post("/api/customer-portal/jobs", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
+      if (!customerUser) {
+        return res.status(404).json({ error: "Customer user not found" });
+      }
+
+      const data = customerJobSubmissionSchema.parse(req.body);
+      
+      // Get customer to use their address as default
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === customerUser.customerId);
+      if (!customer) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+
+      // Create job with pending status
+      const job = await storage.createJob({
+        customerId: customerUser.customerId,
+        jobName: data.jobName,
+        poNumber: data.poNumber || null,
+        quantity: data.quantity,
+        goodsReceived: null,
+        requiredDispatchDate: new Date(data.requiredDispatchDate) as any,
+        machineId: null,
+        notes: data.notes || null,
+        status: 'pending_customer_approval',
+        deliveryAddress: data.deliveryAddress || customer.address || null,
+        submittedById: (req.session as any).customerUserId,
+        submittedAt: new Date() as any,
+      });
+
+      res.json(job);
+    } catch (error) {
+      console.error("Error creating job submission:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create job submission" });
+      }
+    }
+  });
+
+  // Customer Portal - Get upload URL for file
+  app.post("/api/customer-portal/objects/upload", isCustomerAuthenticated, async (req, res) => {
+    try {
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Error getting upload URL:", error);
+      res.status(500).json({ error: "Failed to get upload URL" });
+    }
+  });
+
+  // Customer Portal - Add file to job after upload
+  app.post("/api/customer-portal/jobs/:jobId/files", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
+      if (!customerUser) {
+        return res.status(404).json({ error: "Customer user not found" });
+      }
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const fileUrl = objectStorageService.normalizeObjectEntityPath(req.body.fileUrl);
+
+      const fileData = insertJobFileSchema.parse({
+        jobId: req.params.jobId,
+        fileName: req.body.fileName,
+        fileUrl: fileUrl,
+        fileSize: req.body.fileSize,
+        fileType: req.body.fileType,
+        uploadedBy: 'customer',
+        uploaderId: (req.session as any).customerUserId,
+      });
+
+      const file = await storage.createJobFile(fileData);
+      
+      // Set ACL policy for the file
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(fileUrl);
+        const { setObjectAclPolicy } = await import("./objectAcl");
+        const { ObjectAccessGroupType, ObjectPermission } = await import("./objectAcl");
+        await setObjectAclPolicy(objectFile, {
+          owner: (req.session as any).customerUserId,
+          visibility: "private",
+          aclRules: [{
+            group: { type: ObjectAccessGroupType.CUSTOMER_COMPANY, id: customerUser.customerId },
+            permission: ObjectPermission.READ,
+          }],
+        });
+      } catch (aclError) {
+        console.error("Error setting ACL policy:", aclError);
+      }
+
+      res.json(file);
+    } catch (error) {
+      console.error("Error adding file to job:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to add file to job" });
+      }
+    }
+  });
+
+  // Customer Portal - Send message on job
+  app.post("/api/customer-portal/jobs/:jobId/messages", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
+      if (!customerUser) {
+        return res.status(404).json({ error: "Customer user not found" });
+      }
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const messageData = insertJobMessageSchema.parse({
+        jobId: req.params.jobId,
+        senderType: 'customer',
+        senderId: (req.session as any).customerUserId,
+        message: req.body.message,
+      });
+
+      const message = await storage.createJobMessage(messageData);
+      res.json(message);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to send message" });
+      }
+    }
+  });
+
+  // Customer Portal - Get messages for job
+  app.get("/api/customer-portal/jobs/:jobId/messages", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
+      if (!customerUser) {
+        return res.status(404).json({ error: "Customer user not found" });
+      }
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const messages = await storage.getJobMessages(req.params.jobId);
+      
+      // Mark messages as read by customer
+      await storage.markMessagesAsRead(req.params.jobId, 'customer');
+      
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Staff - Get pending customer job submissions
+  app.get("/api/staff/jobs/pending", isStaffAuthenticated, async (req, res) => {
+    try {
+      const allJobs = await storage.getJobs();
+      const pendingJobs = allJobs.filter(j => j.status === 'pending_customer_approval');
+      
+      // Get files and messages for each pending job
+      const jobsWithDetails = await Promise.all(
+        pendingJobs.map(async (job) => {
+          const files = await storage.getJobFiles(job.id);
+          const messages = await storage.getJobMessages(job.id);
+          return {
+            ...job,
+            files,
+            messages,
+          };
+        })
+      );
+      
+      res.json(jobsWithDetails);
+    } catch (error) {
+      console.error("Error fetching pending jobs:", error);
+      res.status(500).json({ error: "Failed to fetch pending jobs" });
+    }
+  });
+
+  // Staff - Approve job
+  app.post("/api/staff/jobs/:jobId/approve", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      // Update job status to production
+      await storage.updateJob(req.params.jobId, {
+        status: 'production',
+        approvedById: req.user?.id,
+        approvedAt: new Date() as any,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error approving job:", error);
+      res.status(500).json({ error: "Failed to approve job" });
+    }
+  });
+
+  // Staff - Reject job
+  app.post("/api/staff/jobs/:jobId/reject", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      // Update job status and add rejection reason
+      await storage.updateJob(req.params.jobId, {
+        status: 'rejected',
+        rejectedById: req.user?.id,
+        rejectedAt: new Date() as any,
+        rejectionReason: req.body.reason || null,
+      });
+
+      // Optionally send a message to the customer
+      if (req.body.message) {
+        await storage.createJobMessage({
+          jobId: req.params.jobId,
+          senderType: 'staff',
+          senderId: req.user?.id,
+          message: req.body.message,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error rejecting job:", error);
+      res.status(500).json({ error: "Failed to reject job" });
     }
   });
 

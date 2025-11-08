@@ -62,7 +62,7 @@ export const jobs = pgTable("jobs", {
   completedOnTime: boolean("completed_on_time"),
   completedById: varchar("completed_by_id").references(() => staff.id),
   machineId: integer("machine_id"),
-  status: text("status").notNull().default("pending"),
+  status: text("status").notNull().default("pending"), // pending_customer_approval, production, completed
   notes: text("notes"),
   invoiceStatus: varchar("invoice_status").notNull().default("pending"),
   invoicedAt: timestamp("invoiced_at"),
@@ -76,6 +76,13 @@ export const jobs = pgTable("jobs", {
   deliveryAddressType: text("delivery_address_type").default("customer"),
   deliveryAddress: text("delivery_address"),
   actualProductionTime: real("actual_production_time"),
+  submittedById: varchar("submitted_by_id").references(() => customerUsers.id),
+  submittedAt: timestamp("submitted_at"),
+  approvedById: varchar("approved_by_id").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectedById: varchar("rejected_by_id").references(() => users.id),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {
@@ -649,9 +656,20 @@ export const insertJobFileSchema = createInsertSchema(jobFiles).omit({
   uploadedBy: z.enum(["customer", "staff"]),
 });
 
+// Customer job submission schema
+export const customerJobSubmissionSchema = z.object({
+  jobName: z.string().min(1, "Job name is required"),
+  poNumber: z.string().optional(),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+  notes: z.string().optional(),
+  deliveryAddress: z.string().optional(),
+  requiredDispatchDate: z.string().min(1, "Dispatch date is required"),
+});
+
 export type InsertCustomerUser = z.infer<typeof insertCustomerUserSchema>;
 export type CustomerUser = typeof customerUsers.$inferSelect;
 export type CustomerLogin = z.infer<typeof customerLoginSchema>;
+export type CustomerJobSubmission = z.infer<typeof customerJobSubmissionSchema>;
 export type InsertJobMessage = z.infer<typeof insertJobMessageSchema>;
 export type JobMessage = typeof jobMessages.$inferSelect;
 export type InsertJobFile = z.infer<typeof insertJobFileSchema>;

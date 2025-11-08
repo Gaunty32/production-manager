@@ -933,13 +933,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(customerUsers.id, id));
   }
 
-  async updateCustomerActive(id: string, active: boolean): Promise<void> {
-    await db
-      .update(customerUsers)
-      .set({ active })
-      .where(eq(customerUsers.id, id));
-  }
-
   async getJobMessages(jobId: string): Promise<JobMessage[]> {
     return await db.select().from(jobMessages).where(eq(jobMessages.jobId, jobId));
   }

@@ -32,6 +32,8 @@ The production queue uses traffic light indicators for logo approval and goods r
 
 - **Database Service**: Neon Serverless PostgreSQL
 - **ORM**: Drizzle ORM
+- **Object Storage**: Replit Object Storage (Google Cloud Storage backend)
+- **File Upload**: Uppy (@uppy/core, @uppy/aws-s3, @uppy/dashboard, @uppy/react)
 - **UI Component Libraries**: `shadcn/ui`, Radix UI primitives, Embla Carousel, Lucide React
 - **Date Utilities**: `date-fns`
 - **Form Management & Validation**: React Hook Form, Zod, @hookform/resolvers
@@ -84,3 +86,61 @@ New customer portal features (as of recent updates):
 - **Forced Password Reset**: New customer logins must reset their password on first login
 - **Access Control**: Staff can enable/disable customer portal access via toggle switch
 - Database fields: `customer_users.must_reset_password` and `customer_users.active`
+
+## Customer Job Upload System (New Feature - Backend Complete)
+
+### Overview
+Customers can now submit new job requests through their portal. Jobs enter a holding area for staff review before moving to production.
+
+### Job Lifecycle
+1. **Customer Submission** (`pending_customer_approval`):
+   - Customer fills out job details: name, quantity, PO number, notes, delivery address, dispatch date
+   - Customer uploads files (images, PDFs, etc.) - stored in Replit Object Storage with ACL
+   - Customer can chat with staff about the job
+
+2. **Staff Review**:
+   - Staff view all pending submissions in holding area
+   - Staff can approve (moves to `production` status) or reject (with reason)
+   - Staff can respond to customer via chat
+
+3. **Production** (`production`):
+   - Approved jobs enter the normal production queue
+   - Staff assign machines, create line items, schedule production
+
+### API Endpoints
+
+**Customer Portal Routes:**
+- `GET /api/customer-portal/jobs` - Get production/completed jobs
+- `GET /api/customer-portal/jobs/pending` - Get jobs awaiting approval
+- `POST /api/customer-portal/jobs` - Submit new job request
+- `POST /api/customer-portal/objects/upload` - Get presigned URL for file upload
+- `POST /api/customer-portal/jobs/:jobId/files` - Attach file to job
+- `POST /api/customer-portal/jobs/:jobId/messages` - Send message
+- `GET /api/customer-portal/jobs/:jobId/messages` - Get messages
+
+**Staff Routes:**
+- `GET /api/staff/jobs/pending` - Get all pending customer submissions
+- `POST /api/staff/jobs/:jobId/approve` - Approve job
+- `POST /api/staff/jobs/:jobId/reject` - Reject job with reason
+
+### Database Schema Updates
+- **jobs table**: Added `submittedById`, `submittedAt`, `approvedById`, `approvedAt`, `rejectedById`, `rejectedAt`, `rejectionReason`
+- **Status field**: Now supports `pending_customer_approval`, `production`, `rejected`, `completed`
+- **jobFiles table**: Stores uploaded files with ACL policies
+- **jobMessages table**: Stores chat messages between customers and staff
+
+### Security
+- File ACL: Files are private and accessible only to customer company members and staff
+- Customer validation: Customers can only access/submit jobs for their company
+- Staff authentication required for approval/rejection
+
+### Frontend Status
+**Backend**: ✅ Complete and tested
+**Frontend**: ⏳ Pending implementation
+
+Frontend components needed:
+- Customer: New Job submission form with file upload
+- Customer: Pending Jobs view
+- Customer: Job detail page with chat
+- Staff: Holding Area dashboard
+- Staff: Job approval/rejection workflow
