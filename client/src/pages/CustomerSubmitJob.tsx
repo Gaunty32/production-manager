@@ -78,9 +78,10 @@ const addWorkingDays = (date: Date, days: number): Date => {
 };
 
 // Helper function to calculate working days between two dates
+// Counts from the day AFTER startDate to endDate (exclusive start, inclusive end)
 const getWorkingDaysBetween = (startDate: Date, endDate: Date): number => {
   let count = 0;
-  let current = new Date(startDate);
+  let current = addDays(new Date(startDate), 1); // Start counting from next day
   
   while (current <= endDate) {
     if (current.getDay() !== 0) { // Not Sunday

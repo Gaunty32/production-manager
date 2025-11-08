@@ -155,3 +155,31 @@ Customers can now submit new job requests through their portal. Jobs enter a hol
 **Known Issues:**
 - Uppy CSS temporarily disabled (file upload works but modal styling is basic)
 - TODO: Add Uppy CSS via CDN or fix Vite configuration
+
+### Messaging Feature Location & Notifications
+
+**Customer-Staff Messaging:**
+- Location: Customer Job Detail page (`/customer/job/:jobId`)
+- Features: Real-time chat with 3-second polling, message history
+- Access: Click any job in "Pending Submissions" or "My Jobs" to view details and chat
+
+**Current Notification System:**
+- **No automated email notifications** are currently implemented
+- Staff must manually check the "Holding Area" in the sidebar to see new submissions
+- Job submissions appear immediately in:
+  - Staff Holding Area (`/dashboard/holding-area`)
+  - Production Queue dashboard (after approval)
+
+**Recommended Enhancements:**
+1. **Email Notifications via Resend Integration:**
+   - Notify staff when new jobs are submitted
+   - Notify customers when jobs are approved/rejected
+   - Alert staff of new customer messages
+   
+2. **Dashboard Badge/Counter:**
+   - Add notification badge on "Holding Area" sidebar item showing pending count
+   - Real-time polling to update pending job count
+
+3. **Browser Push Notifications:**
+   - Optional: Desktop notifications for new submissions (staff side)
+   - Requires service worker setup
