@@ -1297,6 +1297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(jobsWithLineItems);
     } catch (error) {
+      console.error("[ERROR] Failed to fetch jobs:", error);
       res.status(500).json({ error: "Failed to fetch jobs" });
     }
   });
