@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -18,10 +18,21 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, Upload, FileText, X } from "lucide-react";
+import { ArrowLeft, Upload, FileText, X, AlertTriangle } from "lucide-react";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { customerJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { addDays, isSaturday, isSunday, format } from "date-fns";
 
 type CustomerUser = {
   id: string;
@@ -50,16 +61,52 @@ type UploadedFile = {
   fileType: string;
 };
 
+// Helper function to add working days (Mon-Sat)
+const addWorkingDays = (date: Date, days: number): Date => {
+  let result = new Date(date);
+  let addedDays = 0;
+  
+  while (addedDays < days) {
+    result = addDays(result, 1);
+    // Skip Sundays (0 = Sunday)
+    if (result.getDay() !== 0) {
+      addedDays++;
+    }
+  }
+  
+  return result;
+};
+
+// Helper function to calculate working days between two dates
+const getWorkingDaysBetween = (startDate: Date, endDate: Date): number => {
+  let count = 0;
+  let current = new Date(startDate);
+  
+  while (current <= endDate) {
+    if (current.getDay() !== 0) { // Not Sunday
+      count++;
+    }
+    current = addDays(current, 1);
+  }
+  
+  return count;
+};
+
 export default function CustomerSubmitJob() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [showExpressDialog, setShowExpressDialog] = useState(false);
+  const [pendingDispatchDate, setPendingDispatchDate] = useState<string>("");
 
   const { data: customerUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
   });
 
+  // Calculate default dispatch date (7 working days from now)
+  const defaultDispatchDate = format(addWorkingDays(new Date(), 7), "yyyy-MM-dd");
+  
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -68,9 +115,46 @@ export default function CustomerSubmitJob() {
       quantity: 1,
       notes: "",
       deliveryAddress: "",
-      requiredDispatchDate: "",
+      requiredDispatchDate: defaultDispatchDate,
     },
   });
+
+  // Handle dispatch date change with validation
+  const handleDispatchDateChange = (dateStr: string, onChange: (value: string) => void) => {
+    const selectedDate = new Date(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const workingDaysFromNow = getWorkingDaysBetween(today, selectedDate);
+    
+    // Check if it's 2 working days - show express dialog
+    if (workingDaysFromNow === 2) {
+      setPendingDispatchDate(dateStr);
+      setShowExpressDialog(true);
+      return;
+    }
+    
+    // Check if it's less than 2 working days (today or tomorrow)
+    if (workingDaysFromNow < 2) {
+      toast({
+        title: "Invalid date",
+        description: "Minimum dispatch time is 2 working days (with express surcharge)",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    onChange(dateStr);
+  };
+
+  const handleExpressConfirm = () => {
+    form.setValue("requiredDispatchDate", pendingDispatchDate);
+    setShowExpressDialog(false);
+    toast({
+      title: "Express delivery selected",
+      description: "A 100% surcharge will apply to this order",
+    });
+  };
 
   const submitJobMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -96,8 +180,8 @@ export default function CustomerSubmitJob() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/jobs/pending"] });
       toast({
-        title: "Success",
-        description: "Your job has been submitted for review",
+        title: "Job Submitted Successfully",
+        description: "We will review and confirm your order within 7 days",
       });
       setLocation("/customer/pending");
     },
@@ -177,7 +261,7 @@ export default function CustomerSubmitJob() {
                     name="quantity"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Quantity *</FormLabel>
+                        <FormLabel>Garment Quantity *</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -220,12 +304,14 @@ export default function CustomerSubmitJob() {
                       <FormControl>
                         <Input
                           type="date"
-                          {...field}
+                          value={field.value}
+                          onChange={(e) => handleDispatchDateChange(e.target.value, field.onChange)}
+                          min={format(addWorkingDays(new Date(), 2), "yyyy-MM-dd")}
                           data-testid="input-dispatch-date"
                         />
                       </FormControl>
                       <FormDescription>
-                        When do you need this order completed?
+                        Standard delivery: 3+ working days. Express (2 days) incurs 100% surcharge.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -358,6 +444,36 @@ export default function CustomerSubmitJob() {
           </CardContent>
         </Card>
       </main>
+
+      <AlertDialog open={showExpressDialog} onOpenChange={setShowExpressDialog}>
+        <AlertDialogContent data-testid="dialog-express-delivery">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Express Delivery Service
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                You have requested our express delivery service with a dispatch date of 2 working days.
+              </p>
+              <p className="font-semibold text-foreground">
+                This will incur a 100% surcharge on your order total.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Standard delivery (3+ working days) has no additional charges.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowExpressDialog(false)} data-testid="button-express-cancel">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleExpressConfirm} data-testid="button-express-confirm">
+              Confirm Express Delivery
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
