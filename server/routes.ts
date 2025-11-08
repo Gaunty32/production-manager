@@ -1045,10 +1045,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Job not found" });
       }
 
+      // Get staff ID from userId
+      const allStaff = await storage.getStaff();
+      const staff = allStaff.find(s => s.userId === req.session.userId);
+
       // Update job status to production
       await storage.updateJob(req.params.jobId, {
         status: 'production',
-        approvedById: req.user?.id,
+        approvedById: staff?.id || null,
         approvedAt: new Date() as any,
       });
 
@@ -1086,20 +1090,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Job not found" });
       }
 
+      // Get staff ID from userId
+      const allStaff = await storage.getStaff();
+      const staff = allStaff.find(s => s.userId === req.session.userId);
+
       // Update job status and add rejection reason
       await storage.updateJob(req.params.jobId, {
         status: 'rejected',
-        rejectedById: req.user?.id,
+        rejectedById: staff?.id || null,
         rejectedAt: new Date() as any,
         rejectionReason: req.body.reason || null,
       });
 
       // Optionally send a message to the customer
-      if (req.body.message) {
+      if (req.body.message && staff) {
         await storage.createJobMessage({
           jobId: req.params.jobId,
           senderType: 'staff',
-          senderId: req.user?.id,
+          senderId: staff.id,
           message: req.body.message,
         });
       }
@@ -1140,10 +1148,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Job not found" });
       }
 
+      // Get staff ID from userId
+      const allStaff = await storage.getStaff();
+      const staff = allStaff.find(s => s.userId === req.session.userId);
+      if (!staff) {
+        return res.status(404).json({ error: "Staff member not found" });
+      }
+
       const message = await storage.createJobMessage({
         jobId: req.params.jobId,
         senderType: 'staff',
-        senderId: req.user?.id,
+        senderId: staff.id,
         message: req.body.message,
       });
 
