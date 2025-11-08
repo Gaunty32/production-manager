@@ -61,15 +61,62 @@ type UploadedFile = {
   fileType: string;
 };
 
-// Helper function to add working days (Mon-Sat)
+// UK Bank Holidays 2024-2026
+const UK_BANK_HOLIDAYS = [
+  // 2024
+  "2024-01-01", // New Year's Day
+  "2024-03-29", // Good Friday
+  "2024-04-01", // Easter Monday
+  "2024-05-06", // Early May bank holiday
+  "2024-05-27", // Spring bank holiday
+  "2024-08-26", // Summer bank holiday
+  "2024-12-25", // Christmas Day
+  "2024-12-26", // Boxing Day
+  // 2025
+  "2025-01-01", // New Year's Day
+  "2025-04-18", // Good Friday
+  "2025-04-21", // Easter Monday
+  "2025-05-05", // Early May bank holiday
+  "2025-05-26", // Spring bank holiday
+  "2025-08-25", // Summer bank holiday
+  "2025-12-25", // Christmas Day
+  "2025-12-26", // Boxing Day
+  // 2026
+  "2026-01-01", // New Year's Day
+  "2026-04-03", // Good Friday
+  "2026-04-06", // Easter Monday
+  "2026-05-04", // Early May bank holiday
+  "2026-05-25", // Spring bank holiday
+  "2026-08-31", // Summer bank holiday
+  "2026-12-25", // Christmas Day
+  "2026-12-26", // Boxing Day (substitute day)
+  "2026-12-28", // Boxing Day substitute
+];
+
+// Helper function to check if a date is a UK bank holiday
+const isUKBankHoliday = (date: Date): boolean => {
+  const dateStr = format(date, "yyyy-MM-dd");
+  return UK_BANK_HOLIDAYS.includes(dateStr);
+};
+
+// Helper function to check if a date is a working day (Monday-Friday, excluding UK bank holidays)
+const isWorkingDay = (date: Date): boolean => {
+  const dayOfWeek = date.getDay();
+  // Sunday = 0, Saturday = 6
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    return false;
+  }
+  return !isUKBankHoliday(date);
+};
+
+// Helper function to add working days (Mon-Fri, excluding UK bank holidays)
 const addWorkingDays = (date: Date, days: number): Date => {
   let result = new Date(date);
   let addedDays = 0;
   
   while (addedDays < days) {
     result = addDays(result, 1);
-    // Skip Sundays (0 = Sunday)
-    if (result.getDay() !== 0) {
+    if (isWorkingDay(result)) {
       addedDays++;
     }
   }
@@ -84,7 +131,7 @@ const getWorkingDaysBetween = (startDate: Date, endDate: Date): number => {
   let current = addDays(new Date(startDate), 1); // Start counting from next day
   
   while (current <= endDate) {
-    if (current.getDay() !== 0) { // Not Sunday
+    if (isWorkingDay(current)) {
       count++;
     }
     current = addDays(current, 1);
@@ -247,6 +294,7 @@ export default function CustomerSubmitJob() {
                       <FormControl>
                         <Input
                           placeholder="e.g., Company Logo Polo Shirts"
+                          autoComplete="off"
                           {...field}
                           data-testid="input-job-name"
                         />
