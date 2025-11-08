@@ -90,14 +90,22 @@ export default function InvoicingQueue() {
     return acc;
   }, {} as Record<string, Job[]>);
 
-  // Filter customers by search term
-  const filteredJobsByCustomer = Object.entries(jobsByCustomer).reduce((acc, [customerId, customerJobs]) => {
-    const customer = customers.find(c => c.id === customerId);
-    if (customer && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) {
-      acc[customerId] = customerJobs;
-    }
-    return acc;
-  }, {} as Record<string, Job[]>);
+  // Filter customers by search term and sort alphabetically
+  const filteredJobsByCustomer = Object.entries(jobsByCustomer)
+    .reduce((acc, [customerId, customerJobs]) => {
+      const customer = customers.find(c => c.id === customerId);
+      if (customer && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+        acc[customerId] = customerJobs;
+      }
+      return acc;
+    }, {} as Record<string, Job[]>);
+  
+  // Sort customer IDs alphabetically by customer name
+  const sortedCustomerIds = Object.keys(filteredJobsByCustomer).sort((a, b) => {
+    const customerA = customers.find(c => c.id === a);
+    const customerB = customers.find(c => c.id === b);
+    return (customerA?.name || '').localeCompare(customerB?.name || '');
+  });
 
   const toggleJob = (jobId: string) => {
     const newSelected = new Set(selectedJobs);
@@ -465,7 +473,8 @@ export default function InvoicingQueue() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {Object.entries(filteredJobsByCustomer).map(([customerId, customerJobs]) => {
+            {sortedCustomerIds.map((customerId) => {
+              const customerJobs = filteredJobsByCustomer[customerId];
               const customer = customers.find(c => c.id === customerId);
               if (!customer) return null;
 

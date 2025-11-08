@@ -492,17 +492,49 @@ export class XeroService {
       };
     });
 
-    // Get the most recent dates for invoice date and due date
-    const mostRecentDate = jobs.reduce((latest, job) => {
+    // Helper function: Get the next Friday (7th, 14th, 21st, or 28th) after completion date
+    const getNextInvoiceFriday = (completionDate: Date): Date => {
+      const day = completionDate.getDate();
+      const year = completionDate.getFullYear();
+      const month = completionDate.getMonth();
+      
+      // Determine which Friday bucket this falls into
+      let invoiceDay: number;
+      if (day <= 7) {
+        invoiceDay = 7;
+      } else if (day <= 14) {
+        invoiceDay = 14;
+      } else if (day <= 21) {
+        invoiceDay = 21;
+      } else {
+        invoiceDay = 28;
+      }
+      
+      return new Date(year, month, invoiceDay);
+    };
+
+    // Helper function: Get the 5th of the following month
+    const getFifthOfNextMonth = (date: Date): Date => {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      // If we're in December, go to January of next year
+      if (month === 11) {
+        return new Date(year + 1, 0, 5);
+      }
+      return new Date(year, month + 1, 5);
+    };
+
+    // Get the most recent completion date
+    const mostRecentCompletionDate = jobs.reduce((latest, job) => {
       const jobDate = job.goodsReceived ? new Date(job.goodsReceived) : new Date();
       return jobDate > latest ? jobDate : latest;
     }, jobs[0].goodsReceived ? new Date(jobs[0].goodsReceived) : new Date());
 
-    const mostRecentDueDate = jobs.reduce((latest, job) => {
-      if (!job.requiredDispatchDate) return latest;
-      const jobDueDate = new Date(job.requiredDispatchDate);
-      return jobDueDate > latest ? jobDueDate : latest;
-    }, jobs[0].requiredDispatchDate ? new Date(jobs[0].requiredDispatchDate) : new Date());
+    // Calculate invoice date as next Friday after completion
+    const invoiceDate = getNextInvoiceFriday(mostRecentCompletionDate);
+    
+    // Calculate due date as 5th of following month
+    const dueDate = getFifthOfNextMonth(invoiceDate);
 
     // Combine all PO numbers for reference
     const poNumbers = jobs
@@ -516,8 +548,8 @@ export class XeroService {
         ? { contactID: xeroContact.contactID, name: xeroContact.name }
         : { name: customer.name },
       lineItems: xeroLineItems,
-      date: mostRecentDate.toISOString().split('T')[0],
-      dueDate: mostRecentDueDate.toISOString().split('T')[0],
+      date: invoiceDate.toISOString().split('T')[0],
+      dueDate: dueDate.toISOString().split('T')[0],
       reference: poNumbers || undefined,
       status: "DRAFT",
     };
