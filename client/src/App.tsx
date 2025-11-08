@@ -19,6 +19,7 @@ import Schedule from "@/pages/Schedule";
 import Leaderboard from "@/pages/Leaderboard";
 import InvoicingQueue from "@/pages/InvoicingQueue";
 import StaffHoldingArea from "@/pages/StaffHoldingArea";
+import StaffJobDetail from "@/pages/StaffJobDetail";
 import Landing from "@/pages/Landing";
 import CustomerLogin from "@/pages/CustomerLogin";
 import StaffLogin from "@/pages/StaffLogin";
@@ -64,6 +65,7 @@ function StaffRouter() {
       <Route path="/leaderboard"><Leaderboard /></Route>
       <Route path="/invoicing"><InvoicingQueue /></Route>
       <Route path="/holding-area"><StaffHoldingArea /></Route>
+      <Route path="/staff/job/:id"><StaffJobDetail /></Route>
       <Route path="/machine/:id"><Dashboard /></Route>
       <Route><NotFound /></Route>
     </Switch>

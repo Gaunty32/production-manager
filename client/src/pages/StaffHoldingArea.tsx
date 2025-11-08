@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Clock, FileText, MessageSquare, Package, CheckCircle, XCircle, Calendar } from "lucide-react";
+import { Clock, FileText, MessageSquare, Package, CheckCircle, XCircle, Calendar, Eye } from "lucide-react";
 import { format } from "date-fns";
 
 type Job = {
@@ -38,6 +39,7 @@ type DialogState = {
 
 export default function StaffHoldingArea() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [dialogState, setDialogState] = useState<DialogState>({ type: null, jobId: null, jobName: null });
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionMessage, setRejectionMessage] = useState("");
@@ -279,24 +281,35 @@ export default function StaffHoldingArea() {
                   </div>
                 )}
 
-                <div className="flex gap-2 pt-2">
+                <div className="space-y-2 pt-2">
                   <Button
-                    onClick={() => handleApprove(job.id, job.jobName)}
-                    className="flex-1"
-                    data-testid={`button-approve-${job.id}`}
+                    onClick={() => setLocation(`/staff/job/${job.id}`)}
+                    variant="outline"
+                    className="w-full"
+                    data-testid={`button-view-details-${job.id}`}
                   >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Approve
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Details & Chat
                   </Button>
-                  <Button
-                    onClick={() => handleReject(job.id, job.jobName)}
-                    variant="destructive"
-                    className="flex-1"
-                    data-testid={`button-reject-${job.id}`}
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Reject
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleApprove(job.id, job.jobName)}
+                      className="flex-1"
+                      data-testid={`button-approve-${job.id}`}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Approve
+                    </Button>
+                    <Button
+                      onClick={() => handleReject(job.id, job.jobName)}
+                      variant="destructive"
+                      className="flex-1"
+                      data-testid={`button-reject-${job.id}`}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Reject
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

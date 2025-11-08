@@ -1132,6 +1132,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff - Send message to customer about a job
+  app.post("/api/staff/jobs/:jobId/messages", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const message = await storage.createJobMessage({
+        jobId: req.params.jobId,
+        senderType: 'staff',
+        senderId: req.user?.id,
+        message: req.body.message,
+      });
+
+      res.json(message);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // Staff - Get messages for a job
+  app.get("/api/staff/jobs/:jobId/messages", isStaffAuthenticated, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const messages = await storage.getJobMessages(req.params.jobId);
+      
+      // Mark messages as read by staff
+      await storage.markMessagesAsRead(req.params.jobId, 'staff');
+      
+      // Enrich messages with sender names
+      const allStaff = await storage.getStaff();
+      const enrichedMessages = await Promise.all(
+        messages.map(async (msg) => {
+          if (msg.senderType === 'staff' && msg.senderId) {
+            const staff = allStaff.find(s => s.id === msg.senderId);
+            return { ...msg, senderName: staff?.name || null };
+          } else if (msg.senderType === 'customer' && msg.senderId) {
+            const customerUser = await storage.getCustomerUserById(msg.senderId);
+            const name = [customerUser?.firstName, customerUser?.lastName]
+              .filter(Boolean)
+              .join(' ') || null;
+            return { ...msg, senderName: name };
+          }
+          return { ...msg, senderName: null };
+        })
+      );
+
+      res.json(enrichedMessages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Staff - Get files for a job
+  app.get("/api/jobs/:jobId/files", isStaffAuthenticated, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const files = await storage.getJobFiles(req.params.jobId);
+      res.json(files);
+    } catch (error) {
+      console.error("Error fetching job files:", error);
+      res.status(500).json({ error: "Failed to fetch files" });
+    }
+  });
+
   // Customer routes
   app.get("/api/customers", isStaffAuthenticated, async (req, res) => {
     try {
