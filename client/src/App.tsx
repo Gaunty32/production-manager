@@ -155,28 +155,28 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   };
 
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
+    <SidebarProvider defaultOpen={false} style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
         <AppSidebar />
-        <div className="flex flex-col flex-1">
-          <header className="flex items-center justify-between p-4 border-b sticky top-0 bg-background z-10">
-            <div className="flex items-center gap-3">
+        <div className="flex flex-col flex-1 min-w-0">
+          <header className="flex items-center justify-between p-3 md:p-4 border-b sticky top-0 bg-background z-10 gap-2">
+            <div className="flex items-center gap-2 md:gap-3 min-w-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
-              <div className="flex items-center gap-2 ml-2" data-testid="app-logo">
+              <div className="flex items-center gap-2 ml-1 md:ml-2 min-w-0" data-testid="app-logo">
                 <img 
                   src={logoImage} 
                   alt="Select Uniforms" 
-                  className="h-8 object-contain"
+                  className="h-6 md:h-8 object-contain"
                   data-testid="logo-icon"
                 />
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
               <ThemeToggle />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" data-testid="button-user-menu">
-                    <Avatar className="h-8 w-8">
+                    <Avatar className="h-7 w-7 md:h-8 md:w-8">
                       <AvatarImage src={user?.profileImageUrl || undefined} />
                       <AvatarFallback>
                         {user?.email?.[0]?.toUpperCase() || "U"}

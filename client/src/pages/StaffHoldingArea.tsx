@@ -17,6 +17,12 @@ import {
 } from "@/components/ui/dialog";
 import { Clock, FileText, MessageSquare, Package, CheckCircle, XCircle, Calendar, Eye } from "lucide-react";
 import { format } from "date-fns";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 type Job = {
   id: string;
@@ -190,9 +196,10 @@ export default function StaffHoldingArea() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {pendingJobs.map((job) => (
-            <Card key={job.id} data-testid={`card-job-${job.id}`}>
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20 md:pb-0">
+            {pendingJobs.map((job) => (
+              <Card key={job.id} data-testid={`card-job-${job.id}`}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -210,7 +217,7 @@ export default function StaffHoldingArea() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Quantity</p>
                     <p className="font-medium">{job.quantity}</p>
@@ -245,34 +252,79 @@ export default function StaffHoldingArea() {
                   </div>
                 )}
 
-                {job.notes && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Notes</p>
-                    <div className="p-3 bg-muted rounded-md">
-                      <p className="text-sm whitespace-pre-line">{job.notes}</p>
+                {/* Desktop: Show notes/files inline. Mobile: Use accordions */}
+                <div className="hidden md:block space-y-4">
+                  {job.notes && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Notes</p>
+                      <div className="p-3 bg-muted rounded-md">
+                        <p className="text-sm whitespace-pre-line">{job.notes}</p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {job.files && job.files.length > 0 && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-2">Attached Files</p>
-                    <div className="space-y-1">
-                      {job.files.map((file) => (
-                        <div
-                          key={file.id}
-                          className="flex items-center gap-2 text-sm p-2 bg-muted rounded"
-                        >
-                          <FileText className="h-3 w-3 text-muted-foreground" />
-                          <span className="truncate">{file.fileName}</span>
-                          <span className="text-xs text-muted-foreground">
-                            ({Math.round(file.fileSize / 1024)} KB)
-                          </span>
-                        </div>
-                      ))}
+                  {job.files && job.files.length > 0 && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-2">Attached Files</p>
+                      <div className="space-y-1">
+                        {job.files.map((file) => (
+                          <div
+                            key={file.id}
+                            className="flex items-center gap-2 text-sm p-2 bg-muted rounded"
+                          >
+                            <FileText className="h-3 w-3 text-muted-foreground" />
+                            <span className="truncate">{file.fileName}</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({Math.round(file.fileSize / 1024)} KB)
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+
+                {/* Mobile: Accordion for notes/files */}
+                <div className="md:hidden">
+                  <Accordion type="multiple" className="space-y-2">
+                    {job.notes && (
+                      <AccordionItem value="notes" className="border rounded-md px-4">
+                        <AccordionTrigger className="text-sm font-medium hover:no-underline">
+                          Notes
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="p-3 bg-muted rounded-md">
+                            <p className="text-sm whitespace-pre-line">{job.notes}</p>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    )}
+
+                    {job.files && job.files.length > 0 && (
+                      <AccordionItem value="files" className="border rounded-md px-4">
+                        <AccordionTrigger className="text-sm font-medium hover:no-underline">
+                          Attached Files ({job.files.length})
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-1">
+                            {job.files.map((file) => (
+                              <div
+                                key={file.id}
+                                className="flex items-center gap-2 text-sm p-2 bg-muted rounded"
+                              >
+                                <FileText className="h-3 w-3 text-muted-foreground" />
+                                <span className="truncate">{file.fileName}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ({Math.round(file.fileSize / 1024)} KB)
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    )}
+                  </Accordion>
+                </div>
 
                 {(job.messages?.length || 0) > 0 && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -281,7 +333,8 @@ export default function StaffHoldingArea() {
                   </div>
                 )}
 
-                <div className="space-y-2 pt-2">
+                {/* Desktop: Show action buttons inline */}
+                <div className="hidden md:block space-y-2 pt-2">
                   <Button
                     onClick={() => setLocation(`/staff/job/${job.id}`)}
                     variant="outline"
@@ -311,10 +364,77 @@ export default function StaffHoldingArea() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Mobile: Show all action buttons inline */}
+                <div className="md:hidden space-y-2 pt-2">
+                  <Button
+                    onClick={() => setLocation(`/staff/job/${job.id}`)}
+                    variant="outline"
+                    className="w-full"
+                    data-testid={`button-view-details-${job.id}`}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Details & Chat
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleApprove(job.id, job.jobName)}
+                      className="flex-1"
+                      size="sm"
+                      data-testid={`button-approve-${job.id}`}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      onClick={() => handleReject(job.id, job.jobName)}
+                      variant="destructive"
+                      className="flex-1"
+                      size="sm"
+                      data-testid={`button-reject-${job.id}`}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+
+          {/* Mobile: Sticky action bar - always acts on first pending job */}
+          {pendingJobs.length > 0 && (
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t shadow-lg">
+              <div className="p-3 max-w-md mx-auto">
+                <div className="text-xs text-center text-muted-foreground mb-2 truncate">
+                  Quick Action: {pendingJobs[0].jobName}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleApprove(pendingJobs[0].id, pendingJobs[0].jobName)}
+                    className="flex-1"
+                    size="sm"
+                    data-testid="button-approve-sticky"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Approve
+                  </Button>
+                  <Button
+                    onClick={() => handleReject(pendingJobs[0].id, pendingJobs[0].jobName)}
+                    variant="destructive"
+                    className="flex-1"
+                    size="sm"
+                    data-testid="button-reject-sticky"
+                  >
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Reject
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Approve Confirmation Dialog */}

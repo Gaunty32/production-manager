@@ -36,6 +36,7 @@ import { canViewPrices } from "@shared/schema";
 import { useParams } from "wouter";
 import { isPast, isToday, format, addDays, startOfDay, endOfDay } from "date-fns";
 import { getPrice, getPrintPrice, getFlatRatePrice, getBaggingPrice, type PricingTable } from "@shared/pricing";
+import { getCustomerColorClasses } from "@shared/colors";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -702,9 +703,107 @@ export default function Dashboard() {
               </p>
             </div>
           ) : (
-            <div className="border rounded-md overflow-hidden" data-testid="table-production-queue">
-              <div className="overflow-x-auto">
-                <Table>
+            <>
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-3" data-testid="cards-production-queue-mobile">
+                {displayedJobs.map((job) => {
+                  const customer = customers.find(c => c.id === job.customerId);
+                  if (!customer) return null;
+                  
+                  const isOverdue = job.requiredDispatchDate && isPast(startOfDay(new Date(job.requiredDispatchDate)));
+                  const isDueToday = job.requiredDispatchDate && isToday(new Date(job.requiredDispatchDate));
+                  
+                  return (
+                    <Card 
+                      key={job.id} 
+                      className={`hover-elevate ${getCustomerColorClasses(customer.id)}`}
+                    >
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold text-sm truncate">{job.jobName}</h3>
+                            <p className="text-xs text-muted-foreground truncate">{customer.name}</p>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" data-testid={`button-menu-${job.id}`}>
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEdit(job.id)}>
+                                Edit Job
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => setWorksheetJob(job)}
+                                data-testid={`menu-print-${job.id}`}
+                              >
+                                <Printer className="h-4 w-4 mr-2" />
+                                Print Worksheet
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => {
+                                  if (window.confirm(`Are you sure you want to delete this job: ${job.jobName}?`)) {
+                                    handleDelete(job.id);
+                                  }
+                                }}
+                                className="text-destructive"
+                              >
+                                Delete Job
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                          <div>
+                            <span className="text-muted-foreground">Job #:</span>
+                            <span className="ml-1 font-medium">{job.jobNumber}</span>
+                          </div>
+                          {job.poNumber && (
+                            <div>
+                              <span className="text-muted-foreground">PO #:</span>
+                              <span className="ml-1 font-medium">{job.poNumber}</span>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-muted-foreground">Qty:</span>
+                            <span className="ml-1 font-medium">{job.quantity}</span>
+                          </div>
+                          {job.requiredDispatchDate && (
+                            <div>
+                              <span className="text-muted-foreground">Due:</span>
+                              <span className={`ml-1 font-medium ${isOverdue ? 'text-destructive' : isDueToday ? 'text-amber-600' : ''}`}>
+                                {format(new Date(job.requiredDispatchDate), 'dd/MM/yyyy')}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {job.lineItems && job.lineItems.length > 0 && (
+                          <div className="pt-2 border-t space-y-1">
+                            {job.lineItems.map((lineItem, idx) => (
+                              <div key={lineItem.id} className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">
+                                  Line {idx + 1}: {lineItem.quantity} items
+                                </span>
+                                <span className="font-medium">
+                                  {lineItem.machineId ? getMachineName(lineItem.machineId) : 'Not assigned'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+              
+              {/* Desktop Table View */}
+              <div className="hidden md:block border rounded-md overflow-hidden" data-testid="table-production-queue">
+                <div className="overflow-x-auto">
+                  <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow className="text-xs text-muted-foreground uppercase tracking-wider">
                       <TableHead className="py-3 px-3 w-10" onClick={(e) => e.stopPropagation()}>
@@ -837,6 +936,7 @@ export default function Dashboard() {
                 </Table>
               </div>
             </div>
+            </>
           )}
         </div>
 
