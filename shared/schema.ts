@@ -62,7 +62,7 @@ export const jobs = pgTable("jobs", {
   completedOnTime: boolean("completed_on_time"),
   completedById: varchar("completed_by_id").references(() => staff.id),
   machineId: integer("machine_id"),
-  status: text("status").notNull().default("pending"), // pending_customer_approval, production, completed
+  status: text("status").notNull().default("production"), // pending_customer_approval, production, completed
   notes: text("notes"),
   invoiceStatus: varchar("invoice_status").notNull().default("pending"),
   invoicedAt: timestamp("invoiced_at"),
