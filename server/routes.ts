@@ -623,6 +623,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Production Display API routes
+  app.get("/api/production-display/queue", isStaffAuthenticated, async (req, res) => {
+    try {
+      const days = req.query.days ? parseInt(req.query.days as string) : 7;
+      const queueData = await storage.getProductionDisplayQueue(days);
+      res.json(queueData);
+    } catch (error) {
+      console.error("Error fetching production display queue:", error);
+      res.status(500).json({ error: "Failed to fetch production queue" });
+    }
+  });
+
+  app.get("/api/production-display/leaderboard", isStaffAuthenticated, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const leaderboard = await storage.getProductionDisplayLeaderboard(limit);
+      res.json(leaderboard);
+    } catch (error) {
+      console.error("Error fetching production display leaderboard:", error);
+      res.status(500).json({ error: "Failed to fetch leaderboard" });
+    }
+  });
+
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
     try {

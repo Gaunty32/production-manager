@@ -20,6 +20,7 @@ import Leaderboard from "@/pages/Leaderboard";
 import InvoicingQueue from "@/pages/InvoicingQueue";
 import StaffHoldingArea from "@/pages/StaffHoldingArea";
 import StaffJobDetail from "@/pages/StaffJobDetail";
+import ProductionDisplay from "@/pages/ProductionDisplay";
 import Landing from "@/pages/Landing";
 import CustomerLogin from "@/pages/CustomerLogin";
 import StaffLogin from "@/pages/StaffLogin";
@@ -63,6 +64,7 @@ function StaffRouter() {
       <Route path="/users"><UsersPage /></Route>
       <Route path="/schedule"><Schedule /></Route>
       <Route path="/leaderboard"><Leaderboard /></Route>
+      <Route path="/production-display"><ProductionDisplay /></Route>
       <Route path="/invoicing"><InvoicingQueue /></Route>
       <Route path="/holding-area"><StaffHoldingArea /></Route>
       <Route path="/staff/job/:id"><StaffJobDetail /></Route>

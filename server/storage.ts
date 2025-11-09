@@ -127,6 +127,10 @@ export interface IStorage {
   getPasswordResetToken(token: string): Promise<any | undefined>;
   updateUserPassword(userId: string, passwordHash: string): Promise<void>;
   markPasswordResetTokenUsed(tokenId: string): Promise<void>;
+  
+  // Production Display methods
+  getProductionDisplayQueue(days: number): Promise<any[]>;
+  getProductionDisplayLeaderboard(limit?: number): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1004,6 +1008,194 @@ export class DatabaseStorage implements IStorage {
       .update(passwordResetTokens)
       .set({ used: true })
       .where(eq(passwordResetTokens.id, tokenId));
+  }
+
+  async getProductionDisplayQueue(days: number = 7): Promise<any[]> {
+    const result = await db.execute(sql`
+      WITH scheduled_line_items AS (
+        SELECT DISTINCT ON (jli.id, js.scheduled_date)
+          js.scheduled_date::date AS schedule_date,
+          j.id AS job_id,
+          j.job_number,
+          c.name AS customer_name,
+          j.job_name,
+          j.required_dispatch_date,
+          jli.id AS line_item_id,
+          jli.description,
+          jli.quantity,
+          jli.stitch_count,
+          COALESCE(jli.machine_id, j.machine_id) AS machine_id,
+          s.id AS staff_id,
+          s.name AS staff_name,
+          js.start_time,
+          js.end_time
+        FROM job_line_items jli
+        INNER JOIN jobs j ON jli.job_id = j.id
+        INNER JOIN customers c ON j.customer_id = c.id
+        LEFT JOIN job_schedule js ON j.id = js.job_id AND COALESCE(jli.machine_id, j.machine_id) = js.machine_id
+        LEFT JOIN staff s ON js.staff_id = s.id
+        WHERE 
+          j.status = 'production'
+          AND j.completed = false
+          AND jli.completed = false
+          AND js.scheduled_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + ${days} * INTERVAL '1 day'
+        ORDER BY jli.id, js.scheduled_date, js.start_time
+      ),
+      unscheduled_line_items AS (
+        SELECT DISTINCT
+          NULL::date AS schedule_date,
+          j.id AS job_id,
+          j.job_number,
+          c.name AS customer_name,
+          j.job_name,
+          j.required_dispatch_date,
+          jli.id AS line_item_id,
+          jli.description,
+          jli.quantity,
+          jli.stitch_count,
+          COALESCE(jli.machine_id, j.machine_id) AS machine_id,
+          NULL::varchar AS staff_id,
+          'Unassigned'::text AS staff_name,
+          NULL::integer AS start_time,
+          NULL::integer AS end_time
+        FROM job_line_items jli
+        INNER JOIN jobs j ON jli.job_id = j.id
+        INNER JOIN customers c ON j.customer_id = c.id
+        WHERE 
+          j.status = 'production'
+          AND j.completed = false
+          AND jli.completed = false
+          AND NOT EXISTS (
+            SELECT 1 FROM job_schedule js 
+            WHERE js.job_id = j.id 
+            AND js.machine_id = COALESCE(jli.machine_id, j.machine_id)
+            AND js.scheduled_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + ${days} * INTERVAL '1 day'
+          )
+      )
+      SELECT
+        COALESCE(schedule_date::text, 'Unscheduled') AS schedule_date,
+        job_id,
+        job_number,
+        customer_name,
+        job_name,
+        required_dispatch_date::text,
+        line_item_id,
+        description,
+        quantity,
+        stitch_count,
+        machine_id,
+        staff_id,
+        staff_name,
+        start_time,
+        end_time
+      FROM scheduled_line_items
+      UNION ALL
+      SELECT
+        'Unscheduled' AS schedule_date,
+        job_id,
+        job_number,
+        customer_name,
+        job_name,
+        required_dispatch_date::text,
+        line_item_id,
+        description,
+        quantity,
+        stitch_count,
+        machine_id,
+        staff_id,
+        staff_name,
+        start_time,
+        end_time
+      FROM unscheduled_line_items
+      ORDER BY 
+        CASE WHEN schedule_date = 'Unscheduled' THEN 1 ELSE 0 END,
+        schedule_date, 
+        job_id, 
+        line_item_id
+    `);
+
+    return result.rows;
+  }
+
+  async getProductionDisplayLeaderboard(limit: number = 10): Promise<any> {
+    const result = await db.execute(sql`
+      WITH recent_items AS (
+        SELECT
+          jli.completed_by_id AS staff_id,
+          jli.stitch_count,
+          jli.machine_id,
+          COALESCE(
+            j.actual_production_time,
+            EXTRACT(EPOCH FROM (jli.completed_at - js.scheduled_date)) / 60
+          ) AS duration_minutes
+        FROM job_line_items jli
+        INNER JOIN jobs j ON jli.job_id = j.id
+        LEFT JOIN job_schedule js ON j.id = js.job_id
+        WHERE 
+          jli.completed = true
+          AND jli.completed_at >= NOW() - INTERVAL '30 days'
+          AND jli.completed_by_id IS NOT NULL
+      ),
+      staff_metrics AS (
+        SELECT
+          ri.staff_id,
+          SUM(ri.stitch_count) AS total_stitches,
+          SUM(
+            CASE 
+              WHEN ri.machine_id IS NOT NULL THEN ri.duration_minutes / 60.0
+              ELSE 0
+            END
+          ) AS total_hours,
+          json_object_agg(
+            COALESCE(
+              CASE ri.machine_id
+                WHEN 1 THEN 'Barudan 8'
+                WHEN 2 THEN 'Barudan'
+                WHEN 3 THEN 'SWF'
+                WHEN 4 THEN 'SWF'
+                ELSE 'Unknown'
+              END,
+              'Unknown'
+            ),
+            COALESCE(SUM(ri.duration_minutes) FILTER (WHERE ri.machine_id IS NOT NULL) / 60.0, 0)
+          ) AS machine_usage
+        FROM recent_items ri
+        GROUP BY ri.staff_id
+      )
+      SELECT
+        s.id AS staff_id,
+        s.name AS staff_name,
+        COALESCE(us.yellow_stars, 0) AS yellow_stars,
+        COALESCE(us.red_stars, 0) AS red_stars,
+        sm.total_stitches,
+        sm.total_hours,
+        CASE 
+          WHEN sm.total_hours > 0 THEN 
+            ROUND((sm.total_stitches / NULLIF(sm.total_hours, 0))::numeric, 0)
+          ELSE 0
+        END AS stitches_per_head_hour,
+        sm.machine_usage
+      FROM staff_metrics sm
+      INNER JOIN staff s ON sm.staff_id = s.id
+      LEFT JOIN users u ON s.user_id = u.id
+      LEFT JOIN user_stars us ON u.id = us.user_id
+      WHERE sm.total_stitches > 0
+      ORDER BY stitches_per_head_hour DESC
+      LIMIT ${limit}
+    `);
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    return {
+      generatedAt: now.toISOString(),
+      range: {
+        start: thirtyDaysAgo.toISOString(),
+        end: now.toISOString(),
+      },
+      leaders: result.rows,
+    };
   }
 }
 

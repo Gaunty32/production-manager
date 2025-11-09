@@ -716,3 +716,55 @@ export const passwordResetConfirmSchema = z.object({
 export type PasswordResetRequest = z.infer<typeof passwordResetRequestSchema>;
 export type PasswordResetConfirm = z.infer<typeof passwordResetConfirmSchema>;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
+// Production Display types
+export interface ProductionQueueLineItem {
+  lineItemId: string;
+  description: string | null;
+  quantity: number;
+  stitchCount: number;
+  machineId: number | null;
+  machineName: string;
+  staffId: string | null;
+  staffName: string;
+  scheduledStart: number | null;
+  scheduledEnd: number | null;
+}
+
+export interface ProductionQueueJob {
+  jobId: string;
+  jobNumber: number | null;
+  customerName: string;
+  jobName: string;
+  requiredDispatchDate: string | null;
+  lineItems: ProductionQueueLineItem[];
+}
+
+export interface ProductionQueueDateGroup {
+  date: string;
+  jobs: ProductionQueueJob[];
+}
+
+export interface LeaderboardMachineUsage {
+  [machineName: string]: number; // hours
+}
+
+export interface ProductionDisplayLeader {
+  staffId: string;
+  staffName: string;
+  yellowStars: number;
+  redStars: number;
+  totalStitches: number;
+  totalHours: number;
+  stitchesPerHeadHour: number;
+  machines: LeaderboardMachineUsage;
+}
+
+export interface ProductionDisplayLeaderboard {
+  generatedAt: string;
+  range: {
+    start: string;
+    end: string;
+  };
+  leaders: ProductionDisplayLeader[];
+}
