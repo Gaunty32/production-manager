@@ -18,7 +18,7 @@ interface QueueLineItem {
 }
 
 interface QueueData {
-  schedule_date: string;
+  schedule_date: string | null;
   job_id: string;
   job_number: number | null;
   customer_name: string;
@@ -69,16 +69,21 @@ export default function ProductionDisplay() {
   // Group queue data by date, then by job
   const groupedByDate: Record<string, Record<string, QueueData[]>> = {};
   queueData.forEach((item) => {
-    if (!groupedByDate[item.schedule_date]) {
-      groupedByDate[item.schedule_date] = {};
+    const dateKey = item.schedule_date || 'unscheduled';
+    if (!groupedByDate[dateKey]) {
+      groupedByDate[dateKey] = {};
     }
-    if (!groupedByDate[item.schedule_date][item.job_id]) {
-      groupedByDate[item.schedule_date][item.job_id] = [];
+    if (!groupedByDate[dateKey][item.job_id]) {
+      groupedByDate[dateKey][item.job_id] = [];
     }
-    groupedByDate[item.schedule_date][item.job_id].push(item);
+    groupedByDate[dateKey][item.job_id].push(item);
   });
 
-  const sortedDates = Object.keys(groupedByDate).sort();
+  const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
+    if (a === 'unscheduled') return 1;
+    if (b === 'unscheduled') return -1;
+    return a.localeCompare(b);
+  });
 
   const getMachineBadgeColor = (machineId: number | null) => {
     if (machineId === null) return "bg-muted text-muted-foreground";
@@ -115,7 +120,7 @@ export default function ProductionDisplay() {
                   <div className="flex items-center gap-3 mb-3 sticky top-0 bg-background z-10 py-2">
                     <Calendar className="h-6 w-6 text-primary" />
                     <h2 className="text-2xl font-semibold">
-                      {format(new Date(date), "EEEE, MMM d")}
+                      {date === 'unscheduled' ? 'Unscheduled' : format(new Date(date), "EEEE, MMM d")}
                     </h2>
                   </div>
 

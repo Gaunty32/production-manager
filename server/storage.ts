@@ -1073,7 +1073,7 @@ export class DatabaseStorage implements IStorage {
           )
       )
       SELECT
-        COALESCE(schedule_date::text, 'Unscheduled') AS schedule_date,
+        schedule_date::text,
         job_id,
         job_number,
         customer_name,
@@ -1091,7 +1091,7 @@ export class DatabaseStorage implements IStorage {
       FROM scheduled_line_items
       UNION ALL
       SELECT
-        'Unscheduled' AS schedule_date,
+        NULL::text AS schedule_date,
         job_id,
         job_number,
         customer_name,
@@ -1108,7 +1108,7 @@ export class DatabaseStorage implements IStorage {
         end_time
       FROM unscheduled_line_items
       ORDER BY 
-        CASE WHEN schedule_date = 'Unscheduled' THEN 1 ELSE 0 END,
+        CASE WHEN schedule_date IS NULL THEN 1 ELSE 0 END,
         schedule_date, 
         job_id, 
         line_item_id
