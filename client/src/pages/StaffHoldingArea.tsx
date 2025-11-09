@@ -49,13 +49,58 @@ export default function StaffHoldingArea() {
   const [dialogState, setDialogState] = useState<DialogState>({ type: null, jobId: null, jobName: null });
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionMessage, setRejectionMessage] = useState("");
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const previousMessageCountsRef = useRef<Record<string, number>>({});
   const isInitialLoadRef = useRef<boolean>(true);
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const { data: pendingJobs = [], isLoading } = useQuery<Job[]>({
     queryKey: ["/api/staff/jobs/pending"],
     refetchInterval: 5000, // Poll every 5 seconds for new messages
   });
+
+  // Track which card is most visible using IntersectionObserver
+  useEffect(() => {
+    if (!pendingJobs || pendingJobs.length === 0) {
+      setActiveJobId(null);
+      return;
+    }
+
+    // Set first job as active initially
+    if (!activeJobId && pendingJobs.length > 0) {
+      setActiveJobId(pendingJobs[0].id);
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Find the card with highest intersection ratio
+        let maxRatio = 0;
+        let mostVisibleJobId: string | null = null;
+
+        entries.forEach((entry) => {
+          if (entry.intersectionRatio > maxRatio) {
+            maxRatio = entry.intersectionRatio;
+            mostVisibleJobId = entry.target.getAttribute('data-job-id');
+          }
+        });
+
+        if (mostVisibleJobId && maxRatio > 0.3) {
+          setActiveJobId(mostVisibleJobId);
+        }
+      },
+      {
+        root: null,
+        threshold: [0, 0.3, 0.5, 0.7, 1.0],
+      }
+    );
+
+    // Observe all cards
+    Object.values(cardRefs.current).forEach((ref) => {
+      if (ref) observer.observe(ref);
+    });
+
+    return () => observer.disconnect();
+  }, [pendingJobs, activeJobId]);
 
   // Show popup notification when new customer messages arrive
   useEffect(() => {
@@ -198,8 +243,14 @@ export default function StaffHoldingArea() {
       ) : (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20 md:pb-0">
-            {pendingJobs.map((job) => (
-              <Card key={job.id} data-testid={`card-job-${job.id}`}>
+            {pendingJobs.map((job, index) => (
+              <Card 
+                key={job.id}
+                ref={(el) => cardRefs.current[job.id] = el}
+                data-job-id={job.id}
+                data-testid={`card-job-${job.id}`}
+                className={activeJobId === job.id ? "border-2 border-primary md:border md:border-border md:shadow-none transition-all duration-200" : "md:transition-none"}
+              >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -403,37 +454,43 @@ export default function StaffHoldingArea() {
             ))}
           </div>
 
-          {/* Mobile: Sticky action bar - always acts on first pending job */}
-          {pendingJobs.length > 0 && (
-            <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t shadow-lg">
-              <div className="p-3 max-w-md mx-auto">
-                <div className="text-xs text-center text-muted-foreground mb-2 truncate">
-                  Quick Action: {pendingJobs[0].jobName}
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleApprove(pendingJobs[0].id, pendingJobs[0].jobName)}
-                    className="flex-1"
-                    size="sm"
-                    data-testid="button-approve-sticky"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    Approve
-                  </Button>
-                  <Button
-                    onClick={() => handleReject(pendingJobs[0].id, pendingJobs[0].jobName)}
-                    variant="destructive"
-                    className="flex-1"
-                    size="sm"
-                    data-testid="button-reject-sticky"
-                  >
-                    <XCircle className="h-4 w-4 mr-1" />
-                    Reject
-                  </Button>
+          {/* Mobile: Sticky action bar - targets currently visible job */}
+          {pendingJobs.length > 0 && activeJobId && (() => {
+            const activeJob = pendingJobs.find(j => j.id === activeJobId);
+            return activeJob ? (
+              <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-primary/95 backdrop-blur-sm border-t border-primary">
+                <div className="p-3 max-w-md mx-auto">
+                  <div className="text-xs text-center text-primary-foreground mb-2 truncate font-medium">
+                    Active: {activeJob.jobName}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleApprove(activeJob.id, activeJob.jobName)}
+                      className="flex-1 bg-background text-foreground hover:bg-background/90"
+                      size="sm"
+                      data-testid="button-approve-sticky"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      onClick={() => handleReject(activeJob.id, activeJob.jobName)}
+                      variant="destructive"
+                      className="flex-1"
+                      size="sm"
+                      data-testid="button-reject-sticky"
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                  <div className="text-xs text-center text-primary-foreground/80 mt-2">
+                    Scroll to change active job
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            ) : null;
+          })()}
         </>
       )}
 
