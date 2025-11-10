@@ -132,7 +132,10 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   const { isAuthenticated, isLoading, user } = useAuth();
   const { toast } = useToast();
 
+  console.log('[AuthenticatedApp] isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user);
+
   if (isLoading) {
+    console.log('[AuthenticatedApp] Showing loading state');
     return (
       <div className="h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
@@ -141,8 +144,11 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   }
 
   if (!isAuthenticated) {
+    console.log('[AuthenticatedApp] Not authenticated, showing StaffLogin');
     return <StaffLogin />;
   }
+
+  console.log('[AuthenticatedApp] Authenticated, showing dashboard');
 
   const handleLogout = async () => {
     try {
