@@ -56,15 +56,27 @@ interface LeaderboardResponse {
 }
 
 export default function ProductionDisplay() {
-  const { data: queueData = [] } = useQuery<QueueData[]>({
+  const { data: queueData = [], isLoading: queueLoading } = useQuery<QueueData[]>({
     queryKey: ["/api/production-display/queue"],
     refetchInterval: 150000, // Refresh every 2.5 minutes
   });
 
-  const { data: leaderboard } = useQuery<LeaderboardResponse>({
+  const { data: leaderboard, isLoading: leaderboardLoading } = useQuery<LeaderboardResponse>({
     queryKey: ["/api/production-display/leaderboard"],
     refetchInterval: 150000,
   });
+
+  // Show loading state
+  if (queueLoading || leaderboardLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-xl text-muted-foreground">Loading Production Display...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Helper function to parse database date strings (format: "2025-11-10 00:00:00")
   const parseDbDate = (dateStr: string | null): Date | null => {
