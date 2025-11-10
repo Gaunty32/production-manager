@@ -66,6 +66,15 @@ export default function ProductionDisplay() {
     refetchInterval: 150000,
   });
 
+  // Helper function to parse database date strings (format: "2025-11-10 00:00:00")
+  const parseDbDate = (dateStr: string | null): Date | null => {
+    if (!dateStr || dateStr.trim() === '') return null;
+    // Convert space-separated DB format to ISO format
+    const isoDate = dateStr.trim().replace(' ', 'T');
+    const parsed = new Date(isoDate);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
+
   // Group queue data by date, then by job
   const groupedByDate: Record<string, Record<string, QueueData[]>> = {};
   queueData.forEach((item) => {
@@ -120,7 +129,12 @@ export default function ProductionDisplay() {
                   <div className="flex items-center gap-3 mb-3 sticky top-0 bg-background z-10 py-2">
                     <Calendar className="h-6 w-6 text-primary" />
                     <h2 className="text-2xl font-semibold">
-                      {date === 'unscheduled' ? 'Unscheduled' : format(new Date(date), "EEEE, MMM d")}
+                      {date === 'unscheduled' 
+                        ? 'Unscheduled' 
+                        : parseDbDate(date) 
+                          ? format(parseDbDate(date)!, "EEEE, MMM d")
+                          : 'Invalid Date'
+                      }
                     </h2>
                   </div>
 
@@ -144,9 +158,9 @@ export default function ProductionDisplay() {
                                   </p>
                                 )}
                               </div>
-                              {firstItem.required_dispatch_date && (
+                              {parseDbDate(firstItem.required_dispatch_date) && (
                                 <Badge variant="outline" className="text-base px-3 py-1">
-                                  Dispatch: {format(new Date(firstItem.required_dispatch_date), "MMM d")}
+                                  Dispatch: {format(parseDbDate(firstItem.required_dispatch_date)!, "MMM d")}
                                 </Badge>
                               )}
                             </div>
