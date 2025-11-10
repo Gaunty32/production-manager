@@ -64,7 +64,6 @@ function StaffRouter() {
       <Route path="/users"><UsersPage /></Route>
       <Route path="/schedule"><Schedule /></Route>
       <Route path="/leaderboard"><Leaderboard /></Route>
-      <Route path="/production-display"><ProductionDisplay /></Route>
       <Route path="/invoicing"><InvoicingQueue /></Route>
       <Route path="/holding-area"><StaffHoldingArea /></Route>
       <Route path="/staff/job/:id"><StaffJobDetail /></Route>
@@ -75,18 +74,28 @@ function StaffRouter() {
 }
 
 function AppRouter() {
-  const [location] = useLocation();
-  const isCustomerPortal = location.startsWith("/customer/") || location === "/customer";
-  
   const style = {
     "--sidebar-width": "16rem",
   };
 
-  if (isCustomerPortal) {
-    return <CustomerPortalApp />;
-  }
-
-  return <AuthenticatedApp style={style} />;
+  return (
+    <Switch>
+      {/* Public Routes - No Authentication Required */}
+      <Route path="/production-display" component={ProductionDisplay} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
+      
+      {/* Customer Portal Routes */}
+      <Route path="/customer/:rest*">
+        <CustomerPortalApp />
+      </Route>
+      
+      {/* Authenticated Staff Routes */}
+      <Route path="/:rest*">
+        <AuthenticatedApp style={style} />
+      </Route>
+    </Switch>
+  );
 }
 
 export default function App() {
@@ -122,7 +131,6 @@ function CustomerPortalApp() {
 function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   const { isAuthenticated, isLoading, user } = useAuth();
   const { toast } = useToast();
-  const [location] = useLocation();
 
   if (isLoading) {
     return (
@@ -132,14 +140,7 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
     );
   }
 
-  // Show password reset pages without authentication
   if (!isAuthenticated) {
-    if (location === "/forgot-password") {
-      return <ForgotPassword />;
-    }
-    if (location === "/reset-password" || location.startsWith("/reset-password?")) {
-      return <ResetPassword />;
-    }
     return <StaffLogin />;
   }
 

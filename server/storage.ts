@@ -1028,7 +1028,8 @@ export class DatabaseStorage implements IStorage {
           s.id AS staff_id,
           s.name AS staff_name,
           js.start_time,
-          js.end_time
+          js.end_time,
+          0 AS is_unscheduled
         FROM job_line_items jli
         INNER JOIN jobs j ON jli.job_id = j.id
         INNER JOIN customers c ON j.customer_id = c.id
@@ -1057,7 +1058,8 @@ export class DatabaseStorage implements IStorage {
           NULL::varchar AS staff_id,
           'Unassigned'::text AS staff_name,
           NULL::integer AS start_time,
-          NULL::integer AS end_time
+          NULL::integer AS end_time,
+          1 AS is_unscheduled
         FROM job_line_items jli
         INNER JOIN jobs j ON jli.job_id = j.id
         INNER JOIN customers c ON j.customer_id = c.id
@@ -1071,6 +1073,11 @@ export class DatabaseStorage implements IStorage {
             AND js.machine_id = COALESCE(jli.machine_id, j.machine_id)
             AND js.scheduled_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + ${days} * INTERVAL '1 day'
           )
+      ),
+      combined AS (
+        SELECT * FROM scheduled_line_items
+        UNION ALL
+        SELECT * FROM unscheduled_line_items
       )
       SELECT
         schedule_date::text,
@@ -1088,27 +1095,9 @@ export class DatabaseStorage implements IStorage {
         staff_name,
         start_time,
         end_time
-      FROM scheduled_line_items
-      UNION ALL
-      SELECT
-        NULL::text AS schedule_date,
-        job_id,
-        job_number,
-        customer_name,
-        job_name,
-        required_dispatch_date::text,
-        line_item_id,
-        description,
-        quantity,
-        stitch_count,
-        machine_id,
-        staff_id,
-        staff_name,
-        start_time,
-        end_time
-      FROM unscheduled_line_items
+      FROM combined
       ORDER BY 
-        CASE WHEN schedule_date IS NULL THEN 1 ELSE 0 END,
+        is_unscheduled,
         schedule_date, 
         job_id, 
         line_item_id
@@ -1136,6 +1125,24 @@ export class DatabaseStorage implements IStorage {
           AND jli.completed_at >= NOW() - INTERVAL '30 days'
           AND jli.completed_by_id IS NOT NULL
       ),
+      machine_hours AS (
+        SELECT
+          ri.staff_id,
+          COALESCE(
+            CASE ri.machine_id
+              WHEN 1 THEN 'Barudan 8'
+              WHEN 2 THEN 'Barudan'
+              WHEN 3 THEN 'SWF'
+              WHEN 4 THEN 'SWF'
+              ELSE 'Unknown'
+            END,
+            'Unknown'
+          ) AS machine_name,
+          SUM(ri.duration_minutes) / 60.0 AS hours_on_machine
+        FROM recent_items ri
+        WHERE ri.machine_id IS NOT NULL
+        GROUP BY ri.staff_id, ri.machine_id
+      ),
       staff_metrics AS (
         SELECT
           ri.staff_id,
@@ -1147,19 +1154,11 @@ export class DatabaseStorage implements IStorage {
             END
           ) AS total_hours,
           json_object_agg(
-            COALESCE(
-              CASE ri.machine_id
-                WHEN 1 THEN 'Barudan 8'
-                WHEN 2 THEN 'Barudan'
-                WHEN 3 THEN 'SWF'
-                WHEN 4 THEN 'SWF'
-                ELSE 'Unknown'
-              END,
-              'Unknown'
-            ),
-            COALESCE(SUM(ri.duration_minutes) FILTER (WHERE ri.machine_id IS NOT NULL) / 60.0, 0)
+            mh.machine_name,
+            mh.hours_on_machine
           ) AS machine_usage
         FROM recent_items ri
+        LEFT JOIN machine_hours mh ON ri.staff_id = mh.staff_id
         GROUP BY ri.staff_id
       )
       SELECT

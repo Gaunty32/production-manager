@@ -6,6 +6,24 @@ This application is a production management system for manufacturing, featuring 
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### November 10, 2025
+
+**Xero Integration - Item Code Fix:**
+- Added `itemCode` field to Xero invoice line items (was previously intentionally excluded)
+- Item codes now sent to Xero: "Emb" (embroidery), "Carriage" (shipping), "Print DTF", "BAG", "OTHER"
+- Updated both single invoice and consolidated batch invoice functions
+- Item codes must match exactly in Xero Chart of Accounts → Item Codes for proper categorization
+
+**Production Display - Public Access & SQL Fixes:**
+- Removed authentication requirement from Production Display page (/production-display)
+- Moved route to public section in App.tsx router (alongside /forgot-password, /customer/*)
+- Fixed SQL errors in production queue query (invalid UNION ORDER BY clause)
+- Fixed SQL errors in leaderboard query (nested aggregate functions)
+- Production Display now accessible without login for factory big screen displays
+- E2E tested and verified working with proper empty states
+
 ## System Architecture
 
 ### UI/UX Decisions
