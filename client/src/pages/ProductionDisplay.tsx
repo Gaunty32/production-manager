@@ -110,18 +110,18 @@ export default function ProductionDisplay() {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-background">
-      <div className="grid grid-cols-[2fr,1fr] h-full gap-4 p-4">
+    <div className="min-h-screen bg-background">
+      <div className="grid grid-cols-[2fr,1fr] min-h-screen gap-4 p-4">
         {/* Left Panel: Production Queue */}
-        <div className="flex flex-col overflow-hidden">
+        <div className="flex flex-col">
           <div className="mb-4">
-            <h1 className="text-4xl font-bold tracking-tight">Production Queue</h1>
+            <h1 className="text-4xl font-bold tracking-tight" data-testid="heading-production-queue">Production Queue</h1>
             <p className="text-xl text-muted-foreground mt-1">
               Next 7 Days
             </p>
           </div>
 
-          <div className="overflow-auto flex-1 space-y-6">
+          <div className="flex-1 space-y-6">
             {sortedDates.map((date) => {
               const jobs = groupedByDate[date];
               return (
