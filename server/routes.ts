@@ -623,8 +623,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Production Display API routes
-  app.get("/api/production-display/queue", isStaffAuthenticated, async (req, res) => {
+  // Production Display API routes (no authentication required - for big screen display)
+  app.get("/api/production-display/queue", async (req, res) => {
     try {
       const days = req.query.days ? parseInt(req.query.days as string) : 7;
       const queueData = await storage.getProductionDisplayQueue(days);
@@ -635,7 +635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/production-display/leaderboard", isStaffAuthenticated, async (req, res) => {
+  app.get("/api/production-display/leaderboard", async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
       const leaderboard = await storage.getProductionDisplayLeaderboard(limit);
