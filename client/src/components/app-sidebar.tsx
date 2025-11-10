@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -21,6 +21,7 @@ const menuItems = [
   { title: "Invoicing", url: "/invoicing", icon: FileText },
   { title: "Schedule", url: "/schedule", icon: Calendar },
   { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
+  { title: "Weekly Reports", url: "/reports/weekly", icon: BarChart3 },
   { title: "Production Display", url: "/production-display", icon: Monitor },
   { title: "Customers", url: "/customers", icon: Users },
   { title: "Staff", url: "/staff", icon: UserCog },
@@ -47,7 +48,12 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems
-                .filter(item => item.url !== "/invoicing" || userCanViewPrices)
+                .filter(item => {
+                  if (item.url === "/invoicing" || item.url === "/reports/weekly") {
+                    return userCanViewPrices;
+                  }
+                  return true;
+                })
                 .map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={location === item.url}>

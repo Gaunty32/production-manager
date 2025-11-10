@@ -27,7 +27,7 @@ import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
-import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema } from "@shared/schema";
+import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
@@ -643,6 +643,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching production display leaderboard:", error);
       res.status(500).json({ error: "Failed to fetch leaderboard" });
+    }
+  });
+
+  // Weekly Performance Report API (requires staff authentication and price view permission)
+  app.get("/api/reports/weekly-performance", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      // Check authorization - only users who can view prices can access this report
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !canViewPrices(user.role)) {
+        return res.status(403).json({ error: "You do not have permission to view pricing reports" });
+      }
+
+      // Validate and sanitize query parameters
+      const validTimezones = [
+        'Europe/London', 'UTC', 'Europe/Paris', 'Europe/Berlin', 
+        'America/New_York', 'America/Los_Angeles', 'America/Chicago',
+        'Asia/Tokyo', 'Asia/Shanghai', 'Australia/Sydney'
+      ];
+      
+      const querySchema = z.object({
+        weeks: z.string().optional().transform((val) => {
+          if (!val) return 12;
+          const num = parseInt(val);
+          if (isNaN(num) || num < 1 || num > 52) return 12;
+          return num;
+        }),
+        timezone: z.string().optional().default('Europe/London').refine(
+          (tz) => validTimezones.includes(tz),
+          { message: `Invalid timezone. Supported: ${validTimezones.join(', ')}` }
+        ),
+        endDate: z.string().optional().transform((val) => {
+          if (!val) return new Date();
+          const date = new Date(val);
+          return isNaN(date.getTime()) ? new Date() : date;
+        }),
+      });
+
+      const params = querySchema.parse(req.query);
+      
+      const performanceData = await storage.getWeeklyPerformance({
+        weeks: params.weeks,
+        endDate: params.endDate,
+        timezone: params.timezone,
+      });
+      
+      res.json(performanceData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching weekly performance:", error);
+      res.status(500).json({ error: "Failed to fetch weekly performance data" });
     }
   });
 

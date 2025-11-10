@@ -131,6 +131,14 @@ export interface IStorage {
   // Production Display methods
   getProductionDisplayQueue(days: number): Promise<any[]>;
   getProductionDisplayLeaderboard(limit?: number): Promise<any>;
+  
+  // Weekly Performance Report
+  getWeeklyPerformance(params: { weeks?: number; endDate?: Date; timezone?: string }): Promise<Array<{
+    weekStart: string;
+    weekEnd: string;
+    invoicedTotal: number;
+    completedQuantity: number;
+  }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1195,6 +1203,79 @@ export class DatabaseStorage implements IStorage {
       },
       leaders: result.rows,
     };
+  }
+
+  async getWeeklyPerformance(params: { 
+    weeks?: number; 
+    endDate?: Date; 
+    timezone?: string;
+  }): Promise<Array<{
+    weekStart: string;
+    weekEnd: string;
+    invoicedTotal: number;
+    completedQuantity: number;
+  }>> {
+    const { weeks = 12, endDate = new Date(), timezone = 'Europe/London' } = params;
+    
+    const result = await db.execute(sql`
+      WITH base_week AS (
+        SELECT date_trunc('week', ${endDate}::timestamp AT TIME ZONE ${timezone}) AS week_end
+      ),
+      week_series AS (
+        SELECT 
+          date_trunc('week', 
+            (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval + (n || ' weeks')::interval
+          ) AS week_start
+        FROM generate_series(0, ${weeks} - 1) AS n
+      ),
+      weeks_with_end AS (
+        SELECT 
+          week_start::date,
+          (week_start + '6 days'::interval)::date AS week_end
+        FROM week_series
+      ),
+      invoiced_by_week AS (
+        SELECT 
+          date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone})::date AS week_start,
+          SUM(j.invoice_total) AS total_invoiced
+        FROM jobs j
+        WHERE j.invoiced_at IS NOT NULL
+          AND j.invoice_total IS NOT NULL
+          AND date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone}) >= 
+              (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval
+          AND date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone}) <= 
+              (SELECT week_end FROM base_week)
+        GROUP BY date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone})
+      ),
+      completed_by_week AS (
+        SELECT 
+          date_trunc('week', jli.completed_at AT TIME ZONE ${timezone})::date AS week_start,
+          SUM(jli.quantity) AS total_quantity
+        FROM job_line_items jli
+        WHERE jli.completed_at IS NOT NULL
+          AND date_trunc('week', jli.completed_at AT TIME ZONE ${timezone}) >= 
+              (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval
+          AND date_trunc('week', jli.completed_at AT TIME ZONE ${timezone}) <= 
+              (SELECT week_end FROM base_week)
+        GROUP BY date_trunc('week', jli.completed_at AT TIME ZONE ${timezone})
+      )
+      SELECT
+        w.week_start::text,
+        w.week_end::text,
+        COALESCE(ib.total_invoiced, 0) AS invoiced_total,
+        COALESCE(cb.total_quantity, 0) AS completed_quantity
+      FROM weeks_with_end w
+      LEFT JOIN invoiced_by_week ib ON w.week_start = ib.week_start
+      LEFT JOIN completed_by_week cb ON w.week_start = cb.week_start
+      ORDER BY w.week_start
+    `);
+
+    return result.rows.map((row: any) => ({
+      weekStart: row.week_start,
+      weekEnd: row.week_end,
+      invoicedTotal: parseFloat(row.invoiced_total) || 0,
+      completedQuantity: parseInt(row.completed_quantity) || 0,
+    }));
   }
 }
 

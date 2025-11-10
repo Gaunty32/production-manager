@@ -10,6 +10,16 @@ Preferred communication style: Simple, everyday language.
 
 ### November 10, 2025
 
+**Weekly Performance Report:**
+- Added weekly performance report feature showing invoiced value and completed quantities
+- New page at /reports/weekly with 12-week default view
+- Added invoice_total field to jobs schema for storing calculated invoice amounts
+- Backend aggregation uses SQL CTEs with proper timezone handling (Europe/London default)
+- Route protected with canViewPrices authorization check
+- Input validation for weeks (1-52 range), timezone (10 supported zones), and date parameters
+- Frontend displays total invoiced value, total completed quantity, and weekly breakdown table
+- Comprehensive error handling with 400/403/500 responses
+
 **Xero Integration - Item Code Fix:**
 - Added `itemCode` field to Xero invoice line items (was previously intentionally excluded)
 - Item codes now sent to Xero: "Emb" (embroidery), "Carriage" (shipping), "Print DTF", "BAG", "OTHER"

@@ -67,6 +67,7 @@ export const jobs = pgTable("jobs", {
   invoiceStatus: varchar("invoice_status").notNull().default("pending"),
   invoicedAt: timestamp("invoiced_at"),
   invoiceReference: text("invoice_reference"),
+  invoiceTotal: real("invoice_total"), // Total invoice amount (excluding VAT)
   shippingMethod: text("shipping_method"),
   dhlTrackingNumber: text("dhl_tracking_number"),
   packageCount: integer("package_count"),
