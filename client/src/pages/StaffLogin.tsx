@@ -136,7 +136,7 @@ export default function StaffLogin() {
               <div className="text-center">
                 <Button
                   type="button"
-                  variant="link"
+                  variant="ghost"
                   onClick={() => setLocation("/forgot-password")}
                   className="text-sm"
                   data-testid="link-forgot-password"
