@@ -245,8 +245,8 @@ export default function CustomerDashboard() {
                     <TableHead>Job Name</TableHead>
                     <TableHead>Item Description</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="text-center">Goods Rcvd</TableHead>
-                    <TableHead className="text-center">Logo</TableHead>
+                    <TableHead className="text-center">Goods Received</TableHead>
+                    <TableHead className="text-center">Logo Approved</TableHead>
                     <TableHead>Production Date</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
