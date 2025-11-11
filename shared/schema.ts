@@ -184,6 +184,20 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
   used: boolean("used").notNull().default(false),
 });
 
+// Customer impersonation sessions for staff "view as customer" feature
+export const impersonationSessions = pgTable("impersonation_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tokenHash: varchar("token_hash").notNull().unique(),
+  staffUserId: varchar("staff_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  customerUserId: varchar("customer_user_id").notNull().references(() => customerUsers.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  active: boolean("active").notNull().default(true),
+}, (table) => [
+  index("impersonation_sessions_staff_active_idx").on(table.staffUserId, table.active),
+  index("impersonation_sessions_customer_active_idx").on(table.customerUserId, table.active),
+]);
+
 // Customer portal: job messages (chat)
 export const jobMessages = pgTable("job_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -717,6 +731,13 @@ export const passwordResetConfirmSchema = z.object({
 export type PasswordResetRequest = z.infer<typeof passwordResetRequestSchema>;
 export type PasswordResetConfirm = z.infer<typeof passwordResetConfirmSchema>;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
+export const insertImpersonationSessionSchema = createInsertSchema(impersonationSessions).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertImpersonationSession = z.infer<typeof insertImpersonationSessionSchema>;
+export type ImpersonationSession = typeof impersonationSessions.$inferSelect;
 
 // Production Display types
 export interface ProductionQueueLineItem {

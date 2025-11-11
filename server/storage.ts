@@ -14,6 +14,7 @@ import {
   jobMessages,
   jobFiles,
   passwordResetTokens,
+  impersonationSessions,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -43,6 +44,7 @@ import {
 import { db } from "./db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { MACHINE_HEADS } from "@shared/machines";
+import { createHash } from "crypto";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -139,6 +141,11 @@ export interface IStorage {
     invoicedTotal: number;
     completedQuantity: number;
   }>>;
+  
+  // Customer impersonation methods
+  createImpersonationSession(data: { token: string; staffUserId: string; customerUserId: string; expiresAt: Date }): Promise<any>;
+  getImpersonationSession(token: string): Promise<any | undefined>;
+  invalidateImpersonationSession(token: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1276,6 +1283,55 @@ export class DatabaseStorage implements IStorage {
       invoicedTotal: parseFloat(row.invoiced_total) || 0,
       completedQuantity: parseInt(row.completed_quantity) || 0,
     }));
+  }
+
+  async createImpersonationSession(data: { 
+    token: string; 
+    staffUserId: string; 
+    customerUserId: string; 
+    expiresAt: Date 
+  }): Promise<any> {
+    // Hash the token before storing
+    const tokenHash = createHash('sha256').update(data.token).digest('hex');
+    
+    const [session] = await db
+      .insert(impersonationSessions)
+      .values({
+        tokenHash,
+        staffUserId: data.staffUserId,
+        customerUserId: data.customerUserId,
+        expiresAt: data.expiresAt,
+        active: true,
+      })
+      .returning();
+    return session;
+  }
+
+  async getImpersonationSession(token: string): Promise<any | undefined> {
+    // Hash the token for lookup
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    
+    const [session] = await db
+      .select()
+      .from(impersonationSessions)
+      .where(
+        and(
+          eq(impersonationSessions.tokenHash, tokenHash),
+          eq(impersonationSessions.active, true),
+          gte(impersonationSessions.expiresAt, new Date())
+        )
+      );
+    return session;
+  }
+
+  async invalidateImpersonationSession(token: string): Promise<void> {
+    // Hash the token for lookup
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    
+    await db
+      .update(impersonationSessions)
+      .set({ active: false })
+      .where(eq(impersonationSessions.tokenHash, tokenHash));
   }
 }
 

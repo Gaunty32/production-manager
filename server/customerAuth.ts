@@ -63,9 +63,9 @@ export async function resetCustomerPassword(customerUserId: string, newPassword:
   return { success: true };
 }
 
-// Middleware to check if customer is authenticated
+// Middleware to check if customer is authenticated (or impersonated by staff)
 export function isCustomerAuthenticated(req: any, res: any, next: any) {
-  if (!req.session?.customerUserId) {
+  if (!req.session?.customerUserId && !req.session?.impersonationCustomerUserId) {
     return res.status(401).json({ error: "Customer authentication required" });
   }
   next();
@@ -73,12 +73,21 @@ export function isCustomerAuthenticated(req: any, res: any, next: any) {
 
 // Middleware to attach customer user to request
 export async function attachCustomerUser(req: any, res: any, next: any) {
-  if (req.session?.customerUserId) {
+  // Check for impersonation first, then regular customer auth
+  const customerUserId = req.session?.impersonationCustomerUserId || req.session?.customerUserId;
+  
+  if (customerUserId) {
     try {
-      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      const customerUser = await storage.getCustomerUserById(customerUserId);
       if (customerUser) {
         const { passwordHash: _, ...user } = customerUser;
         req.customerUser = user;
+        
+        // If impersonating, also attach impersonation info
+        if (req.session?.impersonationCustomerUserId) {
+          req.isImpersonating = true;
+          req.staffUserId = req.session.impersonationStaffUserId;
+        }
       }
     } catch (error) {
       console.error("Error fetching customer user:", error);
