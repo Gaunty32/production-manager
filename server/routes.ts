@@ -825,6 +825,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer Impersonation - Start impersonation (super_admin only)
+  app.post("/api/staff/customers/:customerId/impersonate", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { customerId } = req.params;
+      const user = req.user;
+      
+      if (!user || user.role !== "super_admin") {
+        return res.status(403).json({ error: "Super admin access required" });
+      }
+      
+      // Get customer users for this customer
+      const customerUsers = await storage.getCustomerUsersByCustomerId(customerId);
+      
+      if (!customerUsers || customerUsers.length === 0) {
+        return res.status(404).json({ error: "No customer portal login found for this customer" });
+      }
+      
+      // Use the first active customer user
+      const customerUser = customerUsers.find(cu => cu.active);
+      if (!customerUser) {
+        return res.status(404).json({ error: "No active customer portal login found" });
+      }
+      
+      // Generate a cryptographically secure random token
+      const crypto = await import("crypto");
+      const tokenBytes = crypto.randomBytes(32);
+      const token = tokenBytes.toString('base64url');
+      
+      // Set expiry to 10 minutes from now
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+      
+      // Create impersonation session (token will be hashed in storage)
+      await storage.createImpersonationSession({
+        token,
+        staffUserId: user.id,
+        customerUserId: customerUser.id,
+        expiresAt,
+      });
+      
+      res.json({ 
+        token,
+        impersonateUrl: `/customer/impersonate/${token}`,
+      });
+    } catch (error) {
+      console.error("Error creating impersonation session:", error);
+      res.status(500).json({ error: "Failed to create impersonation session" });
+    }
+  });
+
+  // Customer Impersonation - Exchange token for session
+  app.get("/customer/impersonate/:token", async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      
+      // Validate and get the impersonation session
+      const session = await storage.getImpersonationSession(token);
+      
+      if (!session) {
+        return res.status(401).send("Invalid or expired impersonation link. Please request a new one.");
+      }
+      
+      // Invalidate the token immediately (single-use)
+      await storage.invalidateImpersonationSession(token);
+      
+      // Set impersonation session
+      req.session.impersonationCustomerUserId = session.customerUserId;
+      req.session.impersonationStaffUserId = session.staffUserId;
+      // Also set customerUserId so existing routes work
+      req.session.customerUserId = session.customerUserId;
+      
+      // Redirect to customer dashboard
+      res.redirect("/customer/dashboard");
+    } catch (error) {
+      console.error("Error exchanging impersonation token:", error);
+      res.status(500).send("Failed to start impersonation session");
+    }
+  });
+
+  // Customer Impersonation - Exit impersonation
+  app.delete("/api/customer-impersonation", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      // Clear impersonation session
+      delete req.session.impersonationCustomerUserId;
+      delete req.session.impersonationStaffUserId;
+      delete req.session.customerUserId;
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error exiting impersonation:", error);
+      res.status(500).json({ error: "Failed to exit impersonation" });
+    }
+  });
+
   app.get("/api/customer-auth/user", isCustomerAuthenticated, async (req: any, res) => {
     try {
       const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
@@ -832,9 +926,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Customer user not found" });
       }
       
-      // Return without password hash
+      // Return without password hash, include impersonation flag
       const { passwordHash: _, ...user } = customerUser;
-      res.json(user);
+      const isImpersonating = !!(req.session as any).impersonationCustomerUserId;
+      
+      res.json({
+        ...user,
+        isImpersonating,
+      });
     } catch (error) {
       console.error("Error fetching customer user:", error);
       res.status(500).json({ error: "Failed to fetch customer user" });
@@ -849,13 +948,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Customer user not found" });
       }
       
-      // Get all jobs for this customer that are in production or completed
+      // Get all jobs for this customer except those pending approval
+      // pending_customer_approval jobs are shown in a separate "Pending Submissions" page
       const jobs = await storage.getJobsByCustomerId(customerUser.customerId);
-      const productionJobs = jobs.filter(j => j.status === 'production' || j.completed);
+      const visibleJobs = jobs.filter(j => j.status !== 'pending_customer_approval');
       
       // Get line items for each job
       const jobsWithLineItems = await Promise.all(
-        productionJobs.map(async (job) => {
+        visibleJobs.map(async (job) => {
           const lineItems = await storage.getJobLineItems(job.id);
           return {
             ...job,

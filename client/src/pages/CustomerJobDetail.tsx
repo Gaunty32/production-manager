@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation, useRoute } from "wouter";
 import { ArrowLeft, Send, FileText, Package, Calendar, MessageSquare, CheckCircle, XCircle, Clock } from "lucide-react";
 import { format } from "date-fns";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type Job = {
   id: string;
@@ -39,15 +41,24 @@ type JobMessage = {
   createdAt: string;
 };
 
+type CustomerUser = {
+  email: string;
+};
+
 export default function CustomerJobDetail() {
   const [, params] = useRoute("/customer/job/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { isImpersonating } = usePermissions();
   const [newMessage, setNewMessage] = useState("");
   const previousStaffMessageCountRef = useRef<number>(0);
   const isInitialLoadRef = useRef<boolean>(true);
 
   const jobId = params?.id;
+
+  const { data: customerUser } = useQuery<CustomerUser>({
+    queryKey: ["/api/customer-auth/user"],
+  });
 
   const { data: job, isLoading: isLoadingJob } = useQuery<Job>({
     queryKey: [`/api/customer-portal/jobs/${jobId}`],
@@ -170,6 +181,11 @@ export default function CustomerJobDetail() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Impersonation Banner - only shown when staff is viewing as customer */}
+      {isImpersonating && customerUser && (
+        <ImpersonationBanner customerEmail={customerUser.email} />
+      )}
+      
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">

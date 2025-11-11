@@ -1,4 +1,4 @@
-import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key } from "lucide-react";
+import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,9 +23,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function Customers() {
   const { toast } = useToast();
+  const { canImpersonateCustomers } = usePermissions();
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [portalFilter, setPortalFilter] = useState<'all' | 'has-portal' | 'no-portal'>('all');
@@ -234,6 +236,24 @@ export default function Customers() {
       toast({
         title: "Error",
         description: error.message || "Failed to reset password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const impersonateMutation = useMutation({
+    mutationFn: async (customerId: string) => {
+      const res = await apiRequest("POST", `/api/staff/customers/${customerId}/impersonate`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      // Open the impersonation URL in same tab
+      window.location.href = data.impersonateUrl;
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to start impersonation",
         variant: "destructive",
       });
     },
@@ -452,6 +472,19 @@ export default function Customers() {
                             <Key className="h-3.5 w-3.5 mr-1" />
                             Reset Password
                           </Button>
+                          {canImpersonateCustomers && portalActive && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7"
+                              onClick={() => impersonateMutation.mutate(customer.id)}
+                              disabled={impersonateMutation.isPending}
+                              data-testid={`button-view-as-customer-${customer.id}`}
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" />
+                              View as Customer
+                            </Button>
+                          )}
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">

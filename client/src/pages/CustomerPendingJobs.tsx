@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
 import { ArrowLeft, Clock, FileText, MessageSquare, Package } from "lucide-react";
 import { format } from "date-fns";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type Job = {
   id: string;
@@ -19,8 +21,17 @@ type Job = {
   messages?: { id: string }[];
 };
 
+type CustomerUser = {
+  email: string;
+};
+
 export default function CustomerPendingJobs() {
   const [, setLocation] = useLocation();
+  const { isImpersonating } = usePermissions();
+
+  const { data: customerUser } = useQuery<CustomerUser>({
+    queryKey: ["/api/customer-auth/user"],
+  });
 
   const { data: pendingJobs = [], isLoading } = useQuery<Job[]>({
     queryKey: ["/api/customer-portal/jobs/pending"],
@@ -36,6 +47,11 @@ export default function CustomerPendingJobs() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Impersonation Banner - only shown when staff is viewing as customer */}
+      {isImpersonating && customerUser && (
+        <ImpersonationBanner customerEmail={customerUser.email} />
+      )}
+      
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">

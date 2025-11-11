@@ -22,6 +22,8 @@ import { ArrowLeft, Upload, FileText, X, AlertTriangle } from "lucide-react";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { customerJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -143,6 +145,7 @@ const getWorkingDaysBetween = (startDate: Date, endDate: Date): number => {
 export default function CustomerSubmitJob() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { isImpersonating } = usePermissions();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [showExpressDialog, setShowExpressDialog] = useState(false);
@@ -256,6 +259,11 @@ export default function CustomerSubmitJob() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Impersonation Banner - only shown when staff is viewing as customer */}
+      {isImpersonating && customerUser && (
+        <ImpersonationBanner customerEmail={customerUser.email} />
+      )}
+      
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">

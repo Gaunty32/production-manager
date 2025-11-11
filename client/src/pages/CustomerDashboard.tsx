@@ -18,6 +18,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type LineItem = {
   id: string;
@@ -56,6 +58,7 @@ type CustomerUser = {
 export default function CustomerDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { isImpersonating } = usePermissions();
   const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed">("in_progress");
 
   const { data: customerUser, isLoading: isLoadingUser } = useQuery<CustomerUser>({
@@ -151,6 +154,11 @@ export default function CustomerDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Impersonation Banner - only shown when staff is viewing as customer */}
+      {isImpersonating && customerUser && (
+        <ImpersonationBanner customerEmail={customerUser.email} />
+      )}
+      
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
