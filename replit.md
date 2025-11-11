@@ -15,7 +15,11 @@ Preferred communication style: Simple, everyday language.
 - Customer portal now displays ALL jobs except those in 'pending_customer_approval' status
 - Removed "Machine" column from customer portal dashboard (internal info customers don't need)
 - Renamed "Date Required" to "Production Date" for better clarity
-- Implementation in server/routes.ts at /api/customer-portal/jobs endpoint
+- Replaced arrow symbol (↳) with actual Job Name on all line item rows
+- Goods Received status, Production Date, and Status badge now display on every line item row
+- PO Number and Notes display only on first row for cleaner presentation
+- Added "Forgot your password?" link on customer login page with contact information dialog
+- Implementation in server/routes.ts at /api/customer-portal/jobs endpoint and client/src/pages/CustomerDashboard.tsx
 
 **Customer Impersonation - Complete Implementation:**
 - Full customer impersonation feature allowing super_admin staff to view customer portal as any customer

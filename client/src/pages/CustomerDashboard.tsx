@@ -300,23 +300,16 @@ export default function CustomerDashboard() {
                         className={index > 0 ? "border-t-0" : ""}
                       >
                         <TableCell className="font-medium">
-                          {index === 0 && (
-                            <>
-                              <span data-testid={`text-jobname-${job.id}`}>{job.jobName}</span>
-                              {job.poNumber && (
-                                <span className="text-xs text-muted-foreground ml-2">
-                                  (PO: {job.poNumber})
-                                </span>
-                              )}
-                              {job.notes && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  Note: {job.notes}
-                                </div>
-                              )}
-                            </>
+                          <span data-testid={`text-jobname-${job.id}-${index}`}>{job.jobName}</span>
+                          {index === 0 && job.poNumber && (
+                            <span className="text-xs text-muted-foreground ml-2">
+                              (PO: {job.poNumber})
+                            </span>
                           )}
-                          {index > 0 && (
-                            <span className="text-muted-foreground text-sm ml-4">↳</span>
+                          {index === 0 && job.notes && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Note: {job.notes}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell>
@@ -331,12 +324,10 @@ export default function CustomerDashboard() {
                         </TableCell>
                         <TableCell className="text-right">{lineItem.quantity}</TableCell>
                         <TableCell className="text-center">
-                          {index === 0 && (
-                            job.goodsReceived ? (
-                              <CircleCheck className="h-4 w-4 text-green-600 inline" data-testid={`icon-goods-received-${job.id}`} />
-                            ) : (
-                              <CircleX className="h-4 w-4 text-red-600 inline" data-testid={`icon-goods-not-received-${job.id}`} />
-                            )
+                          {job.goodsReceived ? (
+                            <CircleCheck className="h-4 w-4 text-green-600 inline" data-testid={`icon-goods-received-${job.id}-${index}`} />
+                          ) : (
+                            <CircleX className="h-4 w-4 text-red-600 inline" data-testid={`icon-goods-not-received-${job.id}-${index}`} />
                           )}
                         </TableCell>
                         <TableCell className="text-center">
@@ -346,18 +337,14 @@ export default function CustomerDashboard() {
                             <CircleX className="h-4 w-4 text-amber-600 inline" data-testid={`icon-logo-not-approved-${lineItem.id}`} />
                           )}
                         </TableCell>
-                        <TableCell>
-                          {index === 0 && job.requiredDispatchDate && (
-                            <span data-testid={`text-dispatch-${job.id}`}>
-                              {format(new Date(job.requiredDispatchDate), "MMM d, yyyy")}
-                            </span>
-                          )}
-                          {index === 0 && !job.requiredDispatchDate && (
-                            <span className="text-muted-foreground">Not set</span>
-                          )}
+                        <TableCell data-testid={`text-dispatch-${job.id}-${index}`}>
+                          {job.requiredDispatchDate
+                            ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
+                            : <span className="text-muted-foreground">Not set</span>
+                          }
                         </TableCell>
                         <TableCell>
-                          {index === 0 && getStatusBadge(job)}
+                          {getStatusBadge(job)}
                         </TableCell>
                       </TableRow>
                     ));
