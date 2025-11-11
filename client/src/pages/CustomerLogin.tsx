@@ -22,8 +22,17 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn } from "lucide-react";
+import { LogIn, HelpCircle } from "lucide-react";
 import { useLocation } from "wouter";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -36,6 +45,7 @@ export default function CustomerLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -141,10 +151,48 @@ export default function CustomerLogin() {
               >
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
+              
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                  data-testid="link-forgot-password"
+                >
+                  <HelpCircle className="h-3.5 w-3.5" />
+                  Forgot your password?
+                </button>
+              </div>
             </form>
           </Form>
         </CardContent>
       </Card>
+
+      <AlertDialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Forgot Your Password?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                If you've forgotten your password, please contact Select Uniforms and we'll help you reset it.
+              </p>
+              <div className="bg-muted p-3 rounded-md">
+                <p className="font-medium text-foreground mb-1">Contact Information:</p>
+                <p className="text-sm">Email: info@selectuniforms.co.uk</p>
+                <p className="text-sm">Phone: 01482 211 211</p>
+              </div>
+              <p className="text-sm">
+                Our team will generate a new password for you and send it to your registered email address.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction data-testid="button-close-forgot-password">
+              Got it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
