@@ -10,6 +10,18 @@ Preferred communication style: Simple, everyday language.
 
 ### November 11, 2025
 
+**Secure Password Management for Customer Portal:**
+- Auto-generate cryptographically secure 12-character passwords when creating customer portal logins
+- Reset password functionality for existing customer accounts with new secure password generation
+- Password generation uses window.crypto.getRandomValues() with rejection sampling to eliminate modulo bias
+- Guarantees inclusion of all character classes (lowercase, uppercase, digit, special character)
+- Uses unbiased Fisher-Yates shuffle with rejection sampling for secure character positioning
+- Show/hide password toggle and copy-to-clipboard functionality for easy password sharing with customers
+- Backend sets mustResetPassword flag when staff resets passwords, forcing customers to change on first login
+- Implementation in CustomerUserDialog.tsx and ResetPasswordDialog.tsx components
+- Backend endpoint: POST /api/customer-users/:id/reset-password with bcrypt hashing (10 rounds)
+- Architect-verified as production-ready with no security vulnerabilities
+
 **Customer Portal Status Visibility:**
 - Added visual indicators on Customers page to show which customers have/don't have portal logins
 - Orange "No Portal Login" badge with alert icon for customers without portal setup
