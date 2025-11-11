@@ -8,6 +8,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 11, 2025
+
+**Consolidated Shipment Invoicing Fix:**
+- Fixed bug where multiple shipping charges were created instead of one per consolidated shipment
+- Backend now groups jobs by `consolidatedShipmentId` before generating Xero invoice line items
+- Shipping costs are summed for all jobs in each shipment group
+- Creates exactly ONE "CARRIAGE" line item per shipment group with total cost
+- Description indicates "(Consolidated)" for multi-job shipments with all job names listed
+- Handles edge cases: null consolidatedShipmentId, TBA shipping, zero costs, customer collection
+- Implementation in server/routes.ts at /api/xero/consolidated-invoice endpoint (lines 2239-2319)
+
 ### November 10, 2025
 
 **Weekly Performance Report:**
