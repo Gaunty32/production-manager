@@ -237,9 +237,105 @@ export default function CustomerDashboard() {
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <div className="overflow-x-auto">
-              <Table>
+          <>
+            {/* Mobile Card Layout - Hidden on md and above */}
+            <div className="md:hidden space-y-4">
+              {filteredJobs.map((job) => {
+                const lineItems = job.lineItems || [];
+                
+                return (
+                  <Card key={job.id} className="overflow-hidden">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">{job.jobName}</CardTitle>
+                      {job.poNumber && (
+                        <p className="text-sm text-muted-foreground">PO: {job.poNumber}</p>
+                      )}
+                      {job.notes && (
+                        <p className="text-sm text-muted-foreground mt-1">Note: {job.notes}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-2">
+                        {getStatusBadge(job)}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {/* Job-level info */}
+                      <div className="grid grid-cols-2 gap-3 pb-3 border-b">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Production Date</p>
+                          <p className="text-sm font-medium">
+                            {job.requiredDispatchDate
+                              ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
+                              : "Not set"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Goods Received</p>
+                          <div className="flex items-center gap-1">
+                            {job.goodsReceived ? (
+                              <>
+                                <CircleCheck className="h-4 w-4 text-green-600" />
+                                <span className="text-sm">Yes</span>
+                              </>
+                            ) : (
+                              <>
+                                <CircleX className="h-4 w-4 text-red-600" />
+                                <span className="text-sm">No</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Line Items */}
+                      {lineItems.length > 0 ? (
+                        <div className="space-y-3">
+                          <p className="text-sm font-semibold">Line Items:</p>
+                          {lineItems.map((lineItem, index) => (
+                            <div key={lineItem.id} className="bg-muted/50 rounded-lg p-3 space-y-2">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm">{lineItem.jobType}</p>
+                                  {lineItem.description && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {lineItem.description}
+                                    </p>
+                                  )}
+                                </div>
+                                <p className="text-sm font-semibold ml-2">Qty: {lineItem.quantity}</p>
+                              </div>
+                              <div className="flex items-center gap-3 text-sm">
+                                <div className="flex items-center gap-1">
+                                  {lineItem.logoApproved ? (
+                                    <>
+                                      <CircleCheck className="h-3.5 w-3.5 text-green-600" />
+                                      <span className="text-xs">Logo OK</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CircleX className="h-3.5 w-3.5 text-amber-600" />
+                                      <span className="text-xs">Logo Pending</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          Quantity: {job.quantity}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table Layout - Hidden on mobile, shown on md and above */}
+            <Card className="hidden md:block">
+              <div className="overflow-x-auto">
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Job Name</TableHead>
@@ -353,6 +449,7 @@ export default function CustomerDashboard() {
               </Table>
             </div>
           </Card>
+          </>
         )}
       </main>
     </div>
