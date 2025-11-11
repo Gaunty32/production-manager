@@ -27,7 +27,7 @@ import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
-import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices } from "@shared/schema";
+import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, type Job } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
@@ -2197,31 +2197,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         });
 
-        // Add shipping cost as a separate line item if available
-        let shippingCost: number | null = null;
-        
+        // Check for TBA shipping (we'll handle adding shipping line items after grouping)
         if (job.shippingCost === "TBA") {
-          // Use manual shipping cost if provided
-          if (manualShippingCosts && manualShippingCosts[job.id]) {
-            shippingCost = Number(manualShippingCosts[job.id]);
-          } else {
+          if (!manualShippingCosts || !manualShippingCosts[job.id]) {
             hasTBA = true;
           }
-        } else if (job.shippingCost) {
-          // Use the stored shipping cost
-          shippingCost = parseFloat(job.shippingCost);
-        }
-        
-        if (shippingCost !== null && !isNaN(shippingCost) && shippingCost > 0) {
-          lineItemsWithPricing.push({
-            jobName: job.jobName,
-            poNumber: job.poNumber,
-            description: `Shipping - ${job.shippingMethod === 'customer_collection' ? 'Customer Collection' : job.shippingMethod === 'consolidated' ? 'Consolidated Back to Customer' : 'Direct Delivery'}`,
-            quantity: 1,
-            unitPrice: shippingCost,
-            stitchCount: 0, // No stitch count for shipping
-            itemCode: "CARRIAGE", // Xero item code for shipping
-          });
         }
       }
       
@@ -2251,6 +2231,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stitchCount: 0,
           itemCode: "OTHER", // Use OTHER item code for logo setups
         });
+      }
+
+      // Group jobs by consolidatedShipmentId and add shipping costs
+      // For consolidated shipments, add only ONE shipping charge per shipment group
+      const shipmentGroups = new Map<string, Job[]>();
+      
+      for (const job of selectedJobs) {
+        const shipmentKey = job.consolidatedShipmentId || `single-${job.id}`;
+        if (!shipmentGroups.has(shipmentKey)) {
+          shipmentGroups.set(shipmentKey, []);
+        }
+        shipmentGroups.get(shipmentKey)!.push(job);
+      }
+      
+      // Add one shipping line item per shipment group
+      for (const [shipmentKey, shipmentJobs] of Array.from(shipmentGroups.entries())) {
+        let totalShippingCost = 0;
+        let shippingMethod = '';
+        let hasShipping = false;
+        
+        // Sum shipping costs for all jobs in this shipment group
+        for (const job of shipmentJobs) {
+          let shippingCost: number | null = null;
+          
+          if (job.shippingCost === "TBA") {
+            if (manualShippingCosts && manualShippingCosts[job.id]) {
+              shippingCost = Number(manualShippingCosts[job.id]);
+            }
+          } else if (job.shippingCost) {
+            shippingCost = parseFloat(job.shippingCost);
+          }
+          
+          if (shippingCost !== null && !isNaN(shippingCost) && shippingCost > 0) {
+            totalShippingCost += shippingCost;
+            hasShipping = true;
+            if (!shippingMethod) {
+              shippingMethod = job.shippingMethod || '';
+            }
+          }
+        }
+        
+        // Add a single shipping line item for this shipment group if there's shipping cost
+        if (hasShipping && totalShippingCost > 0) {
+          const isConsolidated = shipmentJobs.length > 1 && !shipmentKey.startsWith('single-');
+          const jobNames = shipmentJobs.map((j: Job) => j.jobName).join(', ');
+          
+          lineItemsWithPricing.push({
+            jobName: isConsolidated ? `${shipmentJobs.length} jobs` : shipmentJobs[0].jobName,
+            poNumber: shipmentJobs[0].poNumber,
+            description: `Shipping${isConsolidated ? ' (Consolidated)' : ''} - ${
+              shippingMethod === 'customer_collection' 
+                ? 'Customer Collection' 
+                : shippingMethod === 'consolidated' 
+                  ? 'Consolidated Back to Customer' 
+                  : 'Direct Delivery'
+            }${isConsolidated ? ` - ${jobNames}` : ''}`,
+            quantity: 1,
+            unitPrice: totalShippingCost,
+            stitchCount: 0,
+            itemCode: "CARRIAGE",
+          });
+        }
       }
 
       // Create consolidated invoice in Xero
