@@ -1,4 +1,4 @@
-import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,7 @@ export default function Customers() {
   const { toast } = useToast();
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
+  const [portalFilter, setPortalFilter] = useState<'all' | 'has-portal' | 'no-portal'>('all');
 
   const { data: customersData = [], isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -54,9 +55,6 @@ export default function Customers() {
     enabled: customersData.length > 0,
   });
 
-  // Sort customers alphabetically by name
-  const customers = [...customersData].sort((a, b) => a.name.localeCompare(b.name));
-
   // Map customer users by customer ID for quick lookup
   const customerUsersMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -65,6 +63,26 @@ export default function Customers() {
     });
     return map;
   }, [allCustomerUsers]);
+
+  // Sort customers alphabetically by name
+  const allCustomers = [...customersData].sort((a, b) => a.name.localeCompare(b.name));
+  
+  // Filter customers based on portal status
+  const customers = useMemo(() => {
+    if (portalFilter === 'all') return allCustomers;
+    
+    return allCustomers.filter((customer) => {
+      const hasPortal = customerUsersMap.has(customer.id);
+      return portalFilter === 'has-portal' ? hasPortal : !hasPortal;
+    });
+  }, [allCustomers, customerUsersMap, portalFilter]);
+  
+  // Count customers by portal status
+  const portalStats = useMemo(() => {
+    const hasPortal = allCustomers.filter(c => customerUsersMap.has(c.id)).length;
+    const noPortal = allCustomers.length - hasPortal;
+    return { total: allCustomers.length, hasPortal, noPortal };
+  }, [allCustomers, customerUsersMap]);
 
   const createCustomerMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -216,13 +234,14 @@ export default function Customers() {
   return (
     <div className="h-full overflow-auto">
       <div className="max-w-4xl mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Customers</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Manage your customer list and portal access
-            </p>
-          </div>
+        <div className="space-y-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-foreground">Customers</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage your customer list and portal access
+              </p>
+            </div>
           <div className="flex gap-2">
             <CustomerUserDialog
               trigger={
@@ -251,12 +270,48 @@ export default function Customers() {
               }
               onSubmit={(data) => createCustomerMutation.mutate(data)}
             />
+            </div>
+          </div>
+          
+          {/* Filter buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground">Portal Status:</span>
+            <Button
+              variant={portalFilter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPortalFilter('all')}
+              data-testid="button-filter-all"
+            >
+              All ({portalStats.total})
+            </Button>
+            <Button
+              variant={portalFilter === 'has-portal' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPortalFilter('has-portal')}
+              data-testid="button-filter-has-portal"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+              Has Portal ({portalStats.hasPortal})
+            </Button>
+            <Button
+              variant={portalFilter === 'no-portal' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPortalFilter('no-portal')}
+              data-testid="button-filter-no-portal"
+            >
+              <AlertCircle className="h-3.5 w-3.5 mr-1" />
+              No Portal ({portalStats.noPortal})
+            </Button>
           </div>
         </div>
 
         {customers.length === 0 ? (
           <div className="border rounded-md p-8 text-center text-muted-foreground">
-            No customers found. Click 'Add Customer' to create one.
+            {portalFilter === 'all' 
+              ? "No customers found. Click 'Add Customer' to create one."
+              : portalFilter === 'has-portal'
+                ? "No customers with portal logins. Click 'Create Portal Login' to add one."
+                : "No customers without portal logins. All customers are set up!"}
           </div>
         ) : (
           <div className="space-y-3">
@@ -343,7 +398,7 @@ export default function Customers() {
                       )}
 
                       {/* Portal Login Status */}
-                      {hasPortalLogin && (
+                      {hasPortalLogin ? (
                         <div className="flex items-center gap-2 text-sm">
                           {portalActive ? (
                             <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -354,6 +409,17 @@ export default function Customers() {
                             Portal Login: {portalUser.email}
                             {!portalActive && " (Disabled)"}
                           </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant="outline" 
+                            className="bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800"
+                            data-testid={`badge-no-portal-${customer.id}`}
+                          >
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            No Portal Login
+                          </Badge>
                         </div>
                       )}
                     </div>
