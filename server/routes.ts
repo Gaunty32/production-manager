@@ -829,7 +829,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/staff/customers/:customerId/impersonate", isStaffAuthenticated, async (req: any, res) => {
     try {
       const { customerId } = req.params;
-      const user = req.user;
+      
+      // Get the authenticated staff user
+      const user = await storage.getUser(req.session.userId);
       
       if (!user || user.role !== "super_admin") {
         return res.status(403).json({ error: "Super admin access required" });

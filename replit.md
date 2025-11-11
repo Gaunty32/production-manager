@@ -10,6 +10,24 @@ Preferred communication style: Simple, everyday language.
 
 ### November 11, 2025
 
+**Customer Portal Job Visibility & UI Improvements:**
+- Fixed bug where customer portal only showed jobs in 'production' or 'completed' status
+- Customer portal now displays ALL jobs except those in 'pending_customer_approval' status
+- Removed "Machine" column from customer portal dashboard (internal info customers don't need)
+- Renamed "Date Required" to "Production Date" for better clarity
+- Implementation in server/routes.ts at /api/customer-portal/jobs endpoint
+
+**Customer Impersonation - Complete Implementation:**
+- Full customer impersonation feature allowing super_admin staff to view customer portal as any customer
+- Fixed 403 "super admin access required" error by properly fetching user from database
+- Single-use cryptographically secure tokens (SHA-256 hashed, 10-minute expiry)
+- ImpersonationBanner component displayed across all customer portal pages (Dashboard, SubmitJob, PendingJobs, JobDetail)
+- Session properly sets both customerUserId and impersonationCustomerUserId for backward compatibility
+- Exit button clears all session keys and returns staff to Customers page
+- usePermissions hook actively queries /api/customer-auth/user with staleTime: 0 for real-time impersonation state
+- Backend routes: POST /api/staff/customers/:id/impersonate, GET /customer/impersonate/:token, DELETE /api/customer-impersonation
+- Architect-verified implementation with no security vulnerabilities
+
 **Secure Password Management for Customer Portal:**
 - Auto-generate cryptographically secure 12-character passwords when creating customer portal logins
 - Reset password functionality for existing customer accounts with new secure password generation

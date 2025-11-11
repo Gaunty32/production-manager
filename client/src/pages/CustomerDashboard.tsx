@@ -245,10 +245,9 @@ export default function CustomerDashboard() {
                     <TableHead>Job Name</TableHead>
                     <TableHead>Item Description</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead>Machine</TableHead>
                     <TableHead className="text-center">Goods Rcvd</TableHead>
                     <TableHead className="text-center">Logo</TableHead>
-                    <TableHead>Date Required</TableHead>
+                    <TableHead>Production Date</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -275,7 +274,6 @@ export default function CustomerDashboard() {
                           </TableCell>
                           <TableCell className="text-muted-foreground">—</TableCell>
                           <TableCell className="text-right">{job.quantity}</TableCell>
-                          <TableCell>—</TableCell>
                           <TableCell className="text-center">
                             {job.goodsReceived ? (
                               <CircleCheck className="h-4 w-4 text-green-600 inline" data-testid={`icon-goods-received-${job.id}`} />
@@ -332,9 +330,6 @@ export default function CustomerDashboard() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">{lineItem.quantity}</TableCell>
-                        <TableCell data-testid={`text-machine-${lineItem.id}`}>
-                          {getMachineName(lineItem.machineId)}
-                        </TableCell>
                         <TableCell className="text-center">
                           {index === 0 && (
                             job.goodsReceived ? (
