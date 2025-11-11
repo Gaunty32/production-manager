@@ -324,14 +324,18 @@ export default function Dashboard() {
   });
 
   // Calculate key metrics for at-a-glance view
-  const overdueOrders = allProductionJobs.filter(job => 
-    job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate)
-  );
+  const overdueOrders = allProductionJobs.filter(job => {
+    if (!job.requiredDispatchDate) return false;
+    const dispatchDate = new Date(job.requiredDispatchDate);
+    return isPast(dispatchDate) && !isToday(dispatchDate);
+  });
   
   // Jobs due today
-  const jobsDueToday = allProductionJobs.filter(job =>
-    job.requiredDispatchDate && isToday(job.requiredDispatchDate)
-  );
+  const jobsDueToday = allProductionJobs.filter(job => {
+    if (!job.requiredDispatchDate) return false;
+    const dispatchDate = new Date(job.requiredDispatchDate);
+    return isToday(dispatchDate);
+  });
   
   // Jobs due in 3 days (using calendar boundaries)
   const now = new Date();
