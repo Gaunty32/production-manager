@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ### November 11, 2025
 
+**Customer Portal Status Visibility:**
+- Added visual indicators on Customers page to show which customers have/don't have portal logins
+- Orange "No Portal Login" badge with alert icon for customers without portal setup
+- Filter buttons to view: All customers, Has Portal, or No Portal (with live counts)
+- Context-aware empty states when filtering shows no results
+- Makes it easy for staff to identify which customers need portal login setup
+- Implementation in client/src/pages/Customers.tsx with memoized filtering for performance
+
 **Consolidated Shipment Invoicing Fix:**
 - Fixed bug where multiple shipping charges were created instead of one per consolidated shipment
 - Backend now groups jobs by `consolidatedShipmentId` before generating Xero invoice line items
