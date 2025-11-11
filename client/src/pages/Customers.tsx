@@ -1,4 +1,4 @@
-import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { CustomerUserDialog } from "@/components/CustomerUserDialog";
+import { ResetPasswordDialog } from "@/components/ResetPasswordDialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Customer } from "@shared/schema";
@@ -28,6 +29,8 @@ export default function Customers() {
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [portalFilter, setPortalFilter] = useState<'all' | 'has-portal' | 'no-portal'>('all');
+  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
+  const [resetPasswordEmail, setResetPasswordEmail] = useState<string>("");
 
   const { data: customersData = [], isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -212,6 +215,34 @@ export default function Customers() {
       });
     },
   });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ id, password }: { id: string; password: string }) => {
+      const res = await apiRequest("POST", `/api/customer-users/${id}/reset-password`, { password });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-users/all"] });
+      toast({
+        title: "Password Reset",
+        description: "Customer portal password has been reset successfully",
+      });
+      setResetPasswordUserId(null);
+      setResetPasswordEmail("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reset password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleResetPassword = (userId: string, email: string) => {
+    setResetPasswordUserId(userId);
+    setResetPasswordEmail(email);
+  };
 
   const handleDelete = (id: string) => {
     setCustomerToDelete(id);
@@ -399,16 +430,28 @@ export default function Customers() {
 
                       {/* Portal Login Status */}
                       {hasPortalLogin ? (
-                        <div className="flex items-center gap-2 text-sm">
-                          {portalActive ? (
-                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-gray-400" />
-                          )}
-                          <span className="text-muted-foreground">
-                            Portal Login: {portalUser.email}
-                            {!portalActive && " (Disabled)"}
-                          </span>
+                        <div className="flex items-center gap-2 text-sm flex-wrap">
+                          <div className="flex items-center gap-2">
+                            {portalActive ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-gray-400" />
+                            )}
+                            <span className="text-muted-foreground">
+                              Portal Login: {portalUser.email}
+                              {!portalActive && " (Disabled)"}
+                            </span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7"
+                            onClick={() => handleResetPassword(portalUser.id, portalUser.email)}
+                            data-testid={`button-reset-password-${customer.id}`}
+                          >
+                            <Key className="h-3.5 w-3.5 mr-1" />
+                            Reset Password
+                          </Button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
@@ -507,6 +550,26 @@ export default function Customers() {
             onOpenChange={(open) => !open && setCustomerToEdit(null)}
             customer={customerToEdit}
             onSubmit={(data) => updateCustomerMutation.mutate({ id: customerToEdit.id, data })}
+          />
+        )}
+
+        {resetPasswordUserId && (
+          <ResetPasswordDialog
+            open={true}
+            onOpenChange={(open) => {
+              if (!open) {
+                setResetPasswordUserId(null);
+                setResetPasswordEmail("");
+              }
+            }}
+            customerEmail={resetPasswordEmail}
+            onResetPassword={async (password) => {
+              await resetPasswordMutation.mutateAsync({
+                id: resetPasswordUserId,
+                password,
+              });
+            }}
+            isResetting={resetPasswordMutation.isPending}
           />
         )}
       </div>

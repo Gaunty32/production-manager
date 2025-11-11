@@ -802,6 +802,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/customer-users/:id/reset-password", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { password } = z.object({
+        password: z.string().min(8, "Password must be at least 8 characters"),
+      }).parse(req.body);
+      
+      const bcrypt = await import("bcrypt");
+      const passwordHash = await bcrypt.hash(password, 10);
+      
+      await storage.updateCustomerPassword(id, passwordHash);
+      await storage.updateCustomerMustResetPassword(id, true);
+      
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to reset customer password" });
+      }
+    }
+  });
+
   app.get("/api/customer-auth/user", isCustomerAuthenticated, async (req: any, res) => {
     try {
       const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);

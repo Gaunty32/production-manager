@@ -28,8 +28,9 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Eye, EyeOff, RefreshCw, Copy, Check } from "lucide-react";
 import type { Customer } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 const customerUserSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
@@ -48,6 +49,64 @@ interface CustomerUserDialogProps {
   isPending?: boolean;
 }
 
+// Generate a cryptographically secure random password with guaranteed character variety
+function generatePassword(): string {
+  const length = 12;
+  const lowercase = "abcdefghijklmnopqrstuvwxyz";
+  const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const digits = "0123456789";
+  const special = "!@#$%^&*";
+  
+  // Helper function to pick a random character from a set using rejection sampling
+  const pickRandom = (charset: string): string => {
+    const charsetLength = charset.length;
+    const maxValid = 256 - (256 % charsetLength);
+    
+    while (true) {
+      const randomValue = new Uint8Array(1);
+      window.crypto.getRandomValues(randomValue);
+      
+      if (randomValue[0] < maxValid) {
+        return charset.charAt(randomValue[0] % charsetLength);
+      }
+    }
+  };
+  
+  // Ensure at least one character from each required category
+  const password: string[] = [
+    pickRandom(lowercase),
+    pickRandom(uppercase),
+    pickRandom(digits),
+    pickRandom(special),
+  ];
+  
+  // Fill remaining slots with random characters from all categories
+  const allChars = lowercase + uppercase + digits + special;
+  while (password.length < length) {
+    password.push(pickRandom(allChars));
+  }
+  
+  // Shuffle the password array using Fisher-Yates with rejection sampling
+  for (let i = password.length - 1; i > 0; i--) {
+    const maxValid = 256 - (256 % (i + 1));
+    let j: number;
+    
+    while (true) {
+      const randomValue = new Uint8Array(1);
+      window.crypto.getRandomValues(randomValue);
+      
+      if (randomValue[0] < maxValid) {
+        j = randomValue[0] % (i + 1);
+        break;
+      }
+    }
+    
+    [password[i], password[j]] = [password[j], password[i]];
+  }
+  
+  return password.join("");
+}
+
 export function CustomerUserDialog({ 
   trigger, 
   customers,
@@ -56,10 +115,13 @@ export function CustomerUserDialog({
   onOpenChange,
   isPending = false,
 }: CustomerUserDialogProps) {
+  const { toast } = useToast();
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordCopied, setPasswordCopied] = useState(false);
 
   const form = useForm<z.infer<typeof customerUserSchema>>({
     resolver: zodResolver(customerUserSchema),
@@ -84,6 +146,26 @@ export function CustomerUserDialog({
       setIsSubmitting(false);
     }
   }, [open, form]);
+
+  const handleGeneratePassword = () => {
+    const newPassword = generatePassword();
+    form.setValue("password", newPassword);
+    setShowPassword(true);
+    setPasswordCopied(false);
+  };
+
+  const handleCopyPassword = async () => {
+    const password = form.getValues("password");
+    if (password) {
+      await navigator.clipboard.writeText(password);
+      setPasswordCopied(true);
+      toast({
+        title: "Password Copied",
+        description: "Password has been copied to clipboard",
+      });
+      setTimeout(() => setPasswordCopied(false), 2000);
+    }
+  };
 
   const handleSubmit = async (data: z.infer<typeof customerUserSchema>) => {
     setIsSubmitting(true);
@@ -167,16 +249,53 @@ export function CustomerUserDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Password *</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="password" 
-                      placeholder="Minimum 8 characters" 
-                      {...field} 
-                      data-testid="input-password"
-                    />
-                  </FormControl>
+                  <div className="flex gap-2">
+                    <FormControl>
+                      <div className="relative flex-1">
+                        <Input 
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Minimum 8 characters" 
+                          {...field} 
+                          data-testid="input-password"
+                          className="pr-20"
+                        />
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setShowPassword(!showPassword)}
+                            data-testid="button-toggle-password"
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={handleCopyPassword}
+                            disabled={!field.value}
+                            data-testid="button-copy-password"
+                          >
+                            {passwordCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                    </FormControl>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleGeneratePassword}
+                      data-testid="button-generate-password"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Generate
+                    </Button>
+                  </div>
                   <FormDescription>
-                    Share this password with the customer (you can change it later)
+                    Click "Generate" for a secure password, then copy it to share with the customer
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
