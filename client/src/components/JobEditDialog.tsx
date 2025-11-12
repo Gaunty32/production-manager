@@ -57,6 +57,7 @@ type LineItem = {
   completed: boolean;
   completedById: string | null;
   completedAt: string | null;
+  actualProductionTimeMinutes: number | null;
   machineId: number | null;
   scheduleSuggestion?: {
     staffId: string;
@@ -123,7 +124,7 @@ interface JobEditDialogProps {
     deliveryAddressType?: string | null;
     deliveryAddress?: string | null;
   } | null;
-  customers: Array<{ id: string; name: string; address?: string | null }>;
+  customers: Array<{ id: string; name: string; address?: string | null; pricingTable2025?: boolean | null; pricingTable2026?: boolean | null }>;
   staff: Array<{ id: string; name: string }>;
   onSubmit: (id: string, data: z.infer<typeof formSchema>) => void;
 }
@@ -182,6 +183,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     completed: boolean;
     completedById: string | null;
     completedAt: string | null;
+    actualProductionTimeMinutes: number | null;
     machineId: number | null;
   }>>({
     queryKey: ['/api/jobs', job?.id, 'line-items'],
@@ -221,6 +223,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completed: item.completed,
           completedById: item.completedById || null,
           completedAt: item.completedAt || null,
+          actualProductionTimeMinutes: item.actualProductionTimeMinutes || null,
           machineId: item.machineId || null,
         })));
       } else if (job && job.quantity > 0) {
@@ -234,6 +237,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completed: false,
           completedById: null,
           completedAt: null,
+          actualProductionTimeMinutes: null,
           machineId: null,
         }]);
       } else {
@@ -247,6 +251,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completed: false,
           completedById: null,
           completedAt: null,
+          actualProductionTimeMinutes: null,
           machineId: null,
         }]);
       }
@@ -255,7 +260,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }, [fetchedLineItems, open, job]);
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, actualProductionTimeMinutes: null, machineId: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -276,10 +281,11 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       updated[index].completedAt = new Date().toISOString();
     }
     
-    // When unmarking as completed, clear completedById and completedAt
+    // When unmarking as completed, clear completedById, completedAt, and actualProductionTimeMinutes
     if (field === 'completed' && value === false) {
       updated[index].completedById = null;
       updated[index].completedAt = null;
+      updated[index].actualProductionTimeMinutes = null;
     }
     
     setLineItems(updated);
@@ -822,7 +828,12 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                         </div>
                         {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
                           <div className="flex-1">
-                            <label className="text-xs text-muted-foreground">Machine</label>
+                            <label className="text-xs text-muted-foreground">
+                              Machine
+                              {item.completed && (item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") && (
+                                <span className="text-destructive ml-1">*</span>
+                              )}
+                            </label>
                             <Select 
                               value={item.machineId?.toString() || "unassigned"}
                               onValueChange={(value) => updateLineItem(index, 'machineId', value === "unassigned" ? null : parseInt(value))}
@@ -832,7 +843,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="unassigned">Not assigned</SelectItem>
-                                {[1, 2, 3, 4].map((machineNum) => (
+                                {[1, 2, 3, 4, 5].map((machineNum) => (
                                   <SelectItem key={machineNum} value={machineNum.toString()}>
                                     {MACHINE_NAMES[machineNum]}
                                   </SelectItem>
@@ -907,7 +918,12 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                       {item.completed && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t">
                           <div>
-                            <label className="text-xs text-muted-foreground">Completed By</label>
+                            <label className="text-xs text-muted-foreground">
+                              Completed By
+                              {(item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") && (
+                                <span className="text-destructive ml-1">*</span>
+                              )}
+                            </label>
                             <Select 
                               value={item.completedById || "unassigned"}
                               onValueChange={(value) => updateLineItem(index, 'completedById', value === "unassigned" ? null : value)}
@@ -949,6 +965,26 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                               </PopoverContent>
                             </Popover>
                           </div>
+                          {(item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") && (
+                            <div>
+                              <label className="text-xs text-muted-foreground">
+                                Production Time (mins)
+                                <span className="text-destructive ml-1">*</span>
+                              </label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.actualProductionTimeMinutes || ""}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value) || null;
+                                  updateLineItem(index, 'actualProductionTimeMinutes', val);
+                                }}
+                                placeholder="Actual minutes"
+                                className="font-mono mt-1"
+                                data-testid={`input-edit-line-item-production-time-${index}`}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
