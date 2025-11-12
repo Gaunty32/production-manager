@@ -36,7 +36,7 @@ import { MACHINE_NAMES } from "@shared/machines";
 import type { MachineScheduleBlock } from "@shared/schema";
 import { WrenchIcon } from "lucide-react";
 
-const MACHINES = [1, 2, 3, 4];
+const MACHINES = [1, 2, 3, 4, 5];
 
 const BLOCK_TYPES = [
   { value: "maintenance", label: "Maintenance" },

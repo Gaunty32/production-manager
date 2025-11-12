@@ -16,7 +16,7 @@ import { UnscheduledJobs } from "@/components/UnscheduledJobs";
 import { AvailabilitySummary } from "@/components/AvailabilitySummary";
 import type { JobSchedule, Staff, Job } from "@shared/schema";
 
-const MACHINES = [1, 2, 3, 4];
+const MACHINES = [1, 2, 3, 4, 5];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function Schedule() {

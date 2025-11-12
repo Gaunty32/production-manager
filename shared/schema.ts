@@ -380,7 +380,7 @@ export const insertMachineScheduleBlockSchema = createInsertSchema(machineSchedu
   id: true,
 }).extend({
   date: z.string(),
-  machineId: z.number().int().min(1).max(4),
+  machineId: z.number().int().min(1).max(5),
   startTime: z.number().int().min(0).max(1440),
   endTime: z.number().int().min(0).max(1440),
   blockType: z.enum(["job", "maintenance", "blocked"]),
@@ -394,7 +394,7 @@ export const insertJobScheduleSchema = createInsertSchema(jobSchedule).omit({
   id: true,
 }).extend({
   scheduledDate: z.string(),
-  machineId: z.number().int().min(1).max(4),
+  machineId: z.number().int().min(1).max(5),
   startTime: z.number().int().min(0).max(1440),
   endTime: z.number().int().min(0).max(1440),
   status: z.enum(["scheduled", "in_progress", "completed", "cancelled"]).default("scheduled"),
@@ -432,7 +432,7 @@ export const updateStaffShiftSchema = z.object({
 );
 
 export const updateMachineScheduleBlockSchema = z.object({
-  machineId: z.number().int().min(1).max(4).optional(),
+  machineId: z.number().int().min(1).max(5).optional(),
   date: z.preprocess(
     (val) => val ? new Date(val as string) : undefined,
     z.date().optional()
@@ -454,7 +454,7 @@ export const updateMachineScheduleBlockSchema = z.object({
 
 export const updateJobScheduleSchema = z.object({
   jobId: z.string().optional(),
-  machineId: z.number().int().min(1).max(4).optional(),
+  machineId: z.number().int().min(1).max(5).optional(),
   staffId: z.string().optional(),
   scheduledDate: z.preprocess(
     (val) => val ? new Date(val as string) : undefined,
@@ -561,7 +561,7 @@ export const insertStaffMachineAllocationSchema = createInsertSchema(staffMachin
   id: true,
 }).extend({
   date: z.string(),
-  machineId: z.number().int().min(1).max(4),
+  machineId: z.number().int().min(1).max(5),
   startTime: z.number().int().min(0).max(1440),
   endTime: z.number().int().min(0).max(1440),
   isRecurring: z.boolean().default(false),
@@ -581,7 +581,7 @@ export const insertStaffMachineAllocationSchema = createInsertSchema(staffMachin
 
 export const updateStaffMachineAllocationSchema = z.object({
   staffId: z.string().optional(),
-  machineId: z.number().int().min(1).max(4).optional(),
+  machineId: z.number().int().min(1).max(5).optional(),
   date: z.preprocess(
     (val) => val ? new Date(val as string) : undefined,
     z.date().optional()

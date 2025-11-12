@@ -50,7 +50,7 @@ export function AvailabilitySummary({ selectedDate }: AvailabilitySummaryProps) 
     return `${hours}h ${mins}m`;
   };
 
-  const machines = [1, 2, 3, 4];
+  const machines = [1, 2, 3, 4, 5];
 
   return (
     <Card>
