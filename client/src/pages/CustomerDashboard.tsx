@@ -44,6 +44,7 @@ type Job = {
   status: string;
   notes: string | null;
   invoiceStatus: string;
+  dhlTrackingNumber: string | null;
   lineItems: LineItem[];
 };
 
@@ -286,6 +287,38 @@ export default function CustomerDashboard() {
                         </div>
                       </div>
 
+                      {/* Tracking Info for Completed Jobs */}
+                      {job.completed && job.dhlTrackingNumber && (
+                        <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+                          <p className="text-xs text-muted-foreground mb-1">DHL Tracking Number</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <a
+                              href={`https://www.dhl.com/gb-en/home/tracking.html?tracking-id=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-mono font-semibold text-primary hover:underline"
+                              data-testid={`link-tracking-mobile-${job.id}`}
+                            >
+                              {job.dhlTrackingNumber}
+                            </a>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                navigator.clipboard.writeText(job.dhlTrackingNumber || "");
+                                toast({
+                                  title: "Copied!",
+                                  description: "Tracking number copied to clipboard",
+                                });
+                              }}
+                              data-testid={`button-copy-tracking-${job.id}`}
+                            >
+                              <span className="text-xs">Copy</span>
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Line Items */}
                       {lineItems.length > 0 ? (
                         <div className="space-y-3">
@@ -345,6 +378,7 @@ export default function CustomerDashboard() {
                     <TableHead className="text-center">Logo Approved</TableHead>
                     <TableHead>Production Date</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Tracking</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -384,6 +418,21 @@ export default function CustomerDashboard() {
                               : "Not set"}
                           </TableCell>
                           <TableCell>{getStatusBadge(job)}</TableCell>
+                          <TableCell>
+                            {job.completed && job.dhlTrackingNumber ? (
+                              <a
+                                href={`https://www.dhl.com/gb-en/home/tracking.html?tracking-id=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs font-mono text-primary hover:underline"
+                                data-testid={`link-tracking-${job.id}`}
+                              >
+                                {job.dhlTrackingNumber}
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
+                          </TableCell>
                         </TableRow>
                       );
                     }
@@ -441,6 +490,21 @@ export default function CustomerDashboard() {
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(job)}
+                        </TableCell>
+                        <TableCell>
+                          {index === 0 && job.completed && job.dhlTrackingNumber ? (
+                            <a
+                              href={`https://www.dhl.com/gb-en/home/tracking.html?tracking-id=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-mono text-primary hover:underline"
+                              data-testid={`link-tracking-${job.id}`}
+                            >
+                              {job.dhlTrackingNumber}
+                            </a>
+                          ) : (
+                            index === 0 && <span className="text-muted-foreground text-sm">—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ));
