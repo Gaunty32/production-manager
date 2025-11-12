@@ -246,7 +246,8 @@ export default function Dashboard() {
   // Separate active and completed orders
   // Production Queue: only show jobs that have all required info (dates + embroidery approval)
   const activeJobs = filteredJobs.filter(job => {
-    if (job.invoiceStatus !== 'pending') return false;
+    // Exclude invoiced and ready jobs (only show pending and not_ready)
+    if (job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready') return false;
     
     // Must have both dates to enter production queue
     if (!job.requiredDispatchDate || !job.goodsReceived) return false;
@@ -260,7 +261,8 @@ export default function Dashboard() {
   
   // Pending Orders: orders that are pending but don't have all required info yet
   const pendingJobs = filteredJobs.filter(job => {
-    if (job.invoiceStatus !== 'pending') return false;
+    // Exclude invoiced and ready jobs (only show pending and not_ready)
+    if (job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready') return false;
     
     // Missing dates OR missing logo approvals
     const missingDates = !job.requiredDispatchDate || !job.goodsReceived;
