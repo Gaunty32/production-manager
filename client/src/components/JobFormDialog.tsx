@@ -368,44 +368,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
     }
   };
 
-  const handleSubmit = async (data: z.infer<typeof formSchema>) => {
-    if (isSubmitting) return; // Prevent double submission
-    
-    // Check for suspicious data: quantity > stitch count (likely swapped)
-    const suspiciousItems = lineItems
-      .map((item, index) => ({ ...item, index }))
-      .filter(item => 
-        item.quantity > 0 && 
-        item.stitchCount > 0 && 
-        item.quantity > item.stitchCount &&
-        item.jobType !== "Bagging" && // Bagging doesn't use stitch count
-        item.jobType !== "Print" && // Print doesn't use stitch count
-        !item.jobType.includes("Initials/Name") // Flat-rate items don't compare these
-      );
-    
-    // If suspicious data found and not yet confirmed, show duck dialog
-    if (suspiciousItems.length > 0 && !duckConfirmed) {
-      setPendingFormData(data);
-      setShowDuckDialog(true);
-      return;
-    }
-    
-    // Check for unassigned machines on embroidery items
-    const unassignedEmbroideryItems = lineItems
-      .map((item, index) => ({ ...item, index }))
-      .filter(item => 
-        item.quantity > 0 &&
-        (item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") &&
-        item.machineId === null
-      );
-    
-    // If unassigned machines found and not yet confirmed, show warning dialog
-    if (unassignedEmbroideryItems.length > 0 && !machineWarningConfirmed) {
-      setPendingFormData(data);
-      setShowMachineWarning(true);
-      return;
-    }
-    
+  const performActualSubmit = async (data: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
       const totalQuantity = getTotalQuantity();
@@ -468,6 +431,48 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (data: z.infer<typeof formSchema>) => {
+    if (isSubmitting) return; // Prevent double submission
+    
+    // Check for suspicious data: quantity > stitch count (likely swapped)
+    const suspiciousItems = lineItems
+      .map((item, index) => ({ ...item, index }))
+      .filter(item => 
+        item.quantity > 0 && 
+        item.stitchCount > 0 && 
+        item.quantity > item.stitchCount &&
+        item.jobType !== "Bagging" && // Bagging doesn't use stitch count
+        item.jobType !== "Print" && // Print doesn't use stitch count
+        !item.jobType.includes("Initials/Name") // Flat-rate items don't compare these
+      );
+    
+    // If suspicious data found and not yet confirmed, show duck dialog
+    if (suspiciousItems.length > 0 && !duckConfirmed) {
+      setPendingFormData(data);
+      setShowDuckDialog(true);
+      return;
+    }
+    
+    // Check for unassigned machines on embroidery items
+    const unassignedEmbroideryItems = lineItems
+      .map((item, index) => ({ ...item, index }))
+      .filter(item => 
+        item.quantity > 0 &&
+        (item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") &&
+        item.machineId === null
+      );
+    
+    // If unassigned machines found and not yet confirmed, show warning dialog
+    if (unassignedEmbroideryItems.length > 0 && !machineWarningConfirmed) {
+      setPendingFormData(data);
+      setShowMachineWarning(true);
+      return;
+    }
+    
+    // All validations passed, perform actual submit
+    await performActualSubmit(data);
   };
 
   const handleDuckConfirm = () => {
@@ -1293,10 +1298,9 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
             </Button>
             <Button
               onClick={() => {
-                setMachineWarningConfirmed(true);
                 setShowMachineWarning(false);
                 if (pendingFormData) {
-                  handleSubmit(pendingFormData);
+                  performActualSubmit(pendingFormData);
                 }
               }}
               data-testid="button-confirm-machine-warning"
