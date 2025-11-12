@@ -942,7 +942,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Demo Customer Portal - Public read-only access to JK Prints jobs (lead magnet)
+  // Utility function to obfuscate names server-side for demo portal
+  function obfuscateText(text: string | null): string | null {
+    if (!text) return text;
+    
+    const words = text.split(' ');
+    return words.map(word => {
+      if (word.length <= 1) return word;
+      if (word.length === 2) {
+        // Always mask 2-letter words like "JK"
+        return word[0] + '*';
+      }
+      if (word.length <= 4) {
+        // Short words: keep first, star middle, keep last
+        return word[0] + '*'.repeat(word.length - 2) + word[word.length - 1];
+      }
+      // Longer words: keep first, star most of middle, keep last 1-2
+      const keepEnd = word.length > 6 ? 2 : 1;
+      return word[0] + '*'.repeat(word.length - 1 - keepEnd) + word.slice(-keepEnd);
+    }).join(' ');
+  }
+
+  // Demo Customer Portal - Public read-only access to obfuscated demo data (lead magnet)
   app.get("/api/demo/customer/jobs", async (req: any, res) => {
     try {
       // Redirect staff users if they're logged in
@@ -957,13 +978,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobs = await storage.getJobsByCustomerId(JK_PRINTS_CUSTOMER_ID);
       const visibleJobs = jobs.filter(j => j.status !== 'pending_customer_approval');
       
-      // Get line items for each job
+      // Get line items for each job and obfuscate all sensitive data
       const jobsWithLineItems = await Promise.all(
         visibleJobs.map(async (job) => {
           const lineItems = await storage.getJobLineItems(job.id);
           return {
             ...job,
-            lineItems,
+            jobName: obfuscateText(job.jobName) || job.jobName,
+            notes: obfuscateText(job.notes),
+            poNumber: job.poNumber ? obfuscateText(job.poNumber) : null,
+            lineItems: lineItems.map(item => ({
+              ...item,
+              description: obfuscateText(item.description),
+            })),
           };
         })
       );

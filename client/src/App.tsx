@@ -32,6 +32,7 @@ import CustomerSubmitJob from "@/pages/CustomerSubmitJob";
 import CustomerPendingJobs from "@/pages/CustomerPendingJobs";
 import CustomerJobDetail from "@/pages/CustomerJobDetail";
 import CustomerPasswordReset from "@/pages/CustomerPasswordReset";
+import DemoPortal from "@/pages/DemoPortal";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -83,6 +84,7 @@ function AppRouter() {
   return (
     <Switch>
       {/* Public Routes - No Authentication Required */}
+      <Route path="/demo" component={DemoPortal} />
       <Route path="/production-display" component={ProductionDisplay} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
