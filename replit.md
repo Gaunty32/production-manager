@@ -10,6 +10,23 @@ Preferred communication style: Simple, everyday language.
 
 ### November 12, 2025
 
+**Machine Suggestion System:**
+- Updated machine names: "Barudan" → "Barudan 6 1", added "Barudan 6 2" (machine ID 5)
+- Renamed SWF machines to "SWF 6 1" and "SWF 6 2" for clarity
+- Created intelligent machine allocation system in shared/machines.ts:
+  - Over 75 units → suggests Barudan 8 (machineId: 1)
+  - 26-75 units → suggests SWF 6 1 (machineId: 3)
+  - Under 25 units → suggests Barudan 6 1 (machineId: 2)
+- Machine suggestions only apply when machineId is null (preserves user overrides)
+- Updated schema validation to support 5 machines (max(5) for all machine ID fields)
+- Job creation form auto-suggests machines based on quantity/job type
+- User-selected machines persist when quantity or job type changes
+- Machine warning dialog appears on submission if embroidery items lack machine assignment
+- Warning dialog shows all unassigned embroidery line items with quantity/description
+- Users can cancel to fix assignments or confirm to proceed without machines
+- Implementation uses two-function pattern: handleSubmit (validation gates) → performActualSubmit (actual mutation)
+- State cleanup on dialog close prevents stale confirmation flags
+
 **Customer Portal Enhancements:**
 - Added mobile-optimized responsive layout for customer dashboard
   - Card-based layout on mobile (< 768px) with vertical stacking
