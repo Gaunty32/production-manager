@@ -2051,6 +2051,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get available time slots for scheduling a line item
+  app.get("/api/scheduling/available-slots", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { lineItemId, machineId, staffId, startDate, endDate } = req.query;
+
+      if (!lineItemId || !machineId || !staffId) {
+        return res.status(400).json({ 
+          error: "Missing required parameters: lineItemId, machineId, staffId" 
+        });
+      }
+
+      // Get the line item to calculate production time
+      const lineItem = await storage.getJobLineItem(lineItemId as string);
+      if (!lineItem) {
+        return res.status(404).json({ error: "Line item not found" });
+      }
+
+      // Import scheduling utilities
+      const { findAvailableSlots, calculateJobDuration, minutesToTime } = await import("@shared/scheduling");
+      
+      // Calculate production duration from line item data
+      const duration = calculateJobDuration(
+        lineItem.quantity, 
+        lineItem.stitchCount, 
+        parseInt(machineId as string)
+      );
+      
+      if (duration === 0) {
+        return res.status(400).json({ error: "Invalid line item parameters for scheduling" });
+      }
+
+      // Get all scheduling data
+      const machineBlocks = await storage.getMachineScheduleBlocks(
+        parseInt(machineId as string),
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+      
+      const staffShifts = await storage.getStaffShifts(
+        staffId as string,
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+      
+      const jobSchedules = await storage.getJobSchedules(
+        undefined,
+        parseInt(machineId as string),
+        staffId as string,
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+
+      // Get ALL staff allocations for this staff member (not filtered by machine)
+      // This is necessary to correctly determine if staff is allocated to a DIFFERENT machine
+      const staffMachineAllocations = await storage.getStaffMachineAllocations(
+        staffId as string,
+        undefined, // Don't filter by machine - need all allocations to check restrictions
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+
+      // Get available slots for each date in the range
+      const start = startDate ? new Date(startDate as string) : new Date();
+      const end = endDate ? new Date(endDate as string) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days default
+      
+      const availableSlots = [];
+      const currentDate = new Date(start);
+      
+      while (currentDate <= end) {
+        const dateSlots = findAvailableSlots(
+          currentDate,
+          parseInt(machineId as string),
+          staffId as string,
+          machineBlocks,
+          staffShifts,
+          jobSchedules,
+          staffMachineAllocations
+        );
+
+        // Filter slots that can fit the duration and format them
+        for (const slot of dateSlots) {
+          const slotDuration = slot.endTime - slot.startTime;
+          if (slotDuration >= duration) {
+            availableSlots.push({
+              date: currentDate.toISOString().split('T')[0],
+              startTime: slot.startTime,
+              endTime: slot.startTime + duration,
+              startTimeFormatted: minutesToTime(slot.startTime),
+              endTimeFormatted: minutesToTime(slot.startTime + duration),
+              durationMinutes: duration,
+              availableMinutes: slotDuration
+            });
+          }
+        }
+        
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      res.json({
+        lineItemId,
+        machineId: parseInt(machineId as string),
+        staffId,
+        durationMinutes: duration,
+        availableSlots
+      });
+    } catch (error) {
+      console.error("Error fetching available slots:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to fetch available slots" 
+      });
+    }
+  });
+
   // Schedule suggestion route
   app.post("/api/suggest-schedule", isStaffAuthenticated, async (req, res) => {
     try {

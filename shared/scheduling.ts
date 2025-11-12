@@ -1,4 +1,4 @@
-import type { StaffShift, MachineScheduleBlock, JobSchedule } from "./schema";
+import type { StaffShift, MachineScheduleBlock, JobSchedule, StaffMachineAllocation } from "./schema";
 import { calculateProductionMetrics } from "./machines";
 
 /**
@@ -167,6 +167,55 @@ export function getStaffAvailableSlots(
 }
 
 /**
+ * Find staff machine allocation slots for a specific staff member, machine, and date
+ * If there are allocations, staff can ONLY work on that machine during allocated times
+ * If there are NO allocations, staff can work on any machine during their shifts
+ */
+export function getStaffMachineAllocationSlots(
+  date: Date,
+  machineId: number,
+  staffId: string,
+  staffMachineAllocations: StaffMachineAllocation[]
+): TimeSlot[] | null {
+  // Filter allocations for this staff member
+  const staffAllocations = staffMachineAllocations.filter(allocation => {
+    if (allocation.staffId !== staffId) {
+      return false;
+    }
+    
+    const allocationDate = new Date(allocation.date);
+    
+    // Check if it's a regular allocation for this date
+    if (allocationDate.toDateString() === date.toDateString()) {
+      return true;
+    }
+    
+    // Check if it's a recurring allocation for this day of week
+    if (allocation.isRecurring && allocation.recurringDaysOfWeek?.includes(date.getDay())) {
+      return true;
+    }
+    
+    return false;
+  });
+  
+  // If there are no allocations for this staff member on this date, they can work on any machine
+  if (staffAllocations.length === 0) {
+    return null; // null means no restrictions
+  }
+  
+  // Filter allocations for this specific machine
+  const relevantAllocations = staffAllocations.filter(allocation => 
+    allocation.machineId === machineId
+  );
+  
+  // Convert allocations to TimeSlots
+  return relevantAllocations.map(allocation => ({
+    startTime: allocation.startTime,
+    endTime: allocation.endTime
+  }));
+}
+
+/**
  * Find available time slots where both machine and staff are available
  */
 export function findAvailableSlots(
@@ -175,16 +224,20 @@ export function findAvailableSlots(
   staffId: string,
   machineBlocks: MachineScheduleBlock[],
   staffShifts: StaffShift[],
-  jobSchedules: JobSchedule[]
+  jobSchedules: JobSchedule[],
+  staffMachineAllocations: StaffMachineAllocation[] = []
 ): TimeSlot[] {
   // Get machine available slots
   const machineSlots = getMachineAvailableSlots(date, machineId, machineBlocks);
   
-  // Get staff available slots
+  // Get staff available slots (based on shifts)
   const staffSlots = getStaffAvailableSlots(date, staffId, staffShifts);
   
+  // Get staff machine allocation slots (restrictions on which machines staff can use)
+  const allocationSlots = getStaffMachineAllocationSlots(date, machineId, staffId, staffMachineAllocations);
+  
   // Find intersection of machine and staff availability
-  const intersectedSlots: TimeSlot[] = [];
+  let intersectedSlots: TimeSlot[] = [];
   for (const machineSlot of machineSlots) {
     for (const staffSlot of staffSlots) {
       const intersection = intersectTimeSlots(machineSlot, staffSlot);
@@ -192,6 +245,25 @@ export function findAvailableSlots(
         intersectedSlots.push(intersection);
       }
     }
+  }
+  
+  // If there are staff machine allocations, further intersect with those
+  // (staff can only work on this machine during allocated times)
+  if (allocationSlots !== null && allocationSlots.length > 0) {
+    const allocatedIntersections: TimeSlot[] = [];
+    for (const slot of intersectedSlots) {
+      for (const allocationSlot of allocationSlots) {
+        const intersection = intersectTimeSlots(slot, allocationSlot);
+        if (intersection) {
+          allocatedIntersections.push(intersection);
+        }
+      }
+    }
+    intersectedSlots = allocatedIntersections;
+  } else if (allocationSlots !== null && allocationSlots.length === 0) {
+    // Staff has allocations on this date, but not for this machine
+    // Therefore, they cannot work on this machine
+    return [];
   }
   
   // Filter out already scheduled jobs that conflict with this machine OR staff on this date
@@ -231,7 +303,8 @@ export function findEarliestSlot(
   durationMinutes: number,
   machineBlocks: MachineScheduleBlock[],
   staffShifts: StaffShift[],
-  jobSchedules: JobSchedule[]
+  jobSchedules: JobSchedule[],
+  staffMachineAllocations: StaffMachineAllocation[] = []
 ): AvailableSlot | null {
   const currentDate = new Date(startDate);
   
@@ -242,7 +315,8 @@ export function findEarliestSlot(
       staffId,
       machineBlocks,
       staffShifts,
-      jobSchedules
+      jobSchedules,
+      staffMachineAllocations
     );
     
     // Find first slot that fits the duration
@@ -289,7 +363,8 @@ export function canScheduleJob(
   staffId: string,
   machineBlocks: MachineScheduleBlock[],
   staffShifts: StaffShift[],
-  jobSchedules: JobSchedule[]
+  jobSchedules: JobSchedule[],
+  staffMachineAllocations: StaffMachineAllocation[] = []
 ): boolean {
   const requestedSlot: TimeSlot = { startTime, endTime };
   
@@ -299,7 +374,8 @@ export function canScheduleJob(
     staffId,
     machineBlocks,
     staffShifts,
-    jobSchedules
+    jobSchedules,
+    staffMachineAllocations
   );
   
   // Check if requested slot fits within any available slot

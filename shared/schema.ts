@@ -110,6 +110,7 @@ export const machineScheduleBlocks = pgTable("machine_schedule_blocks", {
 export const jobSchedule = pgTable("job_schedule", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  lineItemId: varchar("line_item_id").references(() => jobLineItems.id, { onDelete: "cascade" }),
   machineId: integer("machine_id").notNull(),
   staffId: varchar("staff_id").notNull().references(() => staff.id),
   scheduledDate: timestamp("scheduled_date").notNull(),
@@ -395,6 +396,7 @@ export const insertJobScheduleSchema = createInsertSchema(jobSchedule).omit({
   id: true,
 }).extend({
   scheduledDate: z.string(),
+  lineItemId: z.string().nullable().optional(),
   machineId: z.number().int().min(1).max(5),
   startTime: z.number().int().min(0).max(1440),
   endTime: z.number().int().min(0).max(1440),
