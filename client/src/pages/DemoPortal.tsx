@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, Clock, CheckCircle2, AlertCircle, Circle, CircleCheck, CircleX, Search, ArrowUpDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Package, Clock, CheckCircle2, AlertCircle, Circle, CircleCheck, CircleX, Search, ArrowUpDown, Plus, FileText } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
 import { useState } from "react";
 import {
@@ -52,13 +54,22 @@ type Job = {
 };
 
 export default function DemoPortal() {
-  const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed">("in_progress");
+  const { toast } = useToast();
+  const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed">("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "jobName" | "quantity">("date");
 
   const { data: jobs = [], isLoading: isLoadingJobs } = useQuery<Job[]>({
     queryKey: ["/api/demo/customer/jobs"],
   });
+
+  const handleDemoAction = () => {
+    toast({
+      title: "Demo Mode",
+      description: "Sign up for a free account to access this feature",
+      variant: "default",
+    });
+  };
 
   // Filter by status and search term, then sort
   const filteredJobs = jobs
@@ -143,10 +154,31 @@ export default function DemoPortal() {
 
       <div className="max-w-7xl mx-auto p-4 md:p-8">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2" data-testid="heading-demo-portal">Customer Portal Demo</h1>
-          <p className="text-muted-foreground">
-            Track your orders in real-time with our production management system
-          </p>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+            <div>
+              <h1 className="text-3xl font-bold" data-testid="heading-demo-portal">Customer Portal Demo</h1>
+              <p className="text-muted-foreground mt-1">
+                Track your orders in real-time with our production management system
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleDemoAction}
+                data-testid="button-submit-job"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Submit New Job
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleDemoAction}
+                data-testid="button-pending-submissions"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Pending Submissions
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Summary Cards */}
