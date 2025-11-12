@@ -90,6 +90,7 @@ export interface IStorage {
   
   getAllJobLineItems(): Promise<JobLineItem[]>;
   getJobLineItems(jobId: string): Promise<JobLineItem[]>;
+  getJobLineItem(id: string): Promise<JobLineItem | null>;
   createJobLineItem(lineItem: InsertJobLineItem): Promise<JobLineItem>;
   updateJobLineItem(id: string, lineItem: Partial<JobLineItem>): Promise<JobLineItem>;
   deleteJobLineItem(id: string): Promise<void>;
@@ -480,6 +481,11 @@ export class DatabaseStorage implements IStorage {
 
   async getJobLineItems(jobId: string): Promise<JobLineItem[]> {
     return await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId));
+  }
+
+  async getJobLineItem(id: string): Promise<JobLineItem | null> {
+    const [lineItem] = await db.select().from(jobLineItems).where(eq(jobLineItems.id, id));
+    return lineItem || null;
   }
 
   async createJobLineItem(insertLineItem: InsertJobLineItem): Promise<JobLineItem> {

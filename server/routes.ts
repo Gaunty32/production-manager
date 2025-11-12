@@ -1783,6 +1783,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/job-line-items/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateJobLineItemSchema.parse(req.body);
+      
+      // If marking as completed, enforce embroidery-specific requirements
+      if (data.completed === true) {
+        // Load existing line item to check job type
+        const existingLineItem = await storage.getJobLineItem(req.params.id);
+        if (!existingLineItem) {
+          return res.status(404).json({ error: "Line item not found" });
+        }
+        
+        // For embroidery jobs, require machine, staff, and actual production time
+        if (existingLineItem.jobType === "Embroidery" || existingLineItem.jobType === "Embroidery Initials/Name") {
+          const machineId = data.machineId !== undefined ? data.machineId : existingLineItem.machineId;
+          const completedById = data.completedById !== undefined ? data.completedById : existingLineItem.completedById;
+          const actualProductionTimeMinutes = data.actualProductionTimeMinutes !== undefined 
+            ? data.actualProductionTimeMinutes 
+            : existingLineItem.actualProductionTimeMinutes;
+          
+          if (!machineId) {
+            return res.status(400).json({ 
+              error: "Machine assignment is required when completing an embroidery line item" 
+            });
+          }
+          
+          if (!completedById) {
+            return res.status(400).json({ 
+              error: "Completed by (staff member) is required when completing an embroidery line item" 
+            });
+          }
+          
+          if (!actualProductionTimeMinutes || actualProductionTimeMinutes <= 0) {
+            return res.status(400).json({ 
+              error: "Actual production time (in minutes) is required when completing an embroidery line item" 
+            });
+          }
+        }
+      }
+      
       const updates = Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );

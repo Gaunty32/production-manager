@@ -130,6 +130,7 @@ export const jobLineItems = pgTable("job_line_items", {
   completedById: varchar("completed_by_id").references(() => staff.id),
   completedAt: timestamp("completed_at"),
   machineId: integer("machine_id"),
+  actualProductionTimeMinutes: integer("actual_production_time_minutes"),
 });
 
 export const staffMachineAllocations = pgTable("staff_machine_allocations", {
@@ -521,13 +522,14 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
   description: z.string().nullable().optional(),
   completedById: z.string().nullable().optional(),
   completedAt: z.string().nullable().optional(),
+  actualProductionTimeMinutes: z.coerce.number().int().min(0).nullable().optional(),
   machineId: z.preprocess(
     (val) => {
       if (val === null || val === undefined || val === "") return null;
       if (typeof val === "string") return parseInt(val, 10);
       return val;
     },
-    z.union([z.number().int().min(1).max(4), z.null()])
+    z.union([z.number().int().min(1).max(5), z.null()])
   ).optional(),
 });
 
@@ -539,6 +541,7 @@ export const updateJobLineItemSchema = z.object({
   completed: z.coerce.boolean().optional(),
   completedById: z.string().nullable().optional(),
   completedAt: z.string().nullable().optional(),
+  actualProductionTimeMinutes: z.coerce.number().int().min(0).nullable().optional(),
   machineId: z.preprocess(
     (val) => {
       if (val === undefined) return undefined;
@@ -546,9 +549,23 @@ export const updateJobLineItemSchema = z.object({
       if (typeof val === "string") return parseInt(val, 10);
       return val;
     },
-    z.union([z.number().int().min(1).max(4), z.null()]).optional()
+    z.union([z.number().int().min(1).max(5), z.null()]).optional()
   ),
-});
+}).refine(
+  (data) => {
+    // If completed is true and this is an embroidery job, require machineId, completedById, and actualProductionTime
+    // Note: We can't check jobType here as it's not in the update schema
+    // The UI/backend will need to enforce this based on the line item's jobType
+    if (data.completed === true) {
+      return data.completedById !== null && data.completedById !== undefined;
+    }
+    return true;
+  },
+  {
+    message: "Completed by is required when marking a line item as completed",
+    path: ["completedById"],
+  }
+);
 
 export type InsertJobLineItem = z.infer<typeof insertJobLineItemSchema>;
 export type JobLineItem = typeof jobLineItems.$inferSelect;
