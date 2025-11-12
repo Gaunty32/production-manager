@@ -28,6 +28,8 @@ The production queue uses traffic light indicators for logo approval and goods r
 
 A customer job upload system allows customers to submit new job requests, which enter a staff review holding area. Jobs can be approved (moving to production) or rejected. Real-time chat with 3-second polling and email notifications facilitate communication between customers and staff regarding job submissions, approvals, and rejections. Staff can impersonate customers for support. Secure password generation and reset functionality with mandatory first-login resets are implemented for customer portal access. The system also includes a weekly performance report showing invoiced value and completed quantities.
 
+A public demo portal at `/demo` showcases customer portal features for marketing purposes. It displays server-side obfuscated job data from JK Prints customer, protecting sensitive business information while demonstrating the interface. The demo includes a lead magnet modal that appears after 10 seconds, prompting visitors to learn about outsourced production services. All obfuscation happens server-side to prevent data leakage through browser network panels.
+
 # External Dependencies
 
 -   **Database Service**: Neon Serverless PostgreSQL
