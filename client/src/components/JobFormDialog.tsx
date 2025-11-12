@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema, type Customer } from "@shared/schema";
-import { MACHINE_NAMES } from "@shared/machines";
+import { MACHINE_NAMES, suggestMachine } from "@shared/machines";
 import { minutesToTime } from "@shared/scheduling";
 import { getPrice, getPrintPrice, formatPrice, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { z } from "zod";
@@ -116,6 +116,8 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDuckDialog, setShowDuckDialog] = useState(false);
   const [duckConfirmed, setDuckConfirmed] = useState(false);
+  const [showMachineWarning, setShowMachineWarning] = useState(false);
+  const [machineWarningConfirmed, setMachineWarningConfirmed] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<z.infer<typeof formSchema> | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -388,6 +390,22 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       return;
     }
     
+    // Check for unassigned machines on embroidery items
+    const unassignedEmbroideryItems = lineItems
+      .map((item, index) => ({ ...item, index }))
+      .filter(item => 
+        item.quantity > 0 &&
+        (item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") &&
+        item.machineId === null
+      );
+    
+    // If unassigned machines found and not yet confirmed, show warning dialog
+    if (unassignedEmbroideryItems.length > 0 && !machineWarningConfirmed) {
+      setPendingFormData(data);
+      setShowMachineWarning(true);
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
       const totalQuantity = getTotalQuantity();
@@ -466,6 +484,8 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
     if (!newOpen) {
       setCurrentStep(1);
       setDuckConfirmed(false);
+      setMachineWarningConfirmed(false);
+      setShowMachineWarning(false);
       setPendingFormData(null);
     }
   };
@@ -864,17 +884,29 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                           <Select 
                             value={item.jobType}
                             onValueChange={(value) => {
+                              const updated = [...lineItems];
+                              const currentMachine = updated[index].machineId;
+                              
                               if (value === "Print" && item.jobType !== "Print") {
-                                const updated = [...lineItems];
                                 updated[index] = { 
                                   ...updated[index], 
                                   jobType: value,
                                   stitchCount: PRINT_SIZE_CODE.A4 
                                 };
-                                setLineItems(updated);
+                              } else if (currentMachine === null) {
+                                const suggested = suggestMachine(item.quantity, value);
+                                updated[index] = { 
+                                  ...updated[index], 
+                                  jobType: value,
+                                  machineId: suggested
+                                };
                               } else {
-                                updateLineItem(index, 'jobType', value);
+                                updated[index] = { 
+                                  ...updated[index], 
+                                  jobType: value
+                                };
                               }
+                              setLineItems(updated);
                             }}
                           >
                             <SelectTrigger className="mt-1" data-testid={`select-line-item-job-type-${index}`}>
@@ -895,7 +927,23 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             value={item.quantity || ''}
                             onChange={(e) => {
                               const val = parseInt(e.target.value) || 0;
-                              updateLineItem(index, 'quantity', val);
+                              const updated = [...lineItems];
+                              const currentMachine = updated[index].machineId;
+                              
+                              if (currentMachine === null) {
+                                const suggested = suggestMachine(val, item.jobType);
+                                updated[index] = { 
+                                  ...updated[index], 
+                                  quantity: val,
+                                  machineId: suggested
+                                };
+                              } else {
+                                updated[index] = { 
+                                  ...updated[index], 
+                                  quantity: val
+                                };
+                              }
+                              setLineItems(updated);
                             }}
                             placeholder="0"
                             className="font-mono mt-1"
@@ -969,7 +1017,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="unassigned">Not assigned</SelectItem>
-                                {[1, 2, 3, 4].map((machineNum) => (
+                                {[1, 2, 3, 4, 5].map((machineNum) => (
                                   <SelectItem key={machineNum} value={machineNum.toString()}>
                                     {MACHINE_NAMES[machineNum]}
                                   </SelectItem>
@@ -1198,6 +1246,66 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
             stitchCount: item.stitchCount
           }))}
       />
+
+      <Dialog open={showMachineWarning} onOpenChange={(open) => {
+        setShowMachineWarning(open);
+        if (!open) {
+          setPendingFormData(null);
+          setMachineWarningConfirmed(false);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Machine Not Assigned</DialogTitle>
+            <DialogDescription>
+              The following embroidery items don't have a machine assigned. Are you sure you want to continue without assigning machines?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 my-4">
+            {lineItems
+              .map((item, index) => ({ ...item, index }))
+              .filter(item => 
+                item.quantity > 0 &&
+                (item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") &&
+                item.machineId === null
+              )
+              .map((item, idx) => (
+                <div key={idx} className="p-3 bg-muted rounded-md text-sm">
+                  <div className="font-semibold">{item.jobType}</div>
+                  <div className="text-muted-foreground">
+                    Quantity: {item.quantity}
+                    {item.description && ` • ${item.description}`}
+                  </div>
+                </div>
+              ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowMachineWarning(false);
+                setPendingFormData(null);
+                setMachineWarningConfirmed(false);
+              }}
+              data-testid="button-cancel-machine-warning"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setMachineWarningConfirmed(true);
+                setShowMachineWarning(false);
+                if (pendingFormData) {
+                  handleSubmit(pendingFormData);
+                }
+              }}
+              data-testid="button-confirm-machine-warning"
+            >
+              Continue Anyway
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
