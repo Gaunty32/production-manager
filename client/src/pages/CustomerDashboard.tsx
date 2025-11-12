@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Circle, CircleCheck, CircleX, Plus, FileText } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Circle, CircleCheck, CircleX, Plus, FileText, Search, ArrowUpDown } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
 import { useState } from "react";
@@ -20,6 +20,14 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type LineItem = {
   id: string;
@@ -61,6 +69,8 @@ export default function CustomerDashboard() {
   const { toast } = useToast();
   const { isImpersonating } = usePermissions();
   const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed">("in_progress");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<"date" | "jobName" | "quantity">("date");
 
   const { data: customerUser, isLoading: isLoadingUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
@@ -71,21 +81,47 @@ export default function CustomerDashboard() {
     enabled: !!customerUser,
   });
 
-  // Sort jobs by required dispatch date (oldest first) and filter by status
+  // Filter by status and search term, then sort
   const filteredJobs = jobs
     .filter(job => {
-      if (statusFilter === "all") return true;
-      if (statusFilter === "completed") return job.completed;
-      if (statusFilter === "in_progress") return !job.completed;
+      // Status filter
+      if (statusFilter === "completed" && !job.completed) return false;
+      if (statusFilter === "in_progress" && job.completed) return false;
+      
+      // Search filter
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        const jobNameMatch = job.jobName.toLowerCase().includes(searchLower);
+        const poNumberMatch = (job.poNumber ?? "").toLowerCase().includes(searchLower);
+        const descriptionMatch = job.lineItems?.some(item => 
+          (item.description ?? "").toLowerCase().includes(searchLower)
+        ) || false;
+        const notesMatch = (job.notes ?? "").toLowerCase().includes(searchLower);
+        
+        return jobNameMatch || poNumberMatch || descriptionMatch || notesMatch;
+      }
+      
       return true;
     })
     .sort((a, b) => {
-      // Sort by required dispatch date ascending (oldest first)
-      // Jobs without dates go to the end
-      if (!a.requiredDispatchDate && !b.requiredDispatchDate) return 0;
-      if (!a.requiredDispatchDate) return 1;
-      if (!b.requiredDispatchDate) return -1;
-      return new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
+      switch (sortBy) {
+        case "jobName":
+          return a.jobName.localeCompare(b.jobName);
+        
+        case "quantity":
+          // Sum quantities from line items
+          const aQty = a.lineItems?.reduce((sum, item) => sum + item.quantity, 0) || a.quantity;
+          const bQty = b.lineItems?.reduce((sum, item) => sum + item.quantity, 0) || b.quantity;
+          return bQty - aQty; // Descending (largest first)
+        
+        case "date":
+        default:
+          // Sort by required dispatch date ascending (oldest first)
+          if (!a.requiredDispatchDate && !b.requiredDispatchDate) return 0;
+          if (!a.requiredDispatchDate) return 1;
+          if (!b.requiredDispatchDate) return -1;
+          return new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
+      }
     });
 
   const logoutMutation = useMutation({
@@ -204,14 +240,43 @@ export default function CustomerDashboard() {
             </Button>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">Production Queue</h2>
-              <p className="text-sm text-muted-foreground">
-                View the status and progress of your orders in production
-              </p>
+          <div>
+            <h2 className="text-xl font-semibold text-foreground mb-2">Production Queue</h2>
+            <p className="text-sm text-muted-foreground">
+              View the status and progress of your orders in production
+            </p>
+          </div>
+
+          {/* Search and Filter Controls */}
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center w-full sm:w-auto">
+              {/* Search Input */}
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search orders..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                  data-testid="input-search"
+                />
+              </div>
+
+              {/* Sort Dropdown */}
+              <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+                <SelectTrigger className="w-full sm:w-48" data-testid="select-sort">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Sort by..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date" data-testid="sort-date">Production Date</SelectItem>
+                  <SelectItem value="jobName" data-testid="sort-jobname">Job Name</SelectItem>
+                  <SelectItem value="quantity" data-testid="sort-quantity">Quantity</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             
+            {/* Status Tabs */}
             <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
               <TabsList data-testid="tabs-status-filter">
                 <TabsTrigger value="in_progress" data-testid="tab-in-progress">

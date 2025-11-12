@@ -349,6 +349,28 @@ export default function Dashboard() {
     return dispatchDate >= day3Start && dispatchDate <= day3End;
   });
   
+  // Calculate quantities (sum of all line items, fallback to job quantity if no line items)
+  const overdueQuantity = overdueOrders.reduce((sum, job) => {
+    const jobQuantity = job.lineItems && job.lineItems.length > 0
+      ? job.lineItems.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0)
+      : job.quantity || 0;
+    return sum + jobQuantity;
+  }, 0);
+  
+  const dueTodayQuantity = jobsDueToday.reduce((sum, job) => {
+    const jobQuantity = job.lineItems && job.lineItems.length > 0
+      ? job.lineItems.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0)
+      : job.quantity || 0;
+    return sum + jobQuantity;
+  }, 0);
+  
+  const dueIn3DaysQuantity = jobsDueIn3Days.reduce((sum, job) => {
+    const jobQuantity = job.lineItems && job.lineItems.length > 0
+      ? job.lineItems.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0)
+      : job.quantity || 0;
+    return sum + jobQuantity;
+  }, 0);
+  
   const pendingLogoSetups = logoSetups.filter(ls => !ls.approved);
 
   // Calculate total quantity and total value for production queue
@@ -516,8 +538,8 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Overdue / Due Today</p>
                   <div className="flex items-baseline gap-2 mt-2">
-                    <h3 className="text-3xl font-bold text-destructive">{overdueOrders.length}</h3>
-                    <span className="text-xl font-semibold text-amber-500">/ {jobsDueToday.length}</span>
+                    <h3 className="text-3xl font-bold text-destructive" data-testid="text-overdue-quantity">{overdueQuantity.toLocaleString()}</h3>
+                    <span className="text-xl font-semibold text-amber-500" data-testid="text-due-today-quantity">/ {dueTodayQuantity.toLocaleString()}</span>
                   </div>
                 </div>
                 <div className="h-12 w-12 bg-destructive/10 rounded-full flex items-center justify-center">
@@ -540,7 +562,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Due in 3 Days</p>
-                  <h3 className="text-3xl font-bold text-foreground mt-2">{jobsDueIn3Days.length}</h3>
+                  <h3 className="text-3xl font-bold text-foreground mt-2" data-testid="text-due-3-days-quantity">{dueIn3DaysQuantity.toLocaleString()}</h3>
                 </div>
                 <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center">
                   <Clock className="h-6 w-6 text-muted-foreground" />

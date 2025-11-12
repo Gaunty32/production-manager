@@ -8,6 +8,34 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 12, 2025
+
+**Customer Portal Enhancements:**
+- Added mobile-optimized responsive layout for customer dashboard
+  - Card-based layout on mobile (< 768px) with vertical stacking
+  - Table layout on desktop (>= 768px) with all columns
+  - Automatic breakpoint switching for optimal viewing experience
+- Added DHL tracking number display for completed orders
+  - Highlighted tracking box with copy-to-clipboard on mobile
+  - Clickable DHL tracking links opening in new tab
+  - URL encoding for safe handling of special characters
+  - Proper data-testid attributes for testing
+- Implemented search functionality across job name, PO number, descriptions, and notes
+- Added sorting options: Production Date (default), Job Name (A-Z), Quantity (largest first)
+- Search and sort controls responsive on mobile with full-width inputs
+
+**Dashboard KPI Fixes:**
+- Fixed "Overdue / Due Today" card to show total quantities instead of job count
+- Fixed "Due in 3 Days" card to show total quantities instead of job count
+- KPI cards now correctly sum all line item quantities for accurate production metrics
+- Added proper data-testid attributes for testing KPI values
+
+**Code Quality:**
+- All interactive elements properly instrumented with data-testid attributes
+- Removed hardcoded sizing from buttons (use shadcn size variants)
+- Proper URL encoding for all tracking links (encodeURIComponent)
+- Implementation follows shadcn component guidelines
+
 ### November 11, 2025
 
 **Customer Portal Job Visibility & UI Improvements:**
