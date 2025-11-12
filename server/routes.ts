@@ -942,6 +942,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Demo Customer Portal - Public read-only access to JK Prints jobs (lead magnet)
+  app.get("/api/demo/customer/jobs", async (req: any, res) => {
+    try {
+      // Redirect staff users if they're logged in
+      if (req.session && req.session.userId) {
+        return res.status(403).json({ error: "Staff users cannot access demo portal" });
+      }
+
+      // Hard-coded JK Prints customer ID
+      const JK_PRINTS_CUSTOMER_ID = '3818c869-f54d-4d10-b966-d9708db79adf';
+      
+      // Get all non-sensitive jobs for JK Prints
+      const jobs = await storage.getJobsByCustomerId(JK_PRINTS_CUSTOMER_ID);
+      const visibleJobs = jobs.filter(j => j.status !== 'pending_customer_approval');
+      
+      // Get line items for each job
+      const jobsWithLineItems = await Promise.all(
+        visibleJobs.map(async (job) => {
+          const lineItems = await storage.getJobLineItems(job.id);
+          return {
+            ...job,
+            lineItems,
+          };
+        })
+      );
+      
+      res.json(jobsWithLineItems);
+    } catch (error) {
+      console.error("Error fetching demo jobs:", error);
+      res.status(500).json({ error: "Failed to fetch demo jobs" });
+    }
+  });
+
   // Customer Portal - Jobs with Line Items
   app.get("/api/customer-portal/jobs", isCustomerAuthenticated, async (req: any, res) => {
     try {
