@@ -8,6 +8,8 @@ import {
   jobSchedule,
   jobLineItems,
   staffMachineAllocations,
+  staffHolidays,
+  bankHolidays,
   userStars,
   logoSetups,
   customerUsers,
@@ -33,6 +35,10 @@ import {
   type InsertJobLineItem,
   type StaffMachineAllocation,
   type InsertStaffMachineAllocation,
+  type StaffHoliday,
+  type InsertStaffHoliday,
+  type BankHoliday,
+  type InsertBankHoliday,
   type LogoSetup,
   type InsertLogoSetup,
   type CustomerUser,
@@ -99,6 +105,16 @@ export interface IStorage {
   createStaffMachineAllocation(allocation: InsertStaffMachineAllocation): Promise<StaffMachineAllocation>;
   updateStaffMachineAllocation(id: string, allocation: Partial<StaffMachineAllocation>): Promise<StaffMachineAllocation>;
   deleteStaffMachineAllocation(id: string): Promise<void>;
+  
+  getStaffHolidays(staffId?: string, startDate?: Date, endDate?: Date): Promise<StaffHoliday[]>;
+  createStaffHoliday(holiday: InsertStaffHoliday): Promise<StaffHoliday>;
+  updateStaffHoliday(id: string, holiday: any): Promise<StaffHoliday>;
+  deleteStaffHoliday(id: string): Promise<void>;
+  
+  getBankHolidays(startDate?: Date, endDate?: Date): Promise<BankHoliday[]>;
+  createBankHoliday(holiday: InsertBankHoliday): Promise<BankHoliday>;
+  updateBankHoliday(id: string, holiday: any): Promise<BankHoliday>;
+  deleteBankHoliday(id: string): Promise<void>;
   
   awardStar(userId: string, starType: "yellow" | "red"): Promise<any>;
   getStarsLeaderboard(): Promise<any[]>;
@@ -565,6 +581,129 @@ export class DatabaseStorage implements IStorage {
 
   async deleteStaffMachineAllocation(id: string): Promise<void> {
     await db.delete(staffMachineAllocations).where(eq(staffMachineAllocations.id, id));
+  }
+
+  // Staff holidays methods
+  async getStaffHolidays(staffId?: string, startDate?: Date, endDate?: Date): Promise<StaffHoliday[]> {
+    const conditions = [];
+    if (staffId) {
+      conditions.push(eq(staffHolidays.staffId, staffId));
+    }
+    
+    // Include holidays that overlap with the query range:
+    // Holiday overlaps if: (holiday.endDate >= startDate) AND (holiday.startDate <= endDate)
+    if (startDate && endDate) {
+      conditions.push(
+        and(
+          gte(staffHolidays.endDate, startDate),   // Holiday ends on or after range start
+          lte(staffHolidays.startDate, endDate)     // Holiday starts on or before range end
+        )
+      );
+    } else if (startDate) {
+      conditions.push(gte(staffHolidays.endDate, startDate)); // Holiday ends on or after date
+    } else if (endDate) {
+      conditions.push(lte(staffHolidays.startDate, endDate)); // Holiday starts on or before date
+    }
+    
+    if (conditions.length === 0) {
+      return await db.select().from(staffHolidays);
+    }
+    
+    // Use and() only if we have multiple conditions
+    const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0];
+    return await db.select().from(staffHolidays).where(whereClause);
+  }
+
+  async createStaffHoliday(insertHoliday: InsertStaffHoliday): Promise<StaffHoliday> {
+    const [holiday] = await db
+      .insert(staffHolidays)
+      .values({
+        ...insertHoliday,
+        startDate: new Date(insertHoliday.startDate),
+        endDate: new Date(insertHoliday.endDate),
+      })
+      .returning();
+    return holiday;
+  }
+
+  async updateStaffHoliday(id: string, updates: any): Promise<StaffHoliday> {
+    // Convert date strings to Date objects if present
+    const processedUpdates: any = { ...updates };
+    if (updates.startDate) {
+      processedUpdates.startDate = typeof updates.startDate === 'string' 
+        ? new Date(updates.startDate) 
+        : updates.startDate;
+    }
+    if (updates.endDate) {
+      processedUpdates.endDate = typeof updates.endDate === 'string' 
+        ? new Date(updates.endDate) 
+        : updates.endDate;
+    }
+    
+    const [holiday] = await db
+      .update(staffHolidays)
+      .set(processedUpdates)
+      .where(eq(staffHolidays.id, id))
+      .returning();
+    if (!holiday) throw new Error("Staff holiday not found");
+    return holiday;
+  }
+
+  async deleteStaffHoliday(id: string): Promise<void> {
+    await db.delete(staffHolidays).where(eq(staffHolidays.id, id));
+  }
+
+  // Bank holidays methods
+  async getBankHolidays(startDate?: Date, endDate?: Date): Promise<BankHoliday[]> {
+    const conditions = [];
+    // Bank holidays are single dates, so simple range check is sufficient
+    if (startDate) {
+      conditions.push(gte(bankHolidays.date, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(bankHolidays.date, endDate));
+    }
+    
+    if (conditions.length === 0) {
+      return await db.select().from(bankHolidays).orderBy(bankHolidays.date);
+    }
+    
+    // Use and() only if we have multiple conditions
+    const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0];
+    return await db.select().from(bankHolidays).where(whereClause).orderBy(bankHolidays.date);
+  }
+
+  async createBankHoliday(insertHoliday: InsertBankHoliday): Promise<BankHoliday> {
+    const [holiday] = await db
+      .insert(bankHolidays)
+      .values({
+        ...insertHoliday,
+        date: new Date(insertHoliday.date),
+      })
+      .returning();
+    return holiday;
+  }
+
+  async updateBankHoliday(id: string, updates: any): Promise<BankHoliday> {
+    // Convert date string to Date object if present
+    const processedUpdates: any = { ...updates };
+    if (updates.date) {
+      processedUpdates.date = typeof updates.date === 'string' 
+        ? new Date(updates.date) 
+        : updates.date;
+    }
+    
+    const [holiday] = await db
+      .update(bankHolidays)
+      .set(processedUpdates)
+      .where(eq(bankHolidays.id, id))
+      .returning();
+    if (!holiday) throw new Error("Bank holiday not found");
+    return holiday;
+  }
+
+  async deleteBankHoliday(id: string): Promise<void> {
+    await db.delete(bankHolidays).where(eq(bankHolidays.id, id));
   }
 
   async awardStar(userId: string, starType: "yellow" | "red"): Promise<any> {

@@ -19,6 +19,10 @@ import {
   updateJobLineItemSchema,
   insertStaffMachineAllocationSchema,
   updateStaffMachineAllocationSchema,
+  insertStaffHolidaySchema,
+  updateStaffHolidaySchema,
+  insertBankHolidaySchema,
+  updateBankHolidaySchema,
   insertLogoSetupSchema,
   updateLogoSetupSchema
 } from "@shared/schema";
@@ -2112,6 +2116,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDate ? new Date(endDate as string) : undefined
       );
 
+      // Get staff holidays and bank holidays
+      const staffHolidays = await storage.getStaffHolidays(
+        staffId as string,
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+
+      const bankHolidays = await storage.getBankHolidays(
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+
       // Get available slots for each date in the range
       const start = startDate ? new Date(startDate as string) : new Date();
       const end = endDate ? new Date(endDate as string) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days default
@@ -2127,7 +2143,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           machineBlocks,
           staffShifts,
           jobSchedules,
-          staffMachineAllocations
+          staffMachineAllocations,
+          staffHolidays,
+          bankHolidays
         );
 
         // Filter slots that can fit the duration and format them
@@ -2301,6 +2319,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete staff machine allocation" });
+    }
+  });
+
+  // Staff holidays routes
+  app.get("/api/staff-holidays", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { staffId, startDate, endDate } = req.query;
+      const holidays = await storage.getStaffHolidays(
+        staffId as string | undefined,
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+      res.json(holidays);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch staff holidays" });
+    }
+  });
+
+  app.post("/api/staff-holidays", isStaffAuthenticated, async (req, res) => {
+    try {
+      const data = insertStaffHolidaySchema.parse(req.body);
+      const holiday = await storage.createStaffHoliday(data);
+      res.json(holiday);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create staff holiday" });
+      }
+    }
+  });
+
+  app.patch("/api/staff-holidays/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      const data = updateStaffHolidaySchema.parse(req.body);
+      const holiday = await storage.updateStaffHoliday(req.params.id, data);
+      res.json(holiday);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : "Failed to update staff holiday" 
+        });
+      }
+    }
+  });
+
+  app.delete("/api/staff-holidays/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteStaffHoliday(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete staff holiday" });
+    }
+  });
+
+  // Bank holidays routes
+  app.get("/api/bank-holidays", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const holidays = await storage.getBankHolidays(
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+      res.json(holidays);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch bank holidays" });
+    }
+  });
+
+  app.post("/api/bank-holidays", isStaffAuthenticated, async (req, res) => {
+    try {
+      const data = insertBankHolidaySchema.parse(req.body);
+      const holiday = await storage.createBankHoliday(data);
+      res.json(holiday);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create bank holiday" });
+      }
+    }
+  });
+
+  app.patch("/api/bank-holidays/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      const data = updateBankHolidaySchema.parse(req.body);
+      const holiday = await storage.updateBankHoliday(req.params.id, data);
+      res.json(holiday);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : "Failed to update bank holiday" 
+        });
+      }
+    }
+  });
+
+  app.delete("/api/bank-holidays/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteBankHoliday(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete bank holiday" });
     }
   });
 

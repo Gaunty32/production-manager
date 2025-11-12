@@ -145,6 +145,24 @@ export const staffMachineAllocations = pgTable("staff_machine_allocations", {
   recurringDaysOfWeek: integer("recurring_days_of_week").array(),
 });
 
+export const staffHolidays = pgTable("staff_holidays", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  staffId: varchar("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  holidayType: text("holiday_type").notNull().default("holiday"), // holiday, sick, other
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const bankHolidays = pgTable("bank_holidays", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: timestamp("date").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const userStars = pgTable("user_stars", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
@@ -629,6 +647,48 @@ export const updateStaffMachineAllocationSchema = z.object({
 
 export type InsertStaffMachineAllocation = z.infer<typeof insertStaffMachineAllocationSchema>;
 export type StaffMachineAllocation = typeof staffMachineAllocations.$inferSelect;
+
+export const insertStaffHolidaySchema = createInsertSchema(staffHolidays).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  startDate: z.string(),
+  endDate: z.string(),
+  holidayType: z.enum(["holiday", "sick", "other"]).default("holiday"),
+  notes: z.string().optional(),
+}).refine(
+  (data) => new Date(data.endDate) >= new Date(data.startDate),
+  { message: "End date must be on or after start date" }
+);
+
+export const updateStaffHolidaySchema = z.object({
+  staffId: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  holidayType: z.enum(["holiday", "sick", "other"]).optional(),
+  notes: z.string().optional(),
+});
+
+export type InsertStaffHoliday = z.infer<typeof insertStaffHolidaySchema>;
+export type StaffHoliday = typeof staffHolidays.$inferSelect;
+
+export const insertBankHolidaySchema = createInsertSchema(bankHolidays).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  date: z.string(),
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional(),
+});
+
+export const updateBankHolidaySchema = z.object({
+  date: z.string().optional(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+});
+
+export type InsertBankHoliday = z.infer<typeof insertBankHolidaySchema>;
+export type BankHoliday = typeof bankHolidays.$inferSelect;
 
 export const insertLogoSetupSchema = createInsertSchema(logoSetups).omit({
   id: true,

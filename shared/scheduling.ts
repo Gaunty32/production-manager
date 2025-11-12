@@ -1,4 +1,4 @@
-import type { StaffShift, MachineScheduleBlock, JobSchedule, StaffMachineAllocation } from "./schema";
+import type { StaffShift, MachineScheduleBlock, JobSchedule, StaffMachineAllocation, StaffHoliday, BankHoliday } from "./schema";
 import { calculateProductionMetrics } from "./machines";
 
 /**
@@ -216,6 +216,46 @@ export function getStaffMachineAllocationSlots(
 }
 
 /**
+ * Check if a date is a bank holiday
+ */
+export function isBankHoliday(
+  date: Date,
+  bankHolidays: BankHoliday[]
+): boolean {
+  return bankHolidays.some(holiday => {
+    const holidayDate = new Date(holiday.date);
+    return holidayDate.toDateString() === date.toDateString();
+  });
+}
+
+/**
+ * Check if a staff member is on holiday on a given date
+ */
+export function isStaffOnHoliday(
+  date: Date,
+  staffId: string,
+  staffHolidays: StaffHoliday[]
+): boolean {
+  return staffHolidays.some(holiday => {
+    if (holiday.staffId !== staffId) {
+      return false;
+    }
+    
+    const startDate = new Date(holiday.startDate);
+    const endDate = new Date(holiday.endDate);
+    
+    // Set to start of day for accurate comparison
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+    
+    const checkDate = new Date(date);
+    checkDate.setHours(12, 0, 0, 0); // Use noon to avoid timezone issues
+    
+    return checkDate >= startDate && checkDate <= endDate;
+  });
+}
+
+/**
  * Find available time slots where both machine and staff are available
  */
 export function findAvailableSlots(
@@ -225,8 +265,20 @@ export function findAvailableSlots(
   machineBlocks: MachineScheduleBlock[],
   staffShifts: StaffShift[],
   jobSchedules: JobSchedule[],
-  staffMachineAllocations: StaffMachineAllocation[] = []
+  staffMachineAllocations: StaffMachineAllocation[] = [],
+  staffHolidays: StaffHoliday[] = [],
+  bankHolidays: BankHoliday[] = []
 ): TimeSlot[] {
+  // Check if this is a bank holiday - no work on bank holidays
+  if (isBankHoliday(date, bankHolidays)) {
+    return [];
+  }
+  
+  // Check if staff member is on holiday
+  if (isStaffOnHoliday(date, staffId, staffHolidays)) {
+    return [];
+  }
+  
   // Get machine available slots
   const machineSlots = getMachineAvailableSlots(date, machineId, machineBlocks);
   
