@@ -181,38 +181,45 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
                   <th className="text-center py-2 px-2 font-semibold">Stitch Count</th>
                   <th className="text-center py-2 px-2 font-semibold">Logo</th>
                   <th className="text-center py-2 px-2 font-semibold">Machine</th>
+                  <th className="text-center py-2 px-2 font-semibold">Est. Time</th>
                   <th className="text-center py-2 px-2 font-semibold">✓</th>
                 </tr>
               </thead>
               <tbody>
-                {job.lineItems && job.lineItems.map((item, index) => (
-                  <tr key={item.id} className="border-b">
-                    <td className="py-3 px-2">
-                      {item.jobType}
-                      {item.description && (
-                        <div className="text-xs text-gray-600 mt-1">{item.description}</div>
-                      )}
-                    </td>
-                    <td className="text-center py-3 px-2 font-semibold">{item.quantity}</td>
-                    <td className="text-center py-3 px-2">
-                      {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" 
-                        ? item.stitchCount.toLocaleString()
-                        : "—"
-                      }
-                    </td>
-                    <td className="text-center py-3 px-2">
-                      <span className={item.logoApproved ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
-                        {item.logoApproved ? "✓" : "✗"}
-                      </span>
-                    </td>
-                    <td className="text-center py-3 px-2">
-                      {item.machineId ? getMachineName(item.machineId) : "—"}
-                    </td>
-                    <td className="text-center py-3 px-2">
-                      <div className="w-6 h-6 border-2 border-black inline-block"></div>
-                    </td>
-                  </tr>
-                ))}
+                {job.lineItems && job.lineItems.map((item, index) => {
+                  const itemMetrics = calculateProductionMetrics(item.quantity, item.stitchCount, item.machineId);
+                  return (
+                    <tr key={item.id} className="border-b">
+                      <td className="py-3 px-2">
+                        {item.jobType}
+                        {item.description && (
+                          <div className="text-xs text-gray-600 mt-1">{item.description}</div>
+                        )}
+                      </td>
+                      <td className="text-center py-3 px-2 font-semibold">{item.quantity}</td>
+                      <td className="text-center py-3 px-2">
+                        {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" 
+                          ? item.stitchCount.toLocaleString()
+                          : "—"
+                        }
+                      </td>
+                      <td className="text-center py-3 px-2">
+                        <span className={item.logoApproved ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
+                          {item.logoApproved ? "✓" : "✗"}
+                        </span>
+                      </td>
+                      <td className="text-center py-3 px-2">
+                        {item.machineId ? getMachineName(item.machineId) : "—"}
+                      </td>
+                      <td className="text-center py-3 px-2 font-semibold">
+                        {itemMetrics ? formatTimeDisplay(itemMetrics.totalTimeMinutes) : "—"}
+                      </td>
+                      <td className="text-center py-3 px-2">
+                        <div className="w-6 h-6 border-2 border-black inline-block"></div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
