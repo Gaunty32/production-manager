@@ -2639,104 +2639,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
 
       // Get line items and calculate pricing for each job
+      // Build line items in order: job items, then carriage for that job, repeat
       const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number; itemCode: string }> = [];
       let hasPOA = false;
       let hasTBA = false;
 
-      for (const job of selectedJobs) {
-        const jobLineItems = await storage.getJobLineItems(job.id);
-        
-        // Try to calculate price, but catch errors for items outside pricing tables
-        let priceResult;
-        try {
-          priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
-          if (priceResult.totalPrice === "POA") {
-            hasPOA = true;
-          }
-        } catch (error) {
-          // If price calculation fails (e.g., no tier for quantity), treat as POA
-          console.log(`Price calculation failed for job ${job.id}, treating as POA:`, error instanceof Error ? error.message : error);
-          hasPOA = true;
-          priceResult = null;
-        }
-
-        // Add each line item with its calculated unit price or manual price
-        jobLineItems.forEach((lineItem, index) => {
-          let unitPrice: number;
-          
-          // Use manual price if provided for this line item
-          if (manualPrices && manualPrices[lineItem.id] !== undefined) {
-            unitPrice = parseFloat(manualPrices[lineItem.id]);
-          } else if (priceResult) {
-            // Use calculated price if available
-            const lineItemPrice = priceResult.lineItemPrices[index];
-            unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice as number;
-          } else {
-            // No calculated price and no manual price - this will trigger error below
-            unitPrice = 0;
-          }
-          
-          // Determine item code based on job type
-          let itemCode = "Emb"; // Default to embroidery
-          if (lineItem.jobType === "print") {
-            itemCode = "Print DTF";
-          } else if (lineItem.jobType === "bagging") {
-            itemCode = "BAG";
-          } else if (lineItem.jobType === "other") {
-            itemCode = "OTHER";
-          }
-          
-          lineItemsWithPricing.push({
-            jobName: job.jobName,
-            poNumber: job.poNumber,
-            description: lineItem.description || '',
-            quantity: lineItem.quantity,
-            unitPrice,
-            stitchCount: lineItem.stitchCount,
-            itemCode,
-          });
-        });
-
-        // Check for TBA shipping (we'll handle adding shipping line items after grouping)
-        if (job.shippingCost === "TBA") {
-          if (!manualShippingCosts || !manualShippingCosts[job.id]) {
-            hasTBA = true;
-          }
-        }
-      }
-      
-      // If we have POA items and no manual prices provided, reject
-      if (hasPOA && !manualPrices) {
-        return res.status(400).json({ error: "Manual prices required for POA items" });
-      }
-
-      // If we have TBA shipping costs and no manual shipping costs provided, reject
-      if (hasTBA) {
-        return res.status(400).json({ error: "Manual shipping costs required for TBA shipping. Please enter shipping costs for all orders with TBA shipping." });
-      }
-
-      // Add approved logo setups for this customer
-      const approvedLogoSetups = await storage.getLogoSetups();
-      const customerLogoSetups = approvedLogoSetups.filter(
-        setup => setup.customerId === customerId && setup.approved && setup.approvedAt
-      );
-      
-      for (const setup of customerLogoSetups) {
-        lineItemsWithPricing.push({
-          jobName: "Logo Set-Up",
-          poNumber: null,
-          description: `Logo Set-Up - ${setup.jobName}`,
-          quantity: 1,
-          unitPrice: 10, // £10 per approved logo setup
-          stitchCount: 0,
-          itemCode: "OTHER", // Use OTHER item code for logo setups
-        });
-      }
-
-      // Group jobs by consolidatedShipmentId and add shipping costs
-      // For consolidated shipments, add only ONE shipping charge per shipment group
+      // Group jobs by consolidatedShipmentId to handle carriage properly
       const shipmentGroups = new Map<string, Job[]>();
-      
       for (const job of selectedJobs) {
         const shipmentKey = job.consolidatedShipmentId || `single-${job.id}`;
         if (!shipmentGroups.has(shipmentKey)) {
@@ -2744,9 +2653,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         shipmentGroups.get(shipmentKey)!.push(job);
       }
-      
-      // Add one shipping line item per shipment group
+
+      // Process each shipment group to keep carriage immediately after job items
       for (const [shipmentKey, shipmentJobs] of Array.from(shipmentGroups.entries())) {
+        // Add all line items for all jobs in this shipment group
+        for (const job of shipmentJobs) {
+          const jobLineItems = await storage.getJobLineItems(job.id);
+          
+          // Try to calculate price, but catch errors for items outside pricing tables
+          let priceResult;
+          try {
+            priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
+            if (priceResult.totalPrice === "POA") {
+              hasPOA = true;
+            }
+          } catch (error) {
+            // If price calculation fails (e.g., no tier for quantity), treat as POA
+            console.log(`Price calculation failed for job ${job.id}, treating as POA:`, error instanceof Error ? error.message : error);
+            hasPOA = true;
+            priceResult = null;
+          }
+
+          // Add each line item with its calculated unit price or manual price
+          jobLineItems.forEach((lineItem, index) => {
+            let unitPrice: number;
+            
+            // Use manual price if provided for this line item
+            if (manualPrices && manualPrices[lineItem.id] !== undefined) {
+              unitPrice = parseFloat(manualPrices[lineItem.id]);
+            } else if (priceResult) {
+              // Use calculated price if available
+              const lineItemPrice = priceResult.lineItemPrices[index];
+              unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice as number;
+            } else {
+              // No calculated price and no manual price - this will trigger error below
+              unitPrice = 0;
+            }
+            
+            // Determine item code based on job type (case-insensitive)
+            const jobTypeLower = lineItem.jobType?.toLowerCase() || '';
+            let itemCode = "Emb"; // Default to embroidery
+            if (jobTypeLower === "print") {
+              itemCode = "Print DTF";
+            } else if (jobTypeLower === "bagging") {
+              itemCode = "BAG";
+            } else if (jobTypeLower === "other") {
+              itemCode = "OTHER";
+            }
+            
+            lineItemsWithPricing.push({
+              jobName: job.jobName,
+              poNumber: job.poNumber,
+              description: lineItem.description || '',
+              quantity: lineItem.quantity,
+              unitPrice,
+              stitchCount: lineItem.stitchCount,
+              itemCode,
+            });
+          });
+
+          // Check for TBA shipping
+          if (job.shippingCost === "TBA") {
+            if (!manualShippingCosts || !manualShippingCosts[job.id]) {
+              hasTBA = true;
+            }
+          }
+        }
+
+        // Add shipping line item immediately after this shipment group's job items
         let totalShippingCost = 0;
         let shippingMethod = '';
         let hasShipping = false;
@@ -2793,6 +2767,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
             itemCode: "CARRIAGE",
           });
         }
+      }
+      
+      // If we have POA items and no manual prices provided, reject
+      if (hasPOA && !manualPrices) {
+        return res.status(400).json({ error: "Manual prices required for POA items" });
+      }
+
+      // If we have TBA shipping costs and no manual shipping costs provided, reject
+      if (hasTBA) {
+        return res.status(400).json({ error: "Manual shipping costs required for TBA shipping. Please enter shipping costs for all orders with TBA shipping." });
+      }
+
+      // Add approved logo setups for this customer at the end
+      const approvedLogoSetups = await storage.getLogoSetups();
+      const customerLogoSetups = approvedLogoSetups.filter(
+        setup => setup.customerId === customerId && setup.approved && setup.approvedAt
+      );
+      
+      for (const setup of customerLogoSetups) {
+        lineItemsWithPricing.push({
+          jobName: "Logo Set-Up",
+          poNumber: null,
+          description: `Logo Set-Up - ${setup.jobName}`,
+          quantity: 1,
+          unitPrice: 10, // £10 per approved logo setup
+          stitchCount: 0,
+          itemCode: "OTHER", // Use OTHER item code for logo setups
+        });
       }
 
       // Create consolidated invoice in Xero
