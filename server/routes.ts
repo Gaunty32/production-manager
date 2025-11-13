@@ -37,6 +37,26 @@ import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
 import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail } from "./emailService";
 
+// Helper function to recalculate job's total actual production time from completed line items
+async function recalculateJobProductionTime(jobId: string): Promise<void> {
+  const allLineItems = await storage.getJobLineItems(jobId);
+  
+  // Get all completed items with tracked time (including 0 minutes)
+  const completedItemsWithTime = allLineItems.filter(item => 
+    item.completed && item.actualProductionTimeMinutes !== null && item.actualProductionTimeMinutes !== undefined
+  );
+  
+  // Sum total minutes and convert to hours
+  if (completedItemsWithTime.length > 0) {
+    const totalMinutes = completedItemsWithTime.reduce((sum, item) => sum + (item.actualProductionTimeMinutes || 0), 0);
+    const totalHours = totalMinutes / 60;
+    await storage.updateJob(jobId, { actualProductionTime: totalHours });
+  } else {
+    // No completed items with time tracked, set to null
+    await storage.updateJob(jobId, { actualProductionTime: null });
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Production database setup endpoint (only in production)
   if (process.env.NODE_ENV === 'production') {
@@ -1801,6 +1821,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { jobId } = req.params;
       const data = insertJobLineItemSchema.parse({ ...req.body, jobId });
       const lineItem = await storage.createJobLineItem(data);
+      
+      // Recalculate job's total actual production time
+      await recalculateJobProductionTime(jobId);
+      
       res.json(lineItem);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1855,6 +1879,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
       const lineItem = await storage.updateJobLineItem(req.params.id, updates);
+      
+      // Recalculate job's total actual production time from all completed line items
+      await recalculateJobProductionTime(lineItem.jobId);
+      
       res.json(lineItem);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1869,7 +1897,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/job-line-items/:id", isStaffAuthenticated, async (req, res) => {
     try {
+      // Get the line item before deleting to know which job to recalculate
+      const lineItem = await storage.getJobLineItem(req.params.id);
+      if (!lineItem) {
+        return res.status(404).json({ error: "Line item not found" });
+      }
+      
       await storage.deleteJobLineItem(req.params.id);
+      
+      // Recalculate job's total actual production time
+      await recalculateJobProductionTime(lineItem.jobId);
+      
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete line item" });

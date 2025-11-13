@@ -43,7 +43,6 @@ const shippingSchema = z.object({
   packageCount: z.coerce.number().int().min(1).optional(),
   packageType: z.enum(["boxes", "bags"]).optional(),
   consolidatedJobIds: z.array(z.string()).optional(),
-  actualProductionTime: z.coerce.number().min(0, "Production time must be 0 or greater").optional(),
 }).refine((data) => {
   if (data.shippingMethod === "consolidated" || data.shippingMethod === "direct_delivery") {
     return data.dhlTrackingNumber && data.dhlTrackingNumber.trim().length > 0;
@@ -110,7 +109,6 @@ export function ShippingInfoDialog({
       packageCount: undefined,
       packageType: undefined,
       consolidatedJobIds: [],
-      actualProductionTime: undefined,
     },
   });
 
@@ -264,66 +262,6 @@ export function ShippingInfoDialog({
                 </FormItem>
               )}
             />
-
-            {/* Actual Production Time */}
-            <div className="space-y-2">
-              <FormLabel>Actual Production Time</FormLabel>
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="actualProductionTime"
-                  render={({ field }) => {
-                    const hours = field.value ? Math.floor(field.value) : 0;
-                    const minutes = field.value ? Math.round((field.value - hours) * 60) : 0;
-                    
-                    return (
-                      <>
-                        <FormItem>
-                          <FormLabel className="text-xs text-muted-foreground">Hours</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={hours || ""}
-                              onChange={(e) => {
-                                const newHours = parseInt(e.target.value) || 0;
-                                const currentMinutes = field.value ? Math.round((field.value - Math.floor(field.value)) * 60) : 0;
-                                field.onChange(newHours + (currentMinutes / 60));
-                              }}
-                              placeholder="0"
-                              disabled={isPending || isSubmitting}
-                              data-testid="input-actual-time-hours"
-                            />
-                          </FormControl>
-                        </FormItem>
-                        <FormItem>
-                          <FormLabel className="text-xs text-muted-foreground">Minutes</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="59"
-                              value={minutes || ""}
-                              onChange={(e) => {
-                                const newMinutes = parseInt(e.target.value) || 0;
-                                const currentHours = field.value ? Math.floor(field.value) : 0;
-                                field.onChange(currentHours + (newMinutes / 60));
-                              }}
-                              placeholder="0"
-                              disabled={isPending || isSubmitting}
-                              data-testid="input-actual-time-minutes"
-                            />
-                          </FormControl>
-                        </FormItem>
-                      </>
-                    );
-                  }}
-                />
-              </div>
-              <FormDescription className="text-xs">
-                Record how long this order actually took to produce
-              </FormDescription>
-            </div>
 
             {/* Show existing shipments option for consolidated method */}
             {selectedMethod === "consolidated" && existingShipments.length > 0 && (
