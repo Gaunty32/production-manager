@@ -2754,28 +2754,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Get package info for Direct Delivery
           let packageInfo = '';
           if (shippingMethod === 'direct_delivery') {
-            const firstJobWithPackageInfo = shipmentJobs.find(j => j.packageCount && j.packageType);
-            if (firstJobWithPackageInfo) {
-              const count = firstJobWithPackageInfo.packageCount;
-              const type = firstJobWithPackageInfo.packageType;
-              
+            // Sum up package counts by type across all jobs in the shipment group
+            const packageCounts: { [key: string]: number } = {};
+            
+            for (const job of shipmentJobs) {
+              if (job.packageCount && job.packageType) {
+                const normalizedType = job.packageType.toLowerCase();
+                packageCounts[normalizedType] = (packageCounts[normalizedType] || 0) + job.packageCount;
+              }
+            }
+            
+            if (Object.keys(packageCounts).length > 0) {
               // Proper pluralization mapping
               const pluralMap: { [key: string]: string } = {
                 'box': 'boxes',
-                'Box': 'boxes',
                 'bag': 'bags',
-                'Bag': 'bags',
                 'pallet': 'pallets',
-                'Pallet': 'pallets',
                 'package': 'packages',
-                'Package': 'packages',
               };
               
-              const pluralType = count > 1 
-                ? (pluralMap[type] || type.toLowerCase() + 's') 
-                : type.toLowerCase();
+              // Build package info string
+              const packageParts = Object.entries(packageCounts).map(([type, count]) => {
+                const pluralType = count > 1 
+                  ? (pluralMap[type] || type + 's') 
+                  : type;
+                return `${count} ${pluralType}`;
+              });
               
-              packageInfo = ` (${count} ${pluralType})`;
+              packageInfo = ` (${packageParts.join(', ')})`;
             }
           }
           
