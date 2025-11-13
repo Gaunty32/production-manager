@@ -1867,7 +1867,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
-          if (!actualProductionTimeMinutes || actualProductionTimeMinutes <= 0) {
+          // Allow 0 minutes for quick tasks, but require the field to be set (not null/undefined)
+          if (actualProductionTimeMinutes === null || actualProductionTimeMinutes === undefined) {
             return res.status(400).json({ 
               error: "Actual production time (in minutes) is required when completing an embroidery line item" 
             });

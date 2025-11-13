@@ -132,8 +132,8 @@ export function ShippingInfoDialog({
       if (
         job.customerId === customerId &&
         job.consolidatedShipmentId &&
-        job.invoiceStatus !== "invoiced" &&
-        job.dhlTrackingNumber // Must have tracking info
+        job.invoiceStatus !== "invoiced"
+        // Allow joining shipments even if tracking info hasn't been added yet
       ) {
         // Use the first job we find for each shipment ID
         if (!shipmentsMap.has(job.consolidatedShipmentId)) {
