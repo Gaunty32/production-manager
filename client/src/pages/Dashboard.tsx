@@ -43,6 +43,7 @@ export default function Dashboard() {
   const params = useParams();
   const machineId = params.id ? parseInt(params.id) : null;
   const [searchTerm, setSearchTerm] = useState("");
+  const [completedOrdersSearchTerm, setCompletedOrdersSearchTerm] = useState("");
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [showLogoSetupDialog, setShowLogoSetupDialog] = useState(false);
@@ -273,8 +274,28 @@ export default function Dashboard() {
     return missingDates || missingLogoApprovals;
   });
   
-  // Completed Orders: only show jobs that have been invoiced
-  const completedJobs = filteredJobs.filter(job => job.invoiceStatus === 'invoiced');
+  // Completed Orders: derive from unfiltered jobs for independent search
+  // Get all invoiced jobs from unfiltered jobsWithCustomers
+  const allCompletedJobs = jobsWithCustomers.filter(job => job.invoiceStatus === 'invoiced');
+
+  // Apply separate search filtering to completed orders (independent from production queue search)
+  const filteredCompletedJobs = allCompletedJobs.filter((job) => {
+    if (!completedOrdersSearchTerm) return true;
+    const searchLower = completedOrdersSearchTerm.toLowerCase();
+    return (
+      job.customerName.toLowerCase().includes(searchLower) ||
+      job.jobName.toLowerCase().includes(searchLower) ||
+      (job.poNumber && job.poNumber.toLowerCase().includes(searchLower)) ||
+      (job.jobNumber !== null && job.jobNumber.toString().toLowerCase().includes(searchLower))
+    );
+  });
+
+  // Sort completed jobs
+  const sortedCompletedJobs = [...filteredCompletedJobs].sort((a, b) => {
+    if (!a.requiredDispatchDate) return 1;
+    if (!b.requiredDispatchDate) return -1;
+    return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
+  });
 
   const sortedActiveJobs = [...activeJobs].sort(
     (a, b) => new Date(a.requiredDispatchDate!).getTime() - new Date(b.requiredDispatchDate!).getTime()
@@ -288,12 +309,6 @@ export default function Dashboard() {
     if (a.requiredDispatchDate) return -1;
     if (b.requiredDispatchDate) return 1;
     return a.customerName.localeCompare(b.customerName);
-  });
-
-  const sortedCompletedJobs = [...completedJobs].sort((a, b) => {
-    if (!a.requiredDispatchDate) return 1;
-    if (!b.requiredDispatchDate) return -1;
-    return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
   });
 
   // Combine all non-completed jobs for unified production queue with configurable sorting
@@ -494,6 +509,23 @@ export default function Dashboard() {
                 }
               }}
             />
+            <Button 
+              variant="outline" 
+              data-testid="button-view-completed-orders"
+              onClick={() => {
+                setCompletedOrdersOpen(true);
+                // Scroll to completed orders section after a brief delay to let it expand
+                setTimeout(() => {
+                  const completedSection = document.querySelector('[data-testid="section-completed-orders"]');
+                  if (completedSection) {
+                    completedSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
+              }}
+            >
+              <Package className="h-4 w-4 mr-2" />
+              Completed Orders
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" data-testid="button-more-actions">
@@ -1056,6 +1088,19 @@ export default function Dashboard() {
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="border-t">
+                    {/* Search input for completed orders */}
+                    <div className="p-4 border-b">
+                      <div className="relative max-w-sm">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          data-testid="input-search-completed-orders"
+                          placeholder="Search completed orders..."
+                          value={completedOrdersSearchTerm}
+                          onChange={(e) => setCompletedOrdersSearchTerm(e.target.value)}
+                          className="pl-9"
+                        />
+                      </div>
+                    </div>
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
@@ -1071,7 +1116,7 @@ export default function Dashboard() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {sortedCompletedJobs.flatMap((job) => {
+                          {filteredCompletedJobs.flatMap((job) => {
                             const customer = customers.find(c => c.id === job.customerId);
                             const allLogosApproved = job.lineItems.every(li => li.logoApproved);
                             
