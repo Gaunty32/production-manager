@@ -38,11 +38,11 @@ export function calculateProductionMetrics(
   stitchCount: number,
   machineId: number | null
 ): ProductionMetrics | null {
-  if (machineId === null || !stitchCount || !quantity) {
+  if (!stitchCount || !quantity) {
     return null;
   }
 
-  const heads = getMachineHeads(machineId);
+  const heads = machineId !== null ? getMachineHeads(machineId) : 6;
   const runs = Math.ceil(quantity / heads);
   const embroideryTimePerRun = stitchCount / STITCHES_PER_MINUTE;
   const timePerRunMinutes = embroideryTimePerRun + CHANGEOVER_TIME_MINUTES;
