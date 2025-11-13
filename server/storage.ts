@@ -627,17 +627,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateStaffHoliday(id: string, updates: any): Promise<StaffHoliday> {
-    // Convert date strings to Date objects if present
-    const processedUpdates: any = { ...updates };
+    // Whitelist only allowed fields and convert dates
+    const processedUpdates: any = {};
+    
+    if (updates.staffId !== undefined) processedUpdates.staffId = updates.staffId;
+    if (updates.holidayType !== undefined) processedUpdates.holidayType = updates.holidayType;
+    if (updates.notes !== undefined) processedUpdates.notes = updates.notes;
+    
     if (updates.startDate) {
-      processedUpdates.startDate = typeof updates.startDate === 'string' 
-        ? new Date(updates.startDate) 
-        : updates.startDate;
+      const dateValue = typeof updates.startDate === 'string' ? new Date(updates.startDate) : updates.startDate;
+      if (isNaN(dateValue.getTime())) throw new Error("Invalid startDate");
+      processedUpdates.startDate = dateValue;
     }
+    
     if (updates.endDate) {
-      processedUpdates.endDate = typeof updates.endDate === 'string' 
-        ? new Date(updates.endDate) 
-        : updates.endDate;
+      const dateValue = typeof updates.endDate === 'string' ? new Date(updates.endDate) : updates.endDate;
+      if (isNaN(dateValue.getTime())) throw new Error("Invalid endDate");
+      processedUpdates.endDate = dateValue;
     }
     
     const [holiday] = await db
@@ -685,12 +691,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateBankHoliday(id: string, updates: any): Promise<BankHoliday> {
-    // Convert date string to Date object if present
-    const processedUpdates: any = { ...updates };
+    // Whitelist only allowed fields and convert date
+    const processedUpdates: any = {};
+    
+    if (updates.name !== undefined) processedUpdates.name = updates.name;
+    if (updates.description !== undefined) processedUpdates.description = updates.description;
+    
     if (updates.date) {
-      processedUpdates.date = typeof updates.date === 'string' 
-        ? new Date(updates.date) 
-        : updates.date;
+      const dateValue = typeof updates.date === 'string' ? new Date(updates.date) : updates.date;
+      if (isNaN(dateValue.getTime())) throw new Error("Invalid date");
+      processedUpdates.date = dateValue;
     }
     
     const [holiday] = await db

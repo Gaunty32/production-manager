@@ -22,6 +22,7 @@ import StaffHoldingArea from "@/pages/StaffHoldingArea";
 import WeeklyReports from "@/pages/WeeklyReports";
 import StaffJobDetail from "@/pages/StaffJobDetail";
 import ProductionDisplay from "@/pages/ProductionDisplay";
+import HolidayManagement from "@/pages/HolidayManagement";
 import Landing from "@/pages/Landing";
 import CustomerLogin from "@/pages/CustomerLogin";
 import StaffLogin from "@/pages/StaffLogin";
@@ -65,6 +66,7 @@ function StaffRouter() {
       <Route path="/staff"><StaffPage /></Route>
       <Route path="/users"><UsersPage /></Route>
       <Route path="/schedule"><Schedule /></Route>
+      <Route path="/holidays"><HolidayManagement /></Route>
       <Route path="/leaderboard"><Leaderboard /></Route>
       <Route path="/invoicing"><InvoicingQueue /></Route>
       <Route path="/reports/weekly"><WeeklyReports /></Route>
