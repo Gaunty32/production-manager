@@ -138,7 +138,7 @@ export default function InvoicingQueue() {
   };
 
   const getCustomerApprovedLogos = (customerId: string) => {
-    return logoSetups.filter(ls => ls.customerId === customerId && ls.approved);
+    return logoSetups.filter(ls => ls.customerId === customerId && ls.approved && ls.approvedAt);
   };
 
   const needsManualPrice = (lineItem: LineItem) => {

@@ -2899,7 +2899,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/logo-setups/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const parsed = updateLogoSetupSchema.parse(req.body);
-      const logoSetup = await storage.updateLogoSetup(req.params.id, parsed);
+      
+      // Automatically set approvedAt when approved is set to true
+      const updateData = {
+        ...parsed,
+        approvedAt: parsed.approved === true ? new Date() : parsed.approvedAt,
+      };
+      
+      const logoSetup = await storage.updateLogoSetup(req.params.id, updateData);
       res.json(logoSetup);
     } catch (error) {
       console.error("Error updating logo setup:", error);
