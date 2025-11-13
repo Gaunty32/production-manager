@@ -2751,6 +2751,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const isConsolidated = shipmentJobs.length > 1 && !shipmentKey.startsWith('single-');
           const jobNames = shipmentJobs.map((j: Job) => j.jobName).join(', ');
           
+          // Get package info for Direct Delivery
+          let packageInfo = '';
+          if (shippingMethod === 'direct_delivery') {
+            const firstJobWithPackageInfo = shipmentJobs.find(j => j.packageCount && j.packageType);
+            if (firstJobWithPackageInfo) {
+              const count = firstJobWithPackageInfo.packageCount;
+              const type = firstJobWithPackageInfo.packageType;
+              
+              // Proper pluralization mapping
+              const pluralMap: { [key: string]: string } = {
+                'box': 'boxes',
+                'Box': 'boxes',
+                'bag': 'bags',
+                'Bag': 'bags',
+                'pallet': 'pallets',
+                'Pallet': 'pallets',
+                'package': 'packages',
+                'Package': 'packages',
+              };
+              
+              const pluralType = count > 1 
+                ? (pluralMap[type] || type.toLowerCase() + 's') 
+                : type.toLowerCase();
+              
+              packageInfo = ` (${count} ${pluralType})`;
+            }
+          }
+          
           lineItemsWithPricing.push({
             jobName: isConsolidated ? `${shipmentJobs.length} jobs` : shipmentJobs[0].jobName,
             poNumber: shipmentJobs[0].poNumber,
@@ -2760,7 +2788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 : shippingMethod === 'consolidated' 
                   ? 'Consolidated Back to Customer' 
                   : 'Direct Delivery'
-            }${isConsolidated ? ` - ${jobNames}` : ''}`,
+            }${packageInfo}${isConsolidated ? ` - ${jobNames}` : ''}`,
             quantity: 1,
             unitPrice: totalShippingCost,
             stitchCount: 0,
