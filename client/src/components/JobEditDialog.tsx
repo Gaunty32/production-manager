@@ -50,6 +50,8 @@ import { ShippingInfoDialog } from "@/components/ShippingInfoDialog";
 type LineItem = {
   id?: string;
   jobType: string;
+  position: string | null;
+  positionOther: string | null;
   quantity: number;
   description: string;
   stitchCount: number;
@@ -69,6 +71,7 @@ type LineItem = {
 };
 
 const JOB_TYPES = ["Embroidery", "Print", "Embroidery Initials/Name", "Print Initials/Name", "Bagging", "Other"] as const;
+const POSITION_OPTIONS = ["left chest", "right chest", "left sleeve", "right sleeve", "rear", "other"] as const;
 
 const formSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
@@ -176,6 +179,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const { data: fetchedLineItems } = useQuery<Array<{
     id: string;
     jobType: string;
+    position: string | null;
+    positionOther: string | null;
     quantity: number;
     description: string | null;
     stitchCount: number;
@@ -216,6 +221,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         setLineItems(fetchedLineItems.map((item) => ({
           id: item.id,
           jobType: item.jobType || "Embroidery", // Default to Embroidery if missing (for existing data)
+          position: item.position || null,
+          positionOther: item.positionOther || null,
           quantity: item.quantity,
           description: item.description || "",
           stitchCount: item.stitchCount,
@@ -230,6 +237,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         // Old job without line items - create a default line item from job quantity
         setLineItems([{
           jobType: "Embroidery",
+          position: null,
+          positionOther: null,
           quantity: job.quantity,
           description: "",
           stitchCount: 5000,
@@ -244,6 +253,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         // No line items and no quantity
         setLineItems([{
           jobType: "Embroidery",
+          position: null,
+          positionOther: null,
           quantity: 1,
           description: "",
           stitchCount: 5000,
@@ -260,7 +271,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }, [fetchedLineItems, open, job]);
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, actualProductionTimeMinutes: null, machineId: null }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", position: null, positionOther: null, quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, actualProductionTimeMinutes: null, machineId: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -761,6 +772,30 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                           </Select>
                         </div>
                         <div className="flex-1">
+                          <label className="text-xs text-muted-foreground">Position</label>
+                          <Select 
+                            value={item.position || ""}
+                            onValueChange={(value) => {
+                              updateLineItem(index, 'position', value || null);
+                              // Clear positionOther if not selecting "other"
+                              if (value !== "other") {
+                                updateLineItem(index, 'positionOther', null);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="mt-1" data-testid={`select-edit-line-item-position-${index}`}>
+                              <SelectValue placeholder="Select position" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {POSITION_OPTIONS.map((pos) => (
+                                <SelectItem key={pos} value={pos}>
+                                  {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex-1">
                           <label className="text-xs text-muted-foreground">Quantity</label>
                           <Input
                             type="number"
@@ -894,6 +929,20 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                           data-testid={`input-edit-line-item-description-${index}`}
                         />
                       </div>
+
+                      {/* Position Other - Only show when "other" is selected */}
+                      {item.position === "other" && (
+                        <div>
+                          <label className="text-xs text-muted-foreground">Position Details</label>
+                          <Input
+                            value={item.positionOther || ""}
+                            onChange={(e) => updateLineItem(index, 'positionOther', e.target.value)}
+                            placeholder="Please specify position..."
+                            className="mt-1"
+                            data-testid={`input-edit-line-item-position-other-${index}`}
+                          />
+                        </div>
+                      )}
                       
                       {/* Schedule Suggestion for Line Item */}
                       <div className="flex items-center gap-2">

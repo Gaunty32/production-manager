@@ -123,6 +123,8 @@ export const jobLineItems = pgTable("job_line_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
   jobType: text("job_type").notNull().default("Embroidery"),
+  position: text("position"),
+  positionOther: text("position_other"),
   quantity: integer("quantity").notNull(),
   description: text("description"),
   stitchCount: integer("stitch_count").notNull(),
@@ -534,6 +536,8 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
 }).extend({
   quantity: z.coerce.number().int().min(0),
   stitchCount: z.coerce.number().int().min(0),
+  position: z.string().nullable().optional(),
+  positionOther: z.string().nullable().optional(),
   logoApproved: z.preprocess(
     (val) => val === true || val === 'true' || val === 1 || val === '1',
     z.boolean()
@@ -557,6 +561,8 @@ export const updateJobLineItemSchema = z.object({
   quantity: z.coerce.number().int().min(0).optional(),
   description: z.string().nullable().optional(),
   stitchCount: z.coerce.number().int().min(0).optional(),
+  position: z.string().nullable().optional(),
+  positionOther: z.string().nullable().optional(),
   logoApproved: z.coerce.boolean().optional(),
   completed: z.coerce.boolean().optional(),
   completedById: z.string().nullable().optional(),
