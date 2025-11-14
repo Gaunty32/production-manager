@@ -444,6 +444,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               completedById: item.completedById || null,
               completedAt: item.completedAt || null,
               machineId: item.machineId || null,
+              actualProductionTimeMinutes: item.actualProductionTimeMinutes,
             });
           } else {
             // Create new line item
@@ -457,6 +458,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               completedById: item.completedById || null,
               completedAt: item.completedAt || null,
               machineId: item.machineId || null,
+              actualProductionTimeMinutes: item.actualProductionTimeMinutes,
             });
           }
         }
