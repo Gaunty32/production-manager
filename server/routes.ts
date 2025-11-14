@@ -2670,9 +2670,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let hasTBA = false;
 
       // Group jobs by consolidatedShipmentId to handle carriage properly
+      // For consolidated invoices, jobs without a consolidatedShipmentId should be grouped together
       const shipmentGroups = new Map<string, Job[]>();
       for (const job of selectedJobs) {
-        const shipmentKey = job.consolidatedShipmentId || `single-${job.id}`;
+        // Use 'consolidated-all' for jobs without a shipment ID (they're being consolidated now)
+        const shipmentKey = job.consolidatedShipmentId || 'consolidated-all';
         if (!shipmentGroups.has(shipmentKey)) {
           shipmentGroups.set(shipmentKey, []);
         }
