@@ -383,14 +383,24 @@ export class XeroService {
         }
       }
       
-      return {
+      // Build the line item
+      const lineItem: any = {
         description,
         quantity: item.quantity,
         unitAmount: item.unitPrice,
         accountCode: "4002",
         taxType: "OUTPUT2", // 20% VAT on income
-        itemCode: item.itemCode === "CARRIAGE" ? "Carriage" : item.itemCode, // Map CARRIAGE to Carriage for Xero
       };
+      
+      // Only include itemCode if it's a recognized code (not OTHER)
+      if (item.itemCode === "CARRIAGE") {
+        lineItem.itemCode = "Carriage"; // Map CARRIAGE to Carriage for Xero
+      } else if (item.itemCode !== "OTHER") {
+        lineItem.itemCode = item.itemCode; // Include other valid codes like Emb, Print DTF, BAG
+      }
+      // Omit itemCode for OTHER - let Xero handle it without a specific item code
+      
+      return lineItem;
     });
 
     const invoice: XeroInvoice = {
@@ -480,14 +490,24 @@ export class XeroService {
         }
       }
       
-      return {
+      // Build the line item
+      const lineItem: any = {
         description,
         quantity: item.quantity,
         unitAmount: item.unitPrice,
         accountCode: "4002",
         taxType: "OUTPUT2", // 20% VAT on income
-        itemCode: item.itemCode === "CARRIAGE" ? "Carriage" : item.itemCode, // Map CARRIAGE to Carriage for Xero
       };
+      
+      // Only include itemCode if it's a recognized code (not OTHER)
+      if (item.itemCode === "CARRIAGE") {
+        lineItem.itemCode = "Carriage"; // Map CARRIAGE to Carriage for Xero
+      } else if (item.itemCode !== "OTHER") {
+        lineItem.itemCode = item.itemCode; // Include other valid codes like Emb, Print DTF, BAG
+      }
+      // Omit itemCode for OTHER - let Xero handle it without a specific item code
+      
+      return lineItem;
     });
 
     // Helper function: Get the next Friday (7th, 14th, 21st, or 28th) after completion date
