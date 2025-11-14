@@ -37,6 +37,8 @@ export const getQueryFn: <T>(options: {
       return null;
     }
 
+    // For permission errors (401/403), still throw so React Query catches it
+    // This allows components to use the isError state and display error UI
     await throwIfResNotOk(res);
     return await res.json();
   };

@@ -31,7 +31,37 @@ export default function WeeklyReports() {
     }
   };
 
-  // Calculate totals
+  // Early return for error state to prevent processing null data
+  if (isError || (weeklyData === null && !isLoading)) {
+    return (
+      <div className="container mx-auto p-6 space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold" data-testid="text-page-title">Weekly Performance Report</h1>
+          <p className="text-muted-foreground">Last 12 weeks of invoiced value and completed production</p>
+        </div>
+
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="text-destructive">
+              {error instanceof Error && error.message.includes("permission") ? "Access Denied" : "Error Loading Data"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm" data-testid="text-error-message">
+              {error instanceof Error ? error.message : "Failed to load weekly performance data. Please try again later."}
+            </p>
+            {error instanceof Error && error.message.includes("permission") && (
+              <p className="text-xs text-muted-foreground mt-2">
+                This report requires admin, manager, or super admin privileges to view pricing information.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Calculate totals (safe now because we've handled null case above)
   const totals = weeklyData?.reduce(
     (acc, week) => ({
       invoicedTotal: acc.invoicedTotal + week.invoicedTotal,
@@ -80,19 +110,6 @@ export default function WeeklyReports() {
           </CardContent>
         </Card>
       </div>
-
-      {isError && (
-        <Card className="border-destructive">
-          <CardHeader>
-            <CardTitle className="text-destructive">Error Loading Data</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground" data-testid="text-error-message">
-              {error instanceof Error ? error.message : "Failed to load weekly performance data. Please try again later."}
-            </p>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>
