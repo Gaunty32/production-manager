@@ -845,7 +845,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             </>
                           ) : (
                             <>
-                              <label className="text-xs text-muted-foreground">Stitch Count</label>
+                              <label className="text-xs text-muted-foreground whitespace-nowrap">Stitch Count</label>
                               <Input
                                 type="number"
                                 min="1"

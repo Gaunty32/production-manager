@@ -1884,6 +1884,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Recalculate job's total actual production time from all completed line items
       await recalculateJobProductionTime(lineItem.jobId);
       
+      // Check if all line items in the job are now completed
+      const allLineItems = await storage.getJobLineItems(lineItem.jobId);
+      const allCompleted = allLineItems.length > 0 && allLineItems.every(item => item.completed);
+      const anyIncomplete = allLineItems.some(item => !item.completed);
+      
+      const job = await storage.getJob(lineItem.jobId);
+      // Only update if not part of a consolidated shipment (those are handled separately)
+      if (job && job.shippingMethod !== "consolidated") {
+        if (allCompleted && job.invoiceStatus === "pending") {
+          // If all line items are completed and job is pending, mark as ready for invoicing
+          // Don't overwrite jobs that have already been sent/paid
+          await storage.updateJob(lineItem.jobId, {
+            completed: true,
+            invoiceStatus: "ready"
+          });
+        } else if (anyIncomplete && job.invoiceStatus === "ready") {
+          // If any line item is incomplete and job is only at 'ready' status (not yet invoiced),
+          // reset job completion status. Don't downgrade jobs that have been sent/paid.
+          await storage.updateJob(lineItem.jobId, {
+            completed: false,
+            invoiceStatus: "pending"
+          });
+        }
+      }
+      
       res.json(lineItem);
     } catch (error) {
       if (error instanceof z.ZodError) {
