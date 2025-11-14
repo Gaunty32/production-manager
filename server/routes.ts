@@ -1855,22 +1855,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? data.actualProductionTimeMinutes 
             : existingLineItem.actualProductionTimeMinutes;
           
-          if (!machineId) {
-            return res.status(400).json({ 
-              error: "Machine assignment is required when completing an embroidery line item" 
-            });
-          }
-          
-          if (!completedById) {
-            return res.status(400).json({ 
-              error: "Completed by (staff member) is required when completing an embroidery line item" 
-            });
-          }
-          
-          // Allow 0 minutes for quick tasks, but require the field to be set (not null/undefined)
+          const missingFields = [];
+          if (!machineId) missingFields.push("Machine");
+          if (!completedById) missingFields.push("Completed By (staff member)");
           if (actualProductionTimeMinutes === null || actualProductionTimeMinutes === undefined) {
+            missingFields.push("Production Time (minutes)");
+          }
+          
+          if (missingFields.length > 0) {
             return res.status(400).json({ 
-              error: "Actual production time (in minutes) is required when completing an embroidery line item" 
+              error: `To complete this embroidery job, please fill in: ${missingFields.join(", ")}. These fields are marked with red asterisks (*) in the line item section.`
             });
           }
         }
