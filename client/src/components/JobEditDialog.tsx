@@ -810,7 +810,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             data-testid={`input-edit-line-item-quantity-${index}`}
                           />
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-[120px]">
                           {item.jobType === "Print" ? (
                             <>
                               <label className="text-xs text-muted-foreground">Print Size</label>
