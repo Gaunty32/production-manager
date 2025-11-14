@@ -2669,164 +2669,160 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let hasPOA = false;
       let hasTBA = false;
 
-      // Group jobs by consolidatedShipmentId to handle carriage properly
-      // For consolidated invoices, jobs without a consolidatedShipmentId should be grouped together
-      const shipmentGroups = new Map<string, Job[]>();
-      for (const job of selectedJobs) {
-        // Use 'consolidated-all' for jobs without a shipment ID (they're being consolidated now)
-        const shipmentKey = job.consolidatedShipmentId || 'consolidated-all';
-        if (!shipmentGroups.has(shipmentKey)) {
-          shipmentGroups.set(shipmentKey, []);
-        }
-        shipmentGroups.get(shipmentKey)!.push(job);
+      // Pre-compute the last index where each shipmentId appears
+      const shipmentLastIndex = new Map<string, number>();
+      for (let i = 0; i < selectedJobs.length; i++) {
+        const shipmentKey = selectedJobs[i].consolidatedShipmentId || `single-${selectedJobs[i].id}`;
+        shipmentLastIndex.set(shipmentKey, i);
       }
-
-      // Process each shipment group to keep carriage immediately after job items
-      for (const [shipmentKey, shipmentJobs] of Array.from(shipmentGroups.entries())) {
-        // Add all line items for all jobs in this shipment group
-        for (const job of shipmentJobs) {
-          const jobLineItems = await storage.getJobLineItems(job.id);
-          
-          // Try to calculate price, but catch errors for items outside pricing tables
-          let priceResult;
-          try {
-            priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
-            if (priceResult.totalPrice === "POA") {
-              hasPOA = true;
-            }
-          } catch (error) {
-            // If price calculation fails (e.g., no tier for quantity), treat as POA
-            console.log(`Price calculation failed for job ${job.id}, treating as POA:`, error instanceof Error ? error.message : error);
+      
+      // Accumulate jobs by shipment key
+      const shipmentJobsMap = new Map<string, Job[]>();
+      
+      for (let i = 0; i < selectedJobs.length; i++) {
+        const job = selectedJobs[i];
+        const shipmentKey = job.consolidatedShipmentId || `single-${job.id}`;
+        
+        // Add job to shipment accumulator
+        if (!shipmentJobsMap.has(shipmentKey)) {
+          shipmentJobsMap.set(shipmentKey, []);
+        }
+        shipmentJobsMap.get(shipmentKey)!.push(job);
+        
+        // Add this job's line items
+        const jobLineItems = await storage.getJobLineItems(job.id);
+        
+        let priceResult;
+        try {
+          priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
+          if (priceResult.totalPrice === "POA") {
             hasPOA = true;
-            priceResult = null;
           }
-
-          // Add each line item with its calculated unit price or manual price
-          jobLineItems.forEach((lineItem, index) => {
-            let unitPrice: number;
-            
-            // Use manual price if provided for this line item
-            if (manualPrices && manualPrices[lineItem.id] !== undefined) {
-              unitPrice = parseFloat(manualPrices[lineItem.id]);
-            } else if (priceResult) {
-              // Use calculated price if available
-              const lineItemPrice = priceResult.lineItemPrices[index];
-              unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice as number;
-            } else {
-              // No calculated price and no manual price - this will trigger error below
-              unitPrice = 0;
-            }
-            
-            // Determine item code based on job type (case-insensitive)
-            const jobTypeLower = lineItem.jobType?.toLowerCase() || '';
-            let itemCode = "Emb"; // Default to embroidery
-            if (jobTypeLower === "print") {
-              itemCode = "Print DTF";
-            } else if (jobTypeLower === "bagging") {
-              itemCode = "BAG";
-            } else if (jobTypeLower === "other") {
-              itemCode = "OTHER";
-            }
-            
-            lineItemsWithPricing.push({
-              jobName: job.jobName,
-              poNumber: job.poNumber,
-              description: lineItem.description || '',
-              quantity: lineItem.quantity,
-              unitPrice,
-              stitchCount: lineItem.stitchCount,
-              itemCode,
-            });
-          });
-
-          // Check for TBA shipping
-          if (job.shippingCost === "TBA") {
-            if (!manualShippingCosts || !manualShippingCosts[job.id]) {
-              hasTBA = true;
-            }
-          }
+        } catch (error) {
+          console.log(`Price calculation failed for job ${job.id}, treating as POA:`, error instanceof Error ? error.message : error);
+          hasPOA = true;
+          priceResult = null;
         }
 
-        // Add shipping line item immediately after this shipment group's job items
-        let totalShippingCost = 0;
-        let shippingMethod = '';
-        let hasShipping = false;
-        
-        // Sum shipping costs for all jobs in this shipment group
-        for (const job of shipmentJobs) {
-          let shippingCost: number | null = null;
+        jobLineItems.forEach((lineItem, index) => {
+          let unitPrice: number;
           
-          if (job.shippingCost === "TBA") {
-            if (manualShippingCosts && manualShippingCosts[job.id]) {
-              shippingCost = Number(manualShippingCosts[job.id]);
-            }
-          } else if (job.shippingCost) {
-            shippingCost = parseFloat(job.shippingCost);
+          if (manualPrices && manualPrices[lineItem.id] !== undefined) {
+            unitPrice = parseFloat(manualPrices[lineItem.id]);
+          } else if (priceResult) {
+            const lineItemPrice = priceResult.lineItemPrices[index];
+            unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice as number;
+          } else {
+            unitPrice = 0;
           }
           
-          if (shippingCost !== null && !isNaN(shippingCost) && shippingCost > 0) {
-            totalShippingCost += shippingCost;
-            hasShipping = true;
-            if (!shippingMethod) {
-              shippingMethod = job.shippingMethod || '';
-            }
-          }
-        }
-        
-        // Add a single shipping line item for this shipment group if there's shipping cost
-        if (hasShipping && totalShippingCost > 0) {
-          const isConsolidated = shipmentJobs.length > 1 && !shipmentKey.startsWith('single-');
-          const jobNames = shipmentJobs.map((j: Job) => j.jobName).join(', ');
-          
-          // Get package info for Direct Delivery
-          let packageInfo = '';
-          if (shippingMethod === 'direct_delivery') {
-            // Sum up package counts by type across all jobs in the shipment group
-            const packageCounts: { [key: string]: number } = {};
-            
-            for (const job of shipmentJobs) {
-              if (job.packageCount && job.packageType) {
-                const normalizedType = job.packageType.toLowerCase();
-                packageCounts[normalizedType] = (packageCounts[normalizedType] || 0) + job.packageCount;
-              }
-            }
-            
-            if (Object.keys(packageCounts).length > 0) {
-              // Proper pluralization mapping
-              const pluralMap: { [key: string]: string } = {
-                'box': 'boxes',
-                'bag': 'bags',
-                'pallet': 'pallets',
-                'package': 'packages',
-              };
-              
-              // Build package info string
-              const packageParts = Object.entries(packageCounts).map(([type, count]) => {
-                const pluralType = count > 1 
-                  ? (pluralMap[type] || type + 's') 
-                  : type;
-                return `${count} ${pluralType}`;
-              });
-              
-              packageInfo = ` (${packageParts.join(', ')})`;
-            }
+          const jobTypeLower = lineItem.jobType?.toLowerCase() || '';
+          let itemCode = "Emb";
+          if (jobTypeLower === "print") {
+            itemCode = "Print DTF";
+          } else if (jobTypeLower === "bagging") {
+            itemCode = "BAG";
+          } else if (jobTypeLower === "other") {
+            itemCode = "OTHER";
           }
           
           lineItemsWithPricing.push({
-            jobName: isConsolidated ? `${shipmentJobs.length} jobs` : shipmentJobs[0].jobName,
-            poNumber: shipmentJobs[0].poNumber,
-            description: `Shipping${isConsolidated ? ' (Consolidated)' : ''} - ${
-              shippingMethod === 'customer_collection' 
-                ? 'Customer Collection' 
-                : shippingMethod === 'consolidated' 
-                  ? 'Consolidated Back to Customer' 
-                  : 'Direct Delivery'
-            }${packageInfo}${isConsolidated ? ` - ${jobNames}` : ''}`,
-            quantity: 1,
-            unitPrice: totalShippingCost,
-            stitchCount: 0,
-            itemCode: "CARRIAGE",
+            jobName: job.jobName,
+            poNumber: job.poNumber,
+            description: lineItem.description || '',
+            quantity: lineItem.quantity,
+            unitPrice,
+            stitchCount: lineItem.stitchCount,
+            itemCode,
           });
+        });
+
+        if (job.shippingCost === "TBA") {
+          if (!manualShippingCosts || !manualShippingCosts[job.id]) {
+            hasTBA = true;
+          }
+        }
+        
+        // If this is the last occurrence of this shipmentKey, emit carriage
+        if (shipmentLastIndex.get(shipmentKey) === i) {
+          const shipmentJobs = shipmentJobsMap.get(shipmentKey)!;
+          const emitCarriageForJobs = (jobs: Job[]) => {
+            let totalShippingCost = 0;
+            let shippingMethod = '';
+            let hasShipping = false;
+            
+            for (const shipmentJob of jobs) {
+              let shippingCost: number | null = null;
+              
+              if (shipmentJob.shippingCost === "TBA") {
+                if (manualShippingCosts && manualShippingCosts[shipmentJob.id]) {
+                  shippingCost = Number(manualShippingCosts[shipmentJob.id]);
+                }
+              } else if (shipmentJob.shippingCost) {
+                shippingCost = parseFloat(shipmentJob.shippingCost);
+              }
+              
+              if (shippingCost !== null && !isNaN(shippingCost) && shippingCost > 0) {
+                totalShippingCost += shippingCost;
+                hasShipping = true;
+                if (!shippingMethod) {
+                  shippingMethod = shipmentJob.shippingMethod || '';
+                }
+              }
+            }
+            
+            if (hasShipping && totalShippingCost > 0) {
+              const isConsolidated = jobs.length > 1;
+              const jobNames = jobs.map(j => j.jobName).join(', ');
+              
+              let packageInfo = '';
+              if (shippingMethod === 'direct_delivery') {
+                const packageCounts: { [key: string]: number } = {};
+                for (const shipmentJob of jobs) {
+                  if (shipmentJob.packageCount && shipmentJob.packageType) {
+                    const normalizedType = shipmentJob.packageType.toLowerCase();
+                    packageCounts[normalizedType] = (packageCounts[normalizedType] || 0) + shipmentJob.packageCount;
+                  }
+                }
+                
+                if (Object.keys(packageCounts).length > 0) {
+                  const pluralMap: { [key: string]: string } = {
+                    'box': 'boxes',
+                    'bag': 'bags',
+                    'pallet': 'pallets',
+                    'package': 'packages',
+                  };
+                  
+                  const packageParts = Object.entries(packageCounts).map(([type, count]) => {
+                    const pluralType = count > 1 ? (pluralMap[type] || type + 's') : type;
+                    return `${count} ${pluralType}`;
+                  });
+                  
+                  packageInfo = ` (${packageParts.join(', ')})`;
+                }
+              }
+              
+              lineItemsWithPricing.push({
+                jobName: isConsolidated ? `${jobs.length} jobs` : jobs[0].jobName,
+                poNumber: jobs[0].poNumber,
+                description: `Shipping${isConsolidated ? ' (Consolidated)' : ''} - ${
+                  shippingMethod === 'customer_collection' 
+                    ? 'Customer Collection' 
+                    : shippingMethod === 'consolidated' 
+                      ? 'Consolidated Back to Customer' 
+                      : 'Direct Delivery'
+                }${packageInfo}${isConsolidated ? ` - ${jobNames}` : ''}`,
+                quantity: 1,
+                unitPrice: totalShippingCost,
+                stitchCount: 0,
+                itemCode: "CARRIAGE",
+              });
+            }
+          };
+          
+          emitCarriageForJobs(shipmentJobs);
+          // Clear from map to prevent reprocessing
+          shipmentJobsMap.delete(shipmentKey);
         }
       }
       
