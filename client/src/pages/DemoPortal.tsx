@@ -63,6 +63,15 @@ export default function DemoPortal() {
     queryKey: ["/api/demo/customer/jobs"],
   });
 
+  // Debug logging
+  console.log('Demo Portal State:', { 
+    jobsCount: jobs?.length, 
+    isLoading: isLoadingJobs, 
+    isError, 
+    error: error instanceof Error ? error.message : error,
+    jobs: jobs?.slice(0, 2) // Log first 2 jobs
+  });
+
   const handleDemoAction = () => {
     toast({
       title: "Demo Mode",
@@ -198,6 +207,19 @@ export default function DemoPortal() {
                 <Button variant="outline" onClick={() => window.location.href = '/logout'}>
                   Log Out
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Loading State */}
+        {isLoadingJobs && (
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="text-center py-8">
+                <Clock className="h-12 w-12 animate-spin mx-auto mb-4 text-muted-foreground" />
+                <p className="text-lg font-semibold">Loading demo data...</p>
+                <p className="text-sm text-muted-foreground mt-2">Fetching sample orders from our production system</p>
               </div>
             </CardContent>
           </Card>
