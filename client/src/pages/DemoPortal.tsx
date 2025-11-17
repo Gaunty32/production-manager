@@ -59,7 +59,7 @@ export default function DemoPortal() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "jobName" | "quantity">("date");
 
-  const { data: jobs = [], isLoading: isLoadingJobs } = useQuery<Job[]>({
+  const { data: jobs = [], isLoading: isLoadingJobs, isError, error } = useQuery<Job[]>({
     queryKey: ["/api/demo/customer/jobs"],
   });
 
@@ -180,6 +180,28 @@ export default function DemoPortal() {
             </div>
           </div>
         </div>
+
+        {/* Error State - Staff users can't access demo */}
+        {isError && (
+          <Card className="mb-6 border-destructive">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-5 w-5" />
+                Access Restricted
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Staff users cannot access the demo portal. Please log out to view the public demo, or visit the main production queue instead.
+              </p>
+              <div className="mt-4">
+                <Button variant="outline" onClick={() => window.location.href = '/logout'}>
+                  Log Out
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
