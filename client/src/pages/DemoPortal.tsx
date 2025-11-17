@@ -220,7 +220,7 @@ export default function DemoPortal() {
                 Staff users cannot access the demo portal. Please log out to view the public demo, or visit the main production queue instead.
               </p>
               <div className="mt-4">
-                <Button variant="outline" onClick={() => window.location.href = '/logout'}>
+                <Button variant="outline" onClick={() => window.location.href = '/customer/login'}>
                   Log Out
                 </Button>
               </div>
