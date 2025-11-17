@@ -60,7 +60,7 @@ export default function DemoPortal() {
   const [sortBy, setSortBy] = useState<"date" | "jobName" | "quantity">("date");
 
   const { data: jobs = [], isLoading: isLoadingJobs, isError, error } = useQuery<Job[]>({
-    queryKey: ["/api/demo/jobs"],
+    queryKey: ["/api/demo/customer/jobs"],
   });
 
   // Debug logging
