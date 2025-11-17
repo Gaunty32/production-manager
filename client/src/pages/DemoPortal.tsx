@@ -64,13 +64,13 @@ export default function DemoPortal() {
   });
 
   // Debug logging
-  console.log('Demo Portal State:', { 
-    jobsCount: jobs?.length, 
-    isLoading: isLoadingJobs, 
-    isError, 
-    error: error instanceof Error ? error.message : error,
-    jobs: jobs?.slice(0, 2) // Log first 2 jobs
-  });
+  console.log('=== DEMO PORTAL DEBUG ===');
+  console.log('Jobs Count:', jobs?.length);
+  console.log('Is Loading:', isLoadingJobs);
+  console.log('Is Error:', isError);
+  console.log('Error:', error instanceof Error ? error.message : error);
+  console.log('First Job:', jobs?.[0]);
+  console.log('========================');
 
   const handleDemoAction = () => {
     toast({
