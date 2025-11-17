@@ -5,7 +5,13 @@ const sql = neon(process.env.DATABASE_URL!);
 async function seedDemoData() {
   console.log('Starting demo data seed...');
   
-  const JK_PRINTS_CUSTOMER_ID = '3818c869-f54d-4d10-b966-d9708db79adf';
+  // Try to find JK Prints customer by name
+  const jkPrintsCustomer = await sql`SELECT id FROM customers WHERE name = 'JK Prints'`;
+  const JK_PRINTS_CUSTOMER_ID = jkPrintsCustomer.length > 0 
+    ? jkPrintsCustomer[0].id 
+    : '3818c869-f54d-4d10-b966-d9708db79adf'; // fallback to dev ID
+  
+  console.log('Using JK Prints customer ID:', JK_PRINTS_CUSTOMER_ID);
   
   try {
     // Check if demo jobs already exist
@@ -38,7 +44,7 @@ async function seedDemoData() {
     
     // Insert line items for demo jobs
     await sql`
-      INSERT INTO line_items (id, job_id, job_type, quantity, description, stitch_count, logo_approved, completed, machine_id)
+      INSERT INTO job_line_items (id, job_id, job_type, quantity, description, stitch_count, logo_approved, completed, machine_id)
       VALUES 
         -- Job 1: Corporate Polo Shirts
         ('demo-line-1-1', 'demo-job-1', 'embroidery', 80, 'Navy polos - chest logo', 8500, true, false, 1),
@@ -49,7 +55,7 @@ async function seedDemoData() {
         ('demo-line-2-2', 'demo-job-2', 'embroidery', 35, 'Front chest logo', 6500, true, false, 3),
         
         -- Job 3: Trade Show T-Shirts
-        ('demo-line-3-1', 'demo-job-3', 'print', 200, 'DTF print - full color logo', NULL, true, false, NULL),
+        ('demo-line-3-1', 'demo-job-3', 'print', 200, 'DTF print - full color logo', 0, true, false, NULL),
         
         -- Job 4: Safety Vests
         ('demo-line-4-1', 'demo-job-4', 'embroidery', 100, 'Back text embroidery', 12000, true, false, 2),
@@ -62,11 +68,11 @@ async function seedDemoData() {
         ('demo-line-6-2', 'demo-job-6', 'embroidery', 60, 'Jackets - left chest', 5500, true, false, 2),
         
         -- Job 7: Conference Bags
-        ('demo-line-7-1', 'demo-job-7', 'print', 180, 'DTF logo print', NULL, true, false, NULL),
+        ('demo-line-7-1', 'demo-job-7', 'print', 180, 'DTF logo print', 0, true, false, NULL),
         
         -- Job 8: Branded Workwear
         ('demo-line-8-1', 'demo-job-8', 'embroidery', 50, 'Shirts - chest logo', 9000, true, false, 1),
-        ('demo-line-8-2', 'demo-job-8', 'print', 40, 'Hoodies - back print', NULL, true, false, NULL)
+        ('demo-line-8-2', 'demo-job-8', 'print', 40, 'Hoodies - back print', 0, true, false, NULL)
     `;
     
     console.log('✅ Demo data seed completed successfully!');
