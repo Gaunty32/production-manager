@@ -61,8 +61,20 @@ export default function DemoPortal() {
 
   const { data: jobs = [], isLoading: isLoadingJobs, isError, error } = useQuery<Job[]>({
     queryKey: ["/api/demo/customer/jobs"],
-    staleTime: 0, // Force fresh fetch
-    gcTime: 0, // Don't cache
+    queryFn: async () => {
+      const res = await fetch("/api/demo/customer/jobs", {
+        credentials: "include",
+        cache: "no-store", // Force no cache
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`);
+      return res.json();
+    },
+    staleTime: 0,
+    gcTime: 0,
   });
 
   // Debug logging
