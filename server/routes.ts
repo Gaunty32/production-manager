@@ -995,8 +995,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Staff users cannot access demo portal" });
       }
 
-      // Hard-coded JK Prints customer ID
-      const JK_PRINTS_CUSTOMER_ID = '3818c869-f54d-4d10-b966-d9708db79adf';
+      // Hard-coded JK Prints customer ID (production database)
+      const JK_PRINTS_CUSTOMER_ID = '170523f5-012a-4571-892c-02f166dbb463';
       
       // Get all non-sensitive jobs for JK Prints
       const jobs = await storage.getJobsByCustomerId(JK_PRINTS_CUSTOMER_ID);
