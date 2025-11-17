@@ -61,15 +61,19 @@ export default function DemoPortal() {
 
   const { data: jobs = [], isLoading: isLoadingJobs, isError, error } = useQuery<Job[]>({
     queryKey: ["/api/demo/customer/jobs"],
+    staleTime: 0, // Force fresh fetch
+    gcTime: 0, // Don't cache
   });
 
   // Debug logging
   console.log('=== DEMO PORTAL DEBUG ===');
+  console.log('Raw data from React Query:', jobs);
   console.log('Jobs Count:', jobs?.length);
   console.log('Is Loading:', isLoadingJobs);
   console.log('Is Error:', isError);
   console.log('Error:', error instanceof Error ? error.message : error);
   console.log('First Job:', jobs?.[0]);
+  console.log('Data type:', typeof jobs, Array.isArray(jobs));
   console.log('========================');
 
   const handleDemoAction = () => {
