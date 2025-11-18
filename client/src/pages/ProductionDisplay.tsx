@@ -47,6 +47,9 @@ interface LeaderData {
   total_hours: number;
   stitches_per_head_hour: number;
   machine_usage: Record<string, number>;
+  on_time_count?: number;
+  late_count?: number;
+  stars?: number;
 }
 
 interface LeaderboardResponse {
@@ -352,85 +355,127 @@ export default function ProductionDisplay() {
     </div>
   );
 
-  const renderLeaderboardView = () => (
-    <div className="flex flex-col h-full">
-      <div className="mb-6">
-        <h1 className="text-5xl font-bold tracking-tight" data-testid="heading-leaderboard">Production Leaderboard</h1>
-        <p className="text-2xl text-muted-foreground mt-2">Last 30 Days Performance</p>
-      </div>
+  const renderLeaderboardView = () => {
+    const leaders = leaderboard?.leaders || [];
+    
+    if (leaders.length === 0) {
+      return (
+        <div className="flex flex-col h-full">
+          <div className="mb-6">
+            <h1 className="text-5xl font-bold tracking-tight" data-testid="heading-leaderboard">Production Leaderboard</h1>
+            <p className="text-2xl text-muted-foreground mt-2">Last 30 Days Performance</p>
+          </div>
+          <Card>
+            <CardContent className="text-center py-16 text-muted-foreground">
+              <Trophy className="h-20 w-20 mx-auto mb-4 opacity-30" />
+              <p className="text-2xl">No performance data available for the last 30 days</p>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
 
-      <div className="flex-1 overflow-auto">
-        <div className="space-y-4">
-          {leaderboardData.map((staff, index) => (
-            <Card key={staff.staff_id} data-testid={`leaderboard-${staff.staff_id}`}>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-6">
-                  <div 
-                    className="text-6xl font-bold text-primary w-20 text-center" 
-                    data-testid={`rank-${staff.staff_id}`}
-                    aria-label={`Rank ${index + 1}`}
-                  >
-                    #{index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-3xl font-semibold" data-testid={`staff-name-${staff.staff_id}`}>
-                      {staff.staff_name}
-                    </h3>
-                    <div className="grid grid-cols-3 gap-6 mt-4">
-                      <div>
-                        <p className="text-lg text-muted-foreground">Stitches/Hour</p>
-                        <p 
-                          className="text-3xl font-bold text-primary" 
-                          data-testid={`stitches-per-hour-${staff.staff_id}`}
-                        >
-                          {staff.stitches_per_hour.toFixed(0)}
-                        </p>
+    return (
+      <div className="flex flex-col h-full">
+        <div className="mb-6">
+          <h1 className="text-5xl font-bold tracking-tight" data-testid="heading-leaderboard">Production Leaderboard</h1>
+          <p className="text-2xl text-muted-foreground mt-2">Last 30 Days Performance</p>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          <div className="space-y-4">
+            {leaders.map((staff: LeaderData, index: number) => {
+              const netStars = Math.max(0, staff.yellow_stars - staff.red_stars);
+              return (
+                <Card key={staff.staff_id} data-testid={`leaderboard-${staff.staff_id}`}>
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-6">
+                      <div 
+                        className="text-6xl font-bold text-primary w-20 text-center" 
+                        data-testid={`rank-${staff.staff_id}`}
+                        aria-label={`Rank ${index + 1}`}
+                      >
+                        #{index + 1}
                       </div>
-                      <div>
-                        <p className="text-lg text-muted-foreground">On Time</p>
-                        <p 
-                          className="text-3xl font-bold text-green-600" 
-                          data-testid={`on-time-count-${staff.staff_id}`}
-                        >
-                          {staff.on_time_count}
-                        </p>
+                      <div className="flex-1">
+                        <h3 className="text-3xl font-semibold" data-testid={`staff-name-${staff.staff_id}`}>
+                          {staff.staff_name}
+                        </h3>
+                        <div className="grid grid-cols-3 gap-6 mt-4">
+                          <div>
+                            <p className="text-lg text-muted-foreground">Stitches/Hour</p>
+                            <p 
+                              className="text-3xl font-bold text-primary" 
+                              data-testid={`stitches-per-hour-${staff.staff_id}`}
+                            >
+                              {staff.stitches_per_head_hour.toFixed(0)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-lg text-muted-foreground">Yellow Stars</p>
+                            <p 
+                              className="text-3xl font-bold text-yellow-600" 
+                              data-testid={`yellow-stars-${staff.staff_id}`}
+                            >
+                              {staff.yellow_stars}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-lg text-muted-foreground">Red Stars</p>
+                            <p 
+                              className="text-3xl font-bold text-red-600" 
+                              data-testid={`red-stars-${staff.staff_id}`}
+                            >
+                              {staff.red_stars}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-lg text-muted-foreground">Late</p>
-                        <p 
-                          className="text-3xl font-bold text-red-600" 
-                          data-testid={`late-count-${staff.staff_id}`}
-                        >
-                          {staff.late_count}
-                        </p>
+                      <div className="flex gap-2" data-testid={`stars-${staff.staff_id}`} aria-label={`${netStars} stars`}>
+                        {Array.from({ length: Math.min(5, netStars) }).map((_, i) => (
+                          <Star key={i} className="h-12 w-12 fill-yellow-400 text-yellow-400" />
+                        ))}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2" data-testid={`stars-${staff.staff_id}`} aria-label={`${Math.floor(staff.stars)} stars`}>
-                    {Array.from({ length: Math.min(5, Math.floor(staff.stars)) }).map((_, i) => (
-                      <Star key={i} className="h-12 w-12 fill-yellow-400 text-yellow-400" />
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
-  const renderGraphView = () => (
-    <div className="flex flex-col h-full">
-      <div className="mb-6">
-        <h1 className="text-5xl font-bold tracking-tight" data-testid="heading-performance-graph">Performance Trends</h1>
-        <p className="text-2xl text-muted-foreground mt-2">30-Day Stitches Per Hour History</p>
-      </div>
+  const renderGraphView = () => {
+    if (chartData.length === 0) {
+      return (
+        <div className="flex flex-col h-full">
+          <div className="mb-6">
+            <h1 className="text-5xl font-bold tracking-tight" data-testid="heading-performance-graph">Performance Trends</h1>
+            <p className="text-2xl text-muted-foreground mt-2">30-Day Stitches Per Hour History</p>
+          </div>
+          <Card>
+            <CardContent className="text-center py-16 text-muted-foreground">
+              <TrendingUp className="h-20 w-20 mx-auto mb-4 opacity-30" />
+              <p className="text-2xl">No performance history available</p>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
 
-      <div className="flex-1 overflow-auto">
-        <Card data-testid="graph-container">
-          <CardContent className="p-8">
-            <ResponsiveContainer width="100%" height={600} data-testid="performance-chart">
+    return (
+      <div className="flex flex-col h-full">
+        <div className="mb-6">
+          <h1 className="text-5xl font-bold tracking-tight" data-testid="heading-performance-graph">Performance Trends</h1>
+          <p className="text-2xl text-muted-foreground mt-2">30-Day Stitches Per Hour History</p>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          <Card data-testid="graph-container">
+            <CardContent className="p-8">
+              <ResponsiveContainer width="100%" height={600} data-testid="performance-chart">
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
@@ -468,11 +513,12 @@ export default function ProductionDisplay() {
                 ))}
               </LineChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
 
   return (
