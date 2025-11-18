@@ -1216,7 +1216,7 @@ export class DatabaseStorage implements IStorage {
         LEFT JOIN job_schedule js ON j.id = js.job_id AND COALESCE(jli.machine_id, j.machine_id) = js.machine_id
         LEFT JOIN staff s ON js.staff_id = s.id
         WHERE 
-          j.status = 'production'
+          j.status IN ('production', 'pending')
           AND j.completed = false
           AND jli.completed = false
           AND js.scheduled_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + ${days} * INTERVAL '1 day'
@@ -1246,7 +1246,7 @@ export class DatabaseStorage implements IStorage {
         INNER JOIN jobs j ON jli.job_id = j.id
         INNER JOIN customers c ON j.customer_id = c.id
         WHERE 
-          j.status = 'production'
+          j.status IN ('production', 'pending')
           AND j.completed = false
           AND jli.completed = false
           AND j.required_dispatch_date::date < CURRENT_DATE
@@ -1281,7 +1281,7 @@ export class DatabaseStorage implements IStorage {
         INNER JOIN jobs j ON jli.job_id = j.id
         INNER JOIN customers c ON j.customer_id = c.id
         WHERE 
-          j.status = 'production'
+          j.status IN ('production', 'pending')
           AND j.completed = false
           AND jli.completed = false
           AND (j.required_dispatch_date::date >= CURRENT_DATE OR j.required_dispatch_date IS NULL)
