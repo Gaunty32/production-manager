@@ -91,6 +91,26 @@ export default function ProductionDisplay() {
     refetchInterval: 150000,
   });
 
+  // Prepare chart data from history (must be before loading check to follow Rules of Hooks)
+  const chartData = useMemo(() => {
+    if (!history || history.history.length === 0) return [];
+
+    // Get unique dates and staff members
+    const dates = Array.from(new Set(history.history.map(h => h.completion_date))).sort();
+    const staffMembers = Array.from(new Set(history.history.map(h => h.staff_name)));
+
+    // Transform data for recharts
+    return dates.map(date => {
+      const dataPoint: any = { date };
+      history.history
+        .filter(h => h.completion_date === date)
+        .forEach(h => {
+          dataPoint[h.staff_name] = h.stitches_per_hour;
+        });
+      return dataPoint;
+    });
+  }, [history]);
+
   // Show loading state
   if (queueLoading || leaderboardLoading || historyLoading) {
     return (
@@ -145,26 +165,6 @@ export default function ProductionDisplay() {
     const mins = minutes % 60;
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   };
-
-  // Prepare chart data from history
-  const chartData = useMemo(() => {
-    if (!history || history.history.length === 0) return [];
-
-    // Get unique dates and staff members
-    const dates = Array.from(new Set(history.history.map(h => h.completion_date))).sort();
-    const staffMembers = Array.from(new Set(history.history.map(h => h.staff_name)));
-
-    // Transform data for recharts
-    return dates.map(date => {
-      const dataPoint: any = { date };
-      history.history
-        .filter(h => h.completion_date === date)
-        .forEach(h => {
-          dataPoint[h.staff_name] = h.stitches_per_hour;
-        });
-      return dataPoint;
-    });
-  }, [history]);
 
   // Generate colors for each staff member
   const staffColors = [
