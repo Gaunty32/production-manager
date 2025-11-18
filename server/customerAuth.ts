@@ -5,6 +5,12 @@ import type { InsertCustomerUser, CustomerLogin } from "@shared/schema";
 const SALT_ROUNDS = 10;
 
 export async function registerCustomer(data: InsertCustomerUser & { customerId: string }) {
+  // Check if email already exists
+  const existingUser = await storage.getCustomerUserByEmail(data.email);
+  if (existingUser) {
+    throw new Error("A customer portal login with this email already exists");
+  }
+  
   // Hash the password
   const passwordHash = await bcrypt.hash(data.password, SALT_ROUNDS);
   
