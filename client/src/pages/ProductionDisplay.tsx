@@ -1,9 +1,11 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Star, Trophy, Calendar, TrendingUp } from "lucide-react";
 import { getMachineName } from "@shared/machines";
 import { format } from "date-fns";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 interface QueueLineItem {
   line_item_id: string;
@@ -55,6 +57,24 @@ interface LeaderboardResponse {
   leaders: LeaderData[];
 }
 
+interface HistoryData {
+  completion_date: string;
+  staff_id: string;
+  staff_name: string;
+  total_stitches: number;
+  total_hours: number;
+  stitches_per_hour: number;
+}
+
+interface HistoryResponse {
+  generatedAt: string;
+  range: {
+    start: string;
+    end: string;
+  };
+  history: HistoryData[];
+}
+
 export default function ProductionDisplay() {
   const { data: queueData = [], isLoading: queueLoading } = useQuery<QueueData[]>({
     queryKey: ["/api/production-display/queue"],
@@ -66,8 +86,13 @@ export default function ProductionDisplay() {
     refetchInterval: 150000,
   });
 
+  const { data: history, isLoading: historyLoading } = useQuery<HistoryResponse>({
+    queryKey: ["/api/production-display/history"],
+    refetchInterval: 150000,
+  });
+
   // Show loading state
-  if (queueLoading || leaderboardLoading) {
+  if (queueLoading || leaderboardLoading || historyLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -121,6 +146,38 @@ export default function ProductionDisplay() {
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   };
 
+  // Prepare chart data from history
+  const chartData = useMemo(() => {
+    if (!history || history.history.length === 0) return [];
+
+    // Get unique dates and staff members
+    const dates = Array.from(new Set(history.history.map(h => h.completion_date))).sort();
+    const staffMembers = Array.from(new Set(history.history.map(h => h.staff_name)));
+
+    // Transform data for recharts
+    return dates.map(date => {
+      const dataPoint: any = { date };
+      history.history
+        .filter(h => h.completion_date === date)
+        .forEach(h => {
+          dataPoint[h.staff_name] = h.stitches_per_hour;
+        });
+      return dataPoint;
+    });
+  }, [history]);
+
+  // Generate colors for each staff member
+  const staffColors = [
+    "#3b82f6", // blue
+    "#10b981", // green
+    "#f59e0b", // amber
+    "#ef4444", // red
+    "#8b5cf6", // purple
+    "#ec4899", // pink
+    "#14b8a6", // teal
+    "#f97316", // orange
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       <div className="grid grid-cols-[2fr,1fr] min-h-screen gap-4 p-4">
@@ -129,7 +186,7 @@ export default function ProductionDisplay() {
           <div className="mb-4">
             <h1 className="text-4xl font-bold tracking-tight" data-testid="heading-production-queue">Production Queue</h1>
             <p className="text-xl text-muted-foreground mt-1">
-              Next 7 Days
+              Next 3 Days (excluding Sundays)
             </p>
           </div>
 
@@ -224,7 +281,7 @@ export default function ProductionDisplay() {
               <Card>
                 <CardContent className="text-center py-12 text-muted-foreground">
                   <Calendar className="h-16 w-16 mx-auto mb-4 opacity-30" />
-                  <p className="text-xl">No jobs scheduled for the next 7 days</p>
+                  <p className="text-xl">No jobs scheduled for the next 3 days</p>
                 </CardContent>
               </Card>
             )}
@@ -318,6 +375,49 @@ export default function ProductionDisplay() {
               )}
             </CardContent>
           </Card>
+
+          {/* Stitches Per Hour Line Graph */}
+          {chartData.length > 0 && history && (
+            <Card className="mt-4">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <TrendingUp className="h-6 w-6 text-primary" />
+                  Stitches Per Hour Trend
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => format(new Date(value), "MMM d")}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 12 }}
+                      label={{ value: 'Stitches/Hour', angle: -90, position: 'insideLeft' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                      labelFormatter={(value) => format(new Date(value as string), "MMM d, yyyy")}
+                    />
+                    <Legend />
+                    {Array.from(new Set(history.history.map(h => h.staff_name))).map((staffName, index) => (
+                      <Line
+                        key={staffName}
+                        type="monotone"
+                        dataKey={staffName}
+                        stroke={staffColors[index % staffColors.length]}
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
 
           {leaderboard && (
             <div className="mt-3 text-xs text-muted-foreground text-center">

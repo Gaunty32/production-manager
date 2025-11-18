@@ -151,6 +151,7 @@ export interface IStorage {
   // Production Display methods
   getProductionDisplayQueue(days: number): Promise<any[]>;
   getProductionDisplayLeaderboard(limit?: number): Promise<any>;
+  getProductionDisplayHistory(days?: number): Promise<any>;
   
   // Weekly Performance Report
   getWeeklyPerformance(params: { weeks?: number; endDate?: Date; timezone?: string }): Promise<Array<{
@@ -1188,7 +1189,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(passwordResetTokens.id, tokenId));
   }
 
-  async getProductionDisplayQueue(days: number = 7): Promise<any[]> {
+  async getProductionDisplayQueue(days: number = 3): Promise<any[]> {
     const result = await db.execute(sql`
       WITH scheduled_line_items AS (
         SELECT DISTINCT ON (jli.id, js.scheduled_date)
@@ -1218,6 +1219,7 @@ export class DatabaseStorage implements IStorage {
           AND j.completed = false
           AND jli.completed = false
           AND js.scheduled_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + ${days} * INTERVAL '1 day'
+          AND EXTRACT(DOW FROM js.scheduled_date::date) != 0
         ORDER BY jli.id, js.scheduled_date, js.start_time
       ),
       unscheduled_line_items AS (
@@ -1250,6 +1252,7 @@ export class DatabaseStorage implements IStorage {
             WHERE js.job_id = j.id 
             AND js.machine_id = COALESCE(jli.machine_id, j.machine_id)
             AND js.scheduled_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + ${days} * INTERVAL '1 day'
+            AND EXTRACT(DOW FROM js.scheduled_date::date) != 0
           )
       ),
       combined AS (
@@ -1372,6 +1375,58 @@ export class DatabaseStorage implements IStorage {
         end: now.toISOString(),
       },
       leaders: result.rows,
+    };
+  }
+
+  async getProductionDisplayHistory(days: number = 30): Promise<any> {
+    const result = await db.execute(sql`
+      WITH daily_data AS (
+        SELECT
+          DATE(jli.completed_at) AS completion_date,
+          jli.completed_by_id AS staff_id,
+          SUM(jli.stitch_count * jli.quantity) AS total_stitches,
+          SUM(
+            CASE 
+              WHEN jli.actual_production_time_minutes IS NOT NULL 
+              THEN jli.actual_production_time_minutes / 60.0
+              ELSE 0
+            END
+          ) AS total_hours
+        FROM job_line_items jli
+        WHERE 
+          jli.completed = true
+          AND jli.completed_at >= NOW() - ${days} * INTERVAL '1 day'
+          AND jli.completed_by_id IS NOT NULL
+        GROUP BY DATE(jli.completed_at), jli.completed_by_id
+      )
+      SELECT
+        dd.completion_date::text,
+        s.id AS staff_id,
+        s.name AS staff_name,
+        dd.total_stitches,
+        dd.total_hours,
+        CASE 
+          WHEN dd.total_hours > 0 THEN 
+            ROUND((dd.total_stitches / NULLIF(dd.total_hours, 0))::numeric, 0)
+          ELSE 0
+        END AS stitches_per_hour
+      FROM daily_data dd
+      INNER JOIN staff s ON dd.staff_id = s.id
+      WHERE dd.total_stitches > 0
+      ORDER BY dd.completion_date, s.name
+    `);
+
+    const now = new Date();
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - days);
+
+    return {
+      generatedAt: now.toISOString(),
+      range: {
+        start: startDate.toISOString(),
+        end: now.toISOString(),
+      },
+      history: result.rows,
     };
   }
 

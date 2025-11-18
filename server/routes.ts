@@ -703,7 +703,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Production Display API routes (no authentication required - for big screen display)
   app.get("/api/production-display/queue", async (req, res) => {
     try {
-      const days = req.query.days ? parseInt(req.query.days as string) : 7;
+      const days = req.query.days ? parseInt(req.query.days as string) : 3;
       const queueData = await storage.getProductionDisplayQueue(days);
       res.json(queueData);
     } catch (error) {
@@ -720,6 +720,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching production display leaderboard:", error);
       res.status(500).json({ error: "Failed to fetch leaderboard" });
+    }
+  });
+
+  app.get("/api/production-display/history", async (req, res) => {
+    try {
+      const days = req.query.days ? parseInt(req.query.days as string) : 30;
+      const history = await storage.getProductionDisplayHistory(days);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching production display history:", error);
+      res.status(500).json({ error: "Failed to fetch history" });
     }
   });
 
