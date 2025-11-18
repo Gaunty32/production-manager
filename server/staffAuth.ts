@@ -84,9 +84,17 @@ export async function isStaffAuthenticated(req: any, res: any, next: any) {
     
     if (user.active === false) {
       console.log(`[AUTH] User account is deactivated: ${req.session.userId}`);
-      // Clear the session
-      req.session.destroy();
-      return res.status(403).json({ error: "Your account has been deactivated. Please contact your administrator." });
+      // Clear the session and cookie
+      req.session.destroy((err: any) => {
+        if (err) {
+          console.error(`[AUTH] Error destroying session:`, err);
+        }
+        res.clearCookie('connect.sid');
+        return res.status(403).json({ error: "Your account has been deactivated. Please contact your administrator." });
+      });
+      // Null the session to prevent further use in this request
+      req.session = null;
+      return;
     }
   } catch (error) {
     console.error(`[AUTH] Error checking user status:`, error);
