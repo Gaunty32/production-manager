@@ -2,11 +2,10 @@ import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Trophy, Calendar, TrendingUp, AlertTriangle } from "lucide-react";
+import { Star, Trophy, Calendar, TrendingUp, AlertTriangle, AlertCircle } from "lucide-react";
 import { getMachineName } from "@shared/machines";
 import { format } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface QueueLineItem {
   line_item_id: string;
@@ -101,9 +100,8 @@ export default function ProductionDisplay() {
   const chartData = useMemo(() => {
     if (!history || history.history.length === 0) return [];
 
-    // Get unique dates and staff members
+    // Get unique dates
     const dates = Array.from(new Set(history.history.map(h => h.completion_date))).sort();
-    const staffMembers = Array.from(new Set(history.history.map(h => h.staff_name)));
 
     // Transform data for recharts
     return dates.map(date => {
@@ -133,7 +131,7 @@ export default function ProductionDisplay() {
     }, 12000); // 12 seconds per view
 
     return () => clearInterval(interval);
-  }, [chartData.length]);
+  }, [chartData.length]); // Recreate interval when chartData availability changes
 
   // Show loading state
   if (queueLoading || leaderboardLoading || historyLoading) {
@@ -202,253 +200,313 @@ export default function ProductionDisplay() {
     "#f97316", // orange
   ];
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="grid grid-cols-[2fr,1fr] min-h-screen gap-4 p-4">
-        {/* Left Panel: Production Queue */}
-        <div className="flex flex-col">
-          <div className="mb-4">
-            <h1 className="text-4xl font-bold tracking-tight" data-testid="heading-production-queue">Production Queue</h1>
-            <p className="text-xl text-muted-foreground mt-1">
-              Next 3 Days (excluding Sundays)
+  // Get unique staff members for line chart
+  const staffMembers = history 
+    ? Array.from(new Set(history.history.map(h => h.staff_name))) 
+    : [];
+
+  const renderOverdueBanner = () => {
+    if (overdueJobs.length === 0) return null;
+
+    const uniqueOverdueJobs = Array.from(
+      new Map(overdueJobs.map(item => [item.job_id, item])).values()
+    );
+
+    const jobIdentifiers = uniqueOverdueJobs.map(j => 
+      j.job_number ? `#${j.job_number}` : `${j.customer_name} - ${j.job_name}`
+    ).join(', ');
+
+    return (
+      <div className="bg-destructive text-destructive-foreground p-6 mb-6 rounded-lg border-4 border-destructive" data-testid="banner-overdue">
+        <div className="flex items-center gap-4">
+          <AlertCircle className="h-8 w-8 flex-shrink-0" />
+          <div className="flex-1">
+            <h2 className="text-3xl font-bold mb-2">OVERDUE JOBS!</h2>
+            <p className="text-xl">
+              {uniqueOverdueJobs.length} job{uniqueOverdueJobs.length !== 1 ? 's' : ''} past dispatch date: {jobIdentifiers}
             </p>
           </div>
+        </div>
+      </div>
+    );
+  };
 
-          <div className="flex-1 space-y-6">
-            {sortedDates.map((date) => {
-              const jobs = groupedByDate[date];
-              return (
-                <div key={date} data-testid={`date-group-${date}`}>
-                  <div className="flex items-center gap-3 mb-3 sticky top-0 bg-background z-10 py-2">
-                    <Calendar className="h-6 w-6 text-primary" />
-                    <h2 className="text-2xl font-semibold">
-                      {date === 'unscheduled' 
-                        ? 'Unscheduled' 
-                        : parseDbDate(date) 
-                          ? format(parseDbDate(date)!, "EEEE, MMM d")
-                          : 'Invalid Date'
-                      }
-                    </h2>
-                  </div>
+  const renderQueueView = () => (
+    <div className="flex flex-col h-full">
+      <div className="mb-6">
+        <h1 className="text-5xl font-bold tracking-tight" data-testid="heading-production-queue">Production Queue</h1>
+        <p className="text-2xl text-muted-foreground mt-2">
+          Next 3 Days (excluding Sundays) + Overdue Jobs
+        </p>
+      </div>
 
-                  <div className="space-y-3">
-                    {Object.entries(jobs).map(([jobId, lineItems]) => {
-                      const firstItem = lineItems[0];
-                      return (
-                        <Card key={jobId} data-testid={`job-card-${jobId}`}>
-                          <CardHeader className="pb-3">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <CardTitle className="text-xl">
-                                  {firstItem.customer_name}
-                                </CardTitle>
-                                <p className="text-lg text-muted-foreground mt-1">
-                                  {firstItem.job_name}
+      <div className="flex-1 overflow-auto space-y-6">
+        {sortedDates.map((date) => {
+          const jobs = groupedByDate[date];
+          return (
+            <div key={date} data-testid={`date-group-${date}`}>
+              <div className="flex items-center gap-3 mb-4 sticky top-0 bg-background z-10 py-2">
+                <Calendar className="h-8 w-8 text-primary" />
+                <h2 className="text-3xl font-semibold">
+                  {date === 'unscheduled' 
+                    ? 'Unscheduled' 
+                    : parseDbDate(date) 
+                      ? format(parseDbDate(date)!, "EEEE, MMM d")
+                      : 'Invalid Date'
+                  }
+                </h2>
+              </div>
+
+              <div className="space-y-4">
+                {Object.entries(jobs).map(([jobId, lineItems]) => {
+                  const firstItem = lineItems[0];
+                  const isOverdue = firstItem.is_overdue === 1;
+                  return (
+                    <Card 
+                      key={jobId} 
+                      data-testid={`job-card-${jobId}`}
+                      className={isOverdue ? "border-4 border-destructive" : ""}
+                    >
+                      <CardHeader className="pb-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <CardTitle className="text-2xl">
+                              {firstItem.customer_name}
+                            </CardTitle>
+                            <p className="text-xl text-muted-foreground mt-1">
+                              {firstItem.job_name}
+                            </p>
+                            {firstItem.job_number && (
+                              <p className="text-lg text-muted-foreground">
+                                Job #{firstItem.job_number}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-2 items-end">
+                            {isOverdue && (
+                              <Badge variant="destructive" className="text-xl px-4 py-2">
+                                <AlertCircle className="h-5 w-5 mr-2" />
+                                OVERDUE
+                              </Badge>
+                            )}
+                            {parseDbDate(firstItem.required_dispatch_date) && (
+                              <Badge variant="outline" className="text-lg px-4 py-2">
+                                Dispatch: {format(parseDbDate(firstItem.required_dispatch_date)!, "MMM d")}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {lineItems.map((item) => (
+                            <div
+                              key={item.line_item_id}
+                              className="grid grid-cols-[1fr,auto,auto] gap-6 items-center p-4 border rounded-lg"
+                              data-testid={`line-item-${item.line_item_id}`}
+                            >
+                              <div>
+                                <p className="font-medium text-xl">
+                                  {item.description || "Line Item"}
                                 </p>
-                                {firstItem.job_number && (
-                                  <p className="text-sm text-muted-foreground">
-                                    Job #{firstItem.job_number}
+                                <p className="text-lg text-muted-foreground">
+                                  Qty: {item.quantity} • {item.stitch_count.toLocaleString()} stitches
+                                </p>
+                              </div>
+
+                              <Badge className={`${getMachineBadgeColor(item.machine_id)} text-lg px-4 py-2`}>
+                                {getMachineName(item.machine_id)}
+                              </Badge>
+
+                              <div className="text-right min-w-[180px]">
+                                <p className="font-semibold text-xl">
+                                  {item.staff_name || "Unassigned"}
+                                </p>
+                                {item.start_time !== null && (
+                                  <p className="text-lg text-muted-foreground">
+                                    {formatTime(item.start_time)} - {formatTime(item.end_time)}
                                   </p>
                                 )}
                               </div>
-                              {parseDbDate(firstItem.required_dispatch_date) && (
-                                <Badge variant="outline" className="text-base px-3 py-1">
-                                  Dispatch: {format(parseDbDate(firstItem.required_dispatch_date)!, "MMM d")}
-                                </Badge>
-                              )}
                             </div>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-2">
-                              {lineItems.map((item) => (
-                                <div
-                                  key={item.line_item_id}
-                                  className="grid grid-cols-[1fr,auto,auto,auto] gap-4 items-center p-3 border rounded-lg"
-                                  data-testid={`line-item-${item.line_item_id}`}
-                                >
-                                  <div>
-                                    <p className="font-medium text-base">
-                                      {item.description || "Line Item"}
-                                    </p>
-                                    <p className="text-sm text-muted-foreground">
-                                      Qty: {item.quantity} • {item.stitch_count.toLocaleString()} stitches
-                                    </p>
-                                  </div>
-
-                                  <Badge className={`${getMachineBadgeColor(item.machine_id)} text-base px-3 py-1`}>
-                                    {getMachineName(item.machine_id)}
-                                  </Badge>
-
-                                  <div className="text-right min-w-[120px]">
-                                    <p className="font-semibold text-base">
-                                      {item.staff_name || "Unassigned"}
-                                    </p>
-                                    {item.start_time !== null && (
-                                      <p className="text-sm text-muted-foreground">
-                                        {formatTime(item.start_time)} - {formatTime(item.end_time)}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-
-            {sortedDates.length === 0 && (
-              <Card>
-                <CardContent className="text-center py-12 text-muted-foreground">
-                  <Calendar className="h-16 w-16 mx-auto mb-4 opacity-30" />
-                  <p className="text-xl">No jobs scheduled for the next 3 days</p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
-
-        {/* Right Panel: Leaderboard */}
-        <div className="flex flex-col overflow-hidden">
-          <div className="mb-4">
-            <h1 className="text-3xl font-bold tracking-tight">Leaderboard</h1>
-            <p className="text-lg text-muted-foreground mt-1">
-              Last 30 Days
-            </p>
-          </div>
-
-          <Card className="flex-1 overflow-hidden flex flex-col">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xl flex items-center gap-2">
-                <Trophy className="h-6 w-6 text-primary" />
-                Top Performers
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-auto flex-1">
-              {leaderboard && leaderboard.leaders.length > 0 ? (
-                <div className="space-y-3">
-                  {leaderboard.leaders.map((leader, index) => {
-                    const totalStars = leader.yellow_stars + leader.red_stars;
-                    return (
-                      <div
-                        key={leader.staff_id}
-                        className="p-4 border rounded-lg hover-elevate"
-                        data-testid={`leader-${leader.staff_id}`}
-                      >
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center w-10 h-10 shrink-0">
-                              {index < 3 ? (
-                                <Trophy
-                                  className={`h-7 w-7 ${
-                                    index === 0
-                                      ? "text-yellow-600 dark:text-yellow-500"
-                                      : index === 1
-                                      ? "text-slate-400 dark:text-slate-300"
-                                      : "text-amber-700 dark:text-amber-600"
-                                  }`}
-                                />
-                              ) : (
-                                <span className="text-xl font-semibold text-muted-foreground">
-                                  {index + 1}
-                                </span>
-                              )}
-                            </div>
-                            <div>
-                              <h3 className="font-semibold text-lg">{leader.staff_name}</h3>
-                            </div>
-                          </div>
+                          ))}
                         </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
 
-                        <div className="grid grid-cols-2 gap-3 mt-3">
-                          <div className="flex items-center gap-2">
-                            <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                            <span className="font-medium text-base">{leader.yellow_stars}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Star className="h-5 w-5 fill-red-500 text-red-500" />
-                            <span className="font-medium text-base">{leader.red_stars}</span>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 pt-3 border-t">
-                          <div className="flex items-center gap-2 text-primary">
-                            <TrendingUp className="h-5 w-5" />
-                            <span className="font-bold text-xl">
-                              {Math.round(leader.stitches_per_head_hour || 0).toLocaleString()}
-                            </span>
-                            <span className="text-sm text-muted-foreground">stitches/hr</span>
-                          </div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            {leader.total_stitches.toLocaleString()} stitches • {leader.total_hours.toFixed(1)}h
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Trophy className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                  <p className="text-lg">No production data in last 30 days</p>
-                </div>
-              )}
+        {sortedDates.length === 0 && (
+          <Card>
+            <CardContent className="text-center py-16 text-muted-foreground">
+              <Calendar className="h-20 w-20 mx-auto mb-4 opacity-30" />
+              <p className="text-2xl">No jobs scheduled in the next 3 days</p>
             </CardContent>
           </Card>
+        )}
+      </div>
+    </div>
+  );
 
-          {/* Stitches Per Hour Line Graph */}
-          {chartData.length > 0 && history && (
-            <Card className="mt-4">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-xl flex items-center gap-2">
-                  <TrendingUp className="h-6 w-6 text-primary" />
-                  Stitches Per Hour Trend
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="date" 
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => format(new Date(value), "MMM d")}
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 12 }}
-                      label={{ value: 'Stitches/Hour', angle: -90, position: 'insideLeft' }}
-                    />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                      labelFormatter={(value) => format(new Date(value as string), "MMM d, yyyy")}
-                    />
-                    <Legend />
-                    {Array.from(new Set(history.history.map(h => h.staff_name))).map((staffName, index) => (
-                      <Line
-                        key={staffName}
-                        type="monotone"
-                        dataKey={staffName}
-                        stroke={staffColors[index % staffColors.length]}
-                        strokeWidth={2}
-                        dot={{ r: 3 }}
-                      />
+  const renderLeaderboardView = () => (
+    <div className="flex flex-col h-full">
+      <div className="mb-6">
+        <h1 className="text-5xl font-bold tracking-tight" data-testid="heading-leaderboard">Production Leaderboard</h1>
+        <p className="text-2xl text-muted-foreground mt-2">Last 30 Days Performance</p>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        <div className="space-y-4">
+          {leaderboardData.map((staff, index) => (
+            <Card key={staff.staff_id} data-testid={`leaderboard-${staff.staff_id}`}>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-6">
+                  <div 
+                    className="text-6xl font-bold text-primary w-20 text-center" 
+                    data-testid={`rank-${staff.staff_id}`}
+                    aria-label={`Rank ${index + 1}`}
+                  >
+                    #{index + 1}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-3xl font-semibold" data-testid={`staff-name-${staff.staff_id}`}>
+                      {staff.staff_name}
+                    </h3>
+                    <div className="grid grid-cols-3 gap-6 mt-4">
+                      <div>
+                        <p className="text-lg text-muted-foreground">Stitches/Hour</p>
+                        <p 
+                          className="text-3xl font-bold text-primary" 
+                          data-testid={`stitches-per-hour-${staff.staff_id}`}
+                        >
+                          {staff.stitches_per_hour.toFixed(0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-lg text-muted-foreground">On Time</p>
+                        <p 
+                          className="text-3xl font-bold text-green-600" 
+                          data-testid={`on-time-count-${staff.staff_id}`}
+                        >
+                          {staff.on_time_count}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-lg text-muted-foreground">Late</p>
+                        <p 
+                          className="text-3xl font-bold text-red-600" 
+                          data-testid={`late-count-${staff.staff_id}`}
+                        >
+                          {staff.late_count}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2" data-testid={`stars-${staff.staff_id}`} aria-label={`${Math.floor(staff.stars)} stars`}>
+                    {Array.from({ length: Math.min(5, Math.floor(staff.stars)) }).map((_, i) => (
+                      <Star key={i} className="h-12 w-12 fill-yellow-400 text-yellow-400" />
                     ))}
-                  </LineChart>
-                </ResponsiveContainer>
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          )}
-
-          {leaderboard && (
-            <div className="mt-3 text-xs text-muted-foreground text-center">
-              Updated {format(new Date(leaderboard.generatedAt), "MMM d, h:mm a")}
-            </div>
-          )}
+          ))}
         </div>
+      </div>
+    </div>
+  );
+
+  const renderGraphView = () => (
+    <div className="flex flex-col h-full">
+      <div className="mb-6">
+        <h1 className="text-5xl font-bold tracking-tight" data-testid="heading-performance-graph">Performance Trends</h1>
+        <p className="text-2xl text-muted-foreground mt-2">30-Day Stitches Per Hour History</p>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        <Card data-testid="graph-container">
+          <CardContent className="p-8">
+            <ResponsiveContainer width="100%" height={600} data-testid="performance-chart">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  tick={{ fontSize: 16 }}
+                  tickFormatter={(value) => {
+                    const date = new Date(value);
+                    return format(date, 'MMM d');
+                  }}
+                />
+                <YAxis 
+                  label={{ value: 'Stitches Per Hour', angle: -90, position: 'insideLeft', style: { fontSize: 18 } }}
+                  tick={{ fontSize: 16 }}
+                />
+                <Tooltip 
+                  contentStyle={{ fontSize: 16 }}
+                  labelFormatter={(value) => {
+                    const date = new Date(value as string);
+                    return format(date, 'MMM d, yyyy');
+                  }}
+                />
+                <Legend 
+                  wrapperStyle={{ fontSize: 18 }}
+                />
+                {staffMembers.map((staffName, index) => (
+                  <Line
+                    key={staffName}
+                    type="monotone"
+                    dataKey={staffName}
+                    stroke={staffColors[index % staffColors.length]}
+                    strokeWidth={3}
+                    dot={{ r: 6 }}
+                    name={staffName}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+
+
+  return (
+    <div className="min-h-screen bg-background p-6">
+      {renderOverdueBanner()}
+      
+      <div className="min-h-[calc(100vh-12rem)]">
+        {currentView === 'queue' && renderQueueView()}
+        {currentView === 'leaderboard' && renderLeaderboardView()}
+        {currentView === 'graph' && renderGraphView()}
+      </div>
+      
+      {/* View indicator */}
+      <div className="mt-4 text-center text-muted-foreground text-lg" data-testid="carousel-indicators">
+        <div className="flex items-center justify-center gap-3">
+          <div 
+            className={`h-3 w-3 rounded-full ${currentView === 'queue' ? 'bg-primary' : 'bg-muted'}`} 
+            data-testid="indicator-queue"
+            aria-label="Queue view indicator"
+          />
+          <div 
+            className={`h-3 w-3 rounded-full ${currentView === 'leaderboard' ? 'bg-primary' : 'bg-muted'}`} 
+            data-testid="indicator-leaderboard"
+            aria-label="Leaderboard view indicator"
+          />
+          <div 
+            className={`h-3 w-3 rounded-full ${currentView === 'graph' ? 'bg-primary' : 'bg-muted'}`} 
+            data-testid="indicator-graph"
+            aria-label="Graph view indicator"
+          />
+        </div>
+        <p className="mt-2" data-testid="text-rotation-info">
+          Auto-rotating every 12 seconds
+        </p>
       </div>
     </div>
   );
