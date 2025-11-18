@@ -28,6 +28,7 @@ export async function registerStaff(data: StaffRegister) {
     lastName: data.lastName,
     profileImageUrl: null,
     role: data.role || "staff",
+    active: true,
   });
   
   // Return without password
@@ -48,6 +49,11 @@ export async function loginStaff(data: StaffLogin) {
     throw new Error("Invalid username or password");
   }
   
+  // Check if user account is active
+  if (user.active === false) {
+    throw new Error("Your account has been deactivated. Please contact your administrator.");
+  }
+  
   // Verify password
   const isValid = await bcrypt.compare(data.password, user.password);
   
@@ -61,12 +67,32 @@ export async function loginStaff(data: StaffLogin) {
 }
 
 // Middleware to check if staff is authenticated
-export function isStaffAuthenticated(req: any, res: any, next: any) {
+export async function isStaffAuthenticated(req: any, res: any, next: any) {
   console.log(`[AUTH] Checking authentication - SessionID: ${req.sessionID}, UserId: ${req.session?.userId}, Session: ${JSON.stringify(req.session)}`);
   if (!req.session?.userId) {
     console.log(`[AUTH] No userId in session, returning 401`);
     return res.status(401).json({ error: "Authentication required" });
   }
+  
+  // Check if user account is active
+  try {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      console.log(`[AUTH] User not found: ${req.session.userId}`);
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    
+    if (user.active === false) {
+      console.log(`[AUTH] User account is deactivated: ${req.session.userId}`);
+      // Clear the session
+      req.session.destroy();
+      return res.status(403).json({ error: "Your account has been deactivated. Please contact your administrator." });
+    }
+  } catch (error) {
+    console.error(`[AUTH] Error checking user status:`, error);
+    return res.status(500).json({ error: "Authentication check failed" });
+  }
+  
   console.log(`[AUTH] User authenticated: ${req.session.userId}`);
   next();
 }
