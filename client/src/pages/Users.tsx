@@ -13,7 +13,10 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { UserPlus, Pencil } from "lucide-react";
+import { UserPlus, Pencil, Mail, CheckCircle2, XCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 
 const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -142,6 +145,49 @@ export default function Users() {
     createUserMutation.mutate(data);
   };
 
+  const sendPasswordResetMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("POST", `/api/users/${userId}/reset-password`, {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Password reset sent",
+        description: data.message || "Password reset email has been sent to the user.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send password reset email",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ userId, active }: { userId: string; active: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/users/${userId}/active`, { active });
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: variables.active ? "User activated" : "User deactivated",
+        description: variables.active 
+          ? "User account has been activated and can now log in."
+          : "User account has been deactivated and can no longer log in.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user status",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     editUserForm.reset({
@@ -151,6 +197,14 @@ export default function Users() {
       lastName: user.lastName || "",
     });
     setEditDialogOpen(true);
+  };
+
+  const handleSendPasswordReset = (userId: string) => {
+    sendPasswordResetMutation.mutate(userId);
+  };
+
+  const handleToggleActive = (userId: string, currentActive: boolean) => {
+    toggleActiveMutation.mutate({ userId, active: !currentActive });
   };
 
   const onEditUser = (data: EditUserFormData) => {
@@ -346,29 +400,36 @@ export default function Users() {
               {users?.map((user) => (
                 <div 
                   key={user.id} 
-                  className="flex items-center justify-between p-4 border rounded-lg"
+                  className="flex flex-col gap-3 p-4 border rounded-lg"
                   data-testid={`user-row-${user.id}`}
                 >
-                  <div className="flex-1">
-                    <div className="font-medium" data-testid={`user-name-${user.id}`}>
-                      {user.firstName && user.lastName 
-                        ? `${user.firstName} ${user.lastName}`
-                        : user.email || "Unknown User"}
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium" data-testid={`user-name-${user.id}`}>
+                          {user.firstName && user.lastName 
+                            ? `${user.firstName} ${user.lastName}`
+                            : user.email || "Unknown User"}
+                        </div>
+                        {user.active === false ? (
+                          <Badge variant="destructive" className="text-xs" data-testid={`badge-inactive-${user.id}`}>
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Inactive
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs" data-testid={`badge-active-${user.id}`}>
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Active
+                          </Badge>
+                        )}
+                        {user.id === currentUser?.id && (
+                          <span className="text-xs text-muted-foreground">(You)</span>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground" data-testid={`user-email-${user.id}`}>
+                        {user.email}
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground" data-testid={`user-email-${user.id}`}>
-                      {user.email}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEditUser(user)}
-                      data-testid={`button-edit-user-${user.id}`}
-                    >
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Edit
-                    </Button>
                     <Select
                       value={user.role}
                       onValueChange={(value) => handleRoleChange(user.id, value)}
@@ -387,9 +448,42 @@ export default function Users() {
                         <SelectItem value={UserRole.STAFF}>Staff</SelectItem>
                       </SelectContent>
                     </Select>
-                    {user.id === currentUser?.id && (
-                      <span className="text-xs text-muted-foreground">(You)</span>
-                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditUser(user)}
+                      data-testid={`button-edit-user-${user.id}`}
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSendPasswordReset(user.id)}
+                      disabled={sendPasswordResetMutation.isPending || !user.email}
+                      data-testid={`button-reset-password-${user.id}`}
+                    >
+                      <Mail className="h-4 w-4 mr-2" />
+                      Send Password Reset
+                    </Button>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <Label 
+                        htmlFor={`active-toggle-${user.id}`}
+                        className="text-sm cursor-pointer"
+                      >
+                        {user.active === false ? 'Activate' : 'Deactivate'}
+                      </Label>
+                      <Switch
+                        id={`active-toggle-${user.id}`}
+                        checked={user.active !== false}
+                        onCheckedChange={() => handleToggleActive(user.id, user.active !== false)}
+                        disabled={user.id === currentUser?.id || toggleActiveMutation.isPending}
+                        data-testid={`switch-active-${user.id}`}
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
