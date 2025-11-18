@@ -824,6 +824,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: error.errors });
+      } else if (error instanceof Error && error.message.includes("already exists")) {
+        res.status(409).json({ error: error.message });
       } else {
         res.status(500).json({ error: error instanceof Error ? error.message : "Registration failed" });
       }
