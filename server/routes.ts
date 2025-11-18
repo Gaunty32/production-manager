@@ -549,6 +549,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Trigger password reset email for a user (super admin only)
+  app.post("/api/users/:id/reset-password", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (!user.email) {
+        return res.status(400).json({ error: "User has no email address configured" });
+      }
+
+      const token = await requestPasswordReset({ email: user.email });
+      await sendPasswordResetEmail(user.email, token);
+      
+      res.json({ message: `Password reset email sent to ${user.email}` });
+    } catch (error: any) {
+      console.error("Error sending password reset:", error);
+      res.status(500).json({ error: "Failed to send password reset email" });
+    }
+  });
+
+  // Activate or deactivate a user account (super admin only)
+  app.patch("/api/users/:id/active", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const { active } = req.body;
+      
+      if (typeof active !== "boolean") {
+        return res.status(400).json({ error: "Active status must be true or false" });
+      }
+
+      const user = await storage.getUser(req.params.id);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Prevent deactivating yourself
+      if (req.params.id === req.session.userId && !active) {
+        return res.status(400).json({ error: "You cannot deactivate your own account" });
+      }
+
+      await storage.updateUserActive(req.params.id, active);
+      const updatedUser = await storage.getUser(req.params.id);
+      
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Error updating user active status:", error);
+      res.status(500).json({ error: "Failed to update user status" });
+    }
+  });
+
   // Star management routes
   app.post("/api/users/:userId/stars", isStaffAuthenticated, async (req, res) => {
     try {
