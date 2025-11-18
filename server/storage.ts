@@ -1208,7 +1208,8 @@ export class DatabaseStorage implements IStorage {
           s.name AS staff_name,
           js.start_time,
           js.end_time,
-          0 AS is_unscheduled
+          0 AS is_unscheduled,
+          0 AS is_overdue
         FROM job_line_items jli
         INNER JOIN jobs j ON jli.job_id = j.id
         INNER JOIN customers c ON j.customer_id = c.id
@@ -1221,6 +1222,41 @@ export class DatabaseStorage implements IStorage {
           AND js.scheduled_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + ${days} * INTERVAL '1 day'
           AND EXTRACT(DOW FROM js.scheduled_date::date) != 0
         ORDER BY jli.id, js.scheduled_date, js.start_time
+      ),
+      overdue_line_items AS (
+        SELECT DISTINCT
+          j.required_dispatch_date::date AS schedule_date,
+          j.id AS job_id,
+          j.job_number,
+          c.name AS customer_name,
+          j.job_name,
+          j.required_dispatch_date,
+          jli.id AS line_item_id,
+          jli.description,
+          jli.quantity,
+          jli.stitch_count,
+          COALESCE(jli.machine_id, j.machine_id) AS machine_id,
+          NULL::varchar AS staff_id,
+          'Overdue'::text AS staff_name,
+          NULL::integer AS start_time,
+          NULL::integer AS end_time,
+          1 AS is_unscheduled,
+          1 AS is_overdue
+        FROM job_line_items jli
+        INNER JOIN jobs j ON jli.job_id = j.id
+        INNER JOIN customers c ON j.customer_id = c.id
+        WHERE 
+          j.status = 'production'
+          AND j.completed = false
+          AND jli.completed = false
+          AND j.required_dispatch_date::date < CURRENT_DATE
+          AND NOT EXISTS (
+            SELECT 1 FROM job_schedule js 
+            WHERE js.job_id = j.id 
+            AND js.machine_id = COALESCE(jli.machine_id, j.machine_id)
+            AND js.scheduled_date::date BETWEEN CURRENT_DATE AND CURRENT_DATE + ${days} * INTERVAL '1 day'
+            AND EXTRACT(DOW FROM js.scheduled_date::date) != 0
+          )
       ),
       unscheduled_line_items AS (
         SELECT DISTINCT
@@ -1239,7 +1275,8 @@ export class DatabaseStorage implements IStorage {
           'Unassigned'::text AS staff_name,
           NULL::integer AS start_time,
           NULL::integer AS end_time,
-          1 AS is_unscheduled
+          1 AS is_unscheduled,
+          0 AS is_overdue
         FROM job_line_items jli
         INNER JOIN jobs j ON jli.job_id = j.id
         INNER JOIN customers c ON j.customer_id = c.id
@@ -1247,6 +1284,7 @@ export class DatabaseStorage implements IStorage {
           j.status = 'production'
           AND j.completed = false
           AND jli.completed = false
+          AND (j.required_dispatch_date::date >= CURRENT_DATE OR j.required_dispatch_date IS NULL)
           AND NOT EXISTS (
             SELECT 1 FROM job_schedule js 
             WHERE js.job_id = j.id 
@@ -1256,6 +1294,8 @@ export class DatabaseStorage implements IStorage {
           )
       ),
       combined AS (
+        SELECT * FROM overdue_line_items
+        UNION ALL
         SELECT * FROM scheduled_line_items
         UNION ALL
         SELECT * FROM unscheduled_line_items
@@ -1275,9 +1315,11 @@ export class DatabaseStorage implements IStorage {
         staff_id,
         staff_name,
         start_time,
-        end_time
+        end_time,
+        is_overdue
       FROM combined
       ORDER BY 
+        is_overdue DESC,
         is_unscheduled,
         schedule_date, 
         job_id, 

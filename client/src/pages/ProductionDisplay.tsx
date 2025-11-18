@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Trophy, Calendar, TrendingUp } from "lucide-react";
+import { Star, Trophy, Calendar, TrendingUp, AlertTriangle } from "lucide-react";
 import { getMachineName } from "@shared/machines";
 import { format } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface QueueLineItem {
   line_item_id: string;
@@ -35,6 +36,7 @@ interface QueueData {
   staff_name: string | null;
   start_time: number | null;
   end_time: number | null;
+  is_overdue: number;
 }
 
 interface LeaderData {
@@ -75,7 +77,11 @@ interface HistoryResponse {
   history: HistoryData[];
 }
 
+type ViewMode = 'queue' | 'leaderboard' | 'graph';
+
 export default function ProductionDisplay() {
+  const [currentView, setCurrentView] = useState<ViewMode>('queue');
+  
   const { data: queueData = [], isLoading: queueLoading } = useQuery<QueueData[]>({
     queryKey: ["/api/production-display/queue"],
     refetchInterval: 150000, // Refresh every 2.5 minutes
@@ -110,6 +116,24 @@ export default function ProductionDisplay() {
       return dataPoint;
     });
   }, [history]);
+
+  // Detect overdue jobs
+  const overdueJobs = useMemo(() => {
+    return queueData.filter(item => item.is_overdue === 1);
+  }, [queueData]);
+
+  // Rotate between views every 12 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentView(prev => {
+        if (prev === 'queue') return 'leaderboard';
+        if (prev === 'leaderboard') return chartData.length > 0 ? 'graph' : 'queue';
+        return 'queue';
+      });
+    }, 12000); // 12 seconds per view
+
+    return () => clearInterval(interval);
+  }, [chartData.length]);
 
   // Show loading state
   if (queueLoading || leaderboardLoading || historyLoading) {
