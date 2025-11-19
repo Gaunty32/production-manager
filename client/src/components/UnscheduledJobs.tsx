@@ -66,10 +66,12 @@ export function UnscheduledJobs() {
                 <Package className="h-3 w-3" />
                 <span>{job.quantity} units</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                <span>Due {format(new Date(job.requiredDispatchDate), "MMM d")}</span>
-              </div>
+              {job.requiredDispatchDate && (
+                <div className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  <span>Due {format(new Date(job.requiredDispatchDate), "MMM d")}</span>
+                </div>
+              )}
             </div>
             {job.machineId && (
               <Badge variant="secondary" className="text-xs">
