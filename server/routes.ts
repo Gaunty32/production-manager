@@ -786,6 +786,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Production Time Analysis API (requires staff authentication)
+  app.get("/api/reports/production-time-analysis", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const querySchema = z.object({
+        weeks: z.string().optional().transform((val) => {
+          if (!val) return 12;
+          const num = parseInt(val);
+          if (isNaN(num) || num < 1 || num > 52) return 12;
+          return num;
+        }),
+        endDate: z.string().optional().transform((val) => {
+          if (!val) return new Date();
+          const date = new Date(val);
+          return isNaN(date.getTime()) ? new Date() : date;
+        }),
+      });
+
+      const params = querySchema.parse(req.query);
+      
+      const analysisData = await storage.getProductionTimeAnalysis({
+        weeks: params.weeks,
+        endDate: params.endDate,
+      });
+      
+      res.json(analysisData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching production time analysis:", error);
+      res.status(500).json({ error: "Failed to fetch production time analysis data" });
+    }
+  });
+
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
     try {

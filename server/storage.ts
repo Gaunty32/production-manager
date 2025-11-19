@@ -161,6 +161,16 @@ export interface IStorage {
     completedQuantity: number;
   }>>;
   
+  // Production Time Analysis
+  getProductionTimeAnalysis(params: { weeks?: number; endDate?: Date }): Promise<Array<{
+    staffName: string;
+    machineName: string;
+    totalEstimatedMinutes: number;
+    totalActualMinutes: number;
+    completedItems: number;
+    averageAccuracy: number | null;
+  }>>;
+  
   // Customer impersonation methods
   createImpersonationSession(data: { token: string; staffUserId: string; customerUserId: string; expiresAt: Date }): Promise<any>;
   getImpersonationSession(token: string): Promise<any | undefined>;
@@ -1542,6 +1552,106 @@ export class DatabaseStorage implements IStorage {
       weekEnd: row.week_end,
       invoicedTotal: parseFloat(row.invoiced_total) || 0,
       completedQuantity: parseInt(row.completed_quantity) || 0,
+    }));
+  }
+
+  async getProductionTimeAnalysis(params: { weeks?: number; endDate?: Date }): Promise<Array<{
+    staffName: string;
+    machineName: string;
+    totalEstimatedMinutes: number;
+    totalActualMinutes: number;
+    completedItems: number;
+    averageAccuracy: number | null;
+  }>> {
+    const { weeks = 12, endDate = new Date() } = params;
+    
+    const result = await db.execute(sql`
+      WITH date_range AS (
+        SELECT 
+          ${endDate}::timestamp - ((${weeks} || ' weeks')::interval) AS start_date,
+          ${endDate}::timestamp AS end_date
+      ),
+      completed_items AS (
+        SELECT 
+          jli.id,
+          jli.quantity,
+          jli.stitch_count,
+          jli.machine_id,
+          jli.actual_production_time_minutes,
+          jli.completed_at,
+          jli.completed_by_id,
+          s.name as staff_name,
+          CASE 
+            WHEN jli.machine_id = 1 THEN 'Barudan 8'
+            WHEN jli.machine_id = 2 THEN 'Barudan 6 1'
+            WHEN jli.machine_id = 3 THEN 'SWF 6 1'
+            WHEN jli.machine_id = 4 THEN 'SWF 6 2'
+            WHEN jli.machine_id = 5 THEN 'Barudan 6 2'
+            ELSE 'Unknown'
+          END as machine_name,
+          CASE 
+            WHEN jli.machine_id = 1 THEN 8
+            WHEN jli.machine_id IN (2, 3, 4, 5) THEN 6
+            ELSE 6
+          END as machine_heads,
+          CEIL(jli.quantity::numeric / CASE 
+            WHEN jli.machine_id = 1 THEN 8
+            WHEN jli.machine_id IN (2, 3, 4, 5) THEN 6
+            ELSE 6
+          END) as runs,
+          ((jli.stitch_count::numeric / 750.0) + 3) as time_per_run_minutes
+        FROM job_line_items jli
+        LEFT JOIN staff s ON jli.completed_by_id = s.id
+        WHERE jli.completed = true
+          AND jli.actual_production_time_minutes IS NOT NULL
+          AND jli.completed_at IS NOT NULL
+          AND jli.completed_at >= (SELECT start_date FROM date_range)
+          AND jli.completed_at <= (SELECT end_date FROM date_range)
+          AND jli.job_type = 'Embroidery'
+          AND jli.stitch_count > 0
+      )
+      SELECT 
+        COALESCE(staff_name, 'Unassigned') as staff_name,
+        machine_name,
+        COUNT(*) as completed_items,
+        SUM(
+          CEIL(
+            CEIL((runs * time_per_run_minutes))
+            / 10.0
+          ) * 10
+        ) as total_estimated_minutes,
+        SUM(actual_production_time_minutes) as total_actual_minutes,
+        CASE 
+          WHEN SUM(
+            CEIL(
+              CEIL((runs * time_per_run_minutes))
+              / 10.0
+            ) * 10
+          ) > 0 
+          THEN (
+            SUM(actual_production_time_minutes)::numeric / 
+            SUM(
+              CEIL(
+                CEIL((runs * time_per_run_minutes))
+                / 10.0
+              ) * 10
+            ) * 100
+          )
+          ELSE NULL
+        END as average_accuracy
+      FROM completed_items
+      GROUP BY staff_name, machine_name
+      HAVING COUNT(*) > 0
+      ORDER BY staff_name, machine_name
+    `);
+
+    return result.rows.map((row: any) => ({
+      staffName: row.staff_name,
+      machineName: row.machine_name,
+      totalEstimatedMinutes: Number(row.total_estimated_minutes) || 0,
+      totalActualMinutes: Number(row.total_actual_minutes) || 0,
+      completedItems: parseInt(row.completed_items) || 0,
+      averageAccuracy: row.average_accuracy !== null ? parseFloat(row.average_accuracy) : null,
     }));
   }
 
