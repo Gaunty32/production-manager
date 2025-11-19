@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,11 +15,14 @@ import { JobScheduleDialog } from "@/components/JobScheduleDialog";
 import { UnscheduledJobs } from "@/components/UnscheduledJobs";
 import { AvailabilitySummary } from "@/components/AvailabilitySummary";
 import type { JobSchedule, Staff, Job } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const MACHINES = [1, 2, 3, 4, 5];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function Schedule() {
+  const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedStaff, setSelectedStaff] = useState<string | "all">("all");
   const [selectedMachine, setSelectedMachine] = useState<number | "all">("all");
@@ -35,6 +38,28 @@ export default function Schedule() {
 
   const { data: schedules = [] } = useQuery<JobSchedule[]>({
     queryKey: [`/api/job-schedules?date=${format(selectedDate, 'yyyy-MM-dd')}`],
+  });
+
+  const autoScheduleMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/scheduling/auto-schedule', 'POST', {});
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/job-schedules'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      
+      toast({
+        title: "Auto-scheduling complete",
+        description: `Successfully scheduled ${data.scheduledCount} jobs. ${data.failedCount} jobs could not be scheduled.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Auto-scheduling failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   let filteredSchedules = schedules;
@@ -180,6 +205,17 @@ export default function Schedule() {
             <JobScheduleDialog 
               preselectedDate={format(selectedDate, 'yyyy-MM-dd')}
             />
+
+            <Button
+              onClick={() => autoScheduleMutation.mutate()}
+              disabled={autoScheduleMutation.isPending}
+              variant="default"
+              className="gap-2"
+              data-testid="button-auto-schedule"
+            >
+              <Zap className="h-4 w-4" />
+              {autoScheduleMutation.isPending ? "Scheduling..." : "Auto-Schedule All"}
+            </Button>
           </div>
 
           <div className="flex gap-4 flex-1 overflow-hidden">

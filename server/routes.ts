@@ -2354,6 +2354,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Auto-schedule all unscheduled jobs
+  app.post("/api/scheduling/auto-schedule", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { findAvailableSlots, calculateJobDuration, minutesToTime } = await import("@shared/scheduling");
+      
+      // Get all jobs and line items
+      const allJobs = await storage.getJobs();
+      const allLineItems = await storage.getAllJobLineItems();
+      const existingSchedules = await storage.getJobSchedules();
+      const staff = await storage.getStaff();
+      
+      // Find line items that have machine assignments but no schedules
+      const scheduledLineItemIds = new Set(existingSchedules.map(s => s.lineItemId).filter(Boolean));
+      const unscheduledLineItems = allLineItems.filter(li => 
+        li.machineId && // Has machine assigned
+        !li.completed && // Not completed
+        li.jobType === 'Embroidery' && // Only embroidery jobs need scheduling
+        !scheduledLineItemIds.has(li.id) // Not already scheduled
+      );
+      
+      if (unscheduledLineItems.length === 0) {
+        return res.json({
+          success: true,
+          message: "All jobs are already scheduled",
+          scheduledCount: 0,
+          failedCount: 0
+        });
+      }
+      
+      // Get all scheduling data once
+      const machineBlocks = await storage.getMachineScheduleBlocks();
+      const staffShifts = await storage.getStaffShifts();
+      const staffMachineAllocations = await storage.getStaffMachineAllocations();
+      const staffHolidays = await storage.getStaffHolidays();
+      const bankHolidays = await storage.getBankHolidays();
+      
+      // Sort line items by required dispatch date (earliest first)
+      const sortedLineItems = [...unscheduledLineItems].sort((a, b) => {
+        const jobA = allJobs.find(j => j.id === a.jobId);
+        const jobB = allJobs.find(j => j.id === b.jobId);
+        if (!jobA || !jobB || !jobA.requiredDispatchDate || !jobB.requiredDispatchDate) return 0;
+        return new Date(jobA.requiredDispatchDate).getTime() - new Date(jobB.requiredDispatchDate).getTime();
+      });
+      
+      const scheduledItems: any[] = [];
+      const failedItems: any[] = [];
+      let currentSchedules = [...existingSchedules];
+      
+      // Try to schedule each line item
+      for (const lineItem of sortedLineItems) {
+        const job = allJobs.find(j => j.id === lineItem.jobId);
+        if (!job) continue;
+        
+        const duration = calculateJobDuration(lineItem.quantity, lineItem.stitchCount, lineItem.machineId!);
+        if (duration === 0) {
+          failedItems.push({ lineItem: lineItem.id, reason: "Invalid duration calculation" });
+          continue;
+        }
+        
+        // Try to find a slot for each staff member, starting from today until dispatch date
+        if (!job.requiredDispatchDate) {
+          failedItems.push({ lineItem: lineItem.id, reason: "No required dispatch date set" });
+          continue;
+        }
+        
+        const startDate = new Date();
+        const endDate = new Date(job.requiredDispatchDate);
+        endDate.setDate(endDate.getDate() - 1); // Schedule at least 1 day before dispatch
+        
+        if (endDate < startDate) {
+          failedItems.push({ 
+            lineItem: lineItem.id, 
+            reason: "Dispatch date is in the past or too soon" 
+          });
+          continue;
+        }
+        
+        let bestSlot: any = null;
+        let bestStaffId: string | null = null;
+        
+        // Try each staff member to find earliest available slot
+        for (const staffMember of staff) {
+          const currentDate = new Date(startDate);
+          
+          while (currentDate <= endDate) {
+            const dateSlots = findAvailableSlots(
+              currentDate,
+              lineItem.machineId!,
+              staffMember.id,
+              machineBlocks,
+              staffShifts,
+              currentSchedules,
+              staffMachineAllocations,
+              staffHolidays,
+              bankHolidays
+            );
+            
+            // Find first slot that fits
+            for (const slot of dateSlots) {
+              const slotDuration = slot.endTime - slot.startTime;
+              if (slotDuration >= duration) {
+                const proposedSlot = {
+                  date: new Date(currentDate),
+                  startTime: slot.startTime,
+                  endTime: slot.startTime + duration
+                };
+                
+                // Take the earliest slot we find (greedy algorithm)
+                if (!bestSlot || proposedSlot.date < bestSlot.date ||
+                    (proposedSlot.date.getTime() === bestSlot.date.getTime() && proposedSlot.startTime < bestSlot.startTime)) {
+                  bestSlot = proposedSlot;
+                  bestStaffId = staffMember.id;
+                }
+                // Once we find a slot, move to next staff member
+                break;
+              }
+            }
+            
+            // If we found a slot for this staff, move to next staff
+            if (bestSlot) break;
+            
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          
+          // If we already found the earliest possible slot (today), no need to check more staff
+          if (bestSlot && bestSlot.date.toDateString() === startDate.toDateString()) {
+            break;
+          }
+        }
+        
+        // Create schedule if we found a slot
+        if (bestSlot && bestStaffId) {
+          try {
+            const newSchedule = await storage.createJobSchedule({
+              jobId: job.id,
+              lineItemId: lineItem.id,
+              machineId: lineItem.machineId!,
+              staffId: bestStaffId,
+              scheduledDate: bestSlot.date,
+              startTime: bestSlot.startTime,
+              endTime: bestSlot.endTime,
+              status: 'scheduled'
+            });
+            
+            scheduledItems.push({
+              lineItemId: lineItem.id,
+              jobName: job.jobName,
+              date: bestSlot.date.toISOString().split('T')[0],
+              startTime: minutesToTime(bestSlot.startTime),
+              endTime: minutesToTime(bestSlot.endTime)
+            });
+            
+            // CRITICAL: Add to current schedules so next iteration sees it as occupied
+            currentSchedules.push(newSchedule);
+          } catch (error) {
+            console.error(`Failed to create schedule for line item ${lineItem.id}:`, error);
+            failedItems.push({ 
+              lineItemId: lineItem.id, 
+              jobName: job.jobName,
+              reason: error instanceof Error ? error.message : "Failed to create schedule" 
+            });
+          }
+        } else {
+          failedItems.push({ 
+            lineItemId: lineItem.id, 
+            jobName: job.jobName,
+            reason: "No available time slot found before dispatch date" 
+          });
+        }
+      }
+      
+      res.json({
+        success: true,
+        scheduledCount: scheduledItems.length,
+        failedCount: failedItems.length,
+        scheduled: scheduledItems,
+        failed: failedItems
+      });
+    } catch (error) {
+      console.error("Auto-scheduling error:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to auto-schedule jobs" 
+      });
+    }
+  });
+
   // Schedule suggestion route
   app.post("/api/suggest-schedule", isStaffAuthenticated, async (req, res) => {
     try {
