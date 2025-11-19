@@ -2121,13 +2121,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Job schedule routes
   app.get("/api/job-schedules", isStaffAuthenticated, async (req, res) => {
     try {
-      const { jobId, machineId, staffId, startDate, endDate } = req.query;
+      const { jobId, machineId, staffId, date, startDate, endDate } = req.query;
+      
+      let effectiveStartDate: Date | undefined;
+      let effectiveEndDate: Date | undefined;
+      
+      if (date) {
+        const selectedDate = new Date(date as string);
+        effectiveStartDate = new Date(selectedDate.setHours(0, 0, 0, 0));
+        effectiveEndDate = new Date(selectedDate.setHours(23, 59, 59, 999));
+      } else {
+        effectiveStartDate = startDate ? new Date(startDate as string) : undefined;
+        effectiveEndDate = endDate ? new Date(endDate as string) : undefined;
+      }
+      
       const schedules = await storage.getJobSchedules(
         jobId as string | undefined,
         machineId ? parseInt(machineId as string) : undefined,
         staffId as string | undefined,
-        startDate ? new Date(startDate as string) : undefined,
-        endDate ? new Date(endDate as string) : undefined
+        effectiveStartDate,
+        effectiveEndDate
       );
       res.json(schedules);
     } catch (error) {
