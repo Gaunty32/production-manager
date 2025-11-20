@@ -42,7 +42,7 @@ export default function Schedule() {
 
   const autoScheduleMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/scheduling/auto-schedule', 'POST', {});
+      return apiRequest('POST', '/api/scheduling/auto-schedule', {});
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/job-schedules'] });
