@@ -129,12 +129,18 @@ export function JobScheduleDialog({
   const lineItems = selectedJob?.lineItems || [];
   const selectedLineItem = lineItems.find(item => item.id === selectedLineItemId);
 
-  // Auto-suggest machine based on line item quantity and job type
+  // Auto-suggest machine based on line item assignment or quantity
   useEffect(() => {
     if (selectedLineItem && !preselectedMachineId) {
-      const suggestedMachine = suggestMachine(selectedLineItem.quantity, selectedLineItem.jobType);
-      if (suggestedMachine) {
-        form.setValue("machineId", suggestedMachine);
+      // First priority: use machine already assigned to the line item
+      if (selectedLineItem.machineId) {
+        form.setValue("machineId", selectedLineItem.machineId);
+      } else {
+        // Second priority: suggest based on quantity and job type
+        const suggestedMachine = suggestMachine(selectedLineItem.quantity, selectedLineItem.jobType);
+        if (suggestedMachine) {
+          form.setValue("machineId", suggestedMachine);
+        }
       }
     }
   }, [selectedLineItemId, selectedLineItem, preselectedMachineId, form]);
