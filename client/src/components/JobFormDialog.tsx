@@ -65,9 +65,12 @@ type LineItem = {
     startTime: number;
     endTime: number;
   } | null;
+  position?: string | null;
+  positionOther?: string | null;
 };
 
 const JOB_TYPES = ["Embroidery", "Print", "Embroidery Initials/Name", "Print Initials/Name", "Bagging", "Other"] as const;
+const POSITION_OPTIONS = ["left chest", "right chest", "left sleeve", "right sleeve", "rear", "other"] as const;
 
 const formSchema = insertJobSchema.extend({
   customerId: z.string().min(1, "Customer is required"),
@@ -112,7 +115,7 @@ interface JobFormDialogProps {
 export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFormDialogProps) {
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, position: null, positionOther: null }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDuckDialog, setShowDuckDialog] = useState(false);
   const [duckConfirmed, setDuckConfirmed] = useState(false);
@@ -142,7 +145,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   });
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, position: null, positionOther: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -403,6 +406,8 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
             completedById: lineItem.completedById || null,
             completedAt: lineItem.completedAt || null,
             machineId: lineItem.machineId || null,
+            position: lineItem.position || null,
+            positionOther: lineItem.positionOther || null,
           });
         }
       }
@@ -416,7 +421,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       setOpen(false);
       form.reset();
       setCurrentStep(1);
-      setLineItems([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null }]);
+      setLineItems([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, position: null, positionOther: null }]);
       
       // Open the production worksheet after job creation
       if (onJobCreated) {
@@ -925,6 +930,32 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                           </Select>
                         </div>
                         <div className="flex-1">
+                          <label className="text-xs text-muted-foreground font-medium">Position</label>
+                          <Select 
+                            value={item.position || ""}
+                            onValueChange={(value) => {
+                              const updated = [...lineItems];
+                              updated[index] = { 
+                                ...updated[index], 
+                                position: value || null,
+                                positionOther: value !== "other" ? null : updated[index].positionOther
+                              };
+                              setLineItems(updated);
+                            }}
+                          >
+                            <SelectTrigger className="mt-1" data-testid={`select-line-item-position-${index}`}>
+                              <SelectValue placeholder="Select position" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {POSITION_OPTIONS.map((pos) => (
+                                <SelectItem key={pos} value={pos}>
+                                  {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex-1">
                           <label className="text-xs text-muted-foreground font-medium">Quantity</label>
                           <Input
                             type="number"
@@ -1078,6 +1109,27 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                           data-testid={`input-line-item-description-${index}`}
                         />
                       </div>
+
+                      {/* Position Other - Only show when "other" is selected */}
+                      {item.position === "other" && (
+                        <div>
+                          <label className="text-xs text-muted-foreground font-medium">Position Details</label>
+                          <Input
+                            value={item.positionOther || ""}
+                            onChange={(e) => {
+                              const updated = [...lineItems];
+                              updated[index] = { 
+                                ...updated[index], 
+                                positionOther: e.target.value
+                              };
+                              setLineItems(updated);
+                            }}
+                            placeholder="Please specify position..."
+                            className="mt-1"
+                            data-testid={`input-line-item-position-other-${index}`}
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
