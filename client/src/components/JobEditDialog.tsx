@@ -797,7 +797,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-[140px]">
                           <label className="text-xs text-muted-foreground">Quantity</label>
                           <Input
                             type="number"
@@ -808,7 +808,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                               updateLineItem(index, 'quantity', Math.max(1, val));
                             }}
                             placeholder="Quantity"
-                            className="font-mono mt-1"
+                            className="font-mono mt-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             data-testid={`input-edit-line-item-quantity-${index}`}
                           />
                         </div>
@@ -857,7 +857,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                                   updateLineItem(index, 'stitchCount', Math.max(1, val));
                                 }}
                                 placeholder="Stitch count"
-                                className="font-mono mt-1"
+                                className="font-mono mt-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 data-testid={`input-edit-line-item-stitch-count-${index}`}
                               />
                             </>
