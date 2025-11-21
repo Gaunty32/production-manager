@@ -292,7 +292,7 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
       if (typeof val === "string") return parseInt(val, 10);
       return val;
     },
-    z.union([z.number().int().min(1).max(4), z.null()])
+    z.union([z.number().int().min(1).max(5), z.null()])
   ),
   quantity: z.coerce.number().int().min(0),
 });
