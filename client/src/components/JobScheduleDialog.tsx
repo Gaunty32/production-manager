@@ -129,15 +129,15 @@ export function JobScheduleDialog({
   const lineItems = selectedJob?.lineItems || [];
   const selectedLineItem = lineItems.find(item => item.id === selectedLineItemId);
 
-  // Auto-suggest machine based on line item assignment or quantity
+  // Auto-suggest machine based on line item assignment or quantity/stitch count
   useEffect(() => {
     if (selectedLineItem && !preselectedMachineId) {
       // First priority: use machine already assigned to the line item
       if (selectedLineItem.machineId) {
         form.setValue("machineId", selectedLineItem.machineId);
       } else {
-        // Second priority: suggest based on quantity and job type
-        const suggestedMachine = suggestMachine(selectedLineItem.quantity, selectedLineItem.jobType);
+        // Second priority: suggest based on quantity, stitch count, and job type
+        const suggestedMachine = suggestMachine(selectedLineItem.quantity, selectedLineItem.jobType, selectedLineItem.stitchCount);
         if (suggestedMachine) {
           form.setValue("machineId", suggestedMachine);
         }
@@ -289,8 +289,8 @@ export function JobScheduleDialog({
                         <div className="flex gap-2 mt-2">
                           <Badge variant="secondary">{selectedLineItem.quantity} units</Badge>
                           <Badge variant="secondary">{selectedLineItem.stitchCount} stitches</Badge>
-                          {selectedLineItem.quantity && selectedLineItem.jobType && suggestMachine(selectedLineItem.quantity, selectedLineItem.jobType) && (
-                            <Badge variant="outline">Suggested: {MACHINE_NAMES[suggestMachine(selectedLineItem.quantity, selectedLineItem.jobType)!]}</Badge>
+                          {selectedLineItem.quantity && selectedLineItem.jobType && suggestMachine(selectedLineItem.quantity, selectedLineItem.jobType, selectedLineItem.stitchCount) && (
+                            <Badge variant="outline">Suggested: {MACHINE_NAMES[suggestMachine(selectedLineItem.quantity, selectedLineItem.jobType, selectedLineItem.stitchCount)!]}</Badge>
                           )}
                         </div>
                       </FormDescription>

@@ -70,18 +70,41 @@ export function formatTimeDisplay(minutes: number): string {
   return `${hours}h ${remainingMinutes}m`;
 }
 
-export function suggestMachine(quantity: number, jobType: string): number | null {
+export function suggestMachine(quantity: number, jobType: string, stitchCount?: number): number | null {
   if (jobType !== "Embroidery" && jobType !== "Embroidery Initials/Name") {
     return null;
   }
   
-  if (quantity > 75) {
-    return 1;
-  } else if (quantity >= 26 && quantity <= 75) {
-    return 3;
-  } else if (quantity > 0) {
-    return 2;
+  if (quantity <= 0) {
+    return null;
   }
   
-  return null;
+  // If stitch count is provided, use production time-based selection for better efficiency
+  if (stitchCount && stitchCount > 0) {
+    // Calculate production time for each candidate machine
+    const candidates = [
+      { machineId: 1, metrics: calculateProductionMetrics(quantity, stitchCount, 1) }, // Barudan 8
+      { machineId: 2, metrics: calculateProductionMetrics(quantity, stitchCount, 2) }, // Barudan 6 1
+      { machineId: 3, metrics: calculateProductionMetrics(quantity, stitchCount, 3) }, // SWF 6 1
+    ];
+    
+    // Find machine with shortest production time
+    let bestMachine = candidates[0];
+    for (const candidate of candidates) {
+      if (candidate.metrics && (!bestMachine.metrics || candidate.metrics.totalTimeMinutes < bestMachine.metrics.totalTimeMinutes)) {
+        bestMachine = candidate;
+      }
+    }
+    
+    return bestMachine.machineId;
+  }
+  
+  // Fallback to quantity-based thresholds if no stitch count provided
+  if (quantity > 75) {
+    return 1; // Barudan 8
+  } else if (quantity >= 26 && quantity <= 75) {
+    return 3; // SWF 6 1
+  } else {
+    return 2; // Barudan 6 1
+  }
 }

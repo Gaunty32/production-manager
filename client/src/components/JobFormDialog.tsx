@@ -899,7 +899,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                                   stitchCount: PRINT_SIZE_CODE.A4 
                                 };
                               } else if (currentMachine === null) {
-                                const suggested = suggestMachine(item.quantity, value);
+                                const suggested = suggestMachine(item.quantity, value, item.stitchCount);
                                 updated[index] = { 
                                   ...updated[index], 
                                   jobType: value,
@@ -936,7 +936,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                               const currentMachine = updated[index].machineId;
                               
                               if (currentMachine === null) {
-                                const suggested = suggestMachine(val, item.jobType);
+                                const suggested = suggestMachine(val, item.jobType, item.stitchCount);
                                 updated[index] = { 
                                   ...updated[index], 
                                   quantity: val,
@@ -1001,7 +1001,23 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                                 value={item.stitchCount || ''}
                                 onChange={(e) => {
                                   const val = parseInt(e.target.value) || 0;
-                                  updateLineItem(index, 'stitchCount', val);
+                                  const updated = [...lineItems];
+                                  const currentMachine = updated[index].machineId;
+                                  
+                                  if (currentMachine === null) {
+                                    const suggested = suggestMachine(item.quantity, item.jobType, val);
+                                    updated[index] = { 
+                                      ...updated[index], 
+                                      stitchCount: val,
+                                      machineId: suggested
+                                    };
+                                  } else {
+                                    updated[index] = { 
+                                      ...updated[index], 
+                                      stitchCount: val
+                                    };
+                                  }
+                                  setLineItems(updated);
                                 }}
                                 placeholder="0"
                                 className="font-mono mt-1"
