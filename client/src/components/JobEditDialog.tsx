@@ -1019,21 +1019,46 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                           {(item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") && (
                             <div>
                               <label className="text-xs text-muted-foreground">
-                                Production Time (mins)
+                                Production Time
                                 <span className="text-destructive ml-1">*</span>
                               </label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={item.actualProductionTimeMinutes || ""}
-                                onChange={(e) => {
-                                  const val = parseInt(e.target.value) || null;
-                                  updateLineItem(index, 'actualProductionTimeMinutes', val);
-                                }}
-                                placeholder="Actual minutes"
-                                className="font-mono mt-1"
-                                data-testid={`input-edit-line-item-production-time-${index}`}
-                              />
+                              <div className="flex gap-2 mt-1">
+                                <div className="flex-1">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    value={Math.floor((item.actualProductionTimeMinutes || 0) / 60)}
+                                    onChange={(e) => {
+                                      const hours = parseInt(e.target.value) || 0;
+                                      const minutes = (item.actualProductionTimeMinutes || 0) % 60;
+                                      const totalMinutes = (hours * 60) + minutes;
+                                      updateLineItem(index, 'actualProductionTimeMinutes', totalMinutes > 0 ? totalMinutes : null);
+                                    }}
+                                    placeholder="Hours"
+                                    className="font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    data-testid={`input-edit-line-item-production-hours-${index}`}
+                                  />
+                                  <div className="text-xs text-muted-foreground text-center mt-0.5">hrs</div>
+                                </div>
+                                <div className="flex-1">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="59"
+                                    value={(item.actualProductionTimeMinutes || 0) % 60}
+                                    onChange={(e) => {
+                                      const hours = Math.floor((item.actualProductionTimeMinutes || 0) / 60);
+                                      const minutes = Math.min(59, parseInt(e.target.value) || 0);
+                                      const totalMinutes = (hours * 60) + minutes;
+                                      updateLineItem(index, 'actualProductionTimeMinutes', totalMinutes > 0 ? totalMinutes : null);
+                                    }}
+                                    placeholder="Mins"
+                                    className="font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    data-testid={`input-edit-line-item-production-minutes-${index}`}
+                                  />
+                                  <div className="text-xs text-muted-foreground text-center mt-0.5">mins</div>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
