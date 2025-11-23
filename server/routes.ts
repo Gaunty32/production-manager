@@ -28,7 +28,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { xeroService } from "./xero";
-import { calculateJobPrice, calculateShippingCost } from "@shared/pricing";
+import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
 import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, type Job } from "@shared/schema";
@@ -2851,8 +2851,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Determine item code based on job type
         let itemCode = "Emb"; // Default to embroidery
+        let description = lineItem.description || '';
+        
         if (lineItem.jobType === "print") {
           itemCode = "Print DTF";
+          // Add print size to description for Print jobs
+          const printSize = CODE_TO_PRINT_SIZE[lineItem.stitchCount as keyof typeof CODE_TO_PRINT_SIZE];
+          if (printSize) {
+            description = description || job.jobName;
+            description = `${description}, ${printSize} Print`;
+          }
         } else if (lineItem.jobType === "bagging") {
           itemCode = "BAG";
         } else if (lineItem.jobType === "other") {
@@ -2862,7 +2870,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return {
           jobName: job.jobName,
           poNumber: job.poNumber,
-          description: lineItem.description || '',
+          description,
           quantity: lineItem.quantity,
           unitPrice,
           stitchCount: lineItem.stitchCount,
@@ -3012,8 +3020,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           const jobTypeLower = lineItem.jobType?.toLowerCase() || '';
           let itemCode = "Emb";
+          let description = lineItem.description || '';
+          
           if (jobTypeLower === "print") {
             itemCode = "Print DTF";
+            // Add print size to description for Print jobs
+            const printSize = CODE_TO_PRINT_SIZE[lineItem.stitchCount as keyof typeof CODE_TO_PRINT_SIZE];
+            if (printSize) {
+              description = description || job.jobName;
+              description = `${description}, ${printSize} Print`;
+            }
           } else if (jobTypeLower === "bagging") {
             itemCode = "BAG";
           } else if (jobTypeLower === "other") {
@@ -3023,7 +3039,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lineItemsWithPricing.push({
             jobName: job.jobName,
             poNumber: job.poNumber,
-            description: lineItem.description || '',
+            description,
             quantity: lineItem.quantity,
             unitPrice,
             stitchCount: lineItem.stitchCount,
