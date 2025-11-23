@@ -2932,11 +2932,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fetch all jobs and customer
       const allJobs = await storage.getJobs();
-      const selectedJobs = allJobs.filter(j => jobIds.includes(j.id));
+      let selectedJobs = allJobs.filter(j => jobIds.includes(j.id));
 
       if (selectedJobs.length !== jobIds.length) {
         return res.status(404).json({ error: "One or more jobs not found" });
       }
+
+      // Sort jobs by completion date (goodsReceived) - earliest first
+      selectedJobs.sort((a, b) => {
+        const dateA = a.goodsReceived ? new Date(a.goodsReceived).getTime() : 0;
+        const dateB = b.goodsReceived ? new Date(b.goodsReceived).getTime() : 0;
+        return dateA - dateB;
+      });
 
       // CRITICAL: Verify all selected jobs belong to the specified customer
       const jobsFromWrongCustomer = selectedJobs.filter(j => j.customerId !== customerId);
