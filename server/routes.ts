@@ -3082,14 +3082,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 if (Object.keys(packageCounts).length > 0) {
                   const pluralMap: { [key: string]: string } = {
                     'box': 'boxes',
+                    'boxes': 'boxes', // Handle already-plural form
                     'bag': 'bags',
+                    'bags': 'bags', // Handle already-plural form
                     'pallet': 'pallets',
+                    'pallets': 'pallets',
                     'package': 'packages',
+                    'packages': 'packages',
+                  };
+                  
+                  const singularMap: { [key: string]: string } = {
+                    'boxes': 'box',
+                    'bags': 'bag',
+                    'pallets': 'pallet',
+                    'packages': 'package',
                   };
                   
                   const packageParts = Object.entries(packageCounts).map(([type, count]) => {
-                    const pluralType = count > 1 ? (pluralMap[type] || type + 's') : type;
-                    return `${count} ${pluralType}`;
+                    const singular = singularMap[type] || type;
+                    const plural = pluralMap[type] || pluralMap[singular] || type + 's';
+                    const displayType = count > 1 ? plural : singular;
+                    return `${count} ${displayType}`;
                   });
                   
                   packageInfo = ` (${packageParts.join(', ')})`;
