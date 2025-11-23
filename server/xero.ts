@@ -510,25 +510,23 @@ export class XeroService {
       return lineItem;
     });
 
-    // Helper function: Get the next Friday (7th, 14th, 21st, or 28th) after completion date
-    const getNextInvoiceFriday = (completionDate: Date): Date => {
-      const day = completionDate.getDate();
-      const year = completionDate.getFullYear();
-      const month = completionDate.getMonth();
+    // Helper function: Get the most recent Friday (last Friday or today if it's Friday)
+    const getLastFriday = (): Date => {
+      const today = new Date();
+      const dayOfWeek = today.getDay(); // 0 = Sunday, 5 = Friday
       
-      // Determine which Friday bucket this falls into
-      let invoiceDay: number;
-      if (day <= 7) {
-        invoiceDay = 7;
-      } else if (day <= 14) {
-        invoiceDay = 14;
-      } else if (day <= 21) {
-        invoiceDay = 21;
-      } else {
-        invoiceDay = 28;
+      // If today is Friday (5), use today
+      if (dayOfWeek === 5) {
+        return new Date(today.getFullYear(), today.getMonth(), today.getDate());
       }
       
-      return new Date(year, month, invoiceDay);
+      // Otherwise, calculate days back to last Friday
+      // Saturday (6) -> 1 day back, Sunday (0) -> 2 days back, etc.
+      const daysToSubtract = dayOfWeek === 6 ? 1 : (dayOfWeek + 2);
+      const lastFriday = new Date(today);
+      lastFriday.setDate(today.getDate() - daysToSubtract);
+      
+      return new Date(lastFriday.getFullYear(), lastFriday.getMonth(), lastFriday.getDate());
     };
 
     // Helper function: Get the 5th of the following month
@@ -542,14 +540,8 @@ export class XeroService {
       return new Date(year, month + 1, 5);
     };
 
-    // Get the most recent completion date
-    const mostRecentCompletionDate = jobs.reduce((latest, job) => {
-      const jobDate = job.goodsReceived ? new Date(job.goodsReceived) : new Date();
-      return jobDate > latest ? jobDate : latest;
-    }, jobs[0].goodsReceived ? new Date(jobs[0].goodsReceived) : new Date());
-
-    // Calculate invoice date as next Friday after completion
-    const invoiceDate = getNextInvoiceFriday(mostRecentCompletionDate);
+    // Calculate invoice date as the last Friday (end of week invoicing)
+    const invoiceDate = getLastFriday();
     
     // Calculate due date as 5th of following month
     const dueDate = getFifthOfNextMonth(invoiceDate);
