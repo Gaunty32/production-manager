@@ -395,8 +395,10 @@ export class XeroService {
       // Only include itemCode if it's a recognized code (not OTHER)
       if (item.itemCode === "CARRIAGE") {
         lineItem.itemCode = "Carriage"; // Map CARRIAGE to Carriage for Xero
+      } else if (item.itemCode === "Print DTF") {
+        lineItem.itemCode = "DTF"; // Map Print DTF to DTF for Xero
       } else if (item.itemCode !== "OTHER") {
-        lineItem.itemCode = item.itemCode; // Include other valid codes like Emb, Print DTF, BAG
+        lineItem.itemCode = item.itemCode; // Include other valid codes like Emb, BAG
       }
       // Omit itemCode for OTHER - let Xero handle it without a specific item code
       
@@ -502,8 +504,10 @@ export class XeroService {
       // Only include itemCode if it's a recognized code (not OTHER)
       if (item.itemCode === "CARRIAGE") {
         lineItem.itemCode = "Carriage"; // Map CARRIAGE to Carriage for Xero
+      } else if (item.itemCode === "Print DTF") {
+        lineItem.itemCode = "DTF"; // Map Print DTF to DTF for Xero
       } else if (item.itemCode !== "OTHER") {
-        lineItem.itemCode = item.itemCode; // Include other valid codes like Emb, Print DTF, BAG
+        lineItem.itemCode = item.itemCode; // Include other valid codes like Emb, BAG
       }
       // Omit itemCode for OTHER - let Xero handle it without a specific item code
       
