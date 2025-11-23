@@ -3083,7 +3083,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             if (hasShipping && totalShippingCost > 0) {
               const isConsolidated = jobs.length > 1;
-              const jobNames = jobs.map(j => j.jobName).join(', ');
+              
+              // Build job names with PO numbers
+              const jobDetails = jobs.map(j => {
+                if (j.poNumber) {
+                  return `${j.jobName} (PO: ${j.poNumber})`;
+                }
+                return j.jobName;
+              }).join(', ');
               
               let packageInfo = '';
               if (shippingMethod === 'direct_delivery') {
@@ -3134,7 +3141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     : shippingMethod === 'consolidated' 
                       ? 'Consolidated Back to Customer' 
                       : 'Direct Delivery'
-                }${packageInfo}${isConsolidated ? ` - ${jobNames}` : ''}`,
+                }${packageInfo} - ${jobDetails}`,
                 quantity: 1,
                 unitPrice: totalShippingCost,
                 stitchCount: 0,
