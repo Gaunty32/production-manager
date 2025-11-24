@@ -56,22 +56,22 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
       <div className="max-w-4xl mx-auto p-8 print:p-0">
         <div className="bg-white text-black">
           {/* Header Section - Top Quarter of Page */}
-          <div className="border-b-4 border-black pb-6 mb-6 min-h-[25vh]">
+          <div className="border-b-4 border-black pb-6 mb-6 min-h-[25vh] print:min-h-0">
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
-                <h1 className="text-5xl font-bold text-red-600 mb-4">
+                <h1 className="text-5xl font-bold text-red-600 mb-4 print:text-3xl print:mb-2">
                   REQUIRED: {job.requiredDispatchDate ? format(job.requiredDispatchDate, "dd/MM/yyyy") : "TBA"}
                 </h1>
-                <p className="text-4xl font-bold text-red-600 mb-2">{customer.name}</p>
-                <h2 className="text-3xl font-bold text-red-600">{job.jobName}</h2>
+                <p className="text-4xl font-bold text-red-600 mb-2 print:text-2xl print:mb-1">{customer.name}</p>
+                <h2 className="text-3xl font-bold text-red-600 print:text-xl">{job.jobName}</h2>
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-600">Job Number</p>
-                <p className="text-4xl font-bold">#{job.jobNumber || "N/A"}</p>
+                <p className="text-4xl font-bold print:text-2xl">#{job.jobNumber || "N/A"}</p>
               </div>
             </div>
             {job.poNumber && (
-              <p className="text-lg text-gray-600 mt-2">PO Number: {job.poNumber}</p>
+              <p className="text-lg text-gray-600 mt-2 print:text-base print:mt-1">PO Number: {job.poNumber}</p>
             )}
           </div>
 

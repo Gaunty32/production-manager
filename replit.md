@@ -2,6 +2,22 @@
 
 This application is a production management system for manufacturing, featuring both staff and customer portals. It tracks customer orders, schedules machines, and manages dispatch deadlines to streamline operations, improve efficiency, enhance customer satisfaction, and provide operational transparency. Key capabilities include multi-line item job tracking, a robust scheduling system integrating machine and staff availability, and detailed production metrics. The system aims to provide a comprehensive solution for managing the entire production lifecycle, from order submission to invoicing and customer communication.
 
+# Recent Changes (November 24, 2025)
+
+## Invoice Enhancements
+- Invoice dates now always use "last Friday" logic (most recent Friday from current date) for end-of-week invoicing cycles
+- "Print DTF" jobs now map to "DTF" item code for Xero compatibility
+- Print size (A3, A4, A5, A6) is now included in DTF print job descriptions sent to Xero
+- Fixed pluralization in shipping descriptions ("boxess" → "boxes")
+- Shipping line descriptions now include job names and PO numbers for better tracking
+- Consolidated invoices now sort jobs chronologically by completion date (goodsReceived) with shipping fees appearing immediately below each job
+
+## Production Worksheet Printing
+- Enhanced print layout to support multi-page printing when job content is extensive
+- Added intelligent page-break controls to prevent awkward breaks in critical sections (table rows, bordered boxes)
+- Optimized header sizing for printing to be more compact while maintaining readability
+- Content now flows naturally across multiple pages instead of being forced to fit on one page
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.

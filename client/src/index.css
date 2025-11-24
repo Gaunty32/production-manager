@@ -387,4 +387,34 @@
     print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
+  
+  /* Allow content to flow across multiple pages */
+  #production-worksheet-root {
+    overflow: visible !important;
+  }
+  
+  /* Prevent breaking inside important sections */
+  #production-worksheet-root h1,
+  #production-worksheet-root h2,
+  #production-worksheet-root h3 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  
+  /* Prevent breaking table rows */
+  #production-worksheet-root table tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  /* Keep table headers with content */
+  #production-worksheet-root thead {
+    display: table-header-group;
+  }
+  
+  /* Avoid breaking inside bordered boxes */
+  #production-worksheet-root .border-2 {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
 }
