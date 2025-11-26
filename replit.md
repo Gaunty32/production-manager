@@ -18,6 +18,14 @@ This application is a production management system for manufacturing, featuring 
 - Optimized header sizing for printing to be more compact while maintaining readability
 - Content now flows naturally across multiple pages instead of being forced to fit on one page
 
+## Auto-Scheduling Improvements
+- Fixed case-sensitivity issue with job types ('Embroidery' vs 'embroidery')
+- System now schedules overdue jobs ASAP (treats them as most urgent)
+- Jobs without dispatch dates now get scheduled within 30 days
+- Default work hours (7 AM - 6 PM, Mon-Fri) used when no staff shifts configured
+- Better error messages explain why jobs couldn't be scheduled
+- Jobs sorted by urgency: overdue first, then by dispatch date, undated jobs last
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.

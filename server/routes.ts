@@ -2370,14 +2370,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const unscheduledLineItems = allLineItems.filter(li => 
         li.machineId && // Has machine assigned
         !li.completed && // Not completed
-        li.jobType === 'Embroidery' && // Only embroidery jobs need scheduling
+        li.jobType?.toLowerCase() === 'embroidery' && // Only embroidery jobs need scheduling (case-insensitive)
         !scheduledLineItemIds.has(li.id) // Not already scheduled
       );
       
       if (unscheduledLineItems.length === 0) {
         return res.json({
           success: true,
-          message: "All jobs are already scheduled",
+          message: "All embroidery jobs with machine assignments are already scheduled",
           scheduledCount: 0,
           failedCount: 0
         });
@@ -2391,11 +2391,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bankHolidays = await storage.getBankHolidays();
       
       // Sort line items by required dispatch date (earliest first)
+      // Jobs without dispatch dates go last, overdue jobs go first (most urgent)
+      const now = new Date();
       const sortedLineItems = [...unscheduledLineItems].sort((a, b) => {
         const jobA = allJobs.find(j => j.id === a.jobId);
         const jobB = allJobs.find(j => j.id === b.jobId);
-        if (!jobA || !jobB || !jobA.requiredDispatchDate || !jobB.requiredDispatchDate) return 0;
-        return new Date(jobA.requiredDispatchDate).getTime() - new Date(jobB.requiredDispatchDate).getTime();
+        
+        const dateA = jobA?.requiredDispatchDate ? new Date(jobA.requiredDispatchDate) : null;
+        const dateB = jobB?.requiredDispatchDate ? new Date(jobB.requiredDispatchDate) : null;
+        
+        // Jobs with no date go last
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        
+        // Sort by date - earliest first (including overdue which are most urgent)
+        return dateA.getTime() - dateB.getTime();
       });
       
       const scheduledItems: any[] = [];
@@ -2409,26 +2420,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         const duration = calculateJobDuration(lineItem.quantity, lineItem.stitchCount, lineItem.machineId!);
         if (duration === 0) {
-          failedItems.push({ lineItem: lineItem.id, reason: "Invalid duration calculation" });
-          continue;
-        }
-        
-        // Try to find a slot for each staff member, starting from today until dispatch date
-        if (!job.requiredDispatchDate) {
-          failedItems.push({ lineItem: lineItem.id, reason: "No required dispatch date set" });
-          continue;
-        }
-        
-        const startDate = new Date();
-        const endDate = new Date(job.requiredDispatchDate);
-        endDate.setDate(endDate.getDate() - 1); // Schedule at least 1 day before dispatch
-        
-        if (endDate < startDate) {
           failedItems.push({ 
-            lineItem: lineItem.id, 
-            reason: "Dispatch date is in the past or too soon" 
+            lineItemId: lineItem.id, 
+            jobName: job.jobName,
+            reason: "Missing stitch count - cannot calculate production time" 
           });
           continue;
+        }
+        
+        // Determine scheduling window
+        const startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+        
+        let endDate: Date;
+        let isOverdue = false;
+        
+        if (job.requiredDispatchDate) {
+          const dispatchDate = new Date(job.requiredDispatchDate);
+          if (dispatchDate < startDate) {
+            // Job is overdue - schedule ASAP, search up to 30 days ahead
+            isOverdue = true;
+            endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + 30);
+          } else {
+            // Normal case - schedule before dispatch date
+            endDate = new Date(dispatchDate);
+          }
+        } else {
+          // No dispatch date - schedule within next 30 days
+          endDate = new Date(startDate);
+          endDate.setDate(endDate.getDate() + 30);
         }
         
         let bestSlot: any = null;
@@ -2518,10 +2539,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
         } else {
+          let reason = "No available time slot found";
+          if (isOverdue) {
+            reason += " (job is overdue - scheduled ASAP)";
+          } else if (!job.requiredDispatchDate) {
+            reason += " within 30 days";
+          } else {
+            reason += " before dispatch date";
+          }
           failedItems.push({ 
             lineItemId: lineItem.id, 
             jobName: job.jobName,
-            reason: "No available time slot found before dispatch date" 
+            reason 
           });
         }
       }

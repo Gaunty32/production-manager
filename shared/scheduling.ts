@@ -131,12 +131,33 @@ export function getMachineAvailableSlots(
 /**
  * Find available time slots for a specific staff member and date
  * considering their shifts
+ * 
+ * If no staff shifts are configured in the system, uses default work hours:
+ * - Monday to Friday: 7:00 AM to 6:00 PM (420 to 1080 minutes)
+ * - Weekends (Saturday/Sunday): No availability
  */
 export function getStaffAvailableSlots(
   date: Date,
   staffId: string,
   staffShifts: StaffShift[]
 ): TimeSlot[] {
+  // Check if there are ANY staff shifts configured in the system
+  const anyShiftsExist = staffShifts.length > 0;
+  
+  // If no shifts exist at all, use default work hours (Mon-Fri 7 AM to 6 PM)
+  if (!anyShiftsExist) {
+    const dayOfWeek = date.getDay();
+    // Skip weekends (0 = Sunday, 6 = Saturday)
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      return [];
+    }
+    // Default work hours: 7:00 AM (420 min) to 6:00 PM (1080 min)
+    return [{
+      startTime: 420,  // 7:00 AM
+      endTime: 1080    // 6:00 PM (18:00)
+    }];
+  }
+  
   // Filter shifts for this staff member and date
   const relevantShifts = staffShifts.filter(shift => {
     // Must be for this specific staff member
@@ -158,6 +179,20 @@ export function getStaffAvailableSlots(
     
     return false;
   });
+  
+  // If no specific shifts for this staff member, use default work hours for weekdays
+  if (relevantShifts.length === 0) {
+    const dayOfWeek = date.getDay();
+    // Skip weekends (0 = Sunday, 6 = Saturday)
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      return [];
+    }
+    // Default work hours: 7:00 AM (420 min) to 6:00 PM (1080 min)
+    return [{
+      startTime: 420,  // 7:00 AM
+      endTime: 1080    // 6:00 PM (18:00)
+    }];
+  }
   
   // Convert shifts to TimeSlots
   return relevantShifts.map(shift => ({
