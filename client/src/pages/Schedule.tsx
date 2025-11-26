@@ -37,7 +37,12 @@ export default function Schedule() {
   });
 
   const { data: schedules = [] } = useQuery<JobSchedule[]>({
-    queryKey: [`/api/job-schedules?date=${format(selectedDate, 'yyyy-MM-dd')}`],
+    queryKey: ['/api/job-schedules', { date: format(selectedDate, 'yyyy-MM-dd') }],
+    queryFn: async () => {
+      const response = await fetch(`/api/job-schedules?date=${format(selectedDate, 'yyyy-MM-dd')}`);
+      if (!response.ok) throw new Error('Failed to fetch schedules');
+      return response.json();
+    },
   });
 
   const autoScheduleMutation = useMutation({
@@ -120,9 +125,11 @@ export default function Schedule() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      <div className="border-b p-4 bg-card">
-        <h1 className="text-2xl font-semibold mb-4" data-testid="text-page-title">Schedule Management</h1>
+    <div className="h-full flex flex-col bg-background overflow-hidden">
+      <div className="shrink-0 border-b px-4 pt-4 pb-2 bg-card">
+        <h1 className="text-2xl font-semibold" data-testid="text-page-title">Schedule Management</h1>
+      </div>
+      <div className="flex-1 overflow-auto p-4">
         <Tabs defaultValue="timeline" className="w-full">
           <TabsList data-testid="tabs-schedule">
             <TabsTrigger value="timeline" data-testid="tab-timeline">Timeline</TabsTrigger>
@@ -227,8 +234,8 @@ export default function Schedule() {
             </Button>
           </div>
 
-          <div className="flex gap-4 flex-1 overflow-hidden">
-          <div className="flex-1 overflow-auto p-4 -mx-4 -mb-4">
+          <div className="flex gap-4">
+          <div className="flex-1">
         <Card className="p-4">
           <div className="space-y-1">
             <div className="flex gap-2">
@@ -374,7 +381,7 @@ export default function Schedule() {
         </div>
           </div>
           
-          <div className="w-80 shrink-0 overflow-auto p-4 space-y-4">
+          <div className="w-80 shrink-0 space-y-4">
             <AvailabilitySummary selectedDate={selectedDate} />
             <UnscheduledJobs />
           </div>
