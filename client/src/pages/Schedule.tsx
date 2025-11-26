@@ -260,7 +260,7 @@ export default function Schedule() {
                     </div>
                   </div>
                   
-                  <div className="flex-1 relative h-16 bg-muted/20 rounded">
+                  <div className="flex-1 relative h-16 bg-muted/20 rounded overflow-hidden">
                     {HOURS.map((hour) => (
                       <div
                         key={hour}
