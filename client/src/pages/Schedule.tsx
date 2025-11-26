@@ -42,16 +42,25 @@ export default function Schedule() {
 
   const autoScheduleMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('POST', '/api/scheduling/auto-schedule', {});
+      const res = await apiRequest('POST', '/api/scheduling/auto-schedule', {});
+      return res.json();
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/job-schedules'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       
+      const description = data.scheduledCount > 0 
+        ? `Successfully scheduled ${data.scheduledCount} job${data.scheduledCount !== 1 ? 's' : ''}. ${data.failedCount > 0 ? `${data.failedCount} could not be scheduled.` : ''}`
+        : data.message || `${data.failedCount} jobs could not be scheduled.`;
+      
       toast({
         title: "Auto-scheduling complete",
-        description: `Successfully scheduled ${data.scheduledCount} jobs. ${data.failedCount} jobs could not be scheduled.`,
+        description,
       });
+      
+      if (data.failed && data.failed.length > 0) {
+        console.log("Failed to schedule:", data.failed);
+      }
     },
     onError: (error: Error) => {
       toast({

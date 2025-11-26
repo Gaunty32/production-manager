@@ -44,14 +44,14 @@ export function UnscheduledJobs() {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex flex-col max-h-[400px]">
+      <CardHeader className="flex-shrink-0">
         <CardTitle className="text-sm font-medium">
           Unscheduled Jobs ({unscheduledJobs.length})
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2">
-        {unscheduledJobs.slice(0, 10).map((job) => (
+      <CardContent className="space-y-2 overflow-y-auto flex-1">
+        {unscheduledJobs.map((job) => (
           <div
             key={job.id}
             className="p-3 border rounded-md space-y-1 hover-elevate active-elevate-2"
@@ -80,11 +80,6 @@ export function UnscheduledJobs() {
             )}
           </div>
         ))}
-        {unscheduledJobs.length > 10 && (
-          <p className="text-xs text-muted-foreground text-center pt-2">
-            +{unscheduledJobs.length - 10} more jobs
-          </p>
-        )}
       </CardContent>
     </Card>
   );
