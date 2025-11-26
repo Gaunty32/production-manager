@@ -2455,8 +2455,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let bestSlot: any = null;
         let bestStaffId: string | null = null;
         
-        // Try each staff member to find earliest available slot
-        for (const staffMember of staff) {
+        // Determine which staff to consider for this machine
+        // If allocations exist, only use staff who have allocations for this machine
+        // Otherwise, use all staff (legacy behavior for systems without allocations)
+        const hasAllocationsInSystem = staffMachineAllocations.length > 0;
+        
+        let candidateStaff = staff;
+        if (hasAllocationsInSystem) {
+          // Get staff IDs who have allocations for this specific machine
+          const staffWithMachineAllocations = new Set(
+            staffMachineAllocations
+              .filter(a => a.machineId === lineItem.machineId)
+              .map(a => a.staffId)
+          );
+          candidateStaff = staff.filter(s => staffWithMachineAllocations.has(s.id));
+          
+          if (candidateStaff.length === 0) {
+            failedItems.push({ 
+              lineItemId: lineItem.id, 
+              jobName: job.jobName,
+              reason: `No staff allocated to machine ${lineItem.machineId}` 
+            });
+            continue;
+          }
+        }
+        
+        // Try each candidate staff member to find earliest available slot
+        for (const staffMember of candidateStaff) {
           const currentDate = new Date(startDate);
           
           while (currentDate <= endDate) {
