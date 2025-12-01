@@ -2903,11 +2903,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : lineItemPrice.unitPrice as number;
         }
         
-        // Determine item code based on job type
+        // Determine item code based on job type (case-insensitive)
+        const jobTypeLower = lineItem.jobType?.toLowerCase() || '';
         let itemCode = "Emb"; // Default to embroidery
         let description = lineItem.description || '';
         
-        if (lineItem.jobType === "print") {
+        if (jobTypeLower === "print") {
           itemCode = "Print DTF";
           // Add print size to description for Print jobs
           const printSize = CODE_TO_PRINT_SIZE[lineItem.stitchCount as keyof typeof CODE_TO_PRINT_SIZE];
@@ -2915,9 +2916,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description = description || job.jobName;
             description = `${description}, ${printSize} Print`;
           }
-        } else if (lineItem.jobType === "bagging") {
+        } else if (jobTypeLower === "bagging") {
           itemCode = "BAG";
-        } else if (lineItem.jobType === "other") {
+        } else if (jobTypeLower === "other") {
           itemCode = "OTHER";
         }
         
