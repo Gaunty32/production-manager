@@ -539,7 +539,7 @@ export default function Dashboard() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowLogoSetupDialog(true)} data-testid="menu-add-logo-setup">
                   <Palette className="h-4 w-4 mr-2" />
-                  New Logo Set-Up
+                  New Embroidery Set-Up
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -608,12 +608,12 @@ export default function Dashboard() {
             </div>
           </Card>
 
-          {/* Logo Set-Ups */}
+          {/* Embroidery Set-Ups */}
           <Card className="hover-elevate">
             <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Logo Set-Ups</p>
+                  <p className="text-sm font-medium text-muted-foreground">Embroidery Set-Ups</p>
                   <h3 className="text-3xl font-bold text-primary mt-2">{pendingLogoSetups.length}</h3>
                 </div>
                 <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -1000,26 +1000,26 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Logo Set-Up Queue */}
-        {logoSetups.filter(ls => !ls.approved).length > 0 && (
-          <div className="border border-primary/30 rounded-md p-4 bg-primary/5 mb-6" data-testid="section-logo-setups">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Palette className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold text-primary">
-                  Logo Set-Up Queue ({logoSetups.filter(ls => !ls.approved).length})
-                </h3>
-              </div>
-              <LogoSetupDialog
-                trigger={
-                  <Button variant="outline" size="sm" data-testid="button-add-logo-setup">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Logo Set-Up
-                  </Button>
-                }
-                customers={customers}
-              />
+        {/* Logo Set-Up Queue - Always visible */}
+        <div className="border border-primary/30 rounded-md p-4 bg-primary/5 mb-6" data-testid="section-logo-setups">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Palette className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold text-primary">
+                Embroidery Set-Up Queue ({logoSetups.filter(ls => !ls.approved).length})
+              </h3>
             </div>
+            <LogoSetupDialog
+              trigger={
+                <Button variant="outline" size="sm" data-testid="button-add-logo-setup">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Embroidery Set-Up
+                </Button>
+              }
+              customers={customers}
+            />
+          </div>
+          {logoSetups.filter(ls => !ls.approved).length > 0 ? (
             <div className="space-y-2">
               {logoSetups
                 .filter(ls => !ls.approved)
@@ -1069,8 +1069,10 @@ export default function Dashboard() {
                   );
                 })}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-sm text-muted-foreground">No pending set-ups</p>
+          )}
+        </div>
 
         {/* Completed Orders Section */}
         {sortedCompletedJobs.length > 0 && (
