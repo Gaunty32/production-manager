@@ -290,10 +290,6 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
             </div>
           )}
 
-          {/* Footer */}
-          <div className="mt-8 pt-4 border-t text-xs text-gray-500 text-center print:block">
-            Printed: {format(new Date(), "dd/MM/yyyy HH:mm")}
-          </div>
         </div>
       </div>
 
