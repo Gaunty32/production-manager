@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
+  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -1075,7 +1076,7 @@ export default function Dashboard() {
         </div>
 
         {/* Completed Orders Section */}
-        {sortedCompletedJobs.length > 0 && (
+        {allCompletedJobs.length > 0 && (
           <div className="mb-6" data-testid="section-completed-orders">
             <Collapsible open={completedOrdersOpen} onOpenChange={setCompletedOrdersOpen}>
               <div className="border rounded-md">
@@ -1083,7 +1084,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <Package className="h-5 w-5 text-green-600" />
                     <h3 className="font-semibold">
-                      Completed Orders ({sortedCompletedJobs.length})
+                      Completed Orders ({allCompletedJobs.length})
                     </h3>
                   </div>
                   <ChevronDown className={`h-5 w-5 transition-transform ${completedOrdersOpen ? 'rotate-180' : ''}`} />
@@ -1118,43 +1119,51 @@ export default function Dashboard() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredCompletedJobs.flatMap((job) => {
-                            const customer = customers.find(c => c.id === job.customerId);
-                            const allLogosApproved = job.lineItems.every(li => li.logoApproved);
-                            
-                            return job.lineItems.map((lineItem, index) => (
-                              <LineItemRow
-                                key={lineItem.id}
-                                jobId={job.id}
-                                jobNumber={job.jobNumber}
-                                customerId={job.customerId}
-                                customerName={job.customerName}
-                                jobName={job.jobName}
-                                poNumber={job.poNumber}
-                                totalJobQuantity={job.quantity}
-                                lineItemCount={job.lineItems!.length}
-                                lineItemIndex={index}
-                                lineItem={lineItem}
-                                goodsReceived={job.goodsReceived ? new Date(job.goodsReceived) : null}
-                                requiredDispatchDate={job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null}
-                                completedOnTime={job.completedOnTime}
-                                notes={job.notes}
-                                allLogosApproved={allLogosApproved}
-                                customer={customer}
-                                showPrices={canViewPrices(currentUser?.role)}
-                                isSelected={false}
-                                onToggleSelect={() => {}}
-                                onEdit={handleEdit}
-                                onDelete={() => {}}
-                                onPrintWorksheet={(jobId) => {
-                                  const fullJob = jobs.find(j => j.id === jobId);
-                                  if (fullJob) {
-                                    setWorksheetJob(fullJob);
-                                  }
-                                }}
-                              />
-                            ));
-                          })}
+                          {filteredCompletedJobs.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                No completed orders match "{completedOrdersSearchTerm}"
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredCompletedJobs.flatMap((job) => {
+                              const customer = customers.find(c => c.id === job.customerId);
+                              const allLogosApproved = job.lineItems.every(li => li.logoApproved);
+                              
+                              return job.lineItems.map((lineItem, index) => (
+                                <LineItemRow
+                                  key={lineItem.id}
+                                  jobId={job.id}
+                                  jobNumber={job.jobNumber}
+                                  customerId={job.customerId}
+                                  customerName={job.customerName}
+                                  jobName={job.jobName}
+                                  poNumber={job.poNumber}
+                                  totalJobQuantity={job.quantity}
+                                  lineItemCount={job.lineItems!.length}
+                                  lineItemIndex={index}
+                                  lineItem={lineItem}
+                                  goodsReceived={job.goodsReceived ? new Date(job.goodsReceived) : null}
+                                  requiredDispatchDate={job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null}
+                                  completedOnTime={job.completedOnTime}
+                                  notes={job.notes}
+                                  allLogosApproved={allLogosApproved}
+                                  customer={customer}
+                                  showPrices={canViewPrices(currentUser?.role)}
+                                  isSelected={false}
+                                  onToggleSelect={() => {}}
+                                  onEdit={handleEdit}
+                                  onDelete={() => {}}
+                                  onPrintWorksheet={(jobId) => {
+                                    const fullJob = jobs.find(j => j.id === jobId);
+                                    if (fullJob) {
+                                      setWorksheetJob(fullJob);
+                                    }
+                                  }}
+                                />
+                              ));
+                            })
+                          )}
                         </TableBody>
                       </Table>
                     </div>
