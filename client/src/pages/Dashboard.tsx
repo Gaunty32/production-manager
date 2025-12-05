@@ -276,8 +276,10 @@ export default function Dashboard() {
   });
   
   // Completed Orders: derive from unfiltered jobs for independent search
-  // Get all invoiced jobs from unfiltered jobsWithCustomers
-  const allCompletedJobs = jobsWithCustomers.filter(job => job.invoiceStatus === 'invoiced');
+  // Get all completed jobs (both 'ready' for invoicing and already 'invoiced')
+  const allCompletedJobs = jobsWithCustomers.filter(job => 
+    job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready'
+  );
 
   // Apply separate search filtering to completed orders (independent from production queue search)
   const filteredCompletedJobs = allCompletedJobs.filter((job) => {
@@ -1086,6 +1088,9 @@ export default function Dashboard() {
                     <h3 className="font-semibold">
                       Completed Orders ({allCompletedJobs.length})
                     </h3>
+                    <span className="text-xs text-muted-foreground">
+                      (includes draft invoices)
+                    </span>
                   </div>
                   <ChevronDown className={`h-5 w-5 transition-transform ${completedOrdersOpen ? 'rotate-180' : ''}`} />
                 </CollapsibleTrigger>
