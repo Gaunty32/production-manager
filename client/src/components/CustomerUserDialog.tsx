@@ -147,17 +147,35 @@ export function CustomerUserDialog({
     }
   }, [open, form]);
 
-  // Watch for customer selection changes and auto-fill email
+  // Watch for customer selection changes and auto-fill email, first name, last name
   const selectedCustomerId = form.watch("customerId");
   useEffect(() => {
     if (selectedCustomerId) {
       const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
-      if (selectedCustomer?.email) {
-        // Only auto-fill if email is currently empty or matches a previous customer's email
-        const currentEmail = form.getValues("email");
-        const previousCustomerEmail = customers.find(c => c.email === currentEmail)?.email;
-        if (!currentEmail || previousCustomerEmail) {
-          form.setValue("email", selectedCustomer.email);
+      if (selectedCustomer) {
+        // Auto-fill email if empty or matches a previous customer's email
+        if (selectedCustomer.email) {
+          const currentEmail = form.getValues("email");
+          const previousCustomerEmail = customers.find(c => c.email === currentEmail)?.email;
+          if (!currentEmail || previousCustomerEmail) {
+            form.setValue("email", selectedCustomer.email);
+          }
+        }
+        // Auto-fill first name if empty or matches a previous customer's first name
+        if (selectedCustomer.contactFirstName) {
+          const currentFirstName = form.getValues("firstName");
+          const previousCustomerFirstName = customers.find(c => c.contactFirstName === currentFirstName)?.contactFirstName;
+          if (!currentFirstName || previousCustomerFirstName) {
+            form.setValue("firstName", selectedCustomer.contactFirstName);
+          }
+        }
+        // Auto-fill last name if empty or matches a previous customer's last name
+        if (selectedCustomer.contactLastName) {
+          const currentLastName = form.getValues("lastName");
+          const previousCustomerLastName = customers.find(c => c.contactLastName === currentLastName)?.contactLastName;
+          if (!currentLastName || previousCustomerLastName) {
+            form.setValue("lastName", selectedCustomer.contactLastName);
+          }
         }
       }
     }
