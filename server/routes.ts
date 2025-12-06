@@ -895,8 +895,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const email = z.string().email().parse(req.query.email);
       
       // Find customer user by email
-      const customerUsers = await storage.getCustomerUsers();
-      const customerUser = customerUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+      const customerUser = await storage.getCustomerUserByEmail(email);
       
       if (!customerUser) {
         return res.json({ found: false });

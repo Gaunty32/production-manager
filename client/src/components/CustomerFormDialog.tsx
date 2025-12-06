@@ -33,13 +33,14 @@ const formSchema = insertCustomerSchema
     email: z.string().email("Invalid email address").optional().or(z.literal("")),
     telephone: z.string().optional(),
     address: z.string().optional(),
+    logoUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
     pricingTable: z.enum(["none", "2025", "2026"]).default("none"),
   });
 
 interface CustomerFormDialogProps {
   trigger?: React.ReactNode;
   customer?: Customer;
-  onSubmit: (data: Omit<z.infer<typeof formSchema>, 'pricingTable'> & { pricingTable2025: boolean; pricingTable2026: boolean }) => void;
+  onSubmit: (data: Omit<z.infer<typeof formSchema>, 'pricingTable'> & { pricingTable2025: boolean; pricingTable2026: boolean; logoUrl?: string }) => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
@@ -59,6 +60,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
       email: "",
       telephone: "",
       address: "",
+      logoUrl: "",
       pricingTable: "none",
     },
   });
@@ -75,6 +77,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         email: customer.email || "",
         telephone: customer.telephone || "",
         address: customer.address || "",
+        logoUrl: customer.logoUrl || "",
         pricingTable,
       });
     } else if (!open) {
@@ -85,6 +88,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         email: "",
         telephone: "",
         address: "",
+        logoUrl: "",
         pricingTable: "none",
       });
     }
@@ -191,6 +195,29 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                     <Textarea {...field} placeholder="Enter customer address" rows={3} data-testid="input-address" />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="logoUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Logo URL</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="url" placeholder="https://example.com/logo.png" data-testid="input-logo-url" />
+                  </FormControl>
+                  <FormMessage />
+                  {field.value && (
+                    <div className="mt-2 p-2 border rounded-md bg-muted">
+                      <img 
+                        src={field.value} 
+                        alt="Logo preview" 
+                        className="max-h-16 max-w-full object-contain mx-auto"
+                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                      />
+                    </div>
+                  )}
                 </FormItem>
               )}
             />

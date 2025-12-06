@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn, HelpCircle } from "lucide-react";
+import { LogIn, HelpCircle, MapPin, Building2 } from "lucide-react";
 import { useLocation } from "wouter";
 import {
   AlertDialog,
@@ -41,11 +41,20 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+interface CustomerInfo {
+  found: boolean;
+  customerName?: string;
+  logoUrl?: string | null;
+  address?: string | null;
+}
+
 export default function CustomerLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -54,6 +63,53 @@ export default function CustomerLogin() {
       password: "",
     },
   });
+
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastLookedUpEmailRef = useRef<string>("");
+
+  const lookupCustomer = useCallback((email: string) => {
+    if (!email || !email.includes('@') || !email.includes('.')) {
+      setCustomerInfo(null);
+      return;
+    }
+    
+    // Don't lookup the same email again
+    if (email.toLowerCase() === lastLookedUpEmailRef.current.toLowerCase()) {
+      return;
+    }
+    
+    // Clear any pending lookup
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Debounce the lookup by 500ms
+    debounceTimerRef.current = setTimeout(async () => {
+      setIsLookingUp(true);
+      try {
+        const response = await fetch(`/api/customer-auth/lookup?email=${encodeURIComponent(email)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setCustomerInfo(data);
+          lastLookedUpEmailRef.current = email;
+        }
+      } catch (error) {
+        console.error('Failed to lookup customer:', error);
+        setCustomerInfo(null);
+      } finally {
+        setIsLookingUp(false);
+      }
+    }, 500);
+  }, []);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
@@ -96,13 +152,37 @@ export default function CustomerLogin() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <div className="flex items-center justify-center mb-2">
-            <LogIn className="h-8 w-8 text-primary" />
-          </div>
-          <CardTitle className="text-2xl text-center">Customer Portal</CardTitle>
+          {customerInfo?.found && customerInfo.logoUrl ? (
+            <div className="flex items-center justify-center mb-4">
+              <img 
+                src={customerInfo.logoUrl} 
+                alt={customerInfo.customerName || "Customer logo"}
+                className="max-h-20 max-w-full object-contain"
+                data-testid="img-customer-logo"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center mb-2">
+              <LogIn className="h-8 w-8 text-primary" />
+            </div>
+          )}
+          <CardTitle className="text-2xl text-center">
+            {customerInfo?.found ? `Welcome, ${customerInfo.customerName}` : "Customer Portal"}
+          </CardTitle>
           <CardDescription className="text-center">
             Sign in to view your orders and track production
           </CardDescription>
+          {customerInfo?.found && customerInfo.address && (
+            <div className="mt-4 p-3 bg-muted rounded-md" data-testid="customer-address-info">
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium text-foreground mb-1">Default Delivery Address:</p>
+                  <p className="whitespace-pre-line">{customerInfo.address}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -119,6 +199,14 @@ export default function CustomerLogin() {
                         placeholder="your@email.com"
                         data-testid="input-email"
                         {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          lookupCustomer(e.target.value);
+                        }}
+                        onBlur={(e) => {
+                          field.onBlur();
+                          lookupCustomer(e.target.value);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
