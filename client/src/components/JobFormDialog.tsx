@@ -121,6 +121,8 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const [duckConfirmed, setDuckConfirmed] = useState(false);
   const [showMachineWarning, setShowMachineWarning] = useState(false);
   const [machineWarningConfirmed, setMachineWarningConfirmed] = useState(false);
+  const [showExpressWarning, setShowExpressWarning] = useState(false);
+  const [expressWarningConfirmed, setExpressWarningConfirmed] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<z.infer<typeof formSchema> | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -476,6 +478,34 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       return;
     }
     
+    // Check for express service requirement: < 300 items AND < 3 working days
+    const totalQuantity = getTotalQuantity();
+    const dispatchDate = data.requiredDispatchDate ? new Date(data.requiredDispatchDate) : null;
+    
+    if (dispatchDate && totalQuantity > 0 && totalQuantity < 300 && !expressWarningConfirmed) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Calculate working days between today and dispatch date
+      let workingDays = 0;
+      const checkDate = new Date(today);
+      while (checkDate < dispatchDate) {
+        checkDate.setDate(checkDate.getDate() + 1);
+        const dayOfWeek = checkDate.getDay();
+        // Count weekdays (Mon-Fri) as working days
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          workingDays++;
+        }
+      }
+      
+      // If less than 3 working days, show express service warning
+      if (workingDays < 3) {
+        setPendingFormData(data);
+        setShowExpressWarning(true);
+        return;
+      }
+    }
+    
     // All validations passed, perform actual submit
     await performActualSubmit(data);
   };
@@ -489,6 +519,15 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
     }
   };
 
+  const handleExpressConfirm = () => {
+    setExpressWarningConfirmed(true);
+    setShowExpressWarning(false);
+    // Re-submit with the pending data
+    if (pendingFormData) {
+      handleSubmit(pendingFormData);
+    }
+  };
+
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
     if (!newOpen) {
@@ -496,6 +535,8 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       setDuckConfirmed(false);
       setMachineWarningConfirmed(false);
       setShowMachineWarning(false);
+      setExpressWarningConfirmed(false);
+      setShowExpressWarning(false);
       setPendingFormData(null);
     }
   };
@@ -1374,6 +1415,58 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
               data-testid="button-confirm-machine-warning"
             >
               Continue Anyway
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showExpressWarning} onOpenChange={(open) => {
+        setShowExpressWarning(open);
+        if (!open) {
+          setPendingFormData(null);
+          setExpressWarningConfirmed(false);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="text-amber-500">48-Hour Express Service</span>
+            </DialogTitle>
+            <DialogDescription>
+              Based on the dispatch date and quantity, this order qualifies for our express production service.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="my-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+            <div className="flex items-start gap-3">
+              <div className="text-3xl">&#9889;</div>
+              <div>
+                <p className="font-semibold text-amber-800 dark:text-amber-200 mb-1">
+                  Express Service with 100% Surcharge
+                </p>
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  Orders under 300 items with less than 3 working days until dispatch will be booked onto our 48-hour express production service. This incurs a 100% surcharge on the standard embroidery price.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowExpressWarning(false);
+                setPendingFormData(null);
+                setExpressWarningConfirmed(false);
+              }}
+              data-testid="button-cancel-express-warning"
+            >
+              Go Back
+            </Button>
+            <Button
+              onClick={handleExpressConfirm}
+              className="bg-amber-600 hover:bg-amber-700"
+              data-testid="button-confirm-express-warning"
+            >
+              I Understand, Continue
             </Button>
           </div>
         </DialogContent>
