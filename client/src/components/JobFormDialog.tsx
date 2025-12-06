@@ -440,9 +440,39 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
     }
   };
 
-  const handleSubmit = async (data: z.infer<typeof formSchema>) => {
-    if (isSubmitting) return; // Prevent double submission
+  // Helper to check if express service is required
+  const requiresExpressService = (dispatchDateStr: string | undefined) => {
+    if (!dispatchDateStr) return false;
+    const totalQuantity = getTotalQuantity();
+    if (totalQuantity <= 0 || totalQuantity >= 300) return false;
     
+    const dispatchDate = new Date(dispatchDateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Calculate working days between today and dispatch date
+    let workingDays = 0;
+    const checkDate = new Date(today);
+    while (checkDate < dispatchDate) {
+      checkDate.setDate(checkDate.getDate() + 1);
+      const dayOfWeek = checkDate.getDay();
+      // Count weekdays (Mon-Fri) as working days
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        workingDays++;
+      }
+    }
+    
+    return workingDays < 3;
+  };
+
+  // Validation chain with explicit confirmation flags passed as parameters
+  // This avoids React state batching issues where setState updates don't take effect immediately
+  const runValidationChain = async (
+    data: z.infer<typeof formSchema>,
+    confirmedDuck: boolean,
+    confirmedMachine: boolean,
+    confirmedExpress: boolean
+  ) => {
     // Check for suspicious data: quantity > stitch count (likely swapped)
     const suspiciousItems = lineItems
       .map((item, index) => ({ ...item, index }))
@@ -456,7 +486,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       );
     
     // If suspicious data found and not yet confirmed, show duck dialog
-    if (suspiciousItems.length > 0 && !duckConfirmed) {
+    if (suspiciousItems.length > 0 && !confirmedDuck) {
       setPendingFormData(data);
       setShowDuckDialog(true);
       return;
@@ -472,59 +502,54 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       );
     
     // If unassigned machines found and not yet confirmed, show warning dialog
-    if (unassignedEmbroideryItems.length > 0 && !machineWarningConfirmed) {
+    if (unassignedEmbroideryItems.length > 0 && !confirmedMachine) {
       setPendingFormData(data);
       setShowMachineWarning(true);
       return;
     }
     
     // Check for express service requirement: < 300 items AND < 3 working days
-    const totalQuantity = getTotalQuantity();
-    const dispatchDate = data.requiredDispatchDate ? new Date(data.requiredDispatchDate) : null;
-    
-    if (dispatchDate && totalQuantity > 0 && totalQuantity < 300 && !expressWarningConfirmed) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      // Calculate working days between today and dispatch date
-      let workingDays = 0;
-      const checkDate = new Date(today);
-      while (checkDate < dispatchDate) {
-        checkDate.setDate(checkDate.getDate() + 1);
-        const dayOfWeek = checkDate.getDay();
-        // Count weekdays (Mon-Fri) as working days
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-          workingDays++;
-        }
-      }
-      
-      // If less than 3 working days, show express service warning
-      if (workingDays < 3) {
-        setPendingFormData(data);
-        setShowExpressWarning(true);
-        return;
-      }
+    if (requiresExpressService(data.requiredDispatchDate) && !confirmedExpress) {
+      setPendingFormData(data);
+      setShowExpressWarning(true);
+      return;
     }
     
     // All validations passed, perform actual submit
     await performActualSubmit(data);
   };
 
+  const handleSubmit = async (data: z.infer<typeof formSchema>) => {
+    if (isSubmitting) return; // Prevent double submission
+    
+    // Start validation chain with current state values
+    await runValidationChain(data, duckConfirmed, machineWarningConfirmed, expressWarningConfirmed);
+  };
+
   const handleDuckConfirm = () => {
     setDuckConfirmed(true);
     setShowDuckDialog(false);
-    // Re-submit with the pending data
+    // Continue validation chain with duck confirmed (pass true explicitly to avoid state batching)
     if (pendingFormData) {
-      handleSubmit(pendingFormData);
+      runValidationChain(pendingFormData, true, machineWarningConfirmed, expressWarningConfirmed);
+    }
+  };
+
+  const handleMachineWarningConfirm = () => {
+    setMachineWarningConfirmed(true);
+    setShowMachineWarning(false);
+    // Continue validation chain with machine warning confirmed (pass true explicitly)
+    if (pendingFormData) {
+      runValidationChain(pendingFormData, true, true, expressWarningConfirmed);
     }
   };
 
   const handleExpressConfirm = () => {
     setExpressWarningConfirmed(true);
     setShowExpressWarning(false);
-    // Re-submit with the pending data
+    // Express warning is the final check, so submit directly
     if (pendingFormData) {
-      handleSubmit(pendingFormData);
+      performActualSubmit(pendingFormData);
     }
   };
 
@@ -1406,12 +1431,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                setShowMachineWarning(false);
-                if (pendingFormData) {
-                  performActualSubmit(pendingFormData);
-                }
-              }}
+              onClick={handleMachineWarningConfirm}
               data-testid="button-confirm-machine-warning"
             >
               Continue Anyway
@@ -1420,13 +1440,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showExpressWarning} onOpenChange={(open) => {
-        setShowExpressWarning(open);
-        if (!open) {
-          setPendingFormData(null);
-          setExpressWarningConfirmed(false);
-        }
-      }}>
+      <Dialog open={showExpressWarning} onOpenChange={setShowExpressWarning}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
