@@ -44,7 +44,6 @@ export default function Dashboard() {
   const params = useParams();
   const machineId = params.id ? parseInt(params.id) : null;
   const [searchTerm, setSearchTerm] = useState("");
-  const [completedOrdersSearchTerm, setCompletedOrdersSearchTerm] = useState("");
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [showLogoSetupDialog, setShowLogoSetupDialog] = useState(false);
@@ -281,10 +280,10 @@ export default function Dashboard() {
     job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready'
   );
 
-  // Apply separate search filtering to completed orders (independent from production queue search)
+  // Apply unified search filtering to completed orders (same search as production queue)
   const filteredCompletedJobs = allCompletedJobs.filter((job) => {
-    if (!completedOrdersSearchTerm) return true;
-    const searchLower = completedOrdersSearchTerm.toLowerCase();
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
     return (
       job.customerName.toLowerCase().includes(searchLower) ||
       job.jobName.toLowerCase().includes(searchLower) ||
@@ -392,6 +391,18 @@ export default function Dashboard() {
   }, 0);
   
   const pendingLogoSetups = logoSetups.filter(ls => !ls.approved);
+  
+  // Apply unified search filtering to embroidery set-ups
+  const filteredLogoSetups = pendingLogoSetups.filter((setup) => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    const customer = customers.find(c => c.id === setup.customerId);
+    return (
+      (customer?.name?.toLowerCase().includes(searchLower)) ||
+      (setup.jobName?.toLowerCase().includes(searchLower)) ||
+      (setup.notes?.toLowerCase().includes(searchLower))
+    );
+  });
 
   // Calculate total quantity and total value for production queue
   const productionQueueMetrics = (() => {
@@ -668,7 +679,7 @@ export default function Dashboard() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search by customer, job name, job #, or PO number..."
+              placeholder="Search all orders, set-ups..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
@@ -1009,7 +1020,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-2">
               <Palette className="h-5 w-5 text-primary" />
               <h3 className="font-semibold text-primary">
-                Embroidery Set-Up Queue ({logoSetups.filter(ls => !ls.approved).length})
+                Embroidery Set-Up Queue ({pendingLogoSetups.length})
               </h3>
             </div>
             <LogoSetupDialog
@@ -1022,11 +1033,9 @@ export default function Dashboard() {
               customers={customers}
             />
           </div>
-          {logoSetups.filter(ls => !ls.approved).length > 0 ? (
+          {filteredLogoSetups.length > 0 ? (
             <div className="space-y-2">
-              {logoSetups
-                .filter(ls => !ls.approved)
-                .map((setup) => {
+              {filteredLogoSetups.map((setup) => {
                   const customer = customers.find(c => c.id === setup.customerId);
                   return (
                     <div
@@ -1073,7 +1082,11 @@ export default function Dashboard() {
                 })}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No pending set-ups</p>
+            <p className="text-sm text-muted-foreground">
+              {searchTerm && pendingLogoSetups.length > 0 
+                ? `No set-ups match "${searchTerm}"`
+                : "No pending set-ups"}
+            </p>
           )}
         </div>
 
@@ -1096,19 +1109,6 @@ export default function Dashboard() {
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="border-t">
-                    {/* Search input for completed orders */}
-                    <div className="p-4 border-b">
-                      <div className="relative max-w-sm">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          data-testid="input-search-completed-orders"
-                          placeholder="Search completed orders..."
-                          value={completedOrdersSearchTerm}
-                          onChange={(e) => setCompletedOrdersSearchTerm(e.target.value)}
-                          className="pl-9"
-                        />
-                      </div>
-                    </div>
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
@@ -1127,7 +1127,7 @@ export default function Dashboard() {
                           {filteredCompletedJobs.length === 0 ? (
                             <TableRow>
                               <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                                No completed orders match "{completedOrdersSearchTerm}"
+                                No completed orders match "{searchTerm}"
                               </TableCell>
                             </TableRow>
                           ) : (
