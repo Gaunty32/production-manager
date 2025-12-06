@@ -147,6 +147,22 @@ export function CustomerUserDialog({
     }
   }, [open, form]);
 
+  // Watch for customer selection changes and auto-fill email
+  const selectedCustomerId = form.watch("customerId");
+  useEffect(() => {
+    if (selectedCustomerId) {
+      const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+      if (selectedCustomer?.email) {
+        // Only auto-fill if email is currently empty or matches a previous customer's email
+        const currentEmail = form.getValues("email");
+        const previousCustomerEmail = customers.find(c => c.email === currentEmail)?.email;
+        if (!currentEmail || previousCustomerEmail) {
+          form.setValue("email", selectedCustomer.email);
+        }
+      }
+    }
+  }, [selectedCustomerId, customers, form]);
+
   const handleGeneratePassword = () => {
     const newPassword = generatePassword();
     form.setValue("password", newPassword);
