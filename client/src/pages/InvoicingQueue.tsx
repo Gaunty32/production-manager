@@ -1,12 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search } from "lucide-react";
+import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil } from "lucide-react";
 import { format } from "date-fns";
-import { calculateJobPrice, formatPrice } from "@shared/pricing";
+import { calculateJobPrice, formatPrice, calculateShippingCost } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,6 +14,22 @@ import { canViewPrices, type Job, type Customer, type LogoSetup } from "@shared/
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface LineItem {
   id: string;
@@ -26,6 +42,13 @@ interface LineItem {
   completed: boolean;
 }
 
+interface EditShippingState {
+  jobId: string;
+  dhlTrackingNumber: string;
+  packageCount: number | undefined;
+  packageType: "boxes" | "bags" | undefined;
+}
+
 export default function InvoicingQueue() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -35,6 +58,28 @@ export default function InvoicingQueue() {
   const [manualPrices, setManualPrices] = useState<Record<string, string>>({});
   const [manualShippingCosts, setManualShippingCosts] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState("");
+  const [editingShipping, setEditingShipping] = useState<EditShippingState | null>(null);
+
+  const updateShippingMutation = useMutation({
+    mutationFn: async (data: { jobId: string; dhlTrackingNumber?: string; packageCount?: number; packageType?: string }) => {
+      const { jobId, ...updates } = data;
+      const shippingCostResult = updates.packageType && updates.packageCount 
+        ? calculateShippingCost(updates.packageType as "boxes" | "bags", updates.packageCount)
+        : undefined;
+      const shippingCost = shippingCostResult?.cost !== undefined 
+        ? (typeof shippingCostResult.cost === 'number' ? shippingCostResult.cost.toString() : shippingCostResult.cost)
+        : undefined;
+      return apiRequest("PATCH", `/api/jobs/${jobId}`, { ...updates, shippingCost });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: "Shipping Updated", description: "Shipping information has been updated successfully." });
+      setEditingShipping(null);
+    },
+    onError: (error) => {
+      toast({ title: "Update Failed", description: error instanceof Error ? error.message : "Failed to update shipping information", variant: "destructive" });
+    },
+  });
   
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
@@ -612,6 +657,25 @@ export default function InvoicingQueue() {
                                             Tracking: {job.dhlTrackingNumber}
                                           </Badge>
                                         )}
+                                        {(job.shippingMethod === 'consolidated' || job.shippingMethod === 'direct_delivery') && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 ml-1"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setEditingShipping({
+                                                jobId: job.id,
+                                                dhlTrackingNumber: job.dhlTrackingNumber || "",
+                                                packageCount: job.packageCount || undefined,
+                                                packageType: job.packageType as "boxes" | "bags" | undefined,
+                                              });
+                                            }}
+                                            data-testid={`button-edit-shipping-${job.id}`}
+                                          >
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                        )}
                                       </div>
                                       {consolidatedJobs.length > 0 && (
                                         <div className="flex items-center gap-2 ml-5">
@@ -756,6 +820,93 @@ export default function InvoicingQueue() {
           </div>
         )}
       </div>
+
+      {/* Edit Shipping Dialog */}
+      <Dialog open={!!editingShipping} onOpenChange={(open) => !open && setEditingShipping(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Shipping Information</DialogTitle>
+            <DialogDescription>
+              Update tracking number and package details for this order.
+            </DialogDescription>
+          </DialogHeader>
+          {editingShipping && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="tracking">DHL Tracking Number</Label>
+                <Input
+                  id="tracking"
+                  value={editingShipping.dhlTrackingNumber}
+                  onChange={(e) => setEditingShipping({ ...editingShipping, dhlTrackingNumber: e.target.value })}
+                  placeholder="Enter tracking number"
+                  data-testid="input-edit-tracking"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="packageCount">Package Count</Label>
+                  <Input
+                    id="packageCount"
+                    type="number"
+                    min="1"
+                    value={editingShipping.packageCount || ""}
+                    onChange={(e) => setEditingShipping({ ...editingShipping, packageCount: e.target.value ? parseInt(e.target.value) : undefined })}
+                    placeholder="Number of packages"
+                    data-testid="input-edit-package-count"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="packageType">Package Type</Label>
+                  <Select
+                    value={editingShipping.packageType || ""}
+                    onValueChange={(value) => setEditingShipping({ ...editingShipping, packageType: value as "boxes" | "bags" })}
+                  >
+                    <SelectTrigger data-testid="select-edit-package-type">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="boxes">Boxes</SelectItem>
+                      <SelectItem value="bags">Bags</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {editingShipping.packageType && editingShipping.packageCount && (() => {
+                const result = calculateShippingCost(editingShipping.packageType, editingShipping.packageCount);
+                const displayCost = result.cost === "TBA" ? "TBA" : formatPrice(result.cost);
+                return (
+                  <div className="p-3 bg-muted rounded-md">
+                    <p className="text-sm text-muted-foreground">
+                      Shipping cost will be updated to: <span className="font-medium text-foreground">{displayCost}</span>
+                    </p>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingShipping(null)} data-testid="button-cancel-edit-shipping">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingShipping) {
+                  updateShippingMutation.mutate({
+                    jobId: editingShipping.jobId,
+                    dhlTrackingNumber: editingShipping.dhlTrackingNumber || undefined,
+                    packageCount: editingShipping.packageCount,
+                    packageType: editingShipping.packageType,
+                  });
+                }
+              }}
+              disabled={updateShippingMutation.isPending}
+              data-testid="button-save-shipping"
+            >
+              {updateShippingMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
