@@ -700,6 +700,17 @@ export default function Dashboard() {
               }
               customers={customers}
               staff={staff}
+              onJobCreated={async (jobId) => {
+                try {
+                  const response = await fetch(`/api/jobs/${jobId}`, { credentials: 'include' });
+                  if (response.ok) {
+                    const fullJob = await response.json();
+                    setWorksheetJob(fullJob);
+                  }
+                } catch (error) {
+                  console.error('Failed to fetch job for worksheet:', error);
+                }
+              }}
             />
             <Button 
               variant="outline" 
