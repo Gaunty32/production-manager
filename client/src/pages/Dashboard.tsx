@@ -49,7 +49,7 @@ export default function Dashboard() {
   const [showLogoSetupDialog, setShowLogoSetupDialog] = useState(false);
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
   const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'production' | 'completed'>('production');
+  const [viewMode, setViewMode] = useState<'production' | 'completed' | 'setups'>('production');
   const [activeFilter, setActiveFilter] = useState<'overdue' | 'logo-setups' | '3-days' | null>(null);
   const [worksheetJob, setWorksheetJob] = useState<JobWithLineItems | null>(null);
   const [sortOrder, setSortOrder] = useState<'date' | 'customer' | 'jobNumber'>('date');
@@ -731,6 +731,15 @@ export default function Dashboard() {
                 Production Queue
               </Button>
               <Button
+                variant={viewMode === 'setups' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('setups')}
+                data-testid="button-view-setups"
+              >
+                <Palette className="h-4 w-4 mr-2" />
+                Set-Ups ({pendingLogoSetups.length})
+              </Button>
+              <Button
                 variant={viewMode === 'completed' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('completed')}
@@ -1071,81 +1080,85 @@ export default function Dashboard() {
         </div>
         )}
 
-        {/* Logo Set-Up Queue - Always visible */}
-        <div className="border border-primary/30 rounded-md p-4 bg-primary/5 mb-6" data-testid="section-logo-setups">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Palette className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold text-primary">
-                Embroidery Set-Up Queue ({pendingLogoSetups.length})
-              </h3>
+        {/* Logo Set-Up Queue - shown when viewMode is 'setups' */}
+        {viewMode === 'setups' && (
+          <div className="mb-6" data-testid="section-logo-setups">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">
+                  Embroidery Set-Up Queue
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {filteredLogoSetups.length} of {pendingLogoSetups.length} pending set-ups
+                </p>
+              </div>
+              <LogoSetupDialog
+                trigger={
+                  <Button variant="outline" size="sm" data-testid="button-add-logo-setup">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Set-Up
+                  </Button>
+                }
+                customers={customers}
+              />
             </div>
-            <LogoSetupDialog
-              trigger={
-                <Button variant="outline" size="sm" data-testid="button-add-logo-setup">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Embroidery Set-Up
-                </Button>
-              }
-              customers={customers}
-            />
-          </div>
-          {filteredLogoSetups.length > 0 ? (
-            <div className="space-y-2">
-              {filteredLogoSetups.map((setup) => {
-                  const customer = customers.find(c => c.id === setup.customerId);
-                  return (
-                    <div
-                      key={setup.id}
-                      className="flex items-center justify-between bg-background rounded-md p-3"
-                      data-testid={`logo-setup-${setup.id}`}
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{customer?.name || "Unknown Customer"}</span>
-                          <span className="text-muted-foreground">-</span>
-                          <span className="text-sm">{setup.jobName}</span>
+            {filteredLogoSetups.length > 0 ? (
+              <div className="space-y-2">
+                {filteredLogoSetups.map((setup) => {
+                    const customer = customers.find(c => c.id === setup.customerId);
+                    return (
+                      <div
+                        key={setup.id}
+                        className="flex items-center justify-between bg-card border rounded-md p-4"
+                        data-testid={`logo-setup-${setup.id}`}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{customer?.name || "Unknown Customer"}</span>
+                            <span className="text-muted-foreground">-</span>
+                            <span className="text-sm">{setup.jobName}</span>
+                          </div>
+                          {setup.notes && (
+                            <p className="text-xs text-muted-foreground mt-1">{setup.notes}</p>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Added {format(new Date(setup.createdAt), "MMM d, yyyy")}
+                          </p>
                         </div>
-                        {setup.notes && (
-                          <p className="text-xs text-muted-foreground mt-1">{setup.notes}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Added {format(new Date(setup.createdAt), "MMM d, yyyy")}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => approveLogoSetupMutation.mutate(setup.id)}
+                            disabled={approveLogoSetupMutation.isPending}
+                            data-testid={`button-approve-${setup.id}`}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Approve (£10)
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => deleteLogoSetupMutation.mutate(setup.id)}
+                            disabled={deleteLogoSetupMutation.isPending}
+                            data-testid={`button-delete-${setup.id}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => approveLogoSetupMutation.mutate(setup.id)}
-                          disabled={approveLogoSetupMutation.isPending}
-                          data-testid={`button-approve-${setup.id}`}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Approve (£10)
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => deleteLogoSetupMutation.mutate(setup.id)}
-                          disabled={deleteLogoSetupMutation.isPending}
-                          data-testid={`button-delete-${setup.id}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {searchTerm && pendingLogoSetups.length > 0 
-                ? `No set-ups match "${searchTerm}"`
-                : "No pending set-ups"}
-            </p>
-          )}
-        </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              <div className="border rounded-md p-8 text-center text-muted-foreground">
+                {searchTerm && pendingLogoSetups.length > 0 
+                  ? `No set-ups match "${searchTerm}"`
+                  : "No pending set-ups"}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Completed Orders Section - shown when viewMode is 'completed' */}
         {viewMode === 'completed' && (
