@@ -31,13 +31,20 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl text-center">Embroidery Pricing 2026</DialogTitle>
+          <DialogTitle className="text-xl text-center">Embroidery Pricing</DialogTitle>
           <DialogDescription className="text-center">
             Price per item (excluding VAT)
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">
+          <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-stitch-count-key">
+            <p className="font-medium mb-1">Stitch Count Key</p>
+            <p className="text-muted-foreground">
+              Column headers show the maximum stitch count for that price. For example, <span className="font-medium">&lt;5,000</span> means logos with up to 5,000 stitches, <span className="font-medium">&lt;7,500</span> means logos with up to 7,500 stitches.
+            </p>
+          </div>
+          
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse" data-testid="table-pricing-dialog">
               <thead>
@@ -45,7 +52,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
                   <th className="border border-border px-2 py-1.5 text-left font-medium">Quantity</th>
                   {stitchHeaders.map(stitches => (
                     <th key={stitches} className="border border-border px-2 py-1.5 text-center font-medium whitespace-nowrap">
-                      {stitches >= 1000 ? `${stitches / 1000}k` : stitches}
+                      &lt;{stitches >= 1000 ? `${(stitches / 1000).toLocaleString()}k` : stitches.toLocaleString()}
                     </th>
                   ))}
                   <th className="border border-border px-2 py-1.5 text-center font-medium">50k+</th>
