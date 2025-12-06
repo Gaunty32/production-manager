@@ -49,6 +49,7 @@ export default function Dashboard() {
   const [showLogoSetupDialog, setShowLogoSetupDialog] = useState(false);
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
   const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'production' | 'completed'>('production');
   const [activeFilter, setActiveFilter] = useState<'overdue' | 'logo-setups' | '3-days' | null>(null);
   const [worksheetJob, setWorksheetJob] = useState<JobWithLineItems | null>(null);
   const [sortOrder, setSortOrder] = useState<'date' | 'customer' | 'jobNumber'>('date');
@@ -674,8 +675,9 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="mb-6">
-          <div className="relative max-w-md">
+        {/* Search and Action Bar */}
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="relative w-full sm:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
@@ -686,9 +688,63 @@ export default function Dashboard() {
               data-testid="input-search"
             />
           </div>
+          
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <JobFormDialog
+              trigger={
+                <Button data-testid="button-add-order-main">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Order
+                </Button>
+              }
+              customers={customers}
+              staff={staff}
+            />
+            <Button 
+              variant="outline" 
+              onClick={() => setShowCustomerDialog(true)}
+              data-testid="button-add-customer-main"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              New Customer
+            </Button>
+            <LogoSetupDialog
+              trigger={
+                <Button variant="outline" data-testid="button-add-setup-main">
+                  <Palette className="h-4 w-4 mr-2" />
+                  New Embroidery Set-Up
+                </Button>
+              }
+              customers={customers}
+            />
+            
+            {/* View Toggle */}
+            <div className="border rounded-md p-1 flex gap-1 ml-2">
+              <Button
+                variant={viewMode === 'production' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('production')}
+                data-testid="button-view-production"
+              >
+                <Briefcase className="h-4 w-4 mr-2" />
+                Production Queue
+              </Button>
+              <Button
+                variant={viewMode === 'completed' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('completed')}
+                data-testid="button-view-completed"
+              >
+                <Package className="h-4 w-4 mr-2" />
+                Completed ({allCompletedJobs.length})
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Production Queue - All Jobs (Active + Pending) */}
+        {viewMode === 'production' && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -1013,6 +1069,7 @@ export default function Dashboard() {
             </>
           )}
         </div>
+        )}
 
         {/* Logo Set-Up Queue - Always visible */}
         <div className="border border-primary/30 rounded-md p-4 bg-primary/5 mb-6" data-testid="section-logo-setups">
@@ -1090,92 +1147,84 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Completed Orders Section */}
-        {allCompletedJobs.length > 0 && (
+        {/* Completed Orders Section - shown when viewMode is 'completed' */}
+        {viewMode === 'completed' && (
           <div className="mb-6" data-testid="section-completed-orders">
-            <Collapsible open={completedOrdersOpen} onOpenChange={setCompletedOrdersOpen}>
-              <div className="border rounded-md">
-                <CollapsibleTrigger className="w-full flex items-center justify-between p-4 hover-elevate" data-testid="button-toggle-completed">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-5 w-5 text-green-600" />
-                    <h3 className="font-semibold">
-                      Completed Orders ({allCompletedJobs.length})
-                    </h3>
-                    <span className="text-xs text-muted-foreground">
-                      (includes draft invoices)
-                    </span>
-                  </div>
-                  <ChevronDown className={`h-5 w-5 transition-transform ${completedOrdersOpen ? 'rotate-180' : ''}`} />
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="border-t">
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[180px]">Customer</TableHead>
-                            <TableHead className="w-[100px]">Job #</TableHead>
-                            <TableHead>Job Name / Item Description</TableHead>
-                            <TableHead className="w-[80px] text-right">Qty</TableHead>
-                            <TableHead className="w-[120px]">Machine</TableHead>
-                            <TableHead className="w-[100px]">Date Required</TableHead>
-                            <TableHead className="w-[100px]">Invoiced Date</TableHead>
-                            <TableHead className="w-[80px]">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredCompletedJobs.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                                No completed orders match "{searchTerm}"
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            filteredCompletedJobs.flatMap((job) => {
-                              const customer = customers.find(c => c.id === job.customerId);
-                              const allLogosApproved = job.lineItems.every(li => li.logoApproved);
-                              
-                              return job.lineItems.map((lineItem, index) => (
-                                <LineItemRow
-                                  key={lineItem.id}
-                                  jobId={job.id}
-                                  jobNumber={job.jobNumber}
-                                  customerId={job.customerId}
-                                  customerName={job.customerName}
-                                  jobName={job.jobName}
-                                  poNumber={job.poNumber}
-                                  totalJobQuantity={job.quantity}
-                                  lineItemCount={job.lineItems!.length}
-                                  lineItemIndex={index}
-                                  lineItem={lineItem}
-                                  goodsReceived={job.goodsReceived ? new Date(job.goodsReceived) : null}
-                                  requiredDispatchDate={job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null}
-                                  completedOnTime={job.completedOnTime}
-                                  notes={job.notes}
-                                  allLogosApproved={allLogosApproved}
-                                  customer={customer}
-                                  showPrices={canViewPrices(currentUser?.role)}
-                                  isSelected={false}
-                                  onToggleSelect={() => {}}
-                                  onEdit={handleEdit}
-                                  onDelete={() => {}}
-                                  onPrintWorksheet={(jobId) => {
-                                    const fullJob = jobs.find(j => j.id === jobId);
-                                    if (fullJob) {
-                                      setWorksheetJob(fullJob);
-                                    }
-                                  }}
-                                />
-                              ));
-                            })
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                </CollapsibleContent>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">
+                  Completed Orders
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Showing {filteredCompletedJobs.length} of {allCompletedJobs.length} orders (includes draft invoices)
+                </p>
               </div>
-            </Collapsible>
+            </div>
+            <div className="border rounded-md">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[180px]">Customer</TableHead>
+                      <TableHead className="w-[100px]">Job #</TableHead>
+                      <TableHead>Job Name / Item Description</TableHead>
+                      <TableHead className="w-[80px] text-right">Qty</TableHead>
+                      <TableHead className="w-[120px]">Machine</TableHead>
+                      <TableHead className="w-[100px]">Date Required</TableHead>
+                      <TableHead className="w-[100px]">Status</TableHead>
+                      <TableHead className="w-[80px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCompletedJobs.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                          {searchTerm ? `No completed orders match "${searchTerm}"` : "No completed orders yet"}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredCompletedJobs.flatMap((job) => {
+                        const customer = customers.find(c => c.id === job.customerId);
+                        const allLogosApproved = job.lineItems.every(li => li.logoApproved);
+                        
+                        return job.lineItems.map((lineItem, index) => (
+                          <LineItemRow
+                            key={lineItem.id}
+                            jobId={job.id}
+                            jobNumber={job.jobNumber}
+                            customerId={job.customerId}
+                            customerName={job.customerName}
+                            jobName={job.jobName}
+                            poNumber={job.poNumber}
+                            totalJobQuantity={job.quantity}
+                            lineItemCount={job.lineItems!.length}
+                            lineItemIndex={index}
+                            lineItem={lineItem}
+                            goodsReceived={job.goodsReceived ? new Date(job.goodsReceived) : null}
+                            requiredDispatchDate={job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null}
+                            completedOnTime={job.completedOnTime}
+                            notes={job.notes}
+                            allLogosApproved={allLogosApproved}
+                            customer={customer}
+                            showPrices={canViewPrices(currentUser?.role)}
+                            isSelected={false}
+                            onToggleSelect={() => {}}
+                            onEdit={handleEdit}
+                            onDelete={() => {}}
+                            onPrintWorksheet={(jobId) => {
+                              const fullJob = jobs.find(j => j.id === jobId);
+                              if (fullJob) {
+                                setWorksheetJob(fullJob);
+                              }
+                            }}
+                          />
+                        ));
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           </div>
         )}
 
