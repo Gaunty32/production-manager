@@ -1234,12 +1234,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       console.log('[JOB SUBMISSION] Job created successfully:', job.id);
 
-      // Send email notification to staff
+      // Send email notification to Chris only for now
       try {
         const allStaff = await storage.getStaff();
-        const staffEmails = allStaff
-          .filter(s => s.email && s.email.trim().length > 0)
-          .map(s => s.email!);
+        // Only send to Chris for holding area submissions
+        const chris = allStaff.find(s => s.name.toLowerCase() === 'chris' && s.email);
+        const staffEmails = chris ? [chris.email!] : [];
         
         if (staffEmails.length > 0) {
           const dispatchDate = job.requiredDispatchDate ? new Date(job.requiredDispatchDate).toLocaleDateString('en-GB') : 'Not specified';
