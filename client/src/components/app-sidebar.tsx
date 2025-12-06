@@ -13,6 +13,9 @@ import { Link, useLocation } from "wouter";
 import { MACHINE_NAMES } from "@shared/machines";
 import { useAuth } from "@/hooks/useAuth";
 import { isSuperAdmin, canViewPrices } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import type { Job } from "@shared/schema";
+import { Badge } from "@/components/ui/badge";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
@@ -41,6 +44,13 @@ export function AppSidebar() {
   const isUserSuperAdmin = isSuperAdmin(user?.role);
   const userCanViewPrices = canViewPrices(user?.role);
 
+  const { data: pendingJobs = [] } = useQuery<Job[]>({
+    queryKey: ["/api/staff/jobs/pending"],
+    refetchInterval: 30000,
+  });
+
+  const pendingCount = pendingJobs.length;
+
   return (
     <Sidebar>
       <SidebarContent>
@@ -60,7 +70,16 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={location === item.url}>
                       <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
                         <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+                        <span className="flex-1">{item.title}</span>
+                        {item.url === "/holding-area" && pendingCount > 0 && (
+                          <Badge 
+                            variant="destructive" 
+                            className="ml-auto h-5 min-w-5 px-1.5 text-xs"
+                            data-testid="badge-holding-area-count"
+                          >
+                            {pendingCount}
+                          </Badge>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
