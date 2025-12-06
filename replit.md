@@ -2,6 +2,17 @@
 
 This application is a production management system for manufacturing, featuring both staff and customer portals. It tracks customer orders, schedules machines, and manages dispatch deadlines to streamline operations, improve efficiency, enhance customer satisfaction, and provide operational transparency. Key capabilities include multi-line item job tracking, a robust scheduling system integrating machine and staff availability, and detailed production metrics. The system aims to provide a comprehensive solution for managing the entire production lifecycle, from order submission to invoicing and customer communication.
 
+# Recent Changes (December 6, 2025)
+
+## Customer Portal Enhancements
+- Added "View Pricing" button to customer portal dashboard header with reusable PricingTableDialog component
+- 2026 pricing table shows tiered pricing, standard production time (3-4 days for <300 items), and 48-hour express service (100% surcharge)
+
+## Job Creation Express Service Warning
+- Added express service popup warning when creating jobs with quantity <300 items and dispatch date <3 working days away
+- Warning clearly explains the 100% surcharge for express production service
+- Uses explicit confirmation flag passing to handle React state batching issues in the validation chain (duck dialog → machine warning → express warning → submit)
+
 # Recent Changes (November 24, 2025)
 
 ## Invoice Enhancements
