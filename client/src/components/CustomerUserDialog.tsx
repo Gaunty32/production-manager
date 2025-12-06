@@ -153,29 +153,17 @@ export function CustomerUserDialog({
     if (selectedCustomerId) {
       const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
       if (selectedCustomer) {
-        // Auto-fill email if empty or matches a previous customer's email
+        // Auto-fill email - always update when customer changes (user can still edit)
         if (selectedCustomer.email) {
-          const currentEmail = form.getValues("email");
-          const previousCustomerEmail = customers.find(c => c.email === currentEmail)?.email;
-          if (!currentEmail || previousCustomerEmail) {
-            form.setValue("email", selectedCustomer.email);
-          }
+          form.setValue("email", selectedCustomer.email);
         }
-        // Auto-fill first name if empty or matches a previous customer's first name
+        // Auto-fill first name
         if (selectedCustomer.contactFirstName) {
-          const currentFirstName = form.getValues("firstName");
-          const previousCustomerFirstName = customers.find(c => c.contactFirstName === currentFirstName)?.contactFirstName;
-          if (!currentFirstName || previousCustomerFirstName) {
-            form.setValue("firstName", selectedCustomer.contactFirstName);
-          }
+          form.setValue("firstName", selectedCustomer.contactFirstName);
         }
-        // Auto-fill last name if empty or matches a previous customer's last name
+        // Auto-fill last name
         if (selectedCustomer.contactLastName) {
-          const currentLastName = form.getValues("lastName");
-          const previousCustomerLastName = customers.find(c => c.contactLastName === currentLastName)?.contactLastName;
-          if (!currentLastName || previousCustomerLastName) {
-            form.setValue("lastName", selectedCustomer.contactLastName);
-          }
+          form.setValue("lastName", selectedCustomer.contactLastName);
         }
       }
     }
