@@ -194,6 +194,7 @@ export default function StaffJobDetail() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/jobs/pending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       toast({
         title: "Job approved",
         description: "The job has been approved and moved to production",
