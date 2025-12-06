@@ -37,6 +37,7 @@ export const customers = pgTable("customers", {
   email: text("email"),
   telephone: text("telephone"),
   address: text("address"),
+  logoUrl: text("logo_url"),
   pricingTable2025: boolean("pricing_table_2025").notNull().default(false),
   pricingTable2026: boolean("pricing_table_2026").notNull().default(false),
   active: boolean("active").notNull().default(true),

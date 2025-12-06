@@ -889,6 +889,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ success: true });
   });
 
+  // Look up customer info by email for login personalization (public endpoint)
+  app.get("/api/customer-auth/lookup", async (req, res) => {
+    try {
+      const email = z.string().email().parse(req.query.email);
+      
+      // Find customer user by email
+      const customerUsers = await storage.getCustomerUsers();
+      const customerUser = customerUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+      
+      if (!customerUser) {
+        return res.json({ found: false });
+      }
+      
+      // Get customer details
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === customerUser.customerId);
+      
+      if (!customer) {
+        return res.json({ found: false });
+      }
+      
+      // Return customer info for personalization (no sensitive data)
+      res.json({
+        found: true,
+        customerName: customer.name,
+        logoUrl: customer.logoUrl || null,
+        address: customer.address || null,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid email format" });
+      } else {
+        res.status(500).json({ error: "Lookup failed" });
+      }
+    }
+  });
+
   app.post("/api/customer-auth/reset-password", isCustomerAuthenticated, async (req: any, res) => {
     try {
       const { newPassword } = z.object({
