@@ -944,6 +944,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer change password (requires current password)
+  app.post("/api/customer-auth/change-password", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const { currentPassword, newPassword } = z.object({
+        currentPassword: z.string().min(1, "Current password is required"),
+        newPassword: z.string().min(8, "New password must be at least 8 characters"),
+      }).parse(req.body);
+      
+      const customerUserId = (req.session as any).customerUserId;
+      
+      // Get the customer user to verify current password
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Verify current password
+      const bcrypt = await import("bcrypt");
+      const isValid = await bcrypt.compare(currentPassword, customerUser.passwordHash);
+      if (!isValid) {
+        return res.status(400).json({ error: "Current password is incorrect" });
+      }
+      
+      // Hash and save new password
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await storage.updateCustomerPassword(customerUserId, passwordHash);
+      
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Password change failed" });
+      }
+    }
+  });
+
   app.patch("/api/customer-users/:id/toggle-active", isStaffAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;

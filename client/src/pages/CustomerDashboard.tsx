@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Circle, CircleCheck, CircleX, Plus, FileText, Search, ArrowUpDown, PoundSterling } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Circle, CircleCheck, CircleX, Plus, FileText, Search, ArrowUpDown, PoundSterling, Key } from "lucide-react";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
@@ -29,6 +29,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "New password must be at least 8 characters"),
+  confirmPassword: z.string().min(8, "Please confirm your new password"),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
 
 type LineItem = {
   id: string;
@@ -72,6 +100,44 @@ export default function CustomerDashboard() {
   const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed">("in_progress");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "jobName" | "quantity">("date");
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+
+  const changePasswordForm = useForm<z.infer<typeof changePasswordSchema>>({
+    resolver: zodResolver(changePasswordSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
+      return await apiRequest("POST", "/api/customer-auth/change-password", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password Changed",
+        description: "Your password has been updated successfully",
+      });
+      setChangePasswordOpen(false);
+      changePasswordForm.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to change password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleChangePassword = (values: z.infer<typeof changePasswordSchema>) => {
+    changePasswordMutation.mutate({
+      currentPassword: values.currentPassword,
+      newPassword: values.newPassword,
+    });
+  };
 
   const { data: customerUser, isLoading: isLoadingUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
@@ -209,6 +275,14 @@ export default function CustomerDashboard() {
             </div>
             <div className="flex items-center gap-2">
               <PricingTableDialog />
+              <Button
+                variant="outline"
+                onClick={() => setChangePasswordOpen(true)}
+                data-testid="button-change-password"
+              >
+                <Key className="h-4 w-4 mr-2" />
+                Change Password
+              </Button>
               <Button
                 variant="outline"
                 onClick={handleLogout}
@@ -585,6 +659,96 @@ export default function CustomerDashboard() {
           </>
         )}
       </main>
+
+      {/* Change Password Dialog */}
+      <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+            <DialogDescription>
+              Enter your current password and choose a new password.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...changePasswordForm}>
+            <form onSubmit={changePasswordForm.handleSubmit(handleChangePassword)} className="space-y-4">
+              <FormField
+                control={changePasswordForm.control}
+                name="currentPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Current Password</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="password" 
+                        placeholder="Enter your current password" 
+                        {...field} 
+                        data-testid="input-current-password"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={changePasswordForm.control}
+                name="newPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>New Password</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="password" 
+                        placeholder="Enter your new password" 
+                        {...field} 
+                        data-testid="input-new-password"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={changePasswordForm.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirm New Password</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="password" 
+                        placeholder="Confirm your new password" 
+                        {...field} 
+                        data-testid="input-confirm-password"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setChangePasswordOpen(false);
+                    changePasswordForm.reset();
+                  }}
+                  data-testid="button-cancel-change-password"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={changePasswordMutation.isPending}
+                  data-testid="button-submit-change-password"
+                >
+                  {changePasswordMutation.isPending ? "Changing..." : "Change Password"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
