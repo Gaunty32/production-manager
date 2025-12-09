@@ -375,6 +375,14 @@ export const updateJobSchema = z.object({
     },
     z.number().min(0).nullable().optional()
   ),
+  deliveryAddressType: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
+  deliveryAddress: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
   // This is not a database field - used to specify which jobs to consolidate together
   consolidatedJobIds: z.array(z.string()).optional(),
 });
