@@ -2,7 +2,16 @@
 
 This application is a production management system for manufacturing, featuring both staff and customer portals. It tracks customer orders, schedules machines, and manages dispatch deadlines to streamline operations, improve efficiency, enhance customer satisfaction, and provide operational transparency. Key capabilities include multi-line item job tracking, a robust scheduling system integrating machine and staff availability, and detailed production metrics. The system aims to provide a comprehensive solution for managing the entire production lifecycle, from order submission to invoicing and customer communication.
 
-# Recent Changes (December 6, 2025)
+# Recent Changes (December 9, 2025)
+
+## Multi-User Customer Portal Support
+- Customer portal now supports multiple users per customer account (5+ users can access the same customer's data)
+- Staff can create multiple portal logins for the same customer via "Create Portal Login" button
+- Each portal user has individual login credentials, active/disabled status, and password reset capability
+- Customers page displays all portal users per customer with inline enable/disable toggles
+- Customer Change Password feature added to portal header - customers can update their own password (requires current password verification)
+
+## Previous Changes (December 6, 2025)
 
 ## Customer Portal Enhancements
 - Added "View Pricing" button to customer portal dashboard header with reusable PricingTableDialog component

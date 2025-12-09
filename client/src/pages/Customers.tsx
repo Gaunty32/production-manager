@@ -60,11 +60,13 @@ export default function Customers() {
     enabled: customersData.length > 0,
   });
 
-  // Map customer users by customer ID for quick lookup
+  // Map customer users by customer ID for quick lookup (supports multiple users per customer)
   const customerUsersMap = useMemo(() => {
-    const map = new Map<string, any>();
+    const map = new Map<string, any[]>();
     allCustomerUsers.forEach((user) => {
-      map.set(user.customerId, user);
+      const existing = map.get(user.customerId) || [];
+      existing.push(user);
+      map.set(user.customerId, existing);
     });
     return map;
   }, [allCustomerUsers]);
@@ -77,14 +79,15 @@ export default function Customers() {
     if (portalFilter === 'all') return allCustomers;
     
     return allCustomers.filter((customer) => {
-      const hasPortal = customerUsersMap.has(customer.id);
+      const portalUsers = customerUsersMap.get(customer.id) || [];
+      const hasPortal = portalUsers.length > 0;
       return portalFilter === 'has-portal' ? hasPortal : !hasPortal;
     });
   }, [allCustomers, customerUsersMap, portalFilter]);
   
   // Count customers by portal status
   const portalStats = useMemo(() => {
-    const hasPortal = allCustomers.filter(c => customerUsersMap.has(c.id)).length;
+    const hasPortal = allCustomers.filter(c => (customerUsersMap.get(c.id) || []).length > 0).length;
     const noPortal = allCustomers.length - hasPortal;
     return { total: allCustomers.length, hasPortal, noPortal };
   }, [allCustomers, customerUsersMap]);
@@ -368,9 +371,8 @@ export default function Customers() {
           <div className="space-y-3">
             {customers.map((customer) => {
               const isInactive = customer.active === false;
-              const portalUser = customerUsersMap.get(customer.id);
-              const hasPortalLogin = !!portalUser;
-              const portalActive = portalUser?.active !== false;
+              const portalUsers = customerUsersMap.get(customer.id) || [];
+              const hasPortalLogin = portalUsers.length > 0;
               
               return (
               <Card 
@@ -450,33 +452,51 @@ export default function Customers() {
 
                       {/* Portal Login Status */}
                       {hasPortalLogin ? (
-                        <div className="flex items-center gap-2 text-sm flex-wrap">
-                          <div className="flex items-center gap-2">
-                            {portalActive ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                            ) : (
-                              <XCircle className="h-4 w-4 text-gray-400" />
-                            )}
-                            <span className="text-muted-foreground">
-                              Portal Login: {portalUser.email}
-                              {!portalActive && " (Disabled)"}
-                            </span>
+                        <div className="space-y-2">
+                          <div className="text-sm text-muted-foreground">
+                            Portal Logins ({portalUsers.length}):
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7"
-                            onClick={() => handleResetPassword(portalUser.id, portalUser.email)}
-                            data-testid={`button-reset-password-${customer.id}`}
-                          >
-                            <Key className="h-3.5 w-3.5 mr-1" />
-                            Reset Password
-                          </Button>
-                          {canImpersonateCustomers && portalActive && (
+                          {portalUsers.map((portalUser, userIndex) => {
+                            const userActive = portalUser.active !== false;
+                            return (
+                              <div key={portalUser.id} className="flex items-center gap-2 text-sm flex-wrap pl-2 border-l-2 border-muted">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  {userActive ? (
+                                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                                  ) : (
+                                    <XCircle className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                  )}
+                                  <span className="text-foreground truncate" data-testid={`text-portal-email-${portalUser.id}`}>
+                                    {portalUser.email}
+                                    {portalUser.firstName && ` (${portalUser.firstName}${portalUser.lastName ? ` ${portalUser.lastName}` : ''})`}
+                                    {!userActive && <span className="text-muted-foreground"> - Disabled</span>}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7"
+                                    onClick={() => handleResetPassword(portalUser.id, portalUser.email)}
+                                    data-testid={`button-reset-password-${portalUser.id}`}
+                                  >
+                                    <Key className="h-3.5 w-3.5 mr-1" />
+                                    Reset
+                                  </Button>
+                                  <Switch
+                                    checked={userActive}
+                                    onCheckedChange={(checked) => togglePortalAccessMutation.mutate({ id: portalUser.id, active: checked })}
+                                    data-testid={`switch-portal-user-${portalUser.id}`}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {canImpersonateCustomers && portalUsers.some(u => u.active !== false) && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7"
+                              className="h-7 mt-1"
                               onClick={() => impersonateMutation.mutate(customer.id)}
                               disabled={impersonateMutation.isPending}
                               data-testid={`button-view-as-customer-${customer.id}`}
@@ -533,19 +553,6 @@ export default function Customers() {
                           data-testid={`switch-active-${customer.id}`}
                         />
                       </div>
-                      {hasPortalLogin && (
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor={`portal-${customer.id}`} className="text-xs text-muted-foreground cursor-pointer">
-                            Portal
-                          </Label>
-                          <Switch
-                            id={`portal-${customer.id}`}
-                            checked={portalActive}
-                            onCheckedChange={(checked) => togglePortalAccessMutation.mutate({ id: portalUser.id, active: checked })}
-                            data-testid={`switch-portal-${customer.id}`}
-                          />
-                        </div>
-                      )}
                     </div>
                   </div>
                 </CardContent>
