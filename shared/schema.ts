@@ -258,6 +258,7 @@ export const updateCustomerSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   telephone: z.string().optional(),
   address: z.string().optional(),
+  logoUrl: z.string().url().optional().or(z.literal("")).or(z.null()),
   pricingTable2025: z.boolean().optional(),
   pricingTable2026: z.boolean().optional(),
   active: z.boolean().optional(),
