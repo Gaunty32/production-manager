@@ -99,7 +99,7 @@ export default function CustomerDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { isImpersonating } = usePermissions();
-  const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed">("in_progress");
+  const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed" | "pending">("in_progress");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "jobName" | "quantity">("date");
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -153,9 +153,11 @@ export default function CustomerDashboard() {
   // Filter by status and search term, then sort
   const filteredJobs = jobs
     .filter(job => {
-      // Status filter
+      // Status filter - pending jobs are shown separately in "Pending Approval" tab
+      if (statusFilter === "pending" && job.status !== "pending") return false;
       if (statusFilter === "completed" && !job.completed) return false;
-      if (statusFilter === "in_progress" && job.completed) return false;
+      if (statusFilter === "in_progress" && (job.completed || job.status === "pending")) return false;
+      if (statusFilter === "all" && job.status === "pending") return false; // Exclude pending from "All Orders"
       
       // Search filter
       if (searchTerm) {
@@ -185,11 +187,19 @@ export default function CustomerDashboard() {
         
         case "date":
         default:
-          // Sort by required dispatch date ascending (oldest first)
+          // For in_progress: sort by dispatch date ascending (oldest/most urgent first)
+          // For completed/all/pending: sort by dispatch date descending (most recent first)
           if (!a.requiredDispatchDate && !b.requiredDispatchDate) return 0;
           if (!a.requiredDispatchDate) return 1;
           if (!b.requiredDispatchDate) return -1;
-          return new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
+          
+          if (statusFilter === "in_progress") {
+            // Oldest first for in-progress (most urgent at top)
+            return new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
+          } else {
+            // Most recent first for completed/all/pending
+            return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
+          }
       }
     });
 
@@ -370,6 +380,9 @@ export default function CustomerDashboard() {
             {/* Status Tabs */}
             <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
               <TabsList data-testid="tabs-status-filter">
+                <TabsTrigger value="pending" data-testid="tab-pending">
+                  Pending Approval
+                </TabsTrigger>
                 <TabsTrigger value="in_progress" data-testid="tab-in-progress">
                   In Progress
                 </TabsTrigger>
@@ -416,7 +429,7 @@ export default function CustomerDashboard() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {/* Job-level info */}
-                      <div className="grid grid-cols-2 gap-3 pb-3 border-b">
+                      <div className="pb-3 border-b">
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Production Date</p>
                           <p className="text-sm font-medium">
@@ -424,22 +437,6 @@ export default function CustomerDashboard() {
                               ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
                               : "Not set"}
                           </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Goods Received</p>
-                          <div className="flex items-center gap-1">
-                            {job.goodsReceived ? (
-                              <>
-                                <CircleCheck className="h-4 w-4 text-green-600" />
-                                <span className="text-sm">Yes</span>
-                              </>
-                            ) : (
-                              <>
-                                <CircleX className="h-4 w-4 text-red-600" />
-                                <span className="text-sm">No</span>
-                              </>
-                            )}
-                          </div>
                         </div>
                       </div>
 
