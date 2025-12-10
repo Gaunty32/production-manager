@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Circle, CircleCheck, CircleX, Plus, FileText, Search, ArrowUpDown, PoundSterling, Key } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, PoundSterling, Key } from "lucide-react";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
@@ -153,11 +153,23 @@ export default function CustomerDashboard() {
   // Filter by status and search term, then sort
   const filteredJobs = jobs
     .filter(job => {
-      // Status filter - pending jobs are shown separately in "Pending Approval" tab
-      if (statusFilter === "pending" && job.status !== "pending") return false;
-      if (statusFilter === "completed" && !job.completed) return false;
-      if (statusFilter === "in_progress" && (job.completed || job.status === "pending")) return false;
-      if (statusFilter === "all" && job.status === "pending") return false; // Exclude pending from "All Orders"
+      // Status filter based on job.status field:
+      // "pending" = awaiting approval (Pending Approval tab)
+      // "production" = actively being worked on (In Progress tab)
+      // "completed" = finished jobs (Completed tab)
+      if (statusFilter === "pending") {
+        // Only show jobs with status "pending" (awaiting approval)
+        if (job.status !== "pending") return false;
+      } else if (statusFilter === "in_progress") {
+        // Show jobs with status "production" that are not yet completed
+        if (job.status !== "production" || job.completed) return false;
+      } else if (statusFilter === "completed") {
+        // Show only completed jobs
+        if (!job.completed) return false;
+      } else if (statusFilter === "all") {
+        // Show all non-pending jobs (production + completed)
+        if (job.status === "pending") return false;
+      }
       
       // Search filter
       if (searchTerm) {
@@ -187,19 +199,11 @@ export default function CustomerDashboard() {
         
         case "date":
         default:
-          // For in_progress: sort by dispatch date ascending (oldest/most urgent first)
-          // For completed/all/pending: sort by dispatch date descending (most recent first)
+          // Sort by dispatch date descending (most recent first) for ALL views
           if (!a.requiredDispatchDate && !b.requiredDispatchDate) return 0;
           if (!a.requiredDispatchDate) return 1;
           if (!b.requiredDispatchDate) return -1;
-          
-          if (statusFilter === "in_progress") {
-            // Oldest first for in-progress (most urgent at top)
-            return new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
-          } else {
-            // Most recent first for completed/all/pending
-            return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
-          }
+          return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
       }
     });
 
@@ -477,7 +481,7 @@ export default function CustomerDashboard() {
                         <div className="space-y-3">
                           <p className="text-sm font-semibold">Line Items:</p>
                           {lineItems.map((lineItem, index) => (
-                            <div key={lineItem.id} className="bg-muted/50 rounded-lg p-3 space-y-2">
+                            <div key={lineItem.id} className="bg-muted/50 rounded-lg p-3">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                   <p className="font-medium text-sm">{lineItem.jobType}</p>
@@ -488,21 +492,6 @@ export default function CustomerDashboard() {
                                   )}
                                 </div>
                                 <p className="text-sm font-semibold ml-2">Qty: {lineItem.quantity}</p>
-                              </div>
-                              <div className="flex items-center gap-3 text-sm">
-                                <div className="flex items-center gap-1">
-                                  {lineItem.logoApproved ? (
-                                    <>
-                                      <CircleCheck className="h-3.5 w-3.5 text-green-600" />
-                                      <span className="text-xs">Logo OK</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CircleX className="h-3.5 w-3.5 text-amber-600" />
-                                      <span className="text-xs">Logo Pending</span>
-                                    </>
-                                  )}
-                                </div>
                               </div>
                             </div>
                           ))}
@@ -527,8 +516,6 @@ export default function CustomerDashboard() {
                     <TableHead>Job Name</TableHead>
                     <TableHead>Item Description</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="text-center">Goods Received</TableHead>
-                    <TableHead className="text-center">Logo Approved</TableHead>
                     <TableHead>Production Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Tracking</TableHead>
@@ -557,14 +544,6 @@ export default function CustomerDashboard() {
                           </TableCell>
                           <TableCell className="text-muted-foreground">—</TableCell>
                           <TableCell className="text-right">{job.quantity}</TableCell>
-                          <TableCell className="text-center">
-                            {job.goodsReceived ? (
-                              <CircleCheck className="h-4 w-4 text-green-600 inline" data-testid={`icon-goods-received-${job.id}`} />
-                            ) : (
-                              <CircleX className="h-4 w-4 text-red-600 inline" data-testid={`icon-goods-not-received-${job.id}`} />
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">—</TableCell>
                           <TableCell data-testid={`text-dispatch-${job.id}`}>
                             {job.requiredDispatchDate
                               ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
@@ -621,20 +600,6 @@ export default function CustomerDashboard() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">{lineItem.quantity}</TableCell>
-                        <TableCell className="text-center">
-                          {job.goodsReceived ? (
-                            <CircleCheck className="h-4 w-4 text-green-600 inline" data-testid={`icon-goods-received-${job.id}-${index}`} />
-                          ) : (
-                            <CircleX className="h-4 w-4 text-red-600 inline" data-testid={`icon-goods-not-received-${job.id}-${index}`} />
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {lineItem.logoApproved ? (
-                            <CircleCheck className="h-4 w-4 text-green-600 inline" data-testid={`icon-logo-approved-${lineItem.id}`} />
-                          ) : (
-                            <CircleX className="h-4 w-4 text-amber-600 inline" data-testid={`icon-logo-not-approved-${lineItem.id}`} />
-                          )}
-                        </TableCell>
                         <TableCell data-testid={`text-dispatch-${job.id}-${index}`}>
                           {job.requiredDispatchDate
                             ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
