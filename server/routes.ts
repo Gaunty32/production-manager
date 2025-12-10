@@ -1125,13 +1125,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Customer user not found" });
       }
       
-      // Return without password hash, include impersonation flag
+      // Get customer info for logo
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === customerUser.customerId);
+      
+      // Return without password hash, include impersonation flag and customer info
       const { passwordHash: _, ...user } = customerUser;
       const isImpersonating = !!(req.session as any).impersonationCustomerUserId;
       
       res.json({
         ...user,
         isImpersonating,
+        customerName: customer?.name || null,
+        customerLogoUrl: customer?.logoUrl || null,
       });
     } catch (error) {
       console.error("Error fetching customer user:", error);

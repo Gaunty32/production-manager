@@ -91,6 +91,8 @@ type CustomerUser = {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  customerName: string | null;
+  customerLogoUrl: string | null;
 };
 
 export default function CustomerDashboard() {
@@ -266,6 +268,17 @@ export default function CustomerDashboard() {
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
+          {/* Customer Logo - Top Center */}
+          {customerUser?.customerLogoUrl && (
+            <div className="flex justify-center mb-4">
+              <img 
+                src={customerUser.customerLogoUrl} 
+                alt={customerUser.customerName || "Customer logo"}
+                className="max-h-16 max-w-[200px] object-contain"
+                data-testid="img-customer-logo"
+              />
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Customer Portal</h1>
