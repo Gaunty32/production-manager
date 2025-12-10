@@ -99,7 +99,7 @@ export default function CustomerDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { isImpersonating } = usePermissions();
-  const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed" | "pending">("in_progress");
+  const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed">("in_progress");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "jobName" | "quantity">("date");
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -153,23 +153,18 @@ export default function CustomerDashboard() {
   // Filter by status and search term, then sort
   const filteredJobs = jobs
     .filter(job => {
-      // Status filter based on job.status field:
-      // "pending" = awaiting approval (Pending Approval tab)
-      // "production" = actively being worked on (In Progress tab)
-      // "completed" = finished jobs (Completed tab)
-      if (statusFilter === "pending") {
-        // Only show jobs with status "pending" (awaiting approval)
-        if (job.status !== "pending") return false;
-      } else if (statusFilter === "in_progress") {
-        // Show jobs with status "production" that are not yet completed
-        if (job.status !== "production" || job.completed) return false;
+      // Status filter - the API already returns only non-pending jobs
+      // "in_progress" = jobs that are NOT completed
+      // "completed" = jobs that ARE completed
+      // "all" = all jobs
+      if (statusFilter === "in_progress") {
+        // Show jobs that are not yet completed
+        if (job.completed) return false;
       } else if (statusFilter === "completed") {
         // Show only completed jobs
         if (!job.completed) return false;
-      } else if (statusFilter === "all") {
-        // Show all non-pending jobs (production + completed)
-        if (job.status === "pending") return false;
       }
+      // "all" shows everything
       
       // Search filter
       if (searchTerm) {
@@ -384,9 +379,6 @@ export default function CustomerDashboard() {
             {/* Status Tabs */}
             <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
               <TabsList data-testid="tabs-status-filter">
-                <TabsTrigger value="pending" data-testid="tab-pending">
-                  Pending Approval
-                </TabsTrigger>
                 <TabsTrigger value="in_progress" data-testid="tab-in-progress">
                   In Progress
                 </TabsTrigger>
