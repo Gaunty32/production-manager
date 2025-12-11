@@ -1,10 +1,11 @@
-import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye } from "lucide-react";
+import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { CustomerUserDialog } from "@/components/CustomerUserDialog";
 import { ResetPasswordDialog } from "@/components/ResetPasswordDialog";
@@ -33,6 +34,7 @@ export default function Customers() {
   const [portalFilter, setPortalFilter] = useState<'all' | 'has-portal' | 'no-portal'>('all');
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
   const [resetPasswordEmail, setResetPasswordEmail] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const { data: customersData = [], isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -74,16 +76,42 @@ export default function Customers() {
   // Sort customers alphabetically by name
   const allCustomers = [...customersData].sort((a, b) => a.name.localeCompare(b.name));
   
-  // Filter customers based on portal status
+  // Filter customers based on portal status and search term
   const customers = useMemo(() => {
-    if (portalFilter === 'all') return allCustomers;
+    let filtered = allCustomers;
     
-    return allCustomers.filter((customer) => {
-      const portalUsers = customerUsersMap.get(customer.id) || [];
-      const hasPortal = portalUsers.length > 0;
-      return portalFilter === 'has-portal' ? hasPortal : !hasPortal;
-    });
-  }, [allCustomers, customerUsersMap, portalFilter]);
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter((customer) => {
+        const portalUsers = customerUsersMap.get(customer.id) || [];
+        const portalEmails = portalUsers.map(u => u.email?.toLowerCase() || '').join(' ');
+        const portalNames = portalUsers.map(u => `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase()).join(' ');
+        
+        return (
+          customer.name.toLowerCase().includes(search) ||
+          (customer.email?.toLowerCase() || '').includes(search) ||
+          (customer.contactFirstName?.toLowerCase() || '').includes(search) ||
+          (customer.contactLastName?.toLowerCase() || '').includes(search) ||
+          (customer.address?.toLowerCase() || '').includes(search) ||
+          (customer.telephone || '').includes(search) ||
+          portalEmails.includes(search) ||
+          portalNames.includes(search)
+        );
+      });
+    }
+    
+    // Apply portal filter
+    if (portalFilter !== 'all') {
+      filtered = filtered.filter((customer) => {
+        const portalUsers = customerUsersMap.get(customer.id) || [];
+        const hasPortal = portalUsers.length > 0;
+        return portalFilter === 'has-portal' ? hasPortal : !hasPortal;
+      });
+    }
+    
+    return filtered;
+  }, [allCustomers, customerUsersMap, portalFilter, searchTerm]);
   
   // Count customers by portal status
   const portalStats = useMemo(() => {
@@ -327,45 +355,73 @@ export default function Customers() {
             </div>
           </div>
           
-          {/* Filter buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-muted-foreground">Portal Status:</span>
-            <Button
-              variant={portalFilter === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPortalFilter('all')}
-              data-testid="button-filter-all"
-            >
-              All ({portalStats.total})
-            </Button>
-            <Button
-              variant={portalFilter === 'has-portal' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPortalFilter('has-portal')}
-              data-testid="button-filter-has-portal"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-              Has Portal ({portalStats.hasPortal})
-            </Button>
-            <Button
-              variant={portalFilter === 'no-portal' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPortalFilter('no-portal')}
-              data-testid="button-filter-no-portal"
-            >
-              <AlertCircle className="h-3.5 w-3.5 mr-1" />
-              No Portal ({portalStats.noPortal})
-            </Button>
+          {/* Search and Filter */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Search input */}
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search customers..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-9"
+                data-testid="input-search-customers"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setSearchTerm("")}
+                  data-testid="button-clear-search"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            
+            {/* Filter buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-muted-foreground">Portal Status:</span>
+              <Button
+                variant={portalFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPortalFilter('all')}
+                data-testid="button-filter-all"
+              >
+                All ({portalStats.total})
+              </Button>
+              <Button
+                variant={portalFilter === 'has-portal' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPortalFilter('has-portal')}
+                data-testid="button-filter-has-portal"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                Has Portal ({portalStats.hasPortal})
+              </Button>
+              <Button
+                variant={portalFilter === 'no-portal' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPortalFilter('no-portal')}
+                data-testid="button-filter-no-portal"
+              >
+                <AlertCircle className="h-3.5 w-3.5 mr-1" />
+                No Portal ({portalStats.noPortal})
+              </Button>
+            </div>
           </div>
         </div>
 
         {customers.length === 0 ? (
           <div className="border rounded-md p-8 text-center text-muted-foreground">
-            {portalFilter === 'all' 
-              ? "No customers found. Click 'Add Customer' to create one."
-              : portalFilter === 'has-portal'
-                ? "No customers with portal logins. Click 'Create Portal Login' to add one."
-                : "No customers without portal logins. All customers are set up!"}
+            {searchTerm
+              ? `No customers match "${searchTerm}"`
+              : portalFilter === 'all' 
+                ? "No customers found. Click 'Add Customer' to create one."
+                : portalFilter === 'has-portal'
+                  ? "No customers with portal logins. Click 'Create Portal Login' to add one."
+                  : "No customers without portal logins. All customers are set up!"}
           </div>
         ) : (
           <div className="space-y-3">
