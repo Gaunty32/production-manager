@@ -1,5 +1,5 @@
 import { format, isPast, isToday } from "date-fns";
-import { Pencil, Trash2, StickyNote, CheckCircle2, XCircle, Package, Printer } from "lucide-react";
+import { Pencil, Trash2, StickyNote, CheckCircle2, XCircle, Package, Printer, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -38,7 +38,9 @@ interface LineItemRowProps {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onPrintWorksheet?: (id: string) => void;
+  onEditTracking?: (id: string) => void;
   isCompleted?: boolean;
+  dhlTrackingNumber?: string | null;
 }
 
 export function LineItemRow({
@@ -64,7 +66,9 @@ export function LineItemRow({
   onEdit,
   onDelete,
   onPrintWorksheet,
+  onEditTracking,
   isCompleted = false,
+  dhlTrackingNumber,
 }: LineItemRowProps) {
   const isOverdue = requiredDispatchDate && isPast(requiredDispatchDate) && !isToday(requiredDispatchDate);
   const isDueToday = requiredDispatchDate && isToday(requiredDispatchDate);
@@ -293,9 +297,29 @@ export function LineItemRow({
       <td className="py-2 px-3">
         {isFirstLineItem && (
           isCompleted ? (
-            <span className="text-sm" data-testid={`text-invoice-ref-${jobId}`}>
-              -
-            </span>
+            onEditTracking ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => onEditTracking(jobId)}
+                    data-testid={`button-edit-tracking-${jobId}`}
+                  >
+                    <Truck className="h-3 w-3" />
+                    {dhlTrackingNumber || "Add Tracking"}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{dhlTrackingNumber ? "Edit tracking number" : "Add tracking number"}</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <span className="text-sm" data-testid={`text-invoice-ref-${jobId}`}>
+                -
+              </span>
+            )
           ) : (
             <div className="flex gap-1">
               {onPrintWorksheet && (

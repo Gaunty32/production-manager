@@ -29,6 +29,7 @@ import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { LogoSetupDialog } from "@/components/LogoSetupDialog";
 import { LineItemRow } from "@/components/LineItemRow";
 import { ProductionWorksheet } from "@/components/ProductionWorksheet";
+import { EditTrackingDialog } from "@/components/EditTrackingDialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
@@ -54,6 +55,7 @@ export default function Dashboard() {
   const [worksheetJob, setWorksheetJob] = useState<JobWithLineItems | null>(null);
   const [sortOrder, setSortOrder] = useState<'date' | 'customer' | 'jobNumber'>('date');
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
+  const [editingTrackingJob, setEditingTrackingJob] = useState<JobWithLineItems | null>(null);
 
   // Fetch current user
   const { data: currentUser } = useQuery<{ id: string; username?: string; email: string; firstName?: string; lastName?: string; role?: string }>({
@@ -1241,6 +1243,14 @@ export default function Dashboard() {
                                 setWorksheetJob(fullJob);
                               }
                             }}
+                            isCompleted={true}
+                            onEditTracking={(jobId) => {
+                              const fullJob = jobs.find(j => j.id === jobId);
+                              if (fullJob) {
+                                setEditingTrackingJob(fullJob);
+                              }
+                            }}
+                            dhlTrackingNumber={job.dhlTrackingNumber}
                           />
                         ));
                       })
@@ -1272,6 +1282,30 @@ export default function Dashboard() {
             onClose={() => setWorksheetJob(null)}
           />
         )}
+
+        <EditTrackingDialog
+          open={editingTrackingJob !== null}
+          onOpenChange={(open) => !open && setEditingTrackingJob(null)}
+          currentTrackingNumber={editingTrackingJob?.dhlTrackingNumber}
+          jobName={editingTrackingJob?.jobName}
+          isPending={updateJobMutation.isPending}
+          onSubmit={(data) => {
+            if (editingTrackingJob) {
+              updateJobMutation.mutate({
+                id: editingTrackingJob.id,
+                data: { dhlTrackingNumber: data.dhlTrackingNumber || null }
+              }, {
+                onSuccess: () => {
+                  setEditingTrackingJob(null);
+                  toast({
+                    title: "Success",
+                    description: "Tracking number updated",
+                  });
+                }
+              });
+            }
+          }}
+        />
       </div>
     </div>
   );
