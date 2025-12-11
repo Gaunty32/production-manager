@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, PoundSterling, Key } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, PoundSterling, Key } from "lucide-react";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
@@ -101,8 +101,32 @@ export default function CustomerDashboard() {
   const { isImpersonating } = usePermissions();
   const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "completed">("in_progress");
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState<"date" | "jobName" | "quantity">("date");
+  const [sortBy, setSortBy] = useState<"date" | "jobName" | "description" | "quantity" | "status" | "tracking">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc"); // asc = today's orders first
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+
+  // Helper to toggle sort on column click
+  const handleColumnSort = (column: typeof sortBy) => {
+    if (sortBy === column) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // New column - default direction based on column type
+      setSortBy(column);
+      // Date ascending = today first, others ascending = A-Z or smallest first
+      setSortDirection(column === "date" ? "asc" : "asc");
+    }
+  };
+
+  // Render sort indicator
+  const SortIndicator = ({ column }: { column: typeof sortBy }) => {
+    if (sortBy !== column) {
+      return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    }
+    return sortDirection === "asc" 
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
 
   const changePasswordForm = useForm<z.infer<typeof changePasswordSchema>>({
     resolver: zodResolver(changePasswordSchema),
@@ -182,24 +206,64 @@ export default function CustomerDashboard() {
       return true;
     })
     .sort((a, b) => {
+      let comparison = 0;
+      
       switch (sortBy) {
         case "jobName":
-          return a.jobName.localeCompare(b.jobName);
+          comparison = a.jobName.localeCompare(b.jobName);
+          break;
+        
+        case "description":
+          // Sort by first line item description
+          const aDesc = a.lineItems?.[0]?.description || a.lineItems?.[0]?.jobType || "";
+          const bDesc = b.lineItems?.[0]?.description || b.lineItems?.[0]?.jobType || "";
+          comparison = aDesc.localeCompare(bDesc);
+          break;
         
         case "quantity":
           // Sum quantities from line items
           const aQty = a.lineItems?.reduce((sum, item) => sum + item.quantity, 0) || a.quantity;
           const bQty = b.lineItems?.reduce((sum, item) => sum + item.quantity, 0) || b.quantity;
-          return bQty - aQty; // Descending (largest first)
+          comparison = aQty - bQty;
+          break;
+        
+        case "status":
+          // Sort by completion status, then by urgency
+          const getStatusPriority = (job: Job) => {
+            if (job.completed) return 3;
+            const isOverdue = job.requiredDispatchDate && isPast(new Date(job.requiredDispatchDate)) && !isToday(new Date(job.requiredDispatchDate));
+            const isDueToday = job.requiredDispatchDate && isToday(new Date(job.requiredDispatchDate));
+            if (isOverdue) return 0;
+            if (isDueToday) return 1;
+            return 2;
+          };
+          comparison = getStatusPriority(a) - getStatusPriority(b);
+          break;
+        
+        case "tracking":
+          // Sort by tracking number presence and value
+          const aTracking = a.dhlTrackingNumber || "";
+          const bTracking = b.dhlTrackingNumber || "";
+          comparison = aTracking.localeCompare(bTracking);
+          break;
         
         case "date":
         default:
-          // Sort by dispatch date descending (most recent first) for ALL views
-          if (!a.requiredDispatchDate && !b.requiredDispatchDate) return 0;
-          if (!a.requiredDispatchDate) return 1;
-          if (!b.requiredDispatchDate) return -1;
-          return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
+          // Sort by dispatch date - ascending means today/soonest first
+          if (!a.requiredDispatchDate && !b.requiredDispatchDate) {
+            comparison = 0;
+          } else if (!a.requiredDispatchDate) {
+            comparison = 1; // No date goes to end
+          } else if (!b.requiredDispatchDate) {
+            comparison = -1;
+          } else {
+            comparison = new Date(a.requiredDispatchDate).getTime() - new Date(b.requiredDispatchDate).getTime();
+          }
+          break;
       }
+      
+      // Apply sort direction
+      return sortDirection === "desc" ? -comparison : comparison;
     });
 
   const logoutMutation = useMutation({
@@ -363,7 +427,11 @@ export default function CustomerDashboard() {
               </div>
 
               {/* Sort Dropdown */}
-              <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+              <Select value={sortBy} onValueChange={(value: any) => {
+                setSortBy(value);
+                // Reset direction based on column type
+                setSortDirection(value === "date" ? "asc" : "asc");
+              }}>
                 <SelectTrigger className="w-full sm:w-48" data-testid="select-sort">
                   <ArrowUpDown className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Sort by..." />
@@ -371,9 +439,22 @@ export default function CustomerDashboard() {
                 <SelectContent>
                   <SelectItem value="date" data-testid="sort-date">Production Date</SelectItem>
                   <SelectItem value="jobName" data-testid="sort-jobname">Job Name</SelectItem>
+                  <SelectItem value="description" data-testid="sort-description">Item Description</SelectItem>
                   <SelectItem value="quantity" data-testid="sort-quantity">Quantity</SelectItem>
+                  <SelectItem value="status" data-testid="sort-status">Status</SelectItem>
+                  <SelectItem value="tracking" data-testid="sort-tracking">Tracking</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Sort Direction Toggle */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+                title={sortDirection === "asc" ? "Ascending (earliest first)" : "Descending (latest first)"}
+                data-testid="button-toggle-sort-direction"
+              >
+                {sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+              </Button>
             </div>
             
             {/* Status Tabs */}
@@ -505,12 +586,66 @@ export default function CustomerDashboard() {
                 <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Job Name</TableHead>
-                    <TableHead>Item Description</TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead>Production Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Tracking</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleColumnSort("jobName")}
+                      data-testid="header-jobname"
+                    >
+                      <div className="flex items-center">
+                        Job Name
+                        <SortIndicator column="jobName" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleColumnSort("description")}
+                      data-testid="header-description"
+                    >
+                      <div className="flex items-center">
+                        Item Description
+                        <SortIndicator column="description" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="text-right cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleColumnSort("quantity")}
+                      data-testid="header-quantity"
+                    >
+                      <div className="flex items-center justify-end">
+                        Quantity
+                        <SortIndicator column="quantity" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleColumnSort("date")}
+                      data-testid="header-date"
+                    >
+                      <div className="flex items-center">
+                        Production Date
+                        <SortIndicator column="date" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleColumnSort("status")}
+                      data-testid="header-status"
+                    >
+                      <div className="flex items-center">
+                        Status
+                        <SortIndicator column="status" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleColumnSort("tracking")}
+                      data-testid="header-tracking"
+                    >
+                      <div className="flex items-center">
+                        Tracking
+                        <SortIndicator column="tracking" />
+                      </div>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
