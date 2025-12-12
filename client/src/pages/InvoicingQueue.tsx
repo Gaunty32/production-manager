@@ -49,6 +49,12 @@ interface EditShippingState {
   packageType: "boxes" | "bags" | undefined;
 }
 
+interface EditLineItemsState {
+  jobId: string;
+  jobName: string;
+  lineItems: LineItem[];
+}
+
 export default function InvoicingQueue() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -59,6 +65,36 @@ export default function InvoicingQueue() {
   const [manualShippingCosts, setManualShippingCosts] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [editingShipping, setEditingShipping] = useState<EditShippingState | null>(null);
+  const [editingLineItems, setEditingLineItems] = useState<EditLineItemsState | null>(null);
+  const [editedLineItems, setEditedLineItems] = useState<Record<string, { stitchCount: number }>>({});
+
+  const updateLineItemMutation = useMutation({
+    mutationFn: async (data: { lineItemId: string; stitchCount: number }) => {
+      return apiRequest("PATCH", `/api/job-line-items/${data.lineItemId}`, { stitchCount: data.stitchCount });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/job-line-items"] });
+    },
+    onError: (error) => {
+      toast({ title: "Update Failed", description: error instanceof Error ? error.message : "Failed to update line item", variant: "destructive" });
+    },
+  });
+
+  const handleSaveLineItems = async () => {
+    if (!editingLineItems) return;
+    
+    try {
+      const updates = Object.entries(editedLineItems).map(([lineItemId, data]) => 
+        updateLineItemMutation.mutateAsync({ lineItemId, stitchCount: data.stitchCount })
+      );
+      await Promise.all(updates);
+      toast({ title: "Line Items Updated", description: "Line items have been updated successfully." });
+      setEditingLineItems(null);
+      setEditedLineItems({});
+    } catch (error) {
+      // Error already handled by mutation
+    }
+  };
 
   const updateShippingMutation = useMutation({
     mutationFn: async (data: { jobId: string; dhlTrackingNumber?: string; packageCount?: number; packageType?: string }) => {
@@ -757,7 +793,24 @@ export default function InvoicingQueue() {
                                   )}
                                 </div>
                                 {canViewPrices(user?.role) && (
-                                  <div className="text-right shrink-0">
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingLineItems({
+                                          jobId: job.id,
+                                          jobName: job.jobName,
+                                          lineItems: lineItems,
+                                        });
+                                        setEditedLineItems({});
+                                      }}
+                                      data-testid={`button-edit-line-items-${job.id}`}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
                                     <Badge variant="secondary" className="text-base">
                                       {price !== null ? formatPrice(price) : "-"}
                                     </Badge>
@@ -903,6 +956,97 @@ export default function InvoicingQueue() {
               data-testid="button-save-shipping"
             >
               {updateShippingMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Line Items Dialog */}
+      <Dialog open={!!editingLineItems} onOpenChange={(open) => !open && setEditingLineItems(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Line Items</DialogTitle>
+            <DialogDescription>
+              Update line item details for "{editingLineItems?.jobName}". For Print jobs, set the print size.
+            </DialogDescription>
+          </DialogHeader>
+          {editingLineItems && (
+            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+              {editingLineItems.lineItems.map((item) => {
+                const isPrintJob = item.jobType === "Print" || item.jobType === "print";
+                const currentStitchCount = editedLineItems[item.id]?.stitchCount ?? item.stitchCount;
+                
+                return (
+                  <div key={item.id} className="p-4 border rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-sm">{item.description || `Line Item ${item.id.slice(0, 8)}`}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.jobType} • {item.quantity} units
+                        </p>
+                      </div>
+                      <Badge variant="secondary">{item.jobType}</Badge>
+                    </div>
+                    
+                    {isPrintJob ? (
+                      <div className="space-y-2">
+                        <Label>Print Size</Label>
+                        <Select
+                          value={currentStitchCount?.toString() || ""}
+                          onValueChange={(value) => {
+                            setEditedLineItems({
+                              ...editedLineItems,
+                              [item.id]: { stitchCount: parseInt(value) }
+                            });
+                          }}
+                        >
+                          <SelectTrigger data-testid={`select-print-size-${item.id}`}>
+                            <SelectValue placeholder="Select print size" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">A6</SelectItem>
+                            <SelectItem value="2">A5</SelectItem>
+                            <SelectItem value="3">A4</SelectItem>
+                            <SelectItem value="4">A3</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {(!currentStitchCount || currentStitchCount < 1 || currentStitchCount > 4) && (
+                          <p className="text-xs text-destructive">Print size is required for price calculation</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label>Stitch Count</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={currentStitchCount || ""}
+                          onChange={(e) => {
+                            setEditedLineItems({
+                              ...editedLineItems,
+                              [item.id]: { stitchCount: parseInt(e.target.value) || 0 }
+                            });
+                          }}
+                          placeholder="Enter stitch count"
+                          data-testid={`input-stitch-count-${item.id}`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingLineItems(null)} data-testid="button-cancel-edit-line-items">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveLineItems}
+              disabled={updateLineItemMutation.isPending || Object.keys(editedLineItems).length === 0}
+              data-testid="button-save-line-items"
+            >
+              {updateLineItemMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
