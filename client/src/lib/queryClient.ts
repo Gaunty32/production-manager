@@ -3,14 +3,29 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    let errorMessage = text;
+    
     try {
-      const json = JSON.parse(text);
-      // If response has an error field, use that message directly
-      throw new Error(json.error || text);
-    } catch (parseError) {
-      // If JSON parsing fails, use the text as-is
-      throw new Error(text);
+      let parsed = JSON.parse(text);
+      // Handle double-encoded JSON (string that is itself JSON)
+      if (typeof parsed === 'string') {
+        try {
+          parsed = JSON.parse(parsed);
+        } catch {
+          // Not double-encoded, use as-is
+        }
+      }
+      // Extract error message from object
+      if (parsed && typeof parsed === 'object' && parsed.error) {
+        errorMessage = parsed.error;
+      } else if (typeof parsed === 'string') {
+        errorMessage = parsed;
+      }
+    } catch {
+      // JSON parsing failed, use text as-is
     }
+    
+    throw new Error(errorMessage);
   }
 }
 
