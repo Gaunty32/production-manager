@@ -743,6 +743,14 @@ export const insertCustomerUserSchema = createInsertSchema(customerUsers).omit({
   lastName: z.string().min(1, "Last name is required"),
 });
 
+export const updateCustomerUserSchema = z.object({
+  email: z.string().email().optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+});
+
+export type UpdateCustomerUser = z.infer<typeof updateCustomerUserSchema>;
+
 export const customerLoginSchema = z.object({
   email: z.string().email(),
   password: z.string(),

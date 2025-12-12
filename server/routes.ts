@@ -31,7 +31,7 @@ import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
-import { customerLoginSchema, insertCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, type Job } from "@shared/schema";
+import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, type Job } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
@@ -1018,6 +1018,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: error.errors });
       } else {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to reset customer password" });
+      }
+    }
+  });
+
+  // Update customer user details (email, name)
+  app.patch("/api/customer-users/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data = updateCustomerUserSchema.parse(req.body);
+      
+      // Check if email is being changed and if it's already in use
+      if (data.email) {
+        const existingUser = await storage.getCustomerUserByEmail(data.email);
+        if (existingUser && existingUser.id !== id) {
+          return res.status(400).json({ error: "Email address is already in use by another portal user" });
+        }
+      }
+      
+      const updated = await storage.updateCustomerUserDetails(id, data);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to update customer user" });
       }
     }
   });

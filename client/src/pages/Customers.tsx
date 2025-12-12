@@ -35,6 +35,7 @@ export default function Customers() {
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
   const [resetPasswordEmail, setResetPasswordEmail] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [editingPortalUser, setEditingPortalUser] = useState<{ id: string; email: string; firstName: string; lastName: string } | null>(null);
 
   const { data: customersData = [], isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -244,6 +245,28 @@ export default function Customers() {
       toast({
         title: "Error",
         description: error.message || "Failed to update portal access",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updatePortalUserMutation = useMutation({
+    mutationFn: async ({ id, email, firstName, lastName }: { id: string; email: string; firstName: string; lastName: string }) => {
+      const res = await apiRequest("PATCH", `/api/customer-users/${id}`, { email, firstName, lastName });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-users/all"] });
+      setEditingPortalUser(null);
+      toast({
+        title: "Success",
+        description: "Portal user updated",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update portal user",
         variant: "destructive",
       });
     },
@@ -531,6 +554,21 @@ export default function Customers() {
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   <Button
                                     variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => setEditingPortalUser({
+                                      id: portalUser.id,
+                                      email: portalUser.email || '',
+                                      firstName: portalUser.firstName || '',
+                                      lastName: portalUser.lastName || ''
+                                    })}
+                                    data-testid={`button-edit-portal-user-${portalUser.id}`}
+                                    title="Edit portal user"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
                                     size="sm"
                                     className="h-7"
                                     onClick={() => handleResetPassword(portalUser.id, portalUser.email)}
@@ -668,6 +706,66 @@ export default function Customers() {
             isResetting={resetPasswordMutation.isPending}
           />
         )}
+
+        {/* Edit Portal User Dialog */}
+        <AlertDialog open={editingPortalUser !== null} onOpenChange={(open) => !open && setEditingPortalUser(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Edit Portal User</AlertDialogTitle>
+              <AlertDialogDescription>
+                Update the portal user's email address and name.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {editingPortalUser && (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="portal-user-email">Email Address</Label>
+                  <Input
+                    id="portal-user-email"
+                    type="email"
+                    value={editingPortalUser.email}
+                    onChange={(e) => setEditingPortalUser({ ...editingPortalUser, email: e.target.value })}
+                    data-testid="input-edit-portal-email"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="portal-user-first-name">First Name</Label>
+                    <Input
+                      id="portal-user-first-name"
+                      value={editingPortalUser.firstName}
+                      onChange={(e) => setEditingPortalUser({ ...editingPortalUser, firstName: e.target.value })}
+                      data-testid="input-edit-portal-firstname"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="portal-user-last-name">Last Name</Label>
+                    <Input
+                      id="portal-user-last-name"
+                      value={editingPortalUser.lastName}
+                      onChange={(e) => setEditingPortalUser({ ...editingPortalUser, lastName: e.target.value })}
+                      data-testid="input-edit-portal-lastname"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="button-cancel-edit-portal-user">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (editingPortalUser) {
+                    updatePortalUserMutation.mutate(editingPortalUser);
+                  }
+                }}
+                disabled={updatePortalUserMutation.isPending}
+                data-testid="button-save-portal-user"
+              >
+                {updatePortalUserMutation.isPending ? "Saving..." : "Save Changes"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

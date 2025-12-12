@@ -135,6 +135,7 @@ export interface IStorage {
   updateCustomerPassword(id: string, passwordHash: string): Promise<void>;
   updateCustomerActive(id: string, active: boolean): Promise<void>;
   updateCustomerMustResetPassword(id: string, mustResetPassword: boolean): Promise<void>;
+  updateCustomerUserDetails(id: string, data: { email?: string; firstName?: string; lastName?: string }): Promise<CustomerUser>;
   getJobMessages(jobId: string): Promise<JobMessage[]>;
   createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
   markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void>;
@@ -1124,6 +1125,15 @@ export class DatabaseStorage implements IStorage {
       .update(customerUsers)
       .set({ passwordHash, mustResetPassword: false })
       .where(eq(customerUsers.id, id));
+  }
+
+  async updateCustomerUserDetails(id: string, data: { email?: string; firstName?: string; lastName?: string }): Promise<CustomerUser> {
+    const [updated] = await db
+      .update(customerUsers)
+      .set(data)
+      .where(eq(customerUsers.id, id))
+      .returning();
+    return updated;
   }
 
   async getJobMessages(jobId: string): Promise<JobMessage[]> {
