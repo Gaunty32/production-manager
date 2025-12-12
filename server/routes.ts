@@ -874,7 +874,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Set session
       (req.session as any).customerUserId = customerUser.id;
       
-      res.json(customerUser);
+      // Explicitly save session before responding
+      req.session.save((err) => {
+        if (err) {
+          console.error("[CUSTOMER_LOGIN] Session save error:", err);
+          return res.status(500).json({ error: "Session error" });
+        }
+        res.json(customerUser);
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: error.errors });

@@ -32,11 +32,15 @@ export async function registerCustomer(data: InsertCustomerUser & { customerId: 
 
 export async function loginCustomer(data: CustomerLogin) {
   // Find customer user by email
+  console.log(`[CUSTOMER_LOGIN] Attempting login for email: ${data.email}`);
   const customerUser = await storage.getCustomerUserByEmail(data.email);
   
   if (!customerUser) {
+    console.log(`[CUSTOMER_LOGIN] No user found for email: ${data.email}`);
     throw new Error("Invalid email or password");
   }
+  
+  console.log(`[CUSTOMER_LOGIN] Found user: ${customerUser.id}, active: ${customerUser.active}`);
   
   // Check if account is active
   if (!customerUser.active) {
@@ -45,6 +49,7 @@ export async function loginCustomer(data: CustomerLogin) {
   
   // Verify password
   const isValid = await bcrypt.compare(data.password, customerUser.passwordHash);
+  console.log(`[CUSTOMER_LOGIN] Password valid: ${isValid}`);
   
   if (!isValid) {
     throw new Error("Invalid email or password");
