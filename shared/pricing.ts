@@ -362,8 +362,14 @@ export function getPrintPrice(
   // Get print size from code
   const printSize = CODE_TO_PRINT_SIZE[printSizeCode as keyof typeof CODE_TO_PRINT_SIZE];
   
+  // If print size code is missing or invalid, return POA so it's visible in the UI
   if (!printSize) {
-    throw new Error(`Invalid print size code: ${printSizeCode}`);
+    return {
+      unitPrice: 0,
+      totalPrice: "POA" as any, // Mark as POA - needs print size to be set
+      tier: tier.maxQty === null ? `${tier.minQty}+` : `${tier.minQty}-${tier.maxQty}`,
+      printSize: "Unknown" as PrintSize,
+    };
   }
 
   const unitPrice = tier.prices[printSize];
