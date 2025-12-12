@@ -114,7 +114,8 @@ export default function CustomerLogin() {
 
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
-      return await apiRequest("POST", "/api/customer-auth/login", data);
+      const response = await apiRequest("POST", "/api/customer-auth/login", data);
+      return await response.json();
     },
     onSuccess: (customerUser: any) => {
       // Check if password reset is required
