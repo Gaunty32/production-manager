@@ -46,8 +46,53 @@ export default function WeeklyReports() {
     }
   };
 
-  // Early return for error state to prevent processing null data
-  if (isError || (weeklyData === null && !isLoading)) {
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-6 space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold" data-testid="text-page-title">Weekly Performance Report</h1>
+          <p className="text-muted-foreground">Last 12 weeks of invoiced value and completed production</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Invoiced Value</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-8 w-32" />
+              <p className="text-xs text-muted-foreground mt-2">Last 12 weeks</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Completed Quantity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-8 w-32" />
+              <p className="text-xs text-muted-foreground mt-2">Last 12 weeks</p>
+            </CardContent>
+          </Card>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Weekly Breakdown</CardTitle>
+            <CardDescription>Loading data...</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Early return for error state
+  if (isError) {
     return (
       <div className="container mx-auto p-6 space-y-6">
         <div>
