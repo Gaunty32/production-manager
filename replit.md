@@ -2,7 +2,17 @@
 
 This application is a production management system for manufacturing, featuring both staff and customer portals. It tracks customer orders, schedules machines, and manages dispatch deadlines to streamline operations, improve efficiency, enhance customer satisfaction, and provide operational transparency. Key capabilities include multi-line item job tracking, a robust scheduling system integrating machine and staff availability, and detailed production metrics. The system aims to provide a comprehensive solution for managing the entire production lifecycle, from order submission to invoicing and customer communication.
 
-# Recent Changes (December 9, 2025)
+# Recent Changes (December 16, 2025)
+
+## Partial Production Tracking
+- Added `production_entries` table to track daily work progress on line items that span multiple days
+- Staff can now record partial production at end of day using the "Record Production" button (play icon) on each incomplete line item
+- Production entries track: staff member, work date, quantity completed, and time spent
+- Weekly production reports now aggregate data from both production entries (partial work) and completed line items
+- System automatically prevents double-counting: line items with production entries use entry data, others use completion data
+- RecordProductionDialog shows progress summary, previous entries, and allows recording new daily work
+
+# Previous Changes (December 9, 2025)
 
 ## Multi-User Customer Portal Support
 - Customer portal now supports multiple users per customer account (5+ users can access the same customer's data)

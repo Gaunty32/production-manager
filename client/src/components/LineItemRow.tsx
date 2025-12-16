@@ -1,5 +1,5 @@
 import { format, isPast, isToday } from "date-fns";
-import { Pencil, Trash2, StickyNote, CheckCircle2, XCircle, Package, Printer, Truck } from "lucide-react";
+import { Pencil, Trash2, StickyNote, CheckCircle2, XCircle, Package, Printer, Truck, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -39,6 +39,7 @@ interface LineItemRowProps {
   onDelete: (id: string) => void;
   onPrintWorksheet?: (id: string) => void;
   onEditTracking?: (id: string) => void;
+  onRecordProduction?: (lineItem: JobLineItem) => void;
   isCompleted?: boolean;
   dhlTrackingNumber?: string | null;
   errorsSlot?: React.ReactNode;
@@ -68,6 +69,7 @@ export function LineItemRow({
   onDelete,
   onPrintWorksheet,
   onEditTracking,
+  onRecordProduction,
   isCompleted = false,
   dhlTrackingNumber,
   errorsSlot,
@@ -258,24 +260,44 @@ export function LineItemRow({
 
       {/* Production - per line item */}
       <td className="py-2 px-3">
-        {metrics ? (
-          <div className="font-mono text-xs space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-12">Runs:</span>
-              <span>{metrics.runs}</span>
+        <div className="flex items-center gap-2">
+          {metrics ? (
+            <div className="font-mono text-xs space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground w-12">Runs:</span>
+                <span>{metrics.runs}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground w-12">Time:</span>
+                <span>{metrics.timePerRunMinutes}m</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground w-12">Total:</span>
+                <span className="font-semibold">{formatTimeDisplay(metrics.totalTimeMinutes)}</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-12">Time:</span>
-              <span>{metrics.timePerRunMinutes}m</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-12">Total:</span>
-              <span className="font-semibold">{formatTimeDisplay(metrics.totalTimeMinutes)}</span>
-            </div>
-          </div>
-        ) : (
-          <span className="text-muted-foreground text-sm">-</span>
-        )}
+          ) : (
+            <span className="text-muted-foreground text-sm">-</span>
+          )}
+          {onRecordProduction && !lineItem.completed && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 ml-auto"
+                  onClick={() => onRecordProduction(lineItem)}
+                  data-testid={`button-record-production-${lineItem.id}`}
+                >
+                  <PlayCircle className="h-4 w-4 text-primary" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Record daily production progress</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       </td>
 
       {/* Price - per line item */}

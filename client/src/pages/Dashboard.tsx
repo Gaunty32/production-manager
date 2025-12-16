@@ -32,10 +32,11 @@ import { ProductionWorksheet } from "@/components/ProductionWorksheet";
 import { EditTrackingDialog } from "@/components/EditTrackingDialog";
 import { JobErrorsDialog } from "@/components/JobErrorsDialog";
 import { JobErrorBadge } from "@/components/JobErrorBadge";
+import { RecordProductionDialog } from "@/components/RecordProductionDialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
-import type { Customer, Job, JobWithLineItems, Staff, LogoSetup, User } from "@shared/schema";
+import type { Customer, Job, JobWithLineItems, JobLineItem, Staff, LogoSetup, User } from "@shared/schema";
 import { canViewPrices } from "@shared/schema";
 import { useParams } from "wouter";
 import { isPast, isToday, format, addDays, startOfDay, endOfDay } from "date-fns";
@@ -58,6 +59,7 @@ export default function Dashboard() {
   const [sortOrder, setSortOrder] = useState<'date' | 'customer' | 'jobNumber'>('date');
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [editingTrackingJob, setEditingTrackingJob] = useState<JobWithLineItems | null>(null);
+  const [recordingProductionItem, setRecordingProductionItem] = useState<{ lineItem: JobLineItem; jobName: string } | null>(null);
 
   // Fetch current user
   const { data: currentUser } = useQuery<{ id: string; username?: string; email: string; firstName?: string; lastName?: string; role?: string }>({
@@ -1131,6 +1133,9 @@ export default function Dashboard() {
                               setWorksheetJob(fullJob);
                             }
                           }}
+                          onRecordProduction={(li) => {
+                            setRecordingProductionItem({ lineItem: li, jobName: job.jobName });
+                          }}
                           errorsSlot={
                             <JobErrorsDialog
                               jobId={job.id}
@@ -1376,6 +1381,16 @@ export default function Dashboard() {
             }
           }}
         />
+
+        {recordingProductionItem && (
+          <RecordProductionDialog
+            open={recordingProductionItem !== null}
+            onOpenChange={(open) => !open && setRecordingProductionItem(null)}
+            lineItem={recordingProductionItem.lineItem}
+            jobName={recordingProductionItem.jobName}
+            currentUserId={currentUser?.id}
+          />
+        )}
       </div>
     </div>
   );
