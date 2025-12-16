@@ -55,6 +55,9 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 }
 
 function StaffRouter() {
+  const [location] = useLocation();
+  console.log("StaffRouter rendering, location:", location);
+  
   return (
     <Switch>
       {/* Staff Portal Routes */}
@@ -78,6 +81,9 @@ function StaffRouter() {
 }
 
 function AppRouter() {
+  const [location] = useLocation();
+  console.log("AppRouter rendering, location:", location);
+  
   const style = {
     "--sidebar-width": "16rem",
   };
@@ -95,11 +101,8 @@ function AppRouter() {
         <CustomerPortalApp />
       </Route>
       
-      {/* Authenticated Staff Routes */}
-      <Route path="/">
-        <AuthenticatedApp style={style} />
-      </Route>
-      <Route path="/:rest*">
+      {/* Authenticated Staff Routes - handles all non-specific paths */}
+      <Route>
         <AuthenticatedApp style={style} />
       </Route>
     </Switch>
@@ -137,6 +140,9 @@ function CustomerPortalApp() {
 }
 
 function AuthenticatedApp({ style }: { style: Record<string, string> }) {
+  const [location] = useLocation();
+  console.log("AuthenticatedApp rendering, location:", location);
+  
   const { isAuthenticated, isLoading, user } = useAuth();
   const { toast } = useToast();
 
