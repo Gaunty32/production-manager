@@ -183,12 +183,16 @@ export function JobScheduleDialog({
 
   // Apply a machine suggestion to the form
   const applySuggestion = (suggestion: MachineSuggestion) => {
+    console.log("[Schedule] Applying suggestion:", suggestion);
     form.setValue("machineId", suggestion.machineId);
-    form.setValue("staffId", suggestion.staffId);
+    if (suggestion.staffId) {
+      form.setValue("staffId", suggestion.staffId);
+    }
     form.setValue("scheduledDate", suggestion.earliestDate);
     form.setValue("startTime", suggestion.startTime);
     form.setValue("endTime", suggestion.endTime);
     setUseManualTime(true); // Use these specific times, skip slot fetch
+    console.log("[Schedule] Form values after apply:", form.getValues());
   };
 
   // Fetch available slots when all parameters are ready AND not in manual mode
@@ -346,7 +350,7 @@ export function JobScheduleDialog({
 
             {/* Machine Suggestions - Quick Schedule Options */}
             {selectedLineItemId && (
-              <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+              <div className="border rounded-lg p-3 bg-muted/30 space-y-2 pointer-events-auto relative z-50">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Zap className="h-4 w-4 text-primary" />
                   <span>Quick Schedule - Suggested Machines</span>
@@ -361,18 +365,21 @@ export function JobScheduleDialog({
                     No suggestions available. Use manual selection below.
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                  <div className="space-y-2 max-h-48 overflow-y-auto pointer-events-auto">
                     {machineSuggestions.slice(0, 5).map((suggestion) => (
                       <Button
                         key={suggestion.machineId}
                         type="button"
                         variant="outline"
-                        size="sm"
-                        className="w-full justify-start h-auto py-2 px-3"
-                        onClick={() => applySuggestion(suggestion)}
+                        className="w-full justify-start h-auto py-2 px-3 pointer-events-auto"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          applySuggestion(suggestion);
+                        }}
                         data-testid={`button-suggestion-${suggestion.machineId}`}
                       >
-                        <div className="flex flex-col items-start gap-1 w-full">
+                        <div className="flex flex-col items-start gap-1 w-full text-left">
                           <div className="flex items-center justify-between w-full gap-2">
                             <span className="font-medium">{suggestion.machineName}</span>
                             {suggestion.canMeetDeadline ? (
@@ -388,7 +395,7 @@ export function JobScheduleDialog({
                             {new Date(suggestion.earliestDate).toLocaleDateString()} at {suggestion.startTimeFormatted} - {suggestion.endTimeFormatted}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {suggestion.staffName} • {formatTimeDisplay(suggestion.estimatedDuration)} • {suggestion.estimatedRuns} runs
+                            {suggestion.staffName || 'Any staff'} • {formatTimeDisplay(suggestion.estimatedDuration)} • {suggestion.estimatedRuns} runs
                           </div>
                         </div>
                       </Button>
