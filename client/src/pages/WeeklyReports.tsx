@@ -68,17 +68,19 @@ interface DailyProductionData {
 const CHART_COLORS = ['hsl(var(--primary))', 'hsl(142.1 76.2% 36.3%)', 'hsl(47.9 95.8% 53.1%)', 'hsl(262.1 83.3% 57.8%)', 'hsl(12.6 83.7% 53.9%)'];
 
 export default function WeeklyReports() {
-  const { data: performanceData, isLoading: isLoadingPerformance } = useQuery<StaffPerformanceData>({
+  const { data: performanceData, isLoading: isLoadingPerformance, error: performanceError } = useQuery<StaffPerformanceData>({
     queryKey: ['/api/reports/staff-performance'],
   });
 
-  const { data: errorsData, isLoading: isLoadingErrors } = useQuery<ErrorsReportData>({
+  const { data: errorsData, isLoading: isLoadingErrors, error: errorsError } = useQuery<ErrorsReportData>({
     queryKey: ['/api/reports/errors'],
   });
 
-  const { data: productionData, isLoading: isLoadingProduction } = useQuery<DailyProductionData>({
+  const { data: productionData, isLoading: isLoadingProduction, error: productionError } = useQuery<DailyProductionData>({
     queryKey: ['/api/reports/daily-production'],
   });
+
+  const hasError = performanceError || errorsError || productionError;
 
   const formatNumber = (value: number) => value.toLocaleString();
 
@@ -136,6 +138,17 @@ export default function WeeklyReports() {
           <h1 className="text-2xl font-bold" data-testid="text-page-title">Weekly Performance Report</h1>
           <p className="text-muted-foreground text-sm">Last 12 weeks performance metrics</p>
         </div>
+
+        {hasError && (
+          <Card className="border-destructive">
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Failed to load report data. Please refresh the page or try again later.</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Summary Cards */}
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
