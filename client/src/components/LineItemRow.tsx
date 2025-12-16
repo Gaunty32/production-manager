@@ -41,6 +41,7 @@ interface LineItemRowProps {
   onEditTracking?: (id: string) => void;
   isCompleted?: boolean;
   dhlTrackingNumber?: string | null;
+  errorsSlot?: React.ReactNode;
 }
 
 export function LineItemRow({
@@ -69,6 +70,7 @@ export function LineItemRow({
   onEditTracking,
   isCompleted = false,
   dhlTrackingNumber,
+  errorsSlot,
 }: LineItemRowProps) {
   const isOverdue = requiredDispatchDate && isPast(requiredDispatchDate) && !isToday(requiredDispatchDate);
   const isDueToday = requiredDispatchDate && isToday(requiredDispatchDate);
@@ -362,6 +364,13 @@ export function LineItemRow({
           )
         )}
       </td>
+
+      {/* Errors slot - for completed orders error tracking */}
+      {errorsSlot && (
+        <td className="py-2 px-3">
+          {isFirstLineItem && errorsSlot}
+        </td>
+      )}
     </tr>
   );
 }

@@ -24,7 +24,9 @@ import {
   insertBankHolidaySchema,
   updateBankHolidaySchema,
   insertLogoSetupSchema,
-  updateLogoSetupSchema
+  updateLogoSetupSchema,
+  insertJobErrorSchema,
+  updateJobErrorSchema
 } from "@shared/schema";
 import { z } from "zod";
 import { xeroService } from "./xero";
@@ -2142,6 +2144,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete line item" });
+    }
+  });
+
+  // Job error tracking routes
+  app.get("/api/jobs/:jobId/errors", isStaffAuthenticated, async (req, res) => {
+    try {
+      const errors = await storage.getJobErrors(req.params.jobId);
+      res.json(errors);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch job errors" });
+    }
+  });
+
+  app.get("/api/job-errors/unresolved", isStaffAuthenticated, async (req, res) => {
+    try {
+      const errors = await storage.getUnresolvedJobErrors();
+      res.json(errors);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch unresolved job errors" });
+    }
+  });
+
+  app.post("/api/jobs/:jobId/errors", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const data = insertJobErrorSchema.parse({
+        ...req.body,
+        jobId: req.params.jobId,
+        reportedById: req.user.id
+      });
+      const error = await storage.createJobError(data);
+      res.json(error);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create job error" });
+      }
+    }
+  });
+
+  app.patch("/api/job-errors/:id", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const data = updateJobErrorSchema.parse(req.body);
+      
+      // If resolving, set resolved by and resolved at
+      const updates: any = { ...data };
+      if (data.resolved === true) {
+        updates.resolvedById = req.user.id;
+        updates.resolvedAt = new Date();
+      }
+      
+      const error = await storage.updateJobError(req.params.id, updates);
+      res.json(error);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update job error" });
+      }
+    }
+  });
+
+  app.delete("/api/job-errors/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteJobError(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete job error" });
     }
   });
 

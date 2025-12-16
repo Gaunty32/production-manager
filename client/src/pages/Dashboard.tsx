@@ -30,10 +30,11 @@ import { LogoSetupDialog } from "@/components/LogoSetupDialog";
 import { LineItemRow } from "@/components/LineItemRow";
 import { ProductionWorksheet } from "@/components/ProductionWorksheet";
 import { EditTrackingDialog } from "@/components/EditTrackingDialog";
+import { JobErrorsDialog } from "@/components/JobErrorsDialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
-import type { Customer, Job, JobWithLineItems, Staff, LogoSetup } from "@shared/schema";
+import type { Customer, Job, JobWithLineItems, Staff, LogoSetup, User } from "@shared/schema";
 import { canViewPrices } from "@shared/schema";
 import { useParams } from "wouter";
 import { isPast, isToday, format, addDays, startOfDay, endOfDay } from "date-fns";
@@ -83,6 +84,10 @@ export default function Dashboard() {
 
   const { data: logoSetups = [], isLoading: logoSetupsLoading } = useQuery<LogoSetup[]>({
     queryKey: ["/api/logo-setups"],
+  });
+
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
   });
 
   const createCustomerMutation = useMutation({
@@ -1198,13 +1203,14 @@ export default function Dashboard() {
                       <TableHead className="w-[120px]">Machine</TableHead>
                       <TableHead className="w-[100px]">Date Required</TableHead>
                       <TableHead className="w-[100px]">Status</TableHead>
-                      <TableHead className="w-[80px]">Actions</TableHead>
+                      <TableHead className="w-[80px]">Tracking</TableHead>
+                      <TableHead className="w-[80px]">Errors</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredCompletedJobs.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                           {searchTerm ? `No completed orders match "${searchTerm}"` : "No completed orders yet"}
                         </TableCell>
                       </TableRow>
@@ -1251,6 +1257,13 @@ export default function Dashboard() {
                               }
                             }}
                             dhlTrackingNumber={job.dhlTrackingNumber}
+                            errorsSlot={
+                              <JobErrorsDialog
+                                jobId={job.id}
+                                jobName={job.jobName}
+                                users={users}
+                              />
+                            }
                           />
                         ));
                       })
