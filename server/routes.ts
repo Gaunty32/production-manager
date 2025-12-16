@@ -3061,6 +3061,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Machine suggestions endpoint - suggests best machines based on availability
+  app.get("/api/scheduling/machine-suggestions", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { lineItemId, quantity, stitchCount, dispatchDate, jobType } = req.query;
+      
+      // Can work with either a lineItemId or direct parameters
+      let jobQuantity: number;
+      let jobStitchCount: number;
+      let targetDate: Date;
+      let lineItemJobType: string;
+      
+      if (lineItemId) {
+        const lineItem = await storage.getJobLineItem(lineItemId as string);
+        if (!lineItem) {
+          return res.status(404).json({ error: "Line item not found" });
+        }
+        const job = await storage.getJob(lineItem.jobId);
+        if (!job) {
+          return res.status(404).json({ error: "Job not found" });
+        }
+        
+        jobQuantity = lineItem.quantity;
+        jobStitchCount = lineItem.stitchCount || 0;
+        targetDate = job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        lineItemJobType = lineItem.jobType || 'Embroidery';
+      } else {
+        if (!quantity || !stitchCount) {
+          return res.status(400).json({ error: "Must provide lineItemId or quantity and stitchCount" });
+        }
+        jobQuantity = parseInt(quantity as string);
+        jobStitchCount = parseInt(stitchCount as string);
+        targetDate = dispatchDate ? new Date(dispatchDate as string) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        lineItemJobType = (jobType as string) || 'Embroidery';
+      }
+      
+      // Only embroidery jobs need machine scheduling
+      if (!lineItemJobType.toLowerCase().includes('embroidery')) {
+        return res.json({
+          suggestions: [],
+          message: "Only embroidery jobs require machine scheduling"
+        });
+      }
+      
+      if (!jobStitchCount || jobStitchCount <= 0) {
+        return res.status(400).json({ error: "Stitch count is required for scheduling" });
+      }
+      
+      const { findAvailableSlots, calculateJobDuration, minutesToTime } = await import("@shared/scheduling");
+      const { MACHINE_NAMES, MACHINE_HEADS, calculateProductionMetrics } = await import("@shared/machines");
+      
+      // Get all scheduling data
+      const staffMembers = await storage.getStaff();
+      const staffShifts = await storage.getStaffShifts();
+      const machineBlocks = await storage.getMachineScheduleBlocks();
+      const jobSchedules = await storage.getJobSchedules();
+      const staffMachineAllocations = await storage.getStaffMachineAllocations();
+      const staffHolidays = await storage.getStaffHolidays();
+      const bankHolidays = await storage.getBankHolidays();
+      
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = targetDate > startDate ? targetDate : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+      
+      const machineIds = Object.keys(MACHINE_NAMES).map(Number);
+      const suggestions: any[] = [];
+      
+      for (const machineId of machineIds) {
+        const duration = calculateJobDuration(jobQuantity, jobStitchCount, machineId);
+        const metrics = calculateProductionMetrics(jobQuantity, jobStitchCount, machineId);
+        
+        if (duration === 0) continue;
+        
+        // Find candidate staff for this machine
+        const hasAllocationsInSystem = staffMachineAllocations.length > 0;
+        let candidateStaff = staffMembers;
+        
+        if (hasAllocationsInSystem) {
+          const staffWithMachineAllocations = new Set(
+            staffMachineAllocations
+              .filter(a => a.machineId === machineId)
+              .map(a => a.staffId)
+          );
+          candidateStaff = staffMembers.filter(s => staffWithMachineAllocations.has(s.id));
+        }
+        
+        let bestSlot: any = null;
+        let bestStaffId: string | null = null;
+        let bestStaffName: string | null = null;
+        
+        // Find earliest available slot across all candidate staff
+        for (const staffMember of candidateStaff) {
+          const currentDate = new Date(startDate);
+          
+          while (currentDate <= endDate) {
+            const dateSlots = findAvailableSlots(
+              currentDate,
+              machineId,
+              staffMember.id,
+              machineBlocks,
+              staffShifts,
+              jobSchedules,
+              staffMachineAllocations,
+              staffHolidays,
+              bankHolidays
+            );
+            
+            for (const slot of dateSlots) {
+              const slotDuration = slot.endTime - slot.startTime;
+              if (slotDuration >= duration) {
+                const proposedSlot = {
+                  date: new Date(currentDate),
+                  startTime: slot.startTime,
+                  endTime: slot.startTime + duration,
+                  availableMinutes: slotDuration
+                };
+                
+                if (!bestSlot || proposedSlot.date < bestSlot.date ||
+                    (proposedSlot.date.getTime() === bestSlot.date.getTime() && proposedSlot.startTime < bestSlot.startTime)) {
+                  bestSlot = proposedSlot;
+                  bestStaffId = staffMember.id;
+                  bestStaffName = staffMember.name;
+                }
+                break;
+              }
+            }
+            
+            if (bestSlot) break;
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          
+          if (bestSlot && bestSlot.date.toDateString() === startDate.toDateString()) break;
+        }
+        
+        if (bestSlot) {
+          const canMeetDeadline = bestSlot.date <= targetDate;
+          const daysUntilAvailable = Math.ceil((bestSlot.date.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+          
+          suggestions.push({
+            machineId,
+            machineName: MACHINE_NAMES[machineId],
+            heads: MACHINE_HEADS[machineId],
+            estimatedDuration: duration,
+            estimatedRuns: metrics?.runs || 0,
+            earliestDate: bestSlot.date.toISOString().split('T')[0],
+            startTime: bestSlot.startTime,
+            endTime: bestSlot.endTime,
+            startTimeFormatted: minutesToTime(bestSlot.startTime),
+            endTimeFormatted: minutesToTime(bestSlot.endTime),
+            staffId: bestStaffId,
+            staffName: bestStaffName,
+            canMeetDeadline,
+            daysUntilAvailable,
+            score: canMeetDeadline ? (100 - daysUntilAvailable) : (0 - daysUntilAvailable)
+          });
+        }
+      }
+      
+      // Sort by score (best options first)
+      suggestions.sort((a, b) => b.score - a.score);
+      
+      res.json({
+        targetDate: targetDate.toISOString().split('T')[0],
+        quantity: jobQuantity,
+        stitchCount: jobStitchCount,
+        suggestions
+      });
+    } catch (error) {
+      console.error("Error getting machine suggestions:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to get machine suggestions" 
+      });
+    }
+  });
+
   // Staff machine allocation routes
   app.get("/api/staff-machine-allocations", isStaffAuthenticated, async (req, res) => {
     try {
