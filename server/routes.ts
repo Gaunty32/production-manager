@@ -822,6 +822,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff Performance Report API (on-time vs late orders)
+  app.get("/api/reports/staff-performance", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const querySchema = z.object({
+        weeks: z.string().optional().transform((val) => {
+          if (!val) return 12;
+          const num = parseInt(val);
+          if (isNaN(num) || num < 1 || num > 52) return 12;
+          return num;
+        }),
+        endDate: z.string().optional().transform((val) => {
+          if (!val) return new Date();
+          const date = new Date(val);
+          return isNaN(date.getTime()) ? new Date() : date;
+        }),
+      });
+
+      const params = querySchema.parse(req.query);
+      const data = await storage.getStaffPerformanceReport({
+        weeks: params.weeks,
+        endDate: params.endDate,
+      });
+      
+      res.json(data);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching staff performance:", error);
+      res.status(500).json({ error: "Failed to fetch staff performance data" });
+    }
+  });
+
+  // Errors Report API
+  app.get("/api/reports/errors", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const querySchema = z.object({
+        weeks: z.string().optional().transform((val) => {
+          if (!val) return 12;
+          const num = parseInt(val);
+          if (isNaN(num) || num < 1 || num > 52) return 12;
+          return num;
+        }),
+        endDate: z.string().optional().transform((val) => {
+          if (!val) return new Date();
+          const date = new Date(val);
+          return isNaN(date.getTime()) ? new Date() : date;
+        }),
+      });
+
+      const params = querySchema.parse(req.query);
+      const data = await storage.getErrorsReport({
+        weeks: params.weeks,
+        endDate: params.endDate,
+      });
+      
+      res.json(data);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching errors report:", error);
+      res.status(500).json({ error: "Failed to fetch errors report data" });
+    }
+  });
+
+  // Daily Production Report API
+  app.get("/api/reports/daily-production", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const querySchema = z.object({
+        weeks: z.string().optional().transform((val) => {
+          if (!val) return 12;
+          const num = parseInt(val);
+          if (isNaN(num) || num < 1 || num > 52) return 12;
+          return num;
+        }),
+        endDate: z.string().optional().transform((val) => {
+          if (!val) return new Date();
+          const date = new Date(val);
+          return isNaN(date.getTime()) ? new Date() : date;
+        }),
+      });
+
+      const params = querySchema.parse(req.query);
+      const data = await storage.getDailyProductionReport({
+        weeks: params.weeks,
+        endDate: params.endDate,
+      });
+      
+      res.json(data);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching daily production:", error);
+      res.status(500).json({ error: "Failed to fetch daily production data" });
+    }
+  });
+
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
     try {

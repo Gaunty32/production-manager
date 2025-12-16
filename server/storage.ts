@@ -1774,6 +1774,236 @@ export class DatabaseStorage implements IStorage {
       .where(eq(jobErrors.resolved, false))
       .orderBy(sql`${jobErrors.reportedAt} DESC`);
   }
+
+  // Enhanced Weekly Reports - Staff Performance (on-time vs late)
+  async getStaffPerformanceReport(options: { weeks?: number; endDate?: Date } = {}): Promise<{
+    staffMetrics: Array<{
+      staffId: string;
+      staffName: string;
+      onTimeCount: number;
+      lateCount: number;
+      totalCompleted: number;
+      onTimePercentage: number;
+    }>;
+    teamTotals: {
+      onTimeCount: number;
+      lateCount: number;
+      totalCompleted: number;
+      onTimePercentage: number;
+    };
+  }> {
+    const weeks = options.weeks || 12;
+    const endDate = options.endDate || new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - (weeks * 7));
+
+    const result = await db.execute(sql`
+      SELECT 
+        s.id as staff_id,
+        s.name as staff_name,
+        COUNT(CASE WHEN j.completed_on_time = true THEN 1 END) as on_time_count,
+        COUNT(CASE WHEN j.completed_on_time = false THEN 1 END) as late_count,
+        COUNT(j.id) as total_completed
+      FROM jobs j
+      INNER JOIN staff s ON j.completed_by_id = s.id
+      WHERE j.completed = true
+        AND j.invoice_status IN ('ready', 'invoiced')
+        AND j.goods_received >= ${startDate}
+        AND j.goods_received <= ${endDate}
+      GROUP BY s.id, s.name
+      ORDER BY COUNT(j.id) DESC
+    `);
+
+    const staffMetrics = (result.rows as any[]).map(row => ({
+      staffId: row.staff_id,
+      staffName: row.staff_name,
+      onTimeCount: parseInt(row.on_time_count) || 0,
+      lateCount: parseInt(row.late_count) || 0,
+      totalCompleted: parseInt(row.total_completed) || 0,
+      onTimePercentage: parseInt(row.total_completed) > 0 
+        ? Math.round((parseInt(row.on_time_count) / parseInt(row.total_completed)) * 100) 
+        : 0,
+    }));
+
+    const teamTotals = staffMetrics.reduce(
+      (acc, staff) => ({
+        onTimeCount: acc.onTimeCount + staff.onTimeCount,
+        lateCount: acc.lateCount + staff.lateCount,
+        totalCompleted: acc.totalCompleted + staff.totalCompleted,
+        onTimePercentage: 0,
+      }),
+      { onTimeCount: 0, lateCount: 0, totalCompleted: 0, onTimePercentage: 0 }
+    );
+    teamTotals.onTimePercentage = teamTotals.totalCompleted > 0 
+      ? Math.round((teamTotals.onTimeCount / teamTotals.totalCompleted) * 100) 
+      : 0;
+
+    return { staffMetrics, teamTotals };
+  }
+
+  // Enhanced Weekly Reports - Errors per person and team
+  async getErrorsReport(options: { weeks?: number; endDate?: Date } = {}): Promise<{
+    staffErrors: Array<{
+      staffId: string | null;
+      staffName: string;
+      errorCount: number;
+      resolvedCount: number;
+      unresolvedCount: number;
+    }>;
+    teamTotals: {
+      totalErrors: number;
+      resolvedCount: number;
+      unresolvedCount: number;
+    };
+  }> {
+    const weeks = options.weeks || 12;
+    const endDate = options.endDate || new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - (weeks * 7));
+
+    const result = await db.execute(sql`
+      SELECT 
+        je.assigned_to_id as staff_id,
+        COALESCE(s.name, 'Unassigned') as staff_name,
+        COUNT(je.id) as error_count,
+        COUNT(CASE WHEN je.resolved = true THEN 1 END) as resolved_count,
+        COUNT(CASE WHEN je.resolved = false THEN 1 END) as unresolved_count
+      FROM job_errors je
+      LEFT JOIN staff s ON je.assigned_to_id = s.id
+      WHERE je.reported_at >= ${startDate}
+        AND je.reported_at <= ${endDate}
+      GROUP BY je.assigned_to_id, s.name
+      ORDER BY COUNT(je.id) DESC
+    `);
+
+    const staffErrors = (result.rows as any[]).map(row => ({
+      staffId: row.staff_id,
+      staffName: row.staff_name,
+      errorCount: parseInt(row.error_count) || 0,
+      resolvedCount: parseInt(row.resolved_count) || 0,
+      unresolvedCount: parseInt(row.unresolved_count) || 0,
+    }));
+
+    const teamTotals = staffErrors.reduce(
+      (acc, staff) => ({
+        totalErrors: acc.totalErrors + staff.errorCount,
+        resolvedCount: acc.resolvedCount + staff.resolvedCount,
+        unresolvedCount: acc.unresolvedCount + staff.unresolvedCount,
+      }),
+      { totalErrors: 0, resolvedCount: 0, unresolvedCount: 0 }
+    );
+
+    return { staffErrors, teamTotals };
+  }
+
+  // Enhanced Weekly Reports - Daily production (stitches and items per employee)
+  async getDailyProductionReport(options: { weeks?: number; endDate?: Date } = {}): Promise<{
+    dailyData: Array<{
+      date: string;
+      staffId: string;
+      staffName: string;
+      totalStitches: number;
+      totalItems: number;
+      actualMinutes: number;
+      estimatedMinutes: number;
+    }>;
+    staffSummary: Array<{
+      staffId: string;
+      staffName: string;
+      avgDailyStitches: number;
+      avgDailyItems: number;
+      totalStitches: number;
+      totalItems: number;
+      totalActualMinutes: number;
+      totalEstimatedMinutes: number;
+      accuracyPercentage: number;
+    }>;
+  }> {
+    const weeks = options.weeks || 12;
+    const endDate = options.endDate || new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - (weeks * 7));
+
+    // Daily breakdown
+    const dailyResult = await db.execute(sql`
+      SELECT 
+        DATE(jli.completed_at) as completion_date,
+        jli.completed_by_id as staff_id,
+        s.name as staff_name,
+        COALESCE(SUM(jli.quantity * COALESCE(jli.stitch_count, 0)), 0) as total_stitches,
+        COALESCE(SUM(jli.quantity), 0) as total_items,
+        COALESCE(SUM(jli.actual_production_time_minutes), 0) as actual_minutes,
+        COALESCE(SUM(CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60)), 0) as estimated_minutes
+      FROM job_line_items jli
+      INNER JOIN staff s ON jli.completed_by_id = s.id
+      WHERE jli.completed = true
+        AND jli.completed_at >= ${startDate}
+        AND jli.completed_at <= ${endDate}
+        AND jli.completed_by_id IS NOT NULL
+      GROUP BY DATE(jli.completed_at), jli.completed_by_id, s.name
+      ORDER BY DATE(jli.completed_at) DESC, s.name
+    `);
+
+    const dailyData = (dailyResult.rows as any[]).map(row => ({
+      date: row.completion_date,
+      staffId: row.staff_id,
+      staffName: row.staff_name,
+      totalStitches: parseInt(row.total_stitches) || 0,
+      totalItems: parseInt(row.total_items) || 0,
+      actualMinutes: parseInt(row.actual_minutes) || 0,
+      estimatedMinutes: parseInt(row.estimated_minutes) || 0,
+    }));
+
+    // Staff summary with averages
+    const summaryResult = await db.execute(sql`
+      WITH daily_totals AS (
+        SELECT 
+          jli.completed_by_id as staff_id,
+          s.name as staff_name,
+          DATE(jli.completed_at) as work_date,
+          COALESCE(SUM(jli.quantity * COALESCE(jli.stitch_count, 0)), 0) as daily_stitches,
+          COALESCE(SUM(jli.quantity), 0) as daily_items,
+          COALESCE(SUM(jli.actual_production_time_minutes), 0) as daily_actual,
+          COALESCE(SUM(CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60)), 0) as daily_estimated
+        FROM job_line_items jli
+        INNER JOIN staff s ON jli.completed_by_id = s.id
+        WHERE jli.completed = true
+          AND jli.completed_at >= ${startDate}
+          AND jli.completed_at <= ${endDate}
+          AND jli.completed_by_id IS NOT NULL
+        GROUP BY jli.completed_by_id, s.name, DATE(jli.completed_at)
+      )
+      SELECT 
+        staff_id,
+        staff_name,
+        ROUND(AVG(daily_stitches)) as avg_daily_stitches,
+        ROUND(AVG(daily_items)) as avg_daily_items,
+        SUM(daily_stitches) as total_stitches,
+        SUM(daily_items) as total_items,
+        SUM(daily_actual) as total_actual_minutes,
+        SUM(daily_estimated) as total_estimated_minutes,
+        COUNT(DISTINCT work_date) as days_worked
+      FROM daily_totals
+      GROUP BY staff_id, staff_name
+      ORDER BY SUM(daily_stitches) DESC
+    `);
+
+    const staffSummary = (summaryResult.rows as any[]).map(row => ({
+      staffId: row.staff_id,
+      staffName: row.staff_name,
+      avgDailyStitches: parseInt(row.avg_daily_stitches) || 0,
+      avgDailyItems: parseInt(row.avg_daily_items) || 0,
+      totalStitches: parseInt(row.total_stitches) || 0,
+      totalItems: parseInt(row.total_items) || 0,
+      totalActualMinutes: parseInt(row.total_actual_minutes) || 0,
+      totalEstimatedMinutes: parseInt(row.total_estimated_minutes) || 0,
+      accuracyPercentage: parseInt(row.total_estimated_minutes) > 0
+        ? Math.round((parseInt(row.total_actual_minutes) / parseInt(row.total_estimated_minutes)) * 100)
+        : 0,
+    }));
+
+    return { dailyData, staffSummary };
+  }
 }
 
 export const storage = new DatabaseStorage();
