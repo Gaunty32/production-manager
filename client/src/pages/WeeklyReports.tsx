@@ -68,9 +68,13 @@ interface DailyProductionData {
 const CHART_COLORS = ['hsl(var(--primary))', 'hsl(142.1 76.2% 36.3%)', 'hsl(47.9 95.8% 53.1%)', 'hsl(262.1 83.3% 57.8%)', 'hsl(12.6 83.7% 53.9%)'];
 
 export default function WeeklyReports() {
+  console.log('[WeeklyReports] Component rendering');
+  
   const { data: performanceData, isLoading: isLoadingPerformance, error: performanceError } = useQuery<StaffPerformanceData>({
     queryKey: ['/api/reports/staff-performance'],
   });
+  
+  console.log('[WeeklyReports] Performance data:', { performanceData, isLoadingPerformance, error: performanceError });
 
   const { data: errorsData, isLoading: isLoadingErrors, error: errorsError } = useQuery<ErrorsReportData>({
     queryKey: ['/api/reports/errors'],
@@ -132,25 +136,31 @@ export default function WeeklyReports() {
     : [];
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="container mx-auto p-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Weekly Performance Report</h1>
-          <p className="text-muted-foreground text-sm">Last 12 weeks performance metrics</p>
-        </div>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4" data-testid="text-page-title">Weekly Performance Report</h1>
+      <p className="text-muted-foreground text-sm mb-6">Last 12 weeks performance metrics</p>
+      
+      {/* Debug info */}
+      <div className="mb-4 p-4 bg-muted rounded text-sm">
+        <p>Loading: {isLoading ? 'Yes' : 'No'}</p>
+        <p>Has Error: {hasError ? 'Yes' : 'No'}</p>
+        <p>Performance Data: {performanceData ? 'Loaded' : 'Not loaded'}</p>
+        <p>Errors Data: {errorsData ? 'Loaded' : 'Not loaded'}</p>
+        <p>Production Data: {productionData ? 'Loaded' : 'Not loaded'}</p>
+      </div>
 
-        {hasError && (
-          <Card className="border-destructive">
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-2 text-destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <span>Failed to load report data. Please refresh the page or try again later.</span>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+      {hasError && (
+        <Card className="border-destructive mb-6">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <span>Failed to load report data. Please refresh the page or try again later.</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Summary Cards */}
+      {/* Summary Cards */}
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           {/* On-Time Delivery */}
           <Card>
@@ -596,7 +606,6 @@ export default function WeeklyReports() {
             </div>
           </TabsContent>
         </Tabs>
-      </div>
     </div>
   );
 }
