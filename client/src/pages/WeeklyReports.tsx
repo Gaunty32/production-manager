@@ -62,6 +62,35 @@ interface DailyProductionData {
   }>;
 }
 
+interface WeeklyProductionData {
+  weeklyData: Array<{
+    weekNumber: number;
+    weekStart: string;
+    weekEnd: string;
+    staffId: string;
+    staffName: string;
+    avgDailyStitches: number;
+    avgDailyItems: number;
+    totalStitches: number;
+    totalItems: number;
+    totalActualMinutes: number;
+    totalEstimatedMinutes: number;
+    efficiencyScore: number;
+    daysWorked: number;
+  }>;
+  staffTotals: Array<{
+    staffId: string;
+    staffName: string;
+    avgDailyStitches: number;
+    avgDailyItems: number;
+    totalStitches: number;
+    totalItems: number;
+    totalActualMinutes: number;
+    totalEstimatedMinutes: number;
+    efficiencyScore: number;
+  }>;
+}
+
 function formatMinutes(minutes: number): string {
   if (minutes <= 0) return "0m";
   const hours = Math.floor(minutes / 60);
@@ -85,8 +114,12 @@ export default function WeeklyReports() {
     queryKey: ['/api/reports/daily-production'],
   });
 
-  const isLoading = isLoadingPerformance || isLoadingErrors || isLoadingProduction;
-  const hasError = performanceError || errorsError || productionError;
+  const { data: weeklyProductionData, isLoading: isLoadingWeekly, error: weeklyError } = useQuery<WeeklyProductionData>({
+    queryKey: ['/api/reports/weekly-production'],
+  });
+
+  const isLoading = isLoadingPerformance || isLoadingErrors || isLoadingProduction || isLoadingWeekly;
+  const hasError = performanceError || errorsError || productionError || weeklyError;
 
   const formatNumber = (value: number) => value.toLocaleString();
 
@@ -352,12 +385,13 @@ export default function WeeklyReports() {
         </TabsContent>
 
         <TabsContent value="production" className="space-y-4">
+          {/* Staff Totals Summary */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Staff Production Summary</CardTitle>
+              <CardTitle className="text-base">Staff Production Summary (All Weeks)</CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoadingProduction ? (
+              {isLoadingWeekly ? (
                 <Skeleton className="h-[200px] w-full" />
               ) : (
                 <Table>
@@ -370,13 +404,13 @@ export default function WeeklyReports() {
                       <TableHead className="text-right">Total Items</TableHead>
                       <TableHead className="text-right">Actual Time</TableHead>
                       <TableHead className="text-right">Est. Time</TableHead>
-                      <TableHead className="text-right">Accuracy</TableHead>
+                      <TableHead className="text-right">Efficiency</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {productionData?.staffSummary?.length ? (
-                      productionData.staffSummary.map((staff, index) => (
-                        <TableRow key={staff.staffId} data-testid={`row-staff-production-${index}`}>
+                    {weeklyProductionData?.staffTotals?.length ? (
+                      weeklyProductionData.staffTotals.map((staff, index) => (
+                        <TableRow key={staff.staffId} data-testid={`row-staff-total-${index}`}>
                           <TableCell className="font-medium">{staff.staffName}</TableCell>
                           <TableCell className="text-right">{formatNumber(staff.avgDailyStitches)}</TableCell>
                           <TableCell className="text-right">{formatNumber(staff.avgDailyItems)}</TableCell>
@@ -386,12 +420,12 @@ export default function WeeklyReports() {
                           <TableCell className="text-right">{formatMinutes(staff.totalEstimatedMinutes)}</TableCell>
                           <TableCell className="text-right">
                             <span className={
-                              staff.accuracyPercentage === 0 ? 'text-muted-foreground' :
-                              staff.accuracyPercentage >= 90 && staff.accuracyPercentage <= 110 ? 'text-green-600 dark:text-green-400' :
-                              staff.accuracyPercentage < 80 || staff.accuracyPercentage > 120 ? 'text-red-600 dark:text-red-400' :
-                              'text-amber-600 dark:text-amber-400'
+                              staff.efficiencyScore === 0 ? 'text-muted-foreground' :
+                              staff.efficiencyScore >= 0.9 && staff.efficiencyScore <= 1.2 ? 'text-green-600 dark:text-green-400 font-semibold' :
+                              staff.efficiencyScore > 2 ? 'text-red-600 dark:text-red-400 font-semibold' :
+                              'text-amber-600 dark:text-amber-400 font-semibold'
                             }>
-                              {staff.accuracyPercentage > 0 ? `${staff.accuracyPercentage}%` : 'N/A'}
+                              {staff.efficiencyScore > 0 ? staff.efficiencyScore.toFixed(2) : 'N/A'}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -409,12 +443,79 @@ export default function WeeklyReports() {
             </CardContent>
           </Card>
 
+          {/* Weekly Breakdown by Staff */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Weekly Production Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingWeekly ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Week</TableHead>
+                        <TableHead>Staff Member</TableHead>
+                        <TableHead className="text-right">Avg Daily Stitches</TableHead>
+                        <TableHead className="text-right">Avg Daily Items</TableHead>
+                        <TableHead className="text-right">Total Stitches</TableHead>
+                        <TableHead className="text-right">Total Items</TableHead>
+                        <TableHead className="text-right">Actual Time</TableHead>
+                        <TableHead className="text-right">Est. Time</TableHead>
+                        <TableHead className="text-right">Efficiency</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {weeklyProductionData?.weeklyData?.length ? (
+                        weeklyProductionData.weeklyData.map((row, index) => (
+                          <TableRow key={`${row.weekNumber}-${row.staffId}`} data-testid={`row-weekly-production-${index}`}>
+                            <TableCell className="font-medium whitespace-nowrap">
+                              Week {row.weekNumber}
+                              <span className="text-xs text-muted-foreground block">
+                                {new Date(row.weekStart).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                              </span>
+                            </TableCell>
+                            <TableCell>{row.staffName}</TableCell>
+                            <TableCell className="text-right">{formatNumber(row.avgDailyStitches)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(row.avgDailyItems)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(row.totalStitches)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(row.totalItems)}</TableCell>
+                            <TableCell className="text-right">{formatMinutes(row.totalActualMinutes)}</TableCell>
+                            <TableCell className="text-right">{formatMinutes(row.totalEstimatedMinutes)}</TableCell>
+                            <TableCell className="text-right">
+                              <span className={
+                                row.efficiencyScore === 0 ? 'text-muted-foreground' :
+                                row.efficiencyScore >= 0.9 && row.efficiencyScore <= 1.2 ? 'text-green-600 dark:text-green-400 font-semibold' :
+                                row.efficiencyScore > 2 ? 'text-red-600 dark:text-red-400 font-semibold' :
+                                'text-amber-600 dark:text-amber-400 font-semibold'
+                              }>
+                                {row.efficiencyScore > 0 ? row.efficiencyScore.toFixed(2) : 'N/A'}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                            No weekly production data available
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">
-              <strong>Accuracy Guide:</strong>{" "}
-              <span className="text-green-600 dark:text-green-400">Green (90-110%)</span> = Excellent,{" "}
-              <span className="text-amber-600 dark:text-amber-400">Yellow (80-90% or 110-120%)</span> = Acceptable,{" "}
-              <span className="text-red-600 dark:text-red-400">Red (&lt;80% or &gt;120%)</span> = Needs review
+              <strong>Efficiency Score Guide:</strong> Actual Time / Estimated Time ratio.{" "}
+              <span className="text-green-600 dark:text-green-400 font-semibold">0.9 - 1.2</span> = On target (excellent),{" "}
+              <span className="text-amber-600 dark:text-amber-400 font-semibold">1.2 - 2.0</span> = Slower than expected,{" "}
+              <span className="text-red-600 dark:text-red-400 font-semibold">&gt;2.0</span> = Needs attention (took 2x+ longer)
             </p>
           </div>
         </TabsContent>

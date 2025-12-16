@@ -2012,6 +2012,175 @@ export class DatabaseStorage implements IStorage {
 
     return { dailyData, staffSummary };
   }
+
+  // Weekly production breakdown by staff with efficiency score
+  async getWeeklyProductionByStaff(options: { weeks?: number; endDate?: Date } = {}): Promise<{
+    weeklyData: Array<{
+      weekNumber: number;
+      weekStart: string;
+      weekEnd: string;
+      staffId: string;
+      staffName: string;
+      avgDailyStitches: number;
+      avgDailyItems: number;
+      totalStitches: number;
+      totalItems: number;
+      totalActualMinutes: number;
+      totalEstimatedMinutes: number;
+      efficiencyScore: number; // actual/estimated ratio - 1 is perfect, 2 means took twice as long
+      daysWorked: number;
+    }>;
+    staffTotals: Array<{
+      staffId: string;
+      staffName: string;
+      avgDailyStitches: number;
+      avgDailyItems: number;
+      totalStitches: number;
+      totalItems: number;
+      totalActualMinutes: number;
+      totalEstimatedMinutes: number;
+      efficiencyScore: number;
+    }>;
+  }> {
+    const numWeeks = options.weeks || 12;
+    const endDate = options.endDate || new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - (numWeeks * 7));
+
+    // Weekly breakdown per staff member
+    const weeklyResult = await db.execute(sql`
+      WITH week_data AS (
+        SELECT 
+          jli.completed_by_id as staff_id,
+          s.name as staff_name,
+          DATE(jli.completed_at) as work_date,
+          DATE_TRUNC('week', jli.completed_at) as week_start,
+          jli.quantity * COALESCE(jli.stitch_count, 0) as stitches,
+          jli.quantity as items,
+          COALESCE(jli.actual_production_time_minutes, 0) as actual_minutes,
+          CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60) as estimated_minutes
+        FROM job_line_items jli
+        INNER JOIN staff s ON jli.completed_by_id = s.id
+        WHERE jli.completed = true
+          AND jli.completed_at >= ${startDate}
+          AND jli.completed_at <= ${endDate}
+          AND jli.completed_by_id IS NOT NULL
+      ),
+      daily_totals AS (
+        SELECT 
+          staff_id,
+          staff_name,
+          work_date,
+          week_start,
+          SUM(stitches) as daily_stitches,
+          SUM(items) as daily_items,
+          SUM(actual_minutes) as daily_actual,
+          SUM(estimated_minutes) as daily_estimated
+        FROM week_data
+        GROUP BY staff_id, staff_name, work_date, week_start
+      )
+      SELECT 
+        staff_id,
+        staff_name,
+        week_start,
+        week_start + INTERVAL '6 days' as week_end,
+        ROUND(AVG(daily_stitches)) as avg_daily_stitches,
+        ROUND(AVG(daily_items)) as avg_daily_items,
+        SUM(daily_stitches) as total_stitches,
+        SUM(daily_items) as total_items,
+        SUM(daily_actual) as total_actual_minutes,
+        SUM(daily_estimated) as total_estimated_minutes,
+        COUNT(DISTINCT work_date) as days_worked
+      FROM daily_totals
+      GROUP BY staff_id, staff_name, week_start
+      ORDER BY week_start DESC, staff_name
+    `);
+
+    // Calculate week numbers and format data
+    const weeklyData = (weeklyResult.rows as any[]).map((row, index, arr) => {
+      const totalEstimated = parseInt(row.total_estimated_minutes) || 0;
+      const totalActual = parseInt(row.total_actual_minutes) || 0;
+      const efficiencyScore = totalEstimated > 0 
+        ? Math.round((totalActual / totalEstimated) * 100) / 100
+        : 0;
+
+      // Calculate week number relative to the current week
+      const weekStart = new Date(row.week_start);
+      const weeksDiff = Math.floor((endDate.getTime() - weekStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+      const weekNumber = weeksDiff + 1;
+
+      return {
+        weekNumber,
+        weekStart: row.week_start,
+        weekEnd: row.week_end,
+        staffId: row.staff_id,
+        staffName: row.staff_name,
+        avgDailyStitches: parseInt(row.avg_daily_stitches) || 0,
+        avgDailyItems: parseInt(row.avg_daily_items) || 0,
+        totalStitches: parseInt(row.total_stitches) || 0,
+        totalItems: parseInt(row.total_items) || 0,
+        totalActualMinutes: parseInt(row.total_actual_minutes) || 0,
+        totalEstimatedMinutes: parseInt(row.total_estimated_minutes) || 0,
+        efficiencyScore,
+        daysWorked: parseInt(row.days_worked) || 0,
+      };
+    });
+
+    // Staff totals across all weeks
+    const staffTotalsResult = await db.execute(sql`
+      WITH daily_totals AS (
+        SELECT 
+          jli.completed_by_id as staff_id,
+          s.name as staff_name,
+          DATE(jli.completed_at) as work_date,
+          SUM(jli.quantity * COALESCE(jli.stitch_count, 0)) as daily_stitches,
+          SUM(jli.quantity) as daily_items,
+          SUM(COALESCE(jli.actual_production_time_minutes, 0)) as daily_actual,
+          SUM(CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60)) as daily_estimated
+        FROM job_line_items jli
+        INNER JOIN staff s ON jli.completed_by_id = s.id
+        WHERE jli.completed = true
+          AND jli.completed_at >= ${startDate}
+          AND jli.completed_at <= ${endDate}
+          AND jli.completed_by_id IS NOT NULL
+        GROUP BY jli.completed_by_id, s.name, DATE(jli.completed_at)
+      )
+      SELECT 
+        staff_id,
+        staff_name,
+        ROUND(AVG(daily_stitches)) as avg_daily_stitches,
+        ROUND(AVG(daily_items)) as avg_daily_items,
+        SUM(daily_stitches) as total_stitches,
+        SUM(daily_items) as total_items,
+        SUM(daily_actual) as total_actual_minutes,
+        SUM(daily_estimated) as total_estimated_minutes
+      FROM daily_totals
+      GROUP BY staff_id, staff_name
+      ORDER BY SUM(daily_stitches) DESC
+    `);
+
+    const staffTotals = (staffTotalsResult.rows as any[]).map(row => {
+      const totalEstimated = parseInt(row.total_estimated_minutes) || 0;
+      const totalActual = parseInt(row.total_actual_minutes) || 0;
+      const efficiencyScore = totalEstimated > 0 
+        ? Math.round((totalActual / totalEstimated) * 100) / 100
+        : 0;
+
+      return {
+        staffId: row.staff_id,
+        staffName: row.staff_name,
+        avgDailyStitches: parseInt(row.avg_daily_stitches) || 0,
+        avgDailyItems: parseInt(row.avg_daily_items) || 0,
+        totalStitches: parseInt(row.total_stitches) || 0,
+        totalItems: parseInt(row.total_items) || 0,
+        totalActualMinutes: parseInt(row.total_actual_minutes) || 0,
+        totalEstimatedMinutes: parseInt(row.total_estimated_minutes) || 0,
+        efficiencyScore,
+      };
+    });
+
+    return { weeklyData, staffTotals };
+  }
 }
 
 export const storage = new DatabaseStorage();
