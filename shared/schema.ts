@@ -138,6 +138,19 @@ export const jobLineItems = pgTable("job_line_items", {
   actualProductionTimeMinutes: integer("actual_production_time_minutes"),
 });
 
+// Production entries for tracking partial daily work on line items
+export const productionEntries = pgTable("production_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  lineItemId: varchar("line_item_id").notNull().references(() => jobLineItems.id, { onDelete: "cascade" }),
+  staffId: varchar("staff_id").notNull().references(() => staff.id),
+  machineId: integer("machine_id"),
+  workDate: timestamp("work_date").notNull(), // The date the work was performed
+  quantityCompleted: integer("quantity_completed").notNull(), // Items completed in this session
+  productionTimeMinutes: integer("production_time_minutes").notNull(), // Time spent in this session
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const staffMachineAllocations = pgTable("staff_machine_allocations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   staffId: varchar("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
@@ -629,6 +642,28 @@ export type JobLineItem = typeof jobLineItems.$inferSelect;
 export type JobWithLineItems = Job & {
   lineItems: JobLineItem[];
 };
+
+// Production entries schemas and types
+export const insertProductionEntrySchema = createInsertSchema(productionEntries).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  workDate: z.string(), // Accept ISO date string
+  quantityCompleted: z.coerce.number().int().min(1),
+  productionTimeMinutes: z.coerce.number().int().min(1),
+  machineId: z.preprocess(
+    (val) => {
+      if (val === null || val === undefined || val === "") return null;
+      if (typeof val === "string") return parseInt(val, 10);
+      return val;
+    },
+    z.union([z.number().int().min(1).max(5), z.null()]).optional()
+  ),
+  notes: z.string().nullable().optional(),
+});
+
+export type InsertProductionEntry = z.infer<typeof insertProductionEntrySchema>;
+export type ProductionEntry = typeof productionEntries.$inferSelect;
 
 export const insertStaffMachineAllocationSchema = createInsertSchema(staffMachineAllocations).omit({
   id: true,
