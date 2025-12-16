@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, Package, Coins, ArrowUpDown, Printer } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, Package, Coins, ArrowUpDown, Printer, Truck } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1181,98 +1181,91 @@ export default function Dashboard() {
         {/* Completed Orders Section - shown when viewMode is 'completed' */}
         {viewMode === 'completed' && (
           <div className="mb-6" data-testid="section-completed-orders">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <h2 className="text-xl font-semibold text-foreground">
+                <h2 className="text-lg font-semibold text-foreground">
                   Completed Orders
                 </h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Showing {filteredCompletedJobs.length} of {allCompletedJobs.length} orders (includes draft invoices)
+                <p className="text-xs text-muted-foreground">
+                  {filteredCompletedJobs.length} of {allCompletedJobs.length} orders
                 </p>
               </div>
             </div>
             <div className="border rounded-md">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
+              <Table className="text-sm">
+                <TableHeader>
+                  <TableRow className="h-8">
+                    <TableHead className="py-1 px-2">Customer</TableHead>
+                    <TableHead className="py-1 px-2 w-[60px]">Job #</TableHead>
+                    <TableHead className="py-1 px-2">Job Name</TableHead>
+                    <TableHead className="py-1 px-2 w-[50px] text-right">Qty</TableHead>
+                    <TableHead className="py-1 px-2 w-[80px]">Dispatched</TableHead>
+                    <TableHead className="py-1 px-2 w-[100px]">Tracking</TableHead>
+                    <TableHead className="py-1 px-2 w-[70px]">Errors</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCompletedJobs.length === 0 ? (
                     <TableRow>
-                      <TableHead className="w-[40px]"></TableHead>
-                      <TableHead className="w-[180px]">Customer</TableHead>
-                      <TableHead className="w-[100px]">Job #</TableHead>
-                      <TableHead>Job Name / Item Description</TableHead>
-                      <TableHead className="w-[80px] text-right">Qty</TableHead>
-                      <TableHead className="w-[120px]">Machine</TableHead>
-                      <TableHead className="w-[100px]">Date Required</TableHead>
-                      <TableHead className="w-[100px]">Status</TableHead>
-                      <TableHead className="w-[80px]">Tracking</TableHead>
-                      <TableHead className="w-[80px]">Errors</TableHead>
+                      <TableCell colSpan={7} className="text-center py-4 text-muted-foreground text-sm">
+                        {searchTerm ? `No completed orders match "${searchTerm}"` : "No completed orders yet"}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredCompletedJobs.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                          {searchTerm ? `No completed orders match "${searchTerm}"` : "No completed orders yet"}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredCompletedJobs.flatMap((job) => {
-                        const customer = customers.find(c => c.id === job.customerId);
-                        const allLogosApproved = job.lineItems.every(li => li.logoApproved);
-                        
-                        return job.lineItems.map((lineItem, index) => (
-                          <LineItemRow
-                            key={lineItem.id}
-                            jobId={job.id}
-                            jobNumber={job.jobNumber}
-                            customerId={job.customerId}
-                            customerName={job.customerName}
-                            jobName={job.jobName}
-                            poNumber={job.poNumber}
-                            totalJobQuantity={job.quantity}
-                            lineItemCount={job.lineItems!.length}
-                            lineItemIndex={index}
-                            lineItem={lineItem}
-                            goodsReceived={job.goodsReceived ? new Date(job.goodsReceived) : null}
-                            requiredDispatchDate={job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null}
-                            completedOnTime={job.completedOnTime}
-                            notes={job.notes}
-                            allLogosApproved={allLogosApproved}
-                            customer={customer}
-                            showPrices={canViewPrices(currentUser?.role)}
-                            isSelected={false}
-                            onToggleSelect={() => {}}
-                            onEdit={handleEdit}
-                            onDelete={() => {}}
-                            onPrintWorksheet={(jobId) => {
-                              const fullJob = jobs.find(j => j.id === jobId);
-                              if (fullJob) {
-                                setWorksheetJob(fullJob);
-                              }
-                            }}
-                            isCompleted={true}
-                            onEditTracking={(jobId) => {
-                              const fullJob = jobs.find(j => j.id === jobId);
-                              if (fullJob) {
-                                setEditingTrackingJob(fullJob);
-                              }
-                            }}
-                            dhlTrackingNumber={job.dhlTrackingNumber}
-                            errorsSlot={
-                              <JobErrorsDialog
-                                jobId={job.id}
-                                jobName={job.jobName}
-                                users={users}
-                                staff={staff}
-                              />
-                            }
-                          />
-                        ));
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                  ) : (
+                    filteredCompletedJobs.map((job) => {
+                      const totalQty = job.lineItems?.reduce((sum, li) => sum + li.quantity, 0) || job.quantity;
+                      
+                      return (
+                        <TableRow 
+                          key={job.id} 
+                          className="h-8 hover-elevate"
+                          data-testid={`row-completed-job-${job.id}`}
+                        >
+                          <TableCell className="py-1 px-2 font-medium truncate max-w-[150px]">
+                            {job.customerName}
+                          </TableCell>
+                          <TableCell className="py-1 px-2 text-muted-foreground">
+                            #{job.jobNumber}
+                          </TableCell>
+                          <TableCell className="py-1 px-2 truncate max-w-[200px]">
+                            {job.jobName}
+                            {job.poNumber && <span className="text-muted-foreground ml-1">({job.poNumber})</span>}
+                          </TableCell>
+                          <TableCell className="py-1 px-2 text-right">{totalQty}</TableCell>
+                          <TableCell className="py-1 px-2 text-xs text-muted-foreground">
+                            {job.goodsReceived ? format(new Date(job.goodsReceived), 'dd MMM') : '-'}
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-xs px-2"
+                              onClick={() => {
+                                const fullJob = jobs.find(j => j.id === job.id);
+                                if (fullJob) {
+                                  setEditingTrackingJob(fullJob);
+                                }
+                              }}
+                              data-testid={`button-edit-tracking-${job.id}`}
+                            >
+                              <Truck className="h-3 w-3 mr-1" />
+                              {job.dhlTrackingNumber ? job.dhlTrackingNumber.slice(-6) : "Add"}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <JobErrorsDialog
+                              jobId={job.id}
+                              jobName={job.jobName}
+                              users={users}
+                              staff={staff}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </div>
         )}
