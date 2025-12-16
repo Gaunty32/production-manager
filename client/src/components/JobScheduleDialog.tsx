@@ -37,7 +37,26 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { insertJobScheduleSchema, type JobWithLineItems, type Staff, type JobLineItem } from "@shared/schema";
 import { MACHINE_NAMES, suggestMachine } from "@shared/machines";
-import { Plus, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Loader2, AlertCircle, Zap, CheckCircle2 } from "lucide-react";
+import { formatTimeDisplay } from "@shared/machines";
+
+interface MachineSuggestion {
+  machineId: number;
+  machineName: string;
+  heads: number;
+  estimatedDuration: number;
+  estimatedRuns: number;
+  earliestDate: string;
+  startTime: number;
+  endTime: number;
+  startTimeFormatted: string;
+  endTimeFormatted: string;
+  staffId: string;
+  staffName: string;
+  canMeetDeadline: boolean;
+  daysUntilAvailable: number;
+  score: number;
+}
 
 // Helper to format minutes to HH:MM
 const formatTime = (minutes: number) => {
@@ -129,6 +148,23 @@ export function JobScheduleDialog({
   const lineItems = selectedJob?.lineItems || [];
   const selectedLineItem = lineItems.find(item => item.id === selectedLineItemId);
 
+  // Fetch machine suggestions when line item is selected
+  const { data: machineSuggestionsData, isLoading: isLoadingSuggestions } = useQuery({
+    queryKey: ["/api/scheduling/machine-suggestions", selectedLineItemId],
+    enabled: !!selectedLineItemId,
+    queryFn: async () => {
+      const params = new URLSearchParams({ lineItemId: selectedLineItemId! });
+      const response = await fetch(`/api/scheduling/machine-suggestions?${params}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch suggestions');
+      }
+      return response.json();
+    },
+  });
+
+  const machineSuggestions: MachineSuggestion[] = machineSuggestionsData?.suggestions || [];
+
   // Auto-suggest machine based on line item assignment or quantity/stitch count
   useEffect(() => {
     if (selectedLineItem && !preselectedMachineId) {
@@ -144,6 +180,16 @@ export function JobScheduleDialog({
       }
     }
   }, [selectedLineItemId, selectedLineItem, preselectedMachineId, form]);
+
+  // Apply a machine suggestion to the form
+  const applySuggestion = (suggestion: MachineSuggestion) => {
+    form.setValue("machineId", suggestion.machineId);
+    form.setValue("staffId", suggestion.staffId);
+    form.setValue("scheduledDate", suggestion.earliestDate);
+    form.setValue("startTime", suggestion.startTime);
+    form.setValue("endTime", suggestion.endTime);
+    setUseManualTime(true); // Use these specific times, skip slot fetch
+  };
 
   // Fetch available slots when all parameters are ready AND not in manual mode
   const shouldFetchSlots = !useManualTime && selectedLineItemId && selectedMachineId && selectedStaffId && selectedDate;
@@ -286,12 +332,9 @@ export function JobScheduleDialog({
                     </Select>
                     {selectedLineItem && (
                       <FormDescription>
-                        <div className="flex gap-2 mt-2">
+                        <div className="flex gap-2 mt-2 flex-wrap">
                           <Badge variant="secondary">{selectedLineItem.quantity} units</Badge>
                           <Badge variant="secondary">{selectedLineItem.stitchCount} stitches</Badge>
-                          {selectedLineItem.quantity && selectedLineItem.jobType && suggestMachine(selectedLineItem.quantity, selectedLineItem.jobType, selectedLineItem.stitchCount) && (
-                            <Badge variant="outline">Suggested: {MACHINE_NAMES[suggestMachine(selectedLineItem.quantity, selectedLineItem.jobType, selectedLineItem.stitchCount)!]}</Badge>
-                          )}
                         </div>
                       </FormDescription>
                     )}
@@ -299,6 +342,60 @@ export function JobScheduleDialog({
                   </FormItem>
                 )}
               />
+            )}
+
+            {/* Machine Suggestions - Quick Schedule Options */}
+            {selectedLineItemId && (
+              <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Zap className="h-4 w-4 text-primary" />
+                  <span>Quick Schedule - Suggested Machines</span>
+                </div>
+                {isLoadingSuggestions ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Finding best available machines...</span>
+                  </div>
+                ) : machineSuggestions.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-2">
+                    No suggestions available. Use manual selection below.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {machineSuggestions.slice(0, 5).map((suggestion) => (
+                      <Button
+                        key={suggestion.machineId}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start h-auto py-2 px-3"
+                        onClick={() => applySuggestion(suggestion)}
+                        data-testid={`button-suggestion-${suggestion.machineId}`}
+                      >
+                        <div className="flex flex-col items-start gap-1 w-full">
+                          <div className="flex items-center justify-between w-full gap-2">
+                            <span className="font-medium">{suggestion.machineName}</span>
+                            {suggestion.canMeetDeadline ? (
+                              <Badge variant="default" className="text-xs">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                On Time
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive" className="text-xs">Late</Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(suggestion.earliestDate).toLocaleDateString()} at {suggestion.startTimeFormatted} - {suggestion.endTimeFormatted}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {suggestion.staffName} • {formatTimeDisplay(suggestion.estimatedDuration)} • {suggestion.estimatedRuns} runs
+                          </div>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             <FormField
