@@ -13,18 +13,26 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, Plus, Check, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Check, Trash2, User } from "lucide-react";
 import { format } from "date-fns";
-import type { User } from "@shared/schema";
+import type { User as UserType, Staff } from "@shared/schema";
 
 interface JobError {
   id: string;
   jobId: string;
-  description: string;
+  errorDescription: string;
   resolved: boolean;
   reportedById: string;
   resolvedById: string | null;
+  assignedToId: string | null;
   reportedAt: Date | string;
   resolvedAt: Date | string | null;
 }
@@ -33,12 +41,14 @@ interface JobErrorsDialogProps {
   jobId: string;
   jobName: string;
   trigger?: React.ReactNode;
-  users?: User[];
+  users?: UserType[];
+  staff?: Staff[];
 }
 
-export function JobErrorsDialog({ jobId, jobName, trigger, users = [] }: JobErrorsDialogProps) {
+export function JobErrorsDialog({ jobId, jobName, trigger, users = [], staff = [] }: JobErrorsDialogProps) {
   const [open, setOpen] = useState(false);
   const [newErrorDescription, setNewErrorDescription] = useState("");
+  const [assignedToId, setAssignedToId] = useState<string>("");
   const [showAddForm, setShowAddForm] = useState(false);
   const { toast } = useToast();
 
@@ -49,13 +59,17 @@ export function JobErrorsDialog({ jobId, jobName, trigger, users = [] }: JobErro
   });
 
   const createErrorMutation = useMutation({
-    mutationFn: async (description: string) => {
-      return await apiRequest('POST', `/api/jobs/${jobId}/errors`, { description });
+    mutationFn: async (data: { description: string; assignedToId: string | null }) => {
+      return await apiRequest('POST', `/api/jobs/${jobId}/errors`, { 
+        errorDescription: data.description,
+        assignedToId: data.assignedToId 
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'errors'] });
       queryClient.invalidateQueries({ queryKey: ['/api/job-errors/unresolved'] });
       setNewErrorDescription("");
+      setAssignedToId("");
       setShowAddForm(false);
       toast({
         title: "Error Reported",
@@ -118,9 +132,18 @@ export function JobErrorsDialog({ jobId, jobName, trigger, users = [] }: JobErro
     return user ? `${user.firstName} ${user.lastName}` : "Unknown";
   };
 
+  const getStaffName = (staffId: string | null) => {
+    if (!staffId) return null;
+    const staffMember = staff.find(s => s.id === staffId);
+    return staffMember ? staffMember.name : "Unknown";
+  };
+
   const handleSubmitError = () => {
     if (!newErrorDescription.trim()) return;
-    createErrorMutation.mutate(newErrorDescription);
+    createErrorMutation.mutate({
+      description: newErrorDescription,
+      assignedToId: assignedToId || null,
+    });
   };
 
   const unresolvedCount = errors.filter(e => !e.resolved).length;
@@ -169,15 +192,34 @@ export function JobErrorsDialog({ jobId, jobName, trigger, users = [] }: JobErro
             </Button>
           ) : (
             <div className="space-y-3 border rounded-md p-3 bg-muted/50">
-              <Label htmlFor="error-description">Error Description</Label>
-              <Textarea
-                id="error-description"
-                placeholder="Describe the error or issue..."
-                value={newErrorDescription}
-                onChange={(e) => setNewErrorDescription(e.target.value)}
-                className="min-h-[80px]"
-                data-testid="input-error-description"
-              />
+              <div className="space-y-2">
+                <Label htmlFor="error-description">Error Description</Label>
+                <Textarea
+                  id="error-description"
+                  placeholder="Describe the error or issue..."
+                  value={newErrorDescription}
+                  onChange={(e) => setNewErrorDescription(e.target.value)}
+                  className="min-h-[80px]"
+                  data-testid="input-error-description"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="assigned-to">Assign To (Optional)</Label>
+                <Select value={assignedToId} onValueChange={setAssignedToId}>
+                  <SelectTrigger data-testid="select-assigned-to">
+                    <SelectValue placeholder="Select staff member..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {staff.map((s) => (
+                      <SelectItem key={s.id} value={s.id} data-testid={`option-staff-${s.id}`}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex gap-2 justify-end">
                 <Button 
                   variant="ghost" 
@@ -185,6 +227,7 @@ export function JobErrorsDialog({ jobId, jobName, trigger, users = [] }: JobErro
                   onClick={() => {
                     setShowAddForm(false);
                     setNewErrorDescription("");
+                    setAssignedToId("");
                   }}
                   data-testid="button-cancel-error"
                 >
@@ -220,7 +263,17 @@ export function JobErrorsDialog({ jobId, jobName, trigger, users = [] }: JobErro
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm whitespace-pre-wrap break-words">{error.description}</p>
+                        <p className="text-sm whitespace-pre-wrap break-words">{error.errorDescription}</p>
+                        
+                        {error.assignedToId && (
+                          <div className="flex items-center gap-1 mt-2 text-xs">
+                            <User className="h-3 w-3 text-muted-foreground" />
+                            <span className="font-medium text-orange-600 dark:text-orange-400">
+                              Assigned to: {getStaffName(error.assignedToId)}
+                            </span>
+                          </div>
+                        )}
+                        
                         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
                           <span>
                             Reported by {getUserName(error.reportedById)} on {format(new Date(error.reportedAt), 'dd/MM/yyyy HH:mm')}

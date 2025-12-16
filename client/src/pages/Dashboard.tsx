@@ -1262,6 +1262,7 @@ export default function Dashboard() {
                                 jobId={job.id}
                                 jobName={job.jobName}
                                 users={users}
+                                staff={staff}
                               />
                             }
                           />

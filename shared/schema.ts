@@ -253,6 +253,7 @@ export const jobErrors = pgTable("job_errors", {
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
   errorDescription: text("error_description").notNull(),
   errorType: varchar("error_type").notNull().default("quality"), // quality, quantity, delivery, other
+  assignedToId: varchar("assigned_to_id").references(() => staff.id), // Staff member responsible for the error
   reportedById: varchar("reported_by_id").notNull().references(() => users.id),
   reportedAt: timestamp("reported_at").notNull().defaultNow(),
   resolved: boolean("resolved").notNull().default(false),
@@ -262,6 +263,7 @@ export const jobErrors = pgTable("job_errors", {
 }, (table) => [
   index("job_errors_job_id_idx").on(table.jobId),
   index("job_errors_resolved_idx").on(table.resolved),
+  index("job_errors_assigned_to_idx").on(table.assignedToId),
 ]);
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
@@ -874,6 +876,7 @@ export const updateJobErrorSchema = z.object({
   resolvedById: z.string().nullable().optional(),
   resolvedAt: z.date().nullable().optional(),
   resolutionNotes: z.string().nullable().optional(),
+  assignedToId: z.string().nullable().optional(),
 });
 export type InsertJobError = z.infer<typeof insertJobErrorSchema>;
 export type JobError = typeof jobErrors.$inferSelect;
