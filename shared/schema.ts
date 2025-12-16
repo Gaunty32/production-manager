@@ -247,6 +247,23 @@ export const jobFiles = pgTable("job_files", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Job errors - track quality issues on completed orders
+export const jobErrors = pgTable("job_errors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  errorDescription: text("error_description").notNull(),
+  errorType: varchar("error_type").notNull().default("quality"), // quality, quantity, delivery, other
+  reportedById: varchar("reported_by_id").notNull().references(() => users.id),
+  reportedAt: timestamp("reported_at").notNull().defaultNow(),
+  resolved: boolean("resolved").notNull().default(false),
+  resolvedById: varchar("resolved_by_id").references(() => users.id),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+}, (table) => [
+  index("job_errors_job_id_idx").on(table.jobId),
+  index("job_errors_resolved_idx").on(table.resolved),
+]);
+
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
 });
@@ -842,6 +859,24 @@ export const insertImpersonationSessionSchema = createInsertSchema(impersonation
 });
 export type InsertImpersonationSession = z.infer<typeof insertImpersonationSessionSchema>;
 export type ImpersonationSession = typeof impersonationSessions.$inferSelect;
+
+// Job errors schemas and types
+export const insertJobErrorSchema = createInsertSchema(jobErrors).omit({
+  id: true,
+  reportedAt: true,
+  resolved: true,
+  resolvedById: true,
+  resolvedAt: true,
+  resolutionNotes: true,
+});
+export const updateJobErrorSchema = z.object({
+  resolved: z.boolean().optional(),
+  resolvedById: z.string().nullable().optional(),
+  resolvedAt: z.date().nullable().optional(),
+  resolutionNotes: z.string().nullable().optional(),
+});
+export type InsertJobError = z.infer<typeof insertJobErrorSchema>;
+export type JobError = typeof jobErrors.$inferSelect;
 
 // Production Display types
 export interface ProductionQueueLineItem {

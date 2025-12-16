@@ -17,6 +17,7 @@ import {
   jobFiles,
   passwordResetTokens,
   impersonationSessions,
+  jobErrors,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -45,7 +46,9 @@ import {
   type JobMessage,
   type InsertJobMessage,
   type JobFile,
-  type InsertJobFile
+  type InsertJobFile,
+  type JobError,
+  type InsertJobError
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
@@ -176,6 +179,14 @@ export interface IStorage {
   createImpersonationSession(data: { token: string; staffUserId: string; customerUserId: string; expiresAt: Date }): Promise<any>;
   getImpersonationSession(token: string): Promise<any | undefined>;
   invalidateImpersonationSession(token: string): Promise<void>;
+  
+  // Job error tracking methods
+  getJobErrors(jobId: string): Promise<JobError[]>;
+  getJobError(id: string): Promise<JobError | undefined>;
+  createJobError(error: InsertJobError): Promise<JobError>;
+  updateJobError(id: string, error: Partial<JobError>): Promise<JobError>;
+  deleteJobError(id: string): Promise<void>;
+  getUnresolvedJobErrors(): Promise<JobError[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1716,6 +1727,52 @@ export class DatabaseStorage implements IStorage {
       .update(impersonationSessions)
       .set({ active: false })
       .where(eq(impersonationSessions.tokenHash, tokenHash));
+  }
+
+  // Job error tracking methods
+  async getJobErrors(jobId: string): Promise<JobError[]> {
+    return await db
+      .select()
+      .from(jobErrors)
+      .where(eq(jobErrors.jobId, jobId))
+      .orderBy(sql`${jobErrors.reportedAt} DESC`);
+  }
+
+  async getJobError(id: string): Promise<JobError | undefined> {
+    const [error] = await db
+      .select()
+      .from(jobErrors)
+      .where(eq(jobErrors.id, id));
+    return error;
+  }
+
+  async createJobError(error: InsertJobError): Promise<JobError> {
+    const [created] = await db
+      .insert(jobErrors)
+      .values(error)
+      .returning();
+    return created;
+  }
+
+  async updateJobError(id: string, error: Partial<JobError>): Promise<JobError> {
+    const [updated] = await db
+      .update(jobErrors)
+      .set(error)
+      .where(eq(jobErrors.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteJobError(id: string): Promise<void> {
+    await db.delete(jobErrors).where(eq(jobErrors.id, id));
+  }
+
+  async getUnresolvedJobErrors(): Promise<JobError[]> {
+    return await db
+      .select()
+      .from(jobErrors)
+      .where(eq(jobErrors.resolved, false))
+      .orderBy(sql`${jobErrors.reportedAt} DESC`);
   }
 }
 
