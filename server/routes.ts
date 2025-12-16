@@ -2270,11 +2270,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = insertJobErrorSchema.parse({
         ...req.body,
         jobId: req.params.jobId,
-        reportedById: req.user.id
+        reportedById: req.session.userId
       });
       const error = await storage.createJobError(data);
       res.json(error);
     } catch (error) {
+      console.error("Error creating job error:", error);
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: error.errors });
       } else {
@@ -2290,13 +2291,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If resolving, set resolved by and resolved at
       const updates: any = { ...data };
       if (data.resolved === true) {
-        updates.resolvedById = req.user.id;
+        updates.resolvedById = req.session.userId;
         updates.resolvedAt = new Date();
       }
       
       const error = await storage.updateJobError(req.params.id, updates);
       res.json(error);
     } catch (error) {
+      console.error("Error updating job error:", error);
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: error.errors });
       } else {
