@@ -178,15 +178,18 @@ export default function CustomerDashboard() {
   const filteredJobs = jobs
     .filter(job => {
       // Status filter - the API already returns only non-pending jobs
-      // "in_progress" = jobs that are NOT completed
-      // "completed" = jobs that ARE completed
-      // "all" = all jobs
+      // A job is considered "completed" if either:
+      // - job.completed is true, OR
+      // - invoiceStatus is 'ready' or 'invoiced' (meaning it's been processed for invoicing)
+      // This ensures customer portal matches what staff see in "Completed Orders"
+      const isJobCompleted = job.completed || job.invoiceStatus === 'ready' || job.invoiceStatus === 'invoiced';
+      
       if (statusFilter === "in_progress") {
         // Show jobs that are not yet completed
-        if (job.completed) return false;
+        if (isJobCompleted) return false;
       } else if (statusFilter === "completed") {
         // Show only completed jobs
-        if (!job.completed) return false;
+        if (!isJobCompleted) return false;
       }
       // "all" shows everything
       
@@ -285,7 +288,12 @@ export default function CustomerDashboard() {
   };
 
   const getStatusBadge = (job: Job) => {
-    if (job.completed) {
+    // A job is considered "completed" if either:
+    // - job.completed is true, OR
+    // - invoiceStatus is 'ready' or 'invoiced' (meaning it's been processed for invoicing)
+    const isJobCompleted = job.completed || job.invoiceStatus === 'ready' || job.invoiceStatus === 'invoiced';
+    
+    if (isJobCompleted) {
       return (
         <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
           <CheckCircle2 className="h-3 w-3 mr-1" />
