@@ -7,6 +7,7 @@ import {
   machineScheduleBlocks,
   jobSchedule,
   jobLineItems,
+  productionEntries,
   staffMachineAllocations,
   staffHolidays,
   bankHolidays,
@@ -34,6 +35,8 @@ import {
   type InsertJobSchedule,
   type JobLineItem,
   type InsertJobLineItem,
+  type ProductionEntry,
+  type InsertProductionEntry,
   type StaffMachineAllocation,
   type InsertStaffMachineAllocation,
   type StaffHoliday,
@@ -104,6 +107,13 @@ export interface IStorage {
   createJobLineItem(lineItem: InsertJobLineItem): Promise<JobLineItem>;
   updateJobLineItem(id: string, lineItem: Partial<JobLineItem>): Promise<JobLineItem>;
   deleteJobLineItem(id: string): Promise<void>;
+  
+  // Production entries (partial completion tracking)
+  getProductionEntries(lineItemId?: string, staffId?: string, startDate?: Date, endDate?: Date): Promise<ProductionEntry[]>;
+  getProductionEntriesByLineItem(lineItemId: string): Promise<ProductionEntry[]>;
+  createProductionEntry(entry: InsertProductionEntry): Promise<ProductionEntry>;
+  deleteProductionEntry(id: string): Promise<void>;
+  getLineItemProgress(lineItemId: string): Promise<{ totalQuantityCompleted: number; totalMinutes: number }>;
   
   getStaffMachineAllocations(staffId?: string, machineId?: number, startDate?: Date, endDate?: Date): Promise<StaffMachineAllocation[]>;
   createStaffMachineAllocation(allocation: InsertStaffMachineAllocation): Promise<StaffMachineAllocation>;
@@ -567,6 +577,59 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobLineItem(id: string): Promise<void> {
     await db.delete(jobLineItems).where(eq(jobLineItems.id, id));
+  }
+
+  // Production entries (partial completion tracking)
+  async getProductionEntries(lineItemId?: string, staffId?: string, startDate?: Date, endDate?: Date): Promise<ProductionEntry[]> {
+    const conditions = [];
+    if (lineItemId) {
+      conditions.push(eq(productionEntries.lineItemId, lineItemId));
+    }
+    if (staffId) {
+      conditions.push(eq(productionEntries.staffId, staffId));
+    }
+    if (startDate) {
+      conditions.push(gte(productionEntries.workDate, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(productionEntries.workDate, endDate));
+    }
+    
+    if (conditions.length === 0) {
+      return db.select().from(productionEntries).orderBy(productionEntries.workDate);
+    }
+    return db.select().from(productionEntries).where(and(...conditions)).orderBy(productionEntries.workDate);
+  }
+
+  async getProductionEntriesByLineItem(lineItemId: string): Promise<ProductionEntry[]> {
+    return db.select().from(productionEntries).where(eq(productionEntries.lineItemId, lineItemId)).orderBy(productionEntries.workDate);
+  }
+
+  async createProductionEntry(entry: InsertProductionEntry): Promise<ProductionEntry> {
+    const [created] = await db.insert(productionEntries).values({
+      ...entry,
+      workDate: new Date(entry.workDate),
+    }).returning();
+    return created;
+  }
+
+  async deleteProductionEntry(id: string): Promise<void> {
+    await db.delete(productionEntries).where(eq(productionEntries.id, id));
+  }
+
+  async getLineItemProgress(lineItemId: string): Promise<{ totalQuantityCompleted: number; totalMinutes: number }> {
+    const result = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(quantity_completed), 0) as total_quantity,
+        COALESCE(SUM(production_time_minutes), 0) as total_minutes
+      FROM production_entries
+      WHERE line_item_id = ${lineItemId}
+    `);
+    const row = (result.rows as any[])[0];
+    return {
+      totalQuantityCompleted: parseInt(row?.total_quantity) || 0,
+      totalMinutes: parseInt(row?.total_minutes) || 0,
+    };
   }
 
   async getStaffMachineAllocations(staffId?: string, machineId?: number, startDate?: Date, endDate?: Date): Promise<StaffMachineAllocation[]> {

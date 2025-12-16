@@ -2278,6 +2278,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Production entries (partial completion tracking)
+  app.get("/api/production-entries", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { lineItemId, staffId, startDate, endDate } = req.query;
+      const entries = await storage.getProductionEntries(
+        lineItemId as string | undefined,
+        staffId as string | undefined,
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+      res.json(entries);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch production entries" });
+    }
+  });
+
+  app.get("/api/line-items/:lineItemId/production-entries", isStaffAuthenticated, async (req, res) => {
+    try {
+      const entries = await storage.getProductionEntriesByLineItem(req.params.lineItemId);
+      res.json(entries);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch production entries" });
+    }
+  });
+
+  app.get("/api/line-items/:lineItemId/progress", isStaffAuthenticated, async (req, res) => {
+    try {
+      const progress = await storage.getLineItemProgress(req.params.lineItemId);
+      res.json(progress);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch line item progress" });
+    }
+  });
+
+  app.post("/api/production-entries", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { insertProductionEntrySchema } = await import("@shared/schema");
+      const data = insertProductionEntrySchema.parse(req.body);
+      const entry = await storage.createProductionEntry(data);
+      res.json(entry);
+    } catch (error) {
+      console.error("Error creating production entry:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create production entry" });
+      }
+    }
+  });
+
+  app.delete("/api/production-entries/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteProductionEntry(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete production entry" });
+    }
+  });
+
   // Job error tracking routes
   app.get("/api/jobs/:jobId/errors", isStaffAuthenticated, async (req, res) => {
     try {
