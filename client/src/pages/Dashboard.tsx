@@ -1196,6 +1196,7 @@ export default function Dashboard() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[40px]"></TableHead>
                       <TableHead className="w-[180px]">Customer</TableHead>
                       <TableHead className="w-[100px]">Job #</TableHead>
                       <TableHead>Job Name / Item Description</TableHead>
@@ -1210,7 +1211,7 @@ export default function Dashboard() {
                   <TableBody>
                     {filteredCompletedJobs.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                           {searchTerm ? `No completed orders match "${searchTerm}"` : "No completed orders yet"}
                         </TableCell>
                       </TableRow>
