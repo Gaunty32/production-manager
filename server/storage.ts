@@ -187,6 +187,7 @@ export interface IStorage {
   updateJobError(id: string, error: Partial<JobError>): Promise<JobError>;
   deleteJobError(id: string): Promise<void>;
   getUnresolvedJobErrors(): Promise<JobError[]>;
+  getAllJobErrors(): Promise<JobError[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1772,6 +1773,13 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(jobErrors)
       .where(eq(jobErrors.resolved, false))
+      .orderBy(sql`${jobErrors.reportedAt} DESC`);
+  }
+
+  async getAllJobErrors(): Promise<JobError[]> {
+    return await db
+      .select()
+      .from(jobErrors)
       .orderBy(sql`${jobErrors.reportedAt} DESC`);
   }
 

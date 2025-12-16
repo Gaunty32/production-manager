@@ -31,6 +31,7 @@ import { LineItemRow } from "@/components/LineItemRow";
 import { ProductionWorksheet } from "@/components/ProductionWorksheet";
 import { EditTrackingDialog } from "@/components/EditTrackingDialog";
 import { JobErrorsDialog } from "@/components/JobErrorsDialog";
+import { JobErrorBadge } from "@/components/JobErrorBadge";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
@@ -89,6 +90,26 @@ export default function Dashboard() {
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
+
+  interface JobError {
+    id: string;
+    jobId: string;
+    errorDescription: string;
+    resolved: boolean;
+    assignedToId: string | null;
+  }
+
+  const { data: allJobErrors = [] } = useQuery<JobError[]>({
+    queryKey: ["/api/job-errors/all"],
+  });
+
+  const errorsByJobId = allJobErrors.reduce<Record<string, JobError[]>>((acc, error) => {
+    if (!acc[error.jobId]) {
+      acc[error.jobId] = [];
+    }
+    acc[error.jobId].push(error);
+    return acc;
+  }, {});
 
   const createCustomerMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -951,6 +972,26 @@ export default function Dashboard() {
                             ))}
                           </div>
                         )}
+                        
+                        {/* Error indicator for mobile */}
+                        <div className="pt-2 border-t flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">Errors:</span>
+                          <JobErrorsDialog
+                            jobId={job.id}
+                            jobName={job.jobName}
+                            users={users}
+                            staff={staff}
+                            trigger={
+                              (errorsByJobId[job.id] || []).length > 0 ? (
+                                <JobErrorBadge errors={errorsByJobId[job.id] || []} />
+                              ) : (
+                                <Button variant="ghost" size="sm" className="h-6 text-xs">
+                                  + Add
+                                </Button>
+                              )
+                            }
+                          />
+                        </div>
                       </div>
                     </Card>
                   );
@@ -1020,6 +1061,7 @@ export default function Dashboard() {
                       </TableHead>
                       <TableHead className="py-3 px-3">Status</TableHead>
                       <TableHead className="py-3 px-3">Actions</TableHead>
+                      <TableHead className="py-3 px-3">Errors</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1032,11 +1074,14 @@ export default function Dashboard() {
                         ? job.lineItems.every(item => item.logoApproved === true)
                         : false;
                       
+                      // Get errors for this job
+                      const jobErrors = errorsByJobId[job.id] || [];
+                      
                       // If no line items, show a single row for the job
                       if (!job.lineItems || job.lineItems.length === 0) {
                         return (
                           <tr key={job.id}>
-                            <td colSpan={canViewPrices(currentUser?.role) ? 12 : 11} className="py-2 px-3 text-muted-foreground text-center">
+                            <td colSpan={canViewPrices(currentUser?.role) ? 13 : 12} className="py-2 px-3 text-muted-foreground text-center">
                               Job has no line items
                             </td>
                           </tr>
@@ -1086,6 +1131,23 @@ export default function Dashboard() {
                               setWorksheetJob(fullJob);
                             }
                           }}
+                          errorsSlot={
+                            <JobErrorsDialog
+                              jobId={job.id}
+                              jobName={job.jobName}
+                              users={users}
+                              staff={staff}
+                              trigger={
+                                jobErrors.length > 0 ? (
+                                  <JobErrorBadge errors={jobErrors} />
+                                ) : (
+                                  <Button variant="ghost" size="sm" className="h-6 text-xs opacity-50 hover:opacity-100">
+                                    +
+                                  </Button>
+                                )
+                              }
+                            />
+                          }
                         />
                       ));
                     })}

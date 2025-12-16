@@ -2265,6 +2265,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/job-errors/all", isStaffAuthenticated, async (req, res) => {
+    try {
+      const errors = await storage.getAllJobErrors();
+      res.json(errors);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch all job errors" });
+    }
+  });
+
   app.post("/api/jobs/:jobId/errors", isStaffAuthenticated, async (req: any, res) => {
     try {
       const data = insertJobErrorSchema.parse({
