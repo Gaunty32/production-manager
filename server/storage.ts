@@ -2077,6 +2077,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Weekly production breakdown by staff with efficiency score
+  // Uses production_entries for partial work + completed line items for final completions
   async getWeeklyProductionByStaff(options: { weeks?: number; endDate?: Date } = {}): Promise<{
     weeklyData: Array<{
       weekNumber: number;
@@ -2110,9 +2111,27 @@ export class DatabaseStorage implements IStorage {
     const startDate = new Date(endDate);
     startDate.setDate(startDate.getDate() - (numWeeks * 7));
 
-    // Weekly breakdown per staff member
+    // Weekly breakdown per staff member - combines production_entries and completed line items
     const weeklyResult = await db.execute(sql`
-      WITH week_data AS (
+      WITH production_entry_data AS (
+        -- Production entries track partial daily work
+        SELECT 
+          pe.staff_id,
+          s.name as staff_name,
+          DATE(pe.work_date) as work_date,
+          DATE_TRUNC('week', pe.work_date) as week_start,
+          pe.quantity_completed * COALESCE(jli.stitch_count, 0) as stitches,
+          pe.quantity_completed as items,
+          pe.production_time_minutes as actual_minutes,
+          CEIL((pe.quantity_completed::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60) as estimated_minutes
+        FROM production_entries pe
+        INNER JOIN staff s ON pe.staff_id = s.id
+        INNER JOIN job_line_items jli ON pe.line_item_id = jli.id
+        WHERE pe.work_date >= ${startDate}
+          AND pe.work_date <= ${endDate}
+      ),
+      completed_line_item_data AS (
+        -- For line items without production entries, use completed line item data
         SELECT 
           jli.completed_by_id as staff_id,
           s.name as staff_name,
@@ -2128,6 +2147,14 @@ export class DatabaseStorage implements IStorage {
           AND jli.completed_at >= ${startDate}
           AND jli.completed_at <= ${endDate}
           AND jli.completed_by_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM production_entries pe WHERE pe.line_item_id = jli.id
+          )
+      ),
+      all_work AS (
+        SELECT * FROM production_entry_data
+        UNION ALL
+        SELECT * FROM completed_line_item_data
       ),
       daily_totals AS (
         SELECT 
@@ -2139,7 +2166,7 @@ export class DatabaseStorage implements IStorage {
           SUM(items) as daily_items,
           SUM(actual_minutes) as daily_actual,
           SUM(estimated_minutes) as daily_estimated
-        FROM week_data
+        FROM all_work
         GROUP BY staff_id, staff_name, work_date, week_start
       )
       SELECT 
@@ -2189,24 +2216,58 @@ export class DatabaseStorage implements IStorage {
       };
     });
 
-    // Staff totals across all weeks
+    // Staff totals across all weeks - combines production_entries and completed line items
     const staffTotalsResult = await db.execute(sql`
-      WITH daily_totals AS (
+      WITH production_entry_data AS (
+        SELECT 
+          pe.staff_id,
+          s.name as staff_name,
+          DATE(pe.work_date) as work_date,
+          pe.quantity_completed * COALESCE(jli.stitch_count, 0) as stitches,
+          pe.quantity_completed as items,
+          pe.production_time_minutes as actual_minutes,
+          CEIL((pe.quantity_completed::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60) as estimated_minutes
+        FROM production_entries pe
+        INNER JOIN staff s ON pe.staff_id = s.id
+        INNER JOIN job_line_items jli ON pe.line_item_id = jli.id
+        WHERE pe.work_date >= ${startDate}
+          AND pe.work_date <= ${endDate}
+      ),
+      completed_line_item_data AS (
         SELECT 
           jli.completed_by_id as staff_id,
           s.name as staff_name,
           DATE(jli.completed_at) as work_date,
-          SUM(jli.quantity * COALESCE(jli.stitch_count, 0)) as daily_stitches,
-          SUM(jli.quantity) as daily_items,
-          SUM(COALESCE(jli.actual_production_time_minutes, 0)) as daily_actual,
-          SUM(CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60)) as daily_estimated
+          jli.quantity * COALESCE(jli.stitch_count, 0) as stitches,
+          jli.quantity as items,
+          COALESCE(jli.actual_production_time_minutes, 0) as actual_minutes,
+          CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60) as estimated_minutes
         FROM job_line_items jli
         INNER JOIN staff s ON jli.completed_by_id = s.id
         WHERE jli.completed = true
           AND jli.completed_at >= ${startDate}
           AND jli.completed_at <= ${endDate}
           AND jli.completed_by_id IS NOT NULL
-        GROUP BY jli.completed_by_id, s.name, DATE(jli.completed_at)
+          AND NOT EXISTS (
+            SELECT 1 FROM production_entries pe WHERE pe.line_item_id = jli.id
+          )
+      ),
+      all_work AS (
+        SELECT * FROM production_entry_data
+        UNION ALL
+        SELECT * FROM completed_line_item_data
+      ),
+      daily_totals AS (
+        SELECT 
+          staff_id,
+          staff_name,
+          work_date,
+          SUM(stitches) as daily_stitches,
+          SUM(items) as daily_items,
+          SUM(actual_minutes) as daily_actual,
+          SUM(estimated_minutes) as daily_estimated
+        FROM all_work
+        GROUP BY staff_id, staff_name, work_date
       )
       SELECT 
         staff_id,
