@@ -73,8 +73,6 @@ function formatMinutes(minutes: number): string {
 }
 
 export default function WeeklyReports() {
-  console.log("WeeklyReports component rendering");
-  
   const { data: performanceData, isLoading: isLoadingPerformance, error: performanceError } = useQuery<StaffPerformanceData>({
     queryKey: ['/api/reports/staff-performance'],
   });
