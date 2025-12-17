@@ -2,7 +2,17 @@
 
 This application is a production management system for manufacturing, featuring both staff and customer portals. It tracks customer orders, schedules machines, and manages dispatch deadlines to streamline operations, improve efficiency, enhance customer satisfaction, and provide operational transparency. Key capabilities include multi-line item job tracking, a robust scheduling system integrating machine and staff availability, and detailed production metrics. The system aims to provide a comprehensive solution for managing the entire production lifecycle, from order submission to invoicing and customer communication.
 
-# Recent Changes (December 16, 2025)
+# Recent Changes (December 17, 2025)
+
+## Logo-Only Invoice Support
+- Invoicing queue now displays customers who have approved logo setups even if they have no completed jobs
+- Customers with only logo setups show as separate cards with "X approved logo set-ups ready for invoicing"
+- Create Invoice button enabled for logo-only customers to invoice £10 per approved logo setup
+- Backend consolidated-invoice endpoint supports `logoSetupsOnly` flag for empty jobIds array
+- Logo setups are deleted from database after successful invoice creation
+- Cache invalidation for both jobs and logo-setups after invoice creation
+
+# Previous Changes (December 16, 2025)
 
 ## Partial Production Tracking
 - Added `production_entries` table to track daily work progress on line items that span multiple days

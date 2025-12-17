@@ -3525,9 +3525,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/xero/consolidated-invoice", isStaffAuthenticated, async (req, res) => {
     try {
-      const { jobIds, customerId, manualPrices, manualShippingCosts } = req.body; // Optional manual prices: { lineItemId: unitPrice }, optional manual shipping: { jobId: shippingCost }
+      const { jobIds, customerId, manualPrices, manualShippingCosts, logoSetupsOnly } = req.body; // Optional manual prices: { lineItemId: unitPrice }, optional manual shipping: { jobId: shippingCost }
 
-      if (!Array.isArray(jobIds) || jobIds.length === 0) {
+      // For logo-setups-only invoices, jobIds can be empty
+      if (!logoSetupsOnly && (!Array.isArray(jobIds) || jobIds.length === 0)) {
         return res.status(400).json({ error: "jobIds must be a non-empty array" });
       }
       
@@ -3543,9 +3544,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fetch all jobs and customer
       const allJobs = await storage.getJobs();
-      let selectedJobs = allJobs.filter(j => jobIds.includes(j.id));
+      let selectedJobs = logoSetupsOnly ? [] : allJobs.filter(j => (jobIds || []).includes(j.id));
 
-      if (selectedJobs.length !== jobIds.length) {
+      if (!logoSetupsOnly && selectedJobs.length !== (jobIds || []).length) {
         return res.status(404).json({ error: "One or more jobs not found" });
       }
 
@@ -3557,19 +3558,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // CRITICAL: Verify all selected jobs belong to the specified customer
-      const jobsFromWrongCustomer = selectedJobs.filter(j => j.customerId !== customerId);
-      if (jobsFromWrongCustomer.length > 0) {
-        return res.status(400).json({ 
-          error: "All selected jobs must belong to the same customer" 
-        });
-      }
+      if (!logoSetupsOnly) {
+        const jobsFromWrongCustomer = selectedJobs.filter(j => j.customerId !== customerId);
+        if (jobsFromWrongCustomer.length > 0) {
+          return res.status(400).json({ 
+            error: "All selected jobs must belong to the same customer" 
+          });
+        }
 
-      // Verify all selected jobs are in 'ready' status
-      const jobsNotReady = selectedJobs.filter(j => j.invoiceStatus !== 'ready');
-      if (jobsNotReady.length > 0) {
-        return res.status(400).json({ 
-          error: "All selected jobs must be in 'ready' status for invoicing" 
-        });
+        // Verify all selected jobs are in 'ready' status
+        const jobsNotReady = selectedJobs.filter(j => j.invoiceStatus !== 'ready');
+        if (jobsNotReady.length > 0) {
+          return res.status(400).json({ 
+            error: "All selected jobs must be in 'ready' status for invoicing" 
+          });
+        }
       }
 
       const customer = await storage.getCustomers().then(customers => 
@@ -3790,6 +3793,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         setup => setup.customerId === customerId && setup.approved && setup.approvedAt
       );
       
+      // For logo-only invoices, verify there are logo setups to invoice
+      if (logoSetupsOnly && customerLogoSetups.length === 0) {
+        return res.status(400).json({ error: "No approved logo setups found for this customer" });
+      }
+      
       for (const setup of customerLogoSetups) {
         lineItemsWithPricing.push({
           jobName: "Logo Set-Up",
@@ -3833,6 +3841,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoiceId,
         invoiceNumber,
         jobsInvoiced: selectedJobs.length,
+        logoSetupsInvoiced: customerLogoSetups.length,
       });
     } catch (error) {
       console.error("Consolidated invoice creation error:", error);

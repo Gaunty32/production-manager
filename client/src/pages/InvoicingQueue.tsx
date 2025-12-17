@@ -172,8 +172,23 @@ export default function InvoicingQueue() {
     return acc;
   }, {} as Record<string, Job[]>);
 
+  // Get customers with only approved logo setups (no jobs)
+  const approvedLogoSetups = logoSetups.filter(ls => ls.approved && ls.approvedAt);
+  const customersWithOnlyLogoSetups = approvedLogoSetups
+    .map(ls => ls.customerId)
+    .filter(customerId => !jobsByCustomer[customerId]);
+  const uniqueLogoOnlyCustomers = Array.from(new Set(customersWithOnlyLogoSetups));
+
+  // Merge customers with jobs and customers with only logo setups
+  const allInvoiceableCustomers = { ...jobsByCustomer };
+  uniqueLogoOnlyCustomers.forEach(customerId => {
+    if (!allInvoiceableCustomers[customerId]) {
+      allInvoiceableCustomers[customerId] = []; // Empty jobs array, but has logo setups
+    }
+  });
+
   // Filter customers by search term and sort alphabetically
-  const filteredJobsByCustomer = Object.entries(jobsByCustomer)
+  const filteredJobsByCustomer = Object.entries(allInvoiceableCustomers)
     .reduce((acc, [customerId, customerJobs]) => {
       const customer = customers.find(c => c.id === customerId);
       if (customer && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) {
@@ -370,8 +385,11 @@ export default function InvoicingQueue() {
   const handleCreateInvoice = async (customerId: string) => {
     const customerJobs = jobsByCustomer[customerId] || [];
     const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
+    const customerLogoSetups = getCustomerApprovedLogos(customerId);
+    // Can invoice logo setups only when no jobs are selected but customer has approved logo setups
+    const invoicingLogoSetupsOnly = selectedCustomerJobs.length === 0 && customerLogoSetups.length > 0;
     
-    if (selectedCustomerJobs.length === 0) {
+    if (selectedCustomerJobs.length === 0 && customerLogoSetups.length === 0) {
       return;
     }
 
@@ -417,32 +435,46 @@ export default function InvoicingQueue() {
     try {
       const jobIds = selectedCustomerJobs.map(job => job.id);
       
-      // Build manual prices object, converting strings to numbers
-      const manualPricesForAPI: Record<string, number> = {};
-      Object.entries(manualPrices).forEach(([lineItemId, price]) => {
-        if (price) {
-          manualPricesForAPI[lineItemId] = parseFloat(price);
-        }
-      });
+      // For logo-only invoices, skip manual prices and shipping entirely
+      let manualPricesForAPI: Record<string, number> = {};
+      let manualShippingForAPI: Record<string, number> = {};
       
-      // Build manual shipping costs object, converting strings to numbers
-      const manualShippingForAPI: Record<string, number> = {};
-      Object.entries(manualShippingCosts).forEach(([jobId, cost]) => {
-        if (cost) {
-          manualShippingForAPI[jobId] = parseFloat(cost);
-        }
-      });
+      if (!invoicingLogoSetupsOnly) {
+        // Build manual prices object, filtering to only include line items from selected jobs
+        const selectedJobLineItemIds = new Set<string>();
+        selectedCustomerJobs.forEach(job => {
+          getJobLineItems(job.id).forEach(item => selectedJobLineItemIds.add(item.id));
+        });
+        
+        Object.entries(manualPrices).forEach(([lineItemId, price]) => {
+          if (price && selectedJobLineItemIds.has(lineItemId)) {
+            manualPricesForAPI[lineItemId] = parseFloat(price);
+          }
+        });
+        
+        // Build manual shipping costs object, filtering to only include selected jobs
+        Object.entries(manualShippingCosts).forEach(([jobId, cost]) => {
+          if (cost && jobIds.includes(jobId)) {
+            manualShippingForAPI[jobId] = parseFloat(cost);
+          }
+        });
+      }
       
       const response = await apiRequest("POST", "/api/xero/consolidated-invoice", {
         jobIds,
         customerId,
+        logoSetupsOnly: invoicingLogoSetupsOnly,
         manualPrices: Object.keys(manualPricesForAPI).length > 0 ? manualPricesForAPI : undefined,
         manualShippingCosts: Object.keys(manualShippingForAPI).length > 0 ? manualShippingForAPI : undefined,
-      }) as unknown as { success: boolean; invoiceId: string; invoiceNumber: string | null; jobsInvoiced: number };
+      }) as unknown as { success: boolean; invoiceId: string; invoiceNumber: string | null; jobsInvoiced: number; logoSetupsInvoiced?: number };
 
+      const invoiceDescription = invoicingLogoSetupsOnly 
+        ? `Successfully created invoice for ${customerLogoSetups.length} logo set-up${customerLogoSetups.length > 1 ? 's' : ''}.`
+        : `Successfully created invoice for ${selectedCustomerJobs.length} ${selectedCustomerJobs.length === 1 ? 'order' : 'orders'}.`;
+      
       toast({
         title: "Invoice Created",
-        description: `Successfully created invoice for ${selectedCustomerJobs.length} ${selectedCustomerJobs.length === 1 ? 'order' : 'orders'}. Reference: ${response.invoiceNumber || response.invoiceId}`,
+        description: `${invoiceDescription} Reference: ${response.invoiceNumber || response.invoiceId}`,
       });
 
       // Clear selected jobs for this customer
@@ -463,8 +495,9 @@ export default function InvoicingQueue() {
       setManualPrices(newManualPrices);
       setManualShippingCosts(newManualShipping);
 
-      // Refresh jobs list
+      // Refresh jobs list and logo setups
       await queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/logo-setups"] });
     } catch (error) {
       console.error("Error creating invoice:", error);
       toast({
@@ -562,13 +595,13 @@ export default function InvoicingQueue() {
               <Skeleton key={i} className="h-40 w-full" />
             ))}
           </div>
-        ) : Object.keys(jobsByCustomer).length === 0 ? (
+        ) : Object.keys(allInvoiceableCustomers).length === 0 ? (
           <Card>
             <CardContent className="py-12">
               <div className="text-center text-muted-foreground">
                 <FileText className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                <p>No completed jobs ready for invoicing</p>
-                <p className="text-sm mt-2">Jobs will appear here once marked as complete</p>
+                <p>No completed jobs or approved logo setups ready for invoicing</p>
+                <p className="text-sm mt-2">Jobs and approved logo setups will appear here</p>
               </div>
             </CardContent>
           </Card>
@@ -589,43 +622,62 @@ export default function InvoicingQueue() {
               const customer = customers.find(c => c.id === customerId);
               if (!customer) return null;
 
-              const allSelected = customerJobs.every(job => selectedJobs.has(job.id));
+              const customerLogoSetups = getCustomerApprovedLogos(customerId);
+              const allSelected = customerJobs.length > 0 ? customerJobs.every(job => selectedJobs.has(job.id)) : false;
               const someSelected = customerJobs.some(job => selectedJobs.has(job.id));
               const totalPrice = getTotalPrice(customerJobs);
               const selectedCount = customerJobs.filter(job => selectedJobs.has(job.id)).length;
+              const logoSetupTotal = customerLogoSetups.length * 10;
+              // Customer can invoice logo setups when no jobs are selected (either because they have no jobs, or because they deselected all)
+              const canInvoiceLogoSetupsOnly = selectedCount === 0 && customerLogoSetups.length > 0;
+              const hasOnlyLogoSetups = customerJobs.length === 0 && customerLogoSetups.length > 0;
 
               return (
                 <Card key={customerId} data-testid={`invoice-group-${customerId}`}>
                   <CardHeader>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 flex-1">
-                        <Checkbox
-                          checked={allSelected}
-                          onCheckedChange={() => toggleAllJobsForCustomer(customerId)}
-                          data-testid={`checkbox-select-all-${customerId}`}
-                        />
+                        {customerJobs.length > 0 && (
+                          <Checkbox
+                            checked={allSelected}
+                            onCheckedChange={() => toggleAllJobsForCustomer(customerId)}
+                            data-testid={`checkbox-select-all-${customerId}`}
+                          />
+                        )}
                         <div className="flex-1">
                           <CardTitle className="text-xl">{customer.name}</CardTitle>
                           <CardDescription className="mt-1">
-                            {customerJobs.length} {customerJobs.length === 1 ? 'order' : 'orders'} ready for invoicing
-                            {selectedCount > 0 && ` • ${selectedCount} selected`}
+                            {hasOnlyLogoSetups ? (
+                              <>{customerLogoSetups.length} approved logo {customerLogoSetups.length === 1 ? 'set-up' : 'set-ups'} ready for invoicing</>
+                            ) : (
+                              <>
+                                {customerJobs.length} {customerJobs.length === 1 ? 'order' : 'orders'} ready for invoicing
+                                {selectedCount > 0 && ` • ${selectedCount} selected`}
+                                {customerLogoSetups.length > 0 && ` • ${customerLogoSetups.length} logo set-up${customerLogoSetups.length > 1 ? 's' : ''}`}
+                                {canInvoiceLogoSetupsOnly && selectedCount === 0 && ` (select jobs or invoice logo set-ups only)`}
+                              </>
+                            )}
                           </CardDescription>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         {canViewPrices(user?.role) && (
                           <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Selected Total</p>
+                            <p className="text-sm text-muted-foreground">
+                              {canInvoiceLogoSetupsOnly ? "Logo Set-up Total" : "Selected Total"}
+                            </p>
                             <p className="text-2xl font-bold">
-                              {selectedCount > 0 && totalPrice !== null 
-                                ? (typeof totalPrice === 'number' ? formatPrice(totalPrice) : totalPrice)
-                                : "-"}
+                              {canInvoiceLogoSetupsOnly 
+                                ? formatPrice(logoSetupTotal)
+                                : (selectedCount > 0 && totalPrice !== null 
+                                    ? (typeof totalPrice === 'number' ? formatPrice(totalPrice) : totalPrice)
+                                    : "-")}
                             </p>
                           </div>
                         )}
                         <Button
                           onClick={() => handleCreateInvoice(customerId)}
-                          disabled={selectedCount === 0 || creatingInvoice === customerId}
+                          disabled={(selectedCount === 0 && !canInvoiceLogoSetupsOnly) || creatingInvoice === customerId}
                           data-testid={`button-create-invoice-${customerId}`}
                         >
                           <FileText className="h-4 w-4 mr-2" />
@@ -751,6 +803,26 @@ export default function InvoicingQueue() {
                                           ) : null}
                                         </div>
                                       )}
+                                      {/* TBA shipping without package info - still need manual cost entry */}
+                                      {job.shippingCost === 'TBA' && !(job.packageCount && job.packageType) && (
+                                        <div className="flex items-center gap-2 ml-5">
+                                          <Badge variant="secondary">Shipping: TBA</Badge>
+                                          <span className="text-sm text-muted-foreground">£</span>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            placeholder="Enter cost"
+                                            value={manualShippingCosts[job.id] || ''}
+                                            onChange={(e) => setManualShippingCosts({
+                                              ...manualShippingCosts,
+                                              [job.id]: e.target.value
+                                            })}
+                                            className="w-24 h-7"
+                                            data-testid={`input-shipping-cost-${job.id}`}
+                                          />
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                   
@@ -828,12 +900,12 @@ export default function InvoicingQueue() {
                         if (approvedLogos.length === 0) return null;
                         
                         return (
-                          <div className="mt-6 pt-6 border-t">
+                          <div className={customerJobs.length > 0 ? "mt-6 pt-6 border-t" : ""}>
                             <div className="flex items-center gap-2 mb-3">
                               <Palette className="h-4 w-4 text-primary" />
                               <h4 className="font-semibold text-sm">Approved Logo Set-Ups</h4>
                               <Badge variant="outline" className="ml-auto">
-                                Will be added to invoice
+                                {customerJobs.length > 0 ? "Will be added to invoice" : "Ready for invoicing"}
                               </Badge>
                             </div>
                             <div className="space-y-2">
