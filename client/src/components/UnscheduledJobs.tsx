@@ -23,7 +23,12 @@ export function UnscheduledJobs() {
   }
 
   const scheduledJobIds = new Set(schedules.map(s => s.jobId));
-  const unscheduledJobs = jobs.filter(job => !job.completed && !scheduledJobIds.has(job.id));
+  // Exclude jobs that are completed or have status 'completed'
+  const unscheduledJobs = jobs.filter(job => 
+    !job.completed && 
+    job.status !== 'completed' &&
+    !scheduledJobIds.has(job.id)
+  );
 
   const getCustomerName = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
