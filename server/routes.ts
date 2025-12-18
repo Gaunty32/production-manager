@@ -39,6 +39,157 @@ import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
 import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail } from "./emailService";
 
+// Helper function to auto-schedule a line item when it has a machine assigned
+async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { findAvailableSlots, calculateJobDuration, minutesToTime } = await import("@shared/scheduling");
+    
+    const lineItem = await storage.getJobLineItem(lineItemId);
+    if (!lineItem) {
+      return { success: false, error: "Line item not found" };
+    }
+    
+    // Skip if no machine assigned or already completed
+    if (!lineItem.machineId || lineItem.completed) {
+      return { success: true };
+    }
+    
+    // Check if already scheduled
+    const existingSchedules = await storage.getJobSchedules();
+    const alreadyScheduled = existingSchedules.some(s => s.lineItemId === lineItemId);
+    if (alreadyScheduled) {
+      return { success: true };
+    }
+    
+    // Get job for dispatch date
+    const job = await storage.getJob(lineItem.jobId);
+    if (!job) {
+      return { success: false, error: "Job not found" };
+    }
+    
+    // Calculate duration from quantity and stitch count
+    const quantity = lineItem.quantity || 0;
+    const stitchCount = lineItem.stitchCount || 0;
+    
+    if (quantity === 0) {
+      return { success: false, error: "Line item has no quantity" };
+    }
+    
+    let effectiveDuration = calculateJobDuration(quantity, stitchCount, lineItem.machineId);
+    
+    // If no duration calculated (missing stitch count), estimate based on quantity
+    // Assume approximately 1 minute per 5 items as a conservative baseline
+    if (effectiveDuration === 0) {
+      effectiveDuration = Math.max(30, Math.ceil(quantity / 5));
+      console.log(`Auto-scheduling: No stitch count for line item ${lineItemId}, estimating ${effectiveDuration} minutes based on quantity ${quantity}`);
+    }
+    
+    // Get scheduling data
+    const machineBlocks = await storage.getMachineScheduleBlocks();
+    const staffShifts = await storage.getStaffShifts();
+    const staffMachineAllocations = await storage.getStaffMachineAllocations();
+    const staffHolidays = await storage.getStaffHolidays();
+    const bankHolidays = await storage.getBankHolidays();
+    const staff = await storage.getStaff();
+    
+    if (staff.length === 0) {
+      return { success: false, error: "No staff available" };
+    }
+    
+    // Determine date range for scheduling
+    const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+    
+    let endDate: Date;
+    if (job.requiredDispatchDate) {
+      endDate = new Date(job.requiredDispatchDate);
+      // If overdue, still try to schedule ASAP within next 30 days
+      if (endDate < startDate) {
+        endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 30);
+      }
+    } else {
+      // No dispatch date, schedule within 30 days
+      endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 30);
+    }
+    
+    // Re-fetch schedules for accurate slot calculation
+    const allSchedules = await storage.getJobSchedules();
+    
+    // Try to find earliest available slot across all staff
+    let bestSlot: { date: Date; startTime: number; endTime: number; staffId: string } | null = null;
+    
+    for (let dayOffset = 0; dayOffset <= 30; dayOffset++) {
+      const checkDate = new Date(startDate);
+      checkDate.setDate(checkDate.getDate() + dayOffset);
+      
+      if (checkDate > endDate && bestSlot) break;
+      
+      for (const staffMember of staff) {
+        const availableSlots = findAvailableSlots(
+          checkDate,
+          lineItem.machineId,
+          staffMember.id,
+          machineBlocks,
+          staffShifts,
+          allSchedules,
+          staffMachineAllocations,
+          staffHolidays,
+          bankHolidays
+        );
+        
+        // Find first slot that fits the duration
+        for (const slot of availableSlots) {
+          const slotDuration = slot.endTime - slot.startTime;
+          if (slotDuration >= effectiveDuration) {
+            const candidateSlot = {
+              date: new Date(checkDate),
+              startTime: slot.startTime,
+              endTime: slot.startTime + effectiveDuration,
+              staffId: staffMember.id
+            };
+            
+            // Pick earliest slot
+            if (!bestSlot || checkDate < bestSlot.date || 
+                (checkDate.toDateString() === bestSlot.date.toDateString() && slot.startTime < bestSlot.startTime)) {
+              bestSlot = candidateSlot;
+            }
+            break;
+          }
+        }
+      }
+      
+      // If we found a slot today, no need to check more days unless we want the absolute earliest staff slot
+      if (bestSlot && bestSlot.date.toDateString() === checkDate.toDateString()) {
+        break;
+      }
+    }
+    
+    if (!bestSlot) {
+      return { success: false, error: "No available time slots found within 30 days" };
+    }
+    
+    // Create the schedule
+    await storage.createJobSchedule({
+      jobId: lineItem.jobId,
+      lineItemId: lineItem.id,
+      machineId: lineItem.machineId,
+      staffId: bestSlot.staffId,
+      scheduledDate: bestSlot.date.toISOString(),
+      startTime: bestSlot.startTime,
+      endTime: bestSlot.endTime,
+      status: "scheduled"
+    });
+    
+    console.log(`Auto-scheduled line item ${lineItemId} on ${bestSlot.date.toDateString()} at ${minutesToTime(bestSlot.startTime)}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Auto-scheduling error:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
 // Helper function to recalculate job's total actual production time from completed line items
 async function recalculateJobProductionTime(jobId: string): Promise<void> {
   const allLineItems = await storage.getJobLineItems(jobId);
@@ -2169,6 +2320,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Recalculate job's total actual production time
       await recalculateJobProductionTime(jobId);
       
+      // Auto-schedule if machine is assigned
+      if (lineItem.machineId) {
+        const result = await autoScheduleLineItem(lineItem.id);
+        if (!result.success) {
+          console.log(`Auto-scheduling skipped for line item ${lineItem.id}: ${result.error}`);
+        }
+      }
+      
       res.json(lineItem);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2214,6 +2373,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Get existing line item to check if machine is newly assigned
+      const existingBeforeUpdate = await storage.getJobLineItem(req.params.id);
+      const previousMachineId = existingBeforeUpdate?.machineId;
+      
       const updates = Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
@@ -2221,6 +2384,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Recalculate job's total actual production time from all completed line items
       await recalculateJobProductionTime(lineItem.jobId);
+      
+      // Auto-schedule if machine is newly assigned and not already completed
+      if (lineItem.machineId && !previousMachineId && !lineItem.completed) {
+        const result = await autoScheduleLineItem(lineItem.id);
+        if (!result.success) {
+          console.log(`Auto-scheduling skipped for line item ${lineItem.id}: ${result.error}`);
+        }
+      }
       
       // Check if all line items in the job are now completed
       const allLineItems = await storage.getJobLineItems(lineItem.jobId);

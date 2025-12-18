@@ -2,7 +2,18 @@
 
 This application is a production management system for manufacturing, featuring both staff and customer portals. It tracks customer orders, schedules machines, and manages dispatch deadlines to streamline operations, improve efficiency, enhance customer satisfaction, and provide operational transparency. Key capabilities include multi-line item job tracking, a robust scheduling system integrating machine and staff availability, and detailed production metrics. The system aims to provide a comprehensive solution for managing the entire production lifecycle, from order submission to invoicing and customer communication.
 
-# Recent Changes (December 17, 2025)
+# Recent Changes (December 18, 2025)
+
+## Automatic Scheduling on Machine Assignment
+- Line items now auto-schedule when a machine is assigned (on creation or update)
+- System finds the earliest available time slot across all staff members
+- Considers all constraints: staff shifts, machine blocks, staff allocations, holidays, and existing schedules
+- Overdue jobs get scheduled ASAP within 30 days
+- Jobs without dispatch dates get scheduled within 30 days from today
+- Default work hours (7 AM - 6 PM, Mon-Fri) used when no staff shifts configured
+- Unscheduled Jobs panel now also excludes jobs with status 'completed'
+
+# Previous Changes (December 17, 2025)
 
 ## Logo-Only Invoice Support
 - Invoicing queue now displays customers who have approved logo setups even if they have no completed jobs
