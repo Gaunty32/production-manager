@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -5,7 +6,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon } from "lucide-react";
+import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
+
+type DatePreset = "this-week" | "last-week" | "last-4-weeks" | "last-12-weeks" | "custom";
+
+interface DateRange {
+  from: Date;
+  to: Date;
+}
 
 interface StaffPerformanceData {
   staffMetrics: Array<{
@@ -101,33 +113,168 @@ function formatMinutes(minutes: number): string {
   return `${mins}m`;
 }
 
+function getPresetDateRange(preset: DatePreset): DateRange {
+  const today = new Date();
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+  
+  switch (preset) {
+    case "this-week":
+      return {
+        from: weekStart,
+        to: endOfWeek(today, { weekStartsOn: 1 })
+      };
+    case "last-week":
+      return {
+        from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
+        to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 })
+      };
+    case "last-4-weeks":
+      return {
+        from: startOfWeek(subWeeks(today, 3), { weekStartsOn: 1 }),
+        to: endOfWeek(today, { weekStartsOn: 1 })
+      };
+    case "last-12-weeks":
+    default:
+      return {
+        from: startOfWeek(subWeeks(today, 11), { weekStartsOn: 1 }),
+        to: endOfWeek(today, { weekStartsOn: 1 })
+      };
+  }
+}
+
 export default function WeeklyReports() {
+  const [selectedPreset, setSelectedPreset] = useState<DatePreset>("last-12-weeks");
+  const [customDateRange, setCustomDateRange] = useState<DateRange | null>(null);
+  
+  const dateRange = useMemo(() => {
+    if (selectedPreset === "custom" && customDateRange) {
+      return customDateRange;
+    }
+    return getPresetDateRange(selectedPreset);
+  }, [selectedPreset, customDateRange]);
+
+  const weeksCount = useMemo(() => {
+    const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.ceil(diffDays / 7) || 1;
+  }, [dateRange]);
+
+  const fetchWithParams = async (baseUrl: string) => {
+    const url = `${baseUrl}?weeks=${weeksCount}&endDate=${dateRange.to.toISOString()}`;
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch ${baseUrl}`);
+    }
+    return res.json();
+  };
+
   const { data: performanceData, isLoading: isLoadingPerformance, error: performanceError } = useQuery<StaffPerformanceData>({
-    queryKey: ['/api/reports/staff-performance'],
+    queryKey: ['/api/reports/staff-performance', weeksCount, dateRange.to.toISOString()],
+    queryFn: () => fetchWithParams('/api/reports/staff-performance'),
   });
 
   const { data: errorsData, isLoading: isLoadingErrors, error: errorsError } = useQuery<ErrorsReportData>({
-    queryKey: ['/api/reports/errors'],
+    queryKey: ['/api/reports/errors', weeksCount, dateRange.to.toISOString()],
+    queryFn: () => fetchWithParams('/api/reports/errors'),
   });
 
   const { data: productionData, isLoading: isLoadingProduction, error: productionError } = useQuery<DailyProductionData>({
-    queryKey: ['/api/reports/daily-production'],
+    queryKey: ['/api/reports/daily-production', weeksCount, dateRange.to.toISOString()],
+    queryFn: () => fetchWithParams('/api/reports/daily-production'),
   });
 
   const { data: weeklyProductionData, isLoading: isLoadingWeekly, error: weeklyError } = useQuery<WeeklyProductionData>({
-    queryKey: ['/api/reports/weekly-production'],
+    queryKey: ['/api/reports/weekly-production', weeksCount, dateRange.to.toISOString()],
+    queryFn: () => fetchWithParams('/api/reports/weekly-production'),
   });
 
   const isLoading = isLoadingPerformance || isLoadingErrors || isLoadingProduction || isLoadingWeekly;
   const hasError = performanceError || errorsError || productionError || weeklyError;
 
   const formatNumber = (value: number) => value.toLocaleString();
+  
+  const handlePresetChange = (preset: DatePreset) => {
+    setSelectedPreset(preset);
+    if (preset !== "custom") {
+      setCustomDateRange(null);
+    }
+  };
+
+  const handleCustomDateChange = (range: { from?: Date; to?: Date } | undefined) => {
+    if (range?.from && range?.to) {
+      setCustomDateRange({ from: range.from, to: range.to });
+      setSelectedPreset("custom");
+    } else if (range?.from) {
+      setCustomDateRange({ from: range.from, to: range.from });
+    }
+  };
 
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
-      <div>
-        <h1 className="text-2xl font-bold" data-testid="text-page-title">Weekly Performance Report</h1>
-        <p className="text-muted-foreground text-sm">Last 12 weeks performance metrics</p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold" data-testid="text-page-title">Weekly Performance Report</h1>
+          <p className="text-muted-foreground text-sm">
+            {format(dateRange.from, "MMM d, yyyy")} - {format(dateRange.to, "MMM d, yyyy")}
+          </p>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={selectedPreset === "this-week" ? "default" : "outline"}
+            size="sm"
+            onClick={() => handlePresetChange("this-week")}
+            data-testid="button-this-week"
+          >
+            This Week
+          </Button>
+          <Button
+            variant={selectedPreset === "last-week" ? "default" : "outline"}
+            size="sm"
+            onClick={() => handlePresetChange("last-week")}
+            data-testid="button-last-week"
+          >
+            Last Week
+          </Button>
+          <Button
+            variant={selectedPreset === "last-4-weeks" ? "default" : "outline"}
+            size="sm"
+            onClick={() => handlePresetChange("last-4-weeks")}
+            data-testid="button-last-4-weeks"
+          >
+            Last 4 Weeks
+          </Button>
+          <Button
+            variant={selectedPreset === "last-12-weeks" ? "default" : "outline"}
+            size="sm"
+            onClick={() => handlePresetChange("last-12-weeks")}
+            data-testid="button-last-12-weeks"
+          >
+            Last 12 Weeks
+          </Button>
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={selectedPreset === "custom" ? "default" : "outline"}
+                size="sm"
+                data-testid="button-custom-date"
+              >
+                <CalendarIcon className="h-4 w-4 mr-2" />
+                Custom
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="range"
+                selected={customDateRange ? { from: customDateRange.from, to: customDateRange.to } : undefined}
+                onSelect={handleCustomDateChange}
+                numberOfMonths={2}
+                data-testid="calendar-date-picker"
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       {hasError && (
