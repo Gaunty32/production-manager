@@ -694,7 +694,7 @@ export default function WeeklyReports() {
         </TabsContent>
 
         <TabsContent value="trends" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Total Output</CardTitle>
@@ -715,6 +715,26 @@ export default function WeeklyReports() {
                   £{formatNumber(Math.round(weeklyTrendData?.reduce((sum, w) => sum + w.invoicedTotal, 0) ?? 0))}
                 </div>
                 <p className="text-xs text-muted-foreground">Invoiced in period</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Average Cost Per Item</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const totalOutput = weeklyTrendData?.reduce((sum, w) => sum + w.completedQuantity, 0) ?? 0;
+                  const totalValue = weeklyTrendData?.reduce((sum, w) => sum + w.invoicedTotal, 0) ?? 0;
+                  const avgCost = totalOutput > 0 ? totalValue / totalOutput : 0;
+                  return (
+                    <>
+                      <div className="text-3xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-avg-cost">
+                        £{avgCost.toFixed(2)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Invoice value / output</p>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           </div>
