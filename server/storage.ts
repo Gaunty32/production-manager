@@ -1611,7 +1611,7 @@ export class DatabaseStorage implements IStorage {
               (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval
           AND date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone}) <= 
               (SELECT week_end FROM base_week)
-        GROUP BY date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone})
+        GROUP BY 1
       ),
       completed_by_week AS (
         SELECT 
@@ -1623,7 +1623,7 @@ export class DatabaseStorage implements IStorage {
               (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval
           AND date_trunc('week', jli.completed_at AT TIME ZONE ${timezone}) <= 
               (SELECT week_end FROM base_week)
-        GROUP BY date_trunc('week', jli.completed_at AT TIME ZONE ${timezone})
+        GROUP BY 1
       )
       SELECT
         w.week_start::text,

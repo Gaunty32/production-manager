@@ -9,8 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon } from "lucide-react";
+import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon } from "lucide-react";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 type DatePreset = "this-week" | "last-week" | "last-4-weeks" | "last-12-weeks" | "custom";
 
@@ -72,6 +73,13 @@ interface DailyProductionData {
     totalEstimatedMinutes: number;
     accuracyPercentage: number;
   }>;
+}
+
+interface WeeklyTrendData {
+  weekStart: string;
+  weekEnd: string;
+  invoicedTotal: number;
+  completedQuantity: number;
 }
 
 interface WeeklyProductionData {
@@ -188,8 +196,22 @@ export default function WeeklyReports() {
     queryFn: () => fetchWithParams('/api/reports/weekly-production'),
   });
 
-  const isLoading = isLoadingPerformance || isLoadingErrors || isLoadingProduction || isLoadingWeekly;
-  const hasError = performanceError || errorsError || productionError || weeklyError;
+  const { data: weeklyTrendData, isLoading: isLoadingTrend, error: trendError } = useQuery<WeeklyTrendData[]>({
+    queryKey: ['/api/reports/weekly-performance', weeksCount, dateRange.to.toISOString()],
+    queryFn: () => fetchWithParams('/api/reports/weekly-performance'),
+  });
+
+  const isLoading = isLoadingPerformance || isLoadingErrors || isLoadingProduction || isLoadingWeekly || isLoadingTrend;
+  const hasError = performanceError || errorsError || productionError || weeklyError || trendError;
+
+  const chartData = useMemo(() => {
+    if (!weeklyTrendData) return [];
+    return weeklyTrendData.map(week => ({
+      week: format(new Date(week.weekStart), "MMM d"),
+      output: week.completedQuantity,
+      invoiceValue: week.invoicedTotal,
+    }));
+  }, [weeklyTrendData]);
 
   const formatNumber = (value: number) => value.toLocaleString();
   
@@ -383,6 +405,10 @@ export default function WeeklyReports() {
           <TabsTrigger value="production" data-testid="tab-production">
             <TrendingUp className="h-4 w-4 mr-2" />
             Daily Production
+          </TabsTrigger>
+          <TabsTrigger value="trends" data-testid="tab-trends">
+            <LineChartIcon className="h-4 w-4 mr-2" />
+            Contract Embroidery
           </TabsTrigger>
         </TabsList>
 
@@ -665,6 +691,145 @@ export default function WeeklyReports() {
               <span className="text-red-600 dark:text-red-400 font-semibold">&gt;2.0</span> = Needs attention (took 2x+ longer)
             </p>
           </div>
+        </TabsContent>
+
+        <TabsContent value="trends" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Output</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold" data-testid="text-total-output">
+                  {formatNumber(weeklyTrendData?.reduce((sum, w) => sum + w.completedQuantity, 0) ?? 0)}
+                </div>
+                <p className="text-xs text-muted-foreground">Items completed in period</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Invoice Value</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600 dark:text-green-400" data-testid="text-total-invoice-value">
+                  £{formatNumber(Math.round(weeklyTrendData?.reduce((sum, w) => sum + w.invoicedTotal, 0) ?? 0))}
+                </div>
+                <p className="text-xs text-muted-foreground">Invoiced in period</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Contract Embroidery Trend</CardTitle>
+              <p className="text-sm text-muted-foreground">Weekly output and invoice value over time</p>
+            </CardHeader>
+            <CardContent>
+              {isLoadingTrend ? (
+                <Skeleton className="h-[350px] w-full" />
+              ) : chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={350}>
+                  <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="week" 
+                      tick={{ fontSize: 12 }}
+                      className="text-muted-foreground"
+                    />
+                    <YAxis 
+                      yAxisId="left"
+                      tick={{ fontSize: 12 }}
+                      className="text-muted-foreground"
+                      label={{ value: 'Items', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
+                    />
+                    <YAxis 
+                      yAxisId="right"
+                      orientation="right"
+                      tick={{ fontSize: 12 }}
+                      className="text-muted-foreground"
+                      tickFormatter={(value) => `£${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
+                      label={{ value: 'Invoice Value (£)', angle: 90, position: 'insideRight', style: { fontSize: 12 } }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--background))', 
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '6px'
+                      }}
+                      formatter={(value: number, name: string) => {
+                        if (name === 'invoiceValue') return [`£${formatNumber(value)}`, 'Invoice Value'];
+                        return [formatNumber(value), 'Output'];
+                      }}
+                      labelFormatter={(label) => `Week of ${label}`}
+                    />
+                    <Legend />
+                    <Line 
+                      yAxisId="left"
+                      type="monotone" 
+                      dataKey="output" 
+                      name="Output (Items)"
+                      stroke="hsl(var(--primary))" 
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: 'hsl(var(--primary))' }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line 
+                      yAxisId="right"
+                      type="monotone" 
+                      dataKey="invoiceValue" 
+                      name="Invoice Value (£)"
+                      stroke="hsl(142.1, 76.2%, 36.3%)" 
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: 'hsl(142.1, 76.2%, 36.3%)' }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+                  No trend data available for the selected period
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Weekly Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Week</TableHead>
+                    <TableHead className="text-right">Output (Items)</TableHead>
+                    <TableHead className="text-right">Invoice Value</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {weeklyTrendData?.length ? (
+                    weeklyTrendData.map((week, index) => (
+                      <TableRow key={index} data-testid={`row-weekly-trend-${index}`}>
+                        <TableCell className="font-medium">
+                          {format(new Date(week.weekStart), "MMM d")} - {format(new Date(week.weekEnd), "MMM d, yyyy")}
+                        </TableCell>
+                        <TableCell className="text-right">{formatNumber(week.completedQuantity)}</TableCell>
+                        <TableCell className="text-right text-green-600 dark:text-green-400">
+                          £{formatNumber(Math.round(week.invoicedTotal))}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                        No weekly data available
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
