@@ -40,6 +40,7 @@ A customer job upload system allows customers to submit new job requests for sta
 -   **Invoice Enhancements**: Invoice dates use "last Friday" logic. "Print DTF" maps to "DTF" item code for Xero with print size. Shipping descriptions are enhanced. Consolidated invoices sort jobs chronologically with shipping fees per job.
 -   **Production Worksheet Printing**: Enhanced print layout for multi-page printing with intelligent page-break controls.
 -   **Auto-Scheduling Improvements**: Case-insensitive job type handling, overdue jobs prioritized, undated jobs scheduled within 30 days, default work hours (7 AM - 6 PM, Mon-Fri) used when no staff shifts configured, and improved error messages.
+-   **Contract Embroidery Trend Chart**: Weekly Reports includes a "Contract Embroidery" tab with a dual-axis line chart (worm chart) showing weekly production output (items completed) on the left axis and invoice value (£) on the right axis. Supports date range filtering with preset options (This Week, Last Week, Last 4 Weeks, Last 12 Weeks) and custom date picker.
 
 # External Dependencies
 
