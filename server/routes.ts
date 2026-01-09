@@ -1828,9 +1828,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Job not found" });
       }
 
-      // Get staff ID from userId
+      // Get staff ID from userId (convert both to string for safe comparison)
       const allStaff = await storage.getStaff();
-      const staff = allStaff.find(s => s.userId === req.session.userId);
+      const sessionUserId = String(req.session.userId);
+      const staff = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
 
       // Update job status to production
       await storage.updateJob(req.params.jobId, {
@@ -1873,9 +1874,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Job not found" });
       }
 
-      // Get staff ID from userId
+      // Get staff ID from userId (convert both to string for safe comparison)
       const allStaff = await storage.getStaff();
-      const staff = allStaff.find(s => s.userId === req.session.userId);
+      const sessionUserId = String(req.session.userId);
+      const staff = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
 
       // Update job status and add rejection reason
       await storage.updateJob(req.params.jobId, {
