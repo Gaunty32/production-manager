@@ -960,7 +960,7 @@ export default function Dashboard() {
                           )}
                         </div>
                         
-                        {job.lineItems && job.lineItems.length > 0 && (
+                        {job.lineItems && job.lineItems.length > 0 ? (
                           <div className="pt-2 border-t space-y-1">
                             {job.lineItems.map((lineItem, idx) => (
                               <div key={lineItem.id} className="flex items-center justify-between text-xs">
@@ -972,6 +972,10 @@ export default function Dashboard() {
                                 </span>
                               </div>
                             ))}
+                          </div>
+                        ) : (
+                          <div className="pt-2 border-t">
+                            <span className="text-amber-600 text-xs">Needs line items - edit to add</span>
                           </div>
                         )}
                         
@@ -1079,14 +1083,98 @@ export default function Dashboard() {
                       // Get errors for this job
                       const jobErrors = errorsByJobId[job.id] || [];
                       
-                      // If no line items, show a single row for the job
+                      // If no line items, show a summary row for the job with edit capability
                       if (!job.lineItems || job.lineItems.length === 0) {
+                        const isOverdue = job.requiredDispatchDate && isPast(startOfDay(new Date(job.requiredDispatchDate))) && !isToday(new Date(job.requiredDispatchDate));
+                        const isDueToday = job.requiredDispatchDate && isToday(new Date(job.requiredDispatchDate));
+                        const colorClass = getCustomerColorClasses(job.customerId);
+                        
                         return (
-                          <tr key={job.id}>
-                            <td colSpan={canViewPrices(currentUser?.role) ? 13 : 12} className="py-2 px-3 text-muted-foreground text-center">
-                              Job has no line items
-                            </td>
-                          </tr>
+                          <TableRow 
+                            key={job.id} 
+                            className={`${colorClass} ${isOverdue ? 'bg-red-50 dark:bg-red-950/30' : isDueToday ? 'bg-amber-50 dark:bg-amber-950/30' : ''}`}
+                            data-testid={`row-job-no-items-${job.id}`}
+                          >
+                            <TableCell className="py-2 px-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedJobIds.has(job.id)}
+                                onChange={() => {
+                                  const newSelected = new Set(selectedJobIds);
+                                  if (newSelected.has(job.id)) {
+                                    newSelected.delete(job.id);
+                                  } else {
+                                    newSelected.add(job.id);
+                                  }
+                                  setSelectedJobIds(newSelected);
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2 px-3">
+                              <span className="text-xs font-mono">
+                                {job.jobNumber || '-'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="py-2 px-3">
+                              <span className="font-medium">{job.customerName}</span>
+                            </TableCell>
+                            <TableCell className="py-2 px-3 font-medium">{job.jobName}</TableCell>
+                            <TableCell className="py-2 px-3">{job.poNumber || '-'}</TableCell>
+                            <TableCell className="py-2 px-3 text-center">{job.quantity || 0}</TableCell>
+                            <TableCell className="py-2 px-3 text-center">-</TableCell>
+                            {canViewPrices(currentUser?.role) && <TableCell className="py-2 px-3">-</TableCell>}
+                            <TableCell className="py-2 px-3">
+                              {job.goodsReceived 
+                                ? format(new Date(job.goodsReceived), 'dd/MM/yy') 
+                                : <span className="text-amber-600">Awaiting</span>}
+                            </TableCell>
+                            <TableCell className="py-2 px-3">
+                              {job.requiredDispatchDate 
+                                ? format(new Date(job.requiredDispatchDate), 'dd/MM/yy')
+                                : '-'}
+                            </TableCell>
+                            <TableCell className="py-2 px-3">
+                              <span className="text-amber-600 text-xs">Needs line items</span>
+                            </TableCell>
+                            <TableCell className="py-2 px-3">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" data-testid={`button-actions-${job.id}`}>
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleEdit(job.id)} data-testid={`menu-edit-${job.id}`}>
+                                    Edit Job
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => {
+                                      if (window.confirm(`Are you sure you want to delete this job: ${job.jobName}?`)) {
+                                        deleteJobMutation.mutate(job.id);
+                                      }
+                                    }}
+                                    className="text-destructive"
+                                    data-testid={`menu-delete-${job.id}`}
+                                  >
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                            <TableCell className="py-2 px-3">
+                              <JobErrorsDialog
+                                jobId={job.id}
+                                jobName={job.jobName}
+                                users={users}
+                                staff={staff}
+                                trigger={
+                                  <Button variant="ghost" size="sm" className="h-6 text-xs opacity-50 hover:opacity-100">
+                                    +
+                                  </Button>
+                                }
+                              />
+                            </TableCell>
+                          </TableRow>
                         );
                       }
                       

@@ -1832,18 +1832,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
+      console.log('[JOB APPROVE] Found job:', job.id, 'Name:', job.jobName, 'Current status:', job.status);
 
       // Get staff ID from userId (convert both to string for safe comparison)
       const allStaff = await storage.getStaff();
       const sessionUserId = String(req.session.userId);
       const staff = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
+      console.log('[JOB APPROVE] Staff found:', staff?.id, staff?.name);
 
       // Update job status to production
-      await storage.updateJob(req.params.jobId, {
+      const updatedJob = await storage.updateJob(req.params.jobId, {
         status: 'production',
         approvedById: staff?.id || null,
         approvedAt: new Date() as any,
       });
+      console.log('[JOB APPROVE] Job updated. New status:', updatedJob.status, 'Job ID:', updatedJob.id);
 
       // Send email notification to customer
       try {
@@ -2169,6 +2172,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         jobs = await storage.getJobs();
       }
+      
+      // Log job statuses for debugging
+      const statusCounts = jobs.reduce((acc, j) => {
+        acc[j.status] = (acc[j.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('[API /api/jobs] Returning', jobs.length, 'jobs. Status breakdown:', statusCounts);
       
       // Enrich each job with its line items
       const jobsWithLineItems = await Promise.all(
