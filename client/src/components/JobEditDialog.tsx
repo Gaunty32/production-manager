@@ -46,6 +46,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { CelebrationDialog } from "@/components/CelebrationDialog";
 import { ShippingInfoDialog } from "@/components/ShippingInfoDialog";
+import { StaffJobFileUpload } from "@/components/StaffJobFileUpload";
 
 type LineItem = {
   id?: string;
@@ -1168,6 +1169,10 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                 </FormItem>
               )}
             />
+
+            <div className="border rounded-md p-4">
+              <StaffJobFileUpload jobId={job.id} />
+            </div>
 
             {!allLineItemsCompleted() && (
               <p className="text-sm text-muted-foreground bg-muted/50 border rounded-md p-3 flex items-center gap-2">

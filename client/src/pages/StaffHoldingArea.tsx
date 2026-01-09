@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Clock, FileText, MessageSquare, Package, CheckCircle, XCircle, Calendar, Eye } from "lucide-react";
+import { Clock, FileText, MessageSquare, Package, CheckCircle, XCircle, Calendar, Eye, Upload } from "lucide-react";
 import { format } from "date-fns";
 import {
   Accordion,
@@ -23,6 +23,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { StaffJobFileUpload } from "@/components/StaffJobFileUpload";
 
 type Job = {
   id: string;
@@ -322,25 +323,7 @@ export default function StaffHoldingArea() {
                     </div>
                   )}
 
-                  {job.files && job.files.length > 0 && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-2">Attached Files</p>
-                      <div className="space-y-1">
-                        {job.files.map((file) => (
-                          <div
-                            key={file.id}
-                            className="flex items-center gap-2 text-sm p-2 bg-muted rounded"
-                          >
-                            <FileText className="h-3 w-3 text-muted-foreground" />
-                            <span className="truncate">{file.fileName}</span>
-                            <span className="text-xs text-muted-foreground">
-                              ({Math.round(file.fileSize / 1024)} KB)
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <StaffJobFileUpload jobId={job.id} />
                 </div>
 
                 {/* Mobile: Accordion for notes/files */}
@@ -359,29 +342,14 @@ export default function StaffHoldingArea() {
                       </AccordionItem>
                     )}
 
-                    {job.files && job.files.length > 0 && (
-                      <AccordionItem value="files" className="border rounded-md px-4">
-                        <AccordionTrigger className="text-sm font-medium hover:no-underline">
-                          Attached Files ({job.files.length})
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <div className="space-y-1">
-                            {job.files.map((file) => (
-                              <div
-                                key={file.id}
-                                className="flex items-center gap-2 text-sm p-2 bg-muted rounded"
-                              >
-                                <FileText className="h-3 w-3 text-muted-foreground" />
-                                <span className="truncate">{file.fileName}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  ({Math.round(file.fileSize / 1024)} KB)
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    )}
+                    <AccordionItem value="files" className="border rounded-md px-4">
+                      <AccordionTrigger className="text-sm font-medium hover:no-underline">
+                        Files
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <StaffJobFileUpload jobId={job.id} />
+                      </AccordionContent>
+                    </AccordionItem>
                   </Accordion>
                 </div>
 

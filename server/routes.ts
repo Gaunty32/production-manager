@@ -2018,6 +2018,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff - Get upload URL for file
+  app.post("/api/staff/objects/upload", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Error getting upload URL:", error);
+      res.status(500).json({ error: "Failed to get upload URL" });
+    }
+  });
+
+  // Staff - Add file to job after upload
+  app.post("/api/jobs/:jobId/files", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const rawFileUrl = req.body.objectKey || req.body.fileUrl;
+
+      if (!rawFileUrl) {
+        return res.status(400).json({ error: "Missing file URL or object key" });
+      }
+
+      const fileUrl = objectStorageService.normalizeObjectEntityPath(rawFileUrl);
+
+      const fileData = insertJobFileSchema.parse({
+        jobId: req.params.jobId,
+        fileName: req.body.fileName,
+        fileUrl: fileUrl,
+        fileSize: req.body.fileSize,
+        fileType: req.body.fileType,
+        uploadedBy: 'staff' as const,
+        uploaderId: (req.session as any).userId,
+      });
+
+      const file = await storage.createJobFile(fileData);
+      res.json(file);
+    } catch (error) {
+      console.error("Error adding file to job:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to add file" });
+      }
+    }
+  });
+
+  // Staff - Delete file from job
+  app.delete("/api/jobs/:jobId/files/:fileId", isStaffAuthenticated, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      await storage.deleteJobFile(req.params.fileId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      res.status(500).json({ error: "Failed to delete file" });
+    }
+  });
+
   // Customer routes
   app.get("/api/customers", isStaffAuthenticated, async (req, res) => {
     try {
