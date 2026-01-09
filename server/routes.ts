@@ -1691,7 +1691,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { ObjectStorageService } = await import("./objectStorage");
       const objectStorageService = new ObjectStorageService();
-      const fileUrl = objectStorageService.normalizeObjectEntityPath(req.body.fileUrl);
+      // Accept both objectKey (new) and fileUrl (legacy) for the file path
+      const rawFileUrl = req.body.objectKey || req.body.fileUrl;
+      if (!rawFileUrl) {
+        return res.status(400).json({ error: "Missing file URL or object key" });
+      }
+      const fileUrl = objectStorageService.normalizeObjectEntityPath(rawFileUrl);
 
       const fileData = insertJobFileSchema.parse({
         jobId: req.params.jobId,
