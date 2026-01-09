@@ -1931,10 +1931,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Job not found" });
       }
 
-      // Get staff ID from userId
+      // Get staff ID from userId (convert both to string for safe comparison)
       const allStaff = await storage.getStaff();
-      const staff = allStaff.find(s => s.userId === req.session.userId);
+      const sessionUserId = String(req.session.userId);
+      const staff = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
       if (!staff) {
+        console.error(`Staff member not found for userId: ${sessionUserId}. Available staff userIds:`, allStaff.map(s => s.userId));
         return res.status(404).json({ error: "Staff member not found" });
       }
 
