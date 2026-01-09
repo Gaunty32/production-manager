@@ -1795,14 +1795,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const allJobs = await storage.getJobs();
       const pendingJobs = allJobs.filter(j => j.status === 'pending_customer_approval');
+      const customers = await storage.getCustomers();
+      const customerMap = new Map(customers.map(c => [c.id, c]));
       
-      // Get files and messages for each pending job
+      // Get files, messages, and customer name for each pending job
       const jobsWithDetails = await Promise.all(
         pendingJobs.map(async (job) => {
           const files = await storage.getJobFiles(job.id);
           const messages = await storage.getJobMessages(job.id);
+          const customer = customerMap.get(job.customerId);
           return {
             ...job,
+            customerName: customer?.name || 'Unknown Customer',
             files,
             messages,
           };

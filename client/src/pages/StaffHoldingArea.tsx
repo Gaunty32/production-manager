@@ -27,6 +27,7 @@ import {
 type Job = {
   id: string;
   jobName: string;
+  customerName: string;
   poNumber: string | null;
   quantity: number;
   requiredDispatchDate: string | null;
@@ -224,26 +225,29 @@ export default function StaffHoldingArea() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Customer Job Submissions</h1>
-        <p className="text-muted-foreground">
-          Review and approve customer job requests
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex-shrink-0 px-4 py-4 md:py-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">Customer Job Submissions</h1>
+        <p className="text-sm text-muted-foreground">
+          Review and approve customer job requests ({pendingJobs.length} pending)
         </p>
       </div>
 
       {pendingJobs.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">
-              No pending submissions
-            </p>
-          </CardContent>
-        </Card>
+        <div className="px-4">
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">
+                No pending submissions
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20 md:pb-0">
+          <div className="flex-1 overflow-auto px-4 pb-24 md:pb-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {pendingJobs.map((job, index) => (
               <Card 
                 key={job.id}
@@ -253,16 +257,19 @@ export default function StaffHoldingArea() {
                 className={activeJobId === job.id ? "border-2 border-primary md:border md:border-border md:shadow-none transition-all duration-200" : "md:transition-none"}
               >
               <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg mb-1" data-testid={`text-jobname-${job.id}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-primary mb-0.5" data-testid={`text-customer-${job.id}`}>
+                      {job.customerName}
+                    </p>
+                    <CardTitle className="text-lg mb-1 truncate" data-testid={`text-jobname-${job.id}`}>
                       {job.jobName}
                     </CardTitle>
                     {job.poNumber && (
                       <p className="text-sm text-muted-foreground">PO: {job.poNumber}</p>
                     )}
                   </div>
-                  <Badge variant="secondary" className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                  <Badge variant="secondary" className="flex-shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
                     <Clock className="h-3 w-3 mr-1" />
                     Pending
                   </Badge>
@@ -453,6 +460,7 @@ export default function StaffHoldingArea() {
               </CardContent>
             </Card>
             ))}
+            </div>
           </div>
 
           {/* Mobile: Sticky action bar - targets currently visible job */}
