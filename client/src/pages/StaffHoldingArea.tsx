@@ -225,8 +225,8 @@ export default function StaffHoldingArea() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex-shrink-0 px-4 py-4 md:py-6">
+    <div className="h-full overflow-y-auto">
+      <div className="px-4 py-4 md:py-6">
         <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">Customer Job Submissions</h1>
         <p className="text-sm text-muted-foreground">
           Review and approve customer job requests ({pendingJobs.length} pending)
@@ -246,7 +246,7 @@ export default function StaffHoldingArea() {
         </div>
       ) : (
         <>
-          <div className="flex-1 overflow-auto px-4 pb-24 md:pb-4">
+          <div className="px-4 pb-24 md:pb-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {pendingJobs.map((job, index) => (
               <Card 
