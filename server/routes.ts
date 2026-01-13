@@ -2679,6 +2679,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer documents routes (staff management)
+  app.get("/api/customer-documents", isStaffAuthenticated, async (req, res) => {
+    try {
+      const documents = await storage.getCustomerDocuments();
+      res.json(documents);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch customer documents" });
+    }
+  });
+
+  app.post("/api/customer-documents", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { insertCustomerDocumentSchema } = await import("@shared/schema");
+      const data = insertCustomerDocumentSchema.parse({
+        ...req.body,
+        createdById: req.session.userId
+      });
+      const document = await storage.createCustomerDocument(data);
+      res.json(document);
+    } catch (error) {
+      console.error("Error creating customer document:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create customer document" });
+      }
+    }
+  });
+
+  app.patch("/api/customer-documents/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { insertCustomerDocumentSchema } = await import("@shared/schema");
+      const updateSchema = insertCustomerDocumentSchema.partial().omit({ createdById: true });
+      const data = updateSchema.parse(req.body);
+      const document = await storage.updateCustomerDocument(req.params.id, data);
+      res.json(document);
+    } catch (error) {
+      console.error("Error updating customer document:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update customer document" });
+      }
+    }
+  });
+
+  app.delete("/api/customer-documents/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteCustomerDocument(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete customer document" });
+    }
+  });
+
+  // Customer documents routes (customer portal - read only)
+  app.get("/api/customer-portal/documents", isCustomerAuthenticated, async (req, res) => {
+    try {
+      const documents = await storage.getActiveCustomerDocuments();
+      res.json(documents);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
   // Staff shift routes
   app.get("/api/staff-shifts", isStaffAuthenticated, async (req, res) => {
     try {

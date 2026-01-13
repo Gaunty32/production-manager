@@ -410,6 +410,14 @@ export default function CustomerDashboard() {
               <FileText className="h-4 w-4 mr-2" />
               Pending Submissions
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/customer/documents")}
+              data-testid="button-view-documents"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Documents
+            </Button>
           </div>
 
           <div>

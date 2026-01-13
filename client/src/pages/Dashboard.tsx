@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, Package, Coins, ArrowUpDown, Printer, Truck } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, Package, Coins, ArrowUpDown, Printer, Truck, FileText } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -33,6 +33,7 @@ import { EditTrackingDialog } from "@/components/EditTrackingDialog";
 import { JobErrorsDialog } from "@/components/JobErrorsDialog";
 import { JobErrorBadge } from "@/components/JobErrorBadge";
 import { RecordProductionDialog } from "@/components/RecordProductionDialog";
+import { CustomerDocumentsManager } from "@/components/CustomerDocumentsManager";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
@@ -764,6 +765,14 @@ export default function Dashboard() {
                 </Button>
               }
               customers={customers}
+            />
+            <CustomerDocumentsManager
+              trigger={
+                <Button variant="outline" data-testid="button-manage-documents">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Customer Documents
+                </Button>
+              }
             />
             
             {/* View Toggle */}

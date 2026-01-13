@@ -19,6 +19,7 @@ import {
   passwordResetTokens,
   impersonationSessions,
   jobErrors,
+  customerDocuments,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -51,7 +52,9 @@ import {
   type JobFile,
   type InsertJobFile,
   type JobError,
-  type InsertJobError
+  type InsertJobError,
+  type CustomerDocument,
+  type InsertCustomerDocument
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
@@ -198,6 +201,14 @@ export interface IStorage {
   deleteJobError(id: string): Promise<void>;
   getUnresolvedJobErrors(): Promise<JobError[]>;
   getAllJobErrors(): Promise<JobError[]>;
+  
+  // Customer documents methods
+  getCustomerDocuments(): Promise<CustomerDocument[]>;
+  getActiveCustomerDocuments(): Promise<CustomerDocument[]>;
+  getCustomerDocument(id: string): Promise<CustomerDocument | undefined>;
+  createCustomerDocument(doc: InsertCustomerDocument): Promise<CustomerDocument>;
+  updateCustomerDocument(id: string, doc: Partial<CustomerDocument>): Promise<CustomerDocument>;
+  deleteCustomerDocument(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2304,6 +2315,48 @@ export class DatabaseStorage implements IStorage {
     });
 
     return { weeklyData, staffTotals };
+  }
+
+  // Customer documents methods
+  async getCustomerDocuments(): Promise<CustomerDocument[]> {
+    return await db
+      .select()
+      .from(customerDocuments)
+      .orderBy(sql`${customerDocuments.sortOrder} ASC, ${customerDocuments.createdAt} DESC`);
+  }
+
+  async getActiveCustomerDocuments(): Promise<CustomerDocument[]> {
+    return await db
+      .select()
+      .from(customerDocuments)
+      .where(eq(customerDocuments.active, true))
+      .orderBy(sql`${customerDocuments.sortOrder} ASC, ${customerDocuments.createdAt} DESC`);
+  }
+
+  async getCustomerDocument(id: string): Promise<CustomerDocument | undefined> {
+    const [doc] = await db.select().from(customerDocuments).where(eq(customerDocuments.id, id));
+    return doc;
+  }
+
+  async createCustomerDocument(doc: InsertCustomerDocument): Promise<CustomerDocument> {
+    const [created] = await db
+      .insert(customerDocuments)
+      .values(doc)
+      .returning();
+    return created;
+  }
+
+  async updateCustomerDocument(id: string, doc: Partial<CustomerDocument>): Promise<CustomerDocument> {
+    const [updated] = await db
+      .update(customerDocuments)
+      .set({ ...doc, updatedAt: new Date() })
+      .where(eq(customerDocuments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCustomerDocument(id: string): Promise<void> {
+    await db.delete(customerDocuments).where(eq(customerDocuments.id, id));
   }
 }
 

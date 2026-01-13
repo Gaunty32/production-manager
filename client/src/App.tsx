@@ -31,6 +31,7 @@ import CustomerDashboard from "@/pages/CustomerDashboard";
 import CustomerSubmitJob from "@/pages/CustomerSubmitJob";
 import CustomerPendingJobs from "@/pages/CustomerPendingJobs";
 import CustomerJobDetail from "@/pages/CustomerJobDetail";
+import CustomerDocuments from "@/pages/CustomerDocuments";
 import CustomerPasswordReset from "@/pages/CustomerPasswordReset";
 import DemoPortal from "@/pages/DemoPortal";
 import NotFound from "@/pages/not-found";
@@ -126,6 +127,7 @@ function CustomerPortalApp() {
       <Route path="/customer/submit" component={CustomerSubmitJob} />
       <Route path="/customer/pending" component={CustomerPendingJobs} />
       <Route path="/customer/job/:id" component={CustomerJobDetail} />
+      <Route path="/customer/documents" component={CustomerDocuments} />
       <Route path="/customer/dashboard" component={CustomerDashboard} />
       <Route path="/customer" component={CustomerDashboard} />
       <Route component={NotFound} />
