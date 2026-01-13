@@ -1117,14 +1117,14 @@ export default function Dashboard() {
                               />
                             </TableCell>
                             <TableCell className="py-2 px-3">
+                              <span className="font-medium">{job.customerName}</span>
+                            </TableCell>
+                            <TableCell className="py-2 px-3 font-medium">{job.jobName}</TableCell>
+                            <TableCell className="py-2 px-3">
                               <span className="text-xs font-mono">
                                 {job.jobNumber || '-'}
                               </span>
                             </TableCell>
-                            <TableCell className="py-2 px-3">
-                              <span className="font-medium">{job.customerName}</span>
-                            </TableCell>
-                            <TableCell className="py-2 px-3 font-medium">{job.jobName}</TableCell>
                             <TableCell className="py-2 px-3">{job.poNumber || '-'}</TableCell>
                             <TableCell className="py-2 px-3 text-center">{job.quantity || 0}</TableCell>
                             <TableCell className="py-2 px-3 text-center">-</TableCell>
