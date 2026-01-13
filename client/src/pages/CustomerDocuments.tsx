@@ -127,14 +127,14 @@ export default function CustomerDocuments() {
                             <FileText className="h-5 w-5 text-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-medium truncate group-hover:text-primary transition-colors">
+                            <div className="flex items-start gap-2">
+                              <h4 className="font-medium group-hover:text-primary transition-colors">
                                 {doc.title}
                               </h4>
-                              <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                              <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1" />
                             </div>
                             {doc.description && (
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                              <p className="text-sm text-muted-foreground mt-1">
                                 {doc.description}
                               </p>
                             )}
