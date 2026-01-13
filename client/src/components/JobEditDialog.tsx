@@ -777,7 +777,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                         <div className="flex-1">
                           <label className="text-xs text-muted-foreground">Position</label>
                           <Select 
-                            value={item.position || ""}
+                            value={item.position || undefined}
                             onValueChange={(value) => {
                               updateLineItem(index, 'position', value || null);
                               // Clear positionOther if not selecting "other"

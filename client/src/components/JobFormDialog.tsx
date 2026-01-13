@@ -441,7 +441,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   };
 
   // Helper to check if express service is required
-  const requiresExpressService = (dispatchDateStr: string | undefined) => {
+  const requiresExpressService = (dispatchDateStr: string | null | undefined) => {
     if (!dispatchDateStr) return false;
     const totalQuantity = getTotalQuantity();
     if (totalQuantity <= 0 || totalQuantity >= 300) return false;
@@ -998,7 +998,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                         <div className="flex-1">
                           <label className="text-xs text-muted-foreground font-medium">Position</label>
                           <Select 
-                            value={item.position || ""}
+                            value={item.position || undefined}
                             onValueChange={(value) => {
                               const updated = [...lineItems];
                               updated[index] = { 
