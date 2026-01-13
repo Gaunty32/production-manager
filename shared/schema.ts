@@ -279,6 +279,29 @@ export const jobErrors = pgTable("job_errors", {
   index("job_errors_assigned_to_idx").on(table.assignedToId),
 ]);
 
+// Customer portal: shared documents (Google Drive links visible to all customers)
+export const customerDocuments = pgTable("customer_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  driveUrl: varchar("drive_url").notNull(),
+  category: varchar("category").default("general"), // general, pricing, policies, guides
+  sortOrder: integer("sort_order").default(0),
+  active: boolean("active").notNull().default(true),
+  createdById: varchar("created_by_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertCustomerDocumentSchema = createInsertSchema(customerDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CustomerDocument = typeof customerDocuments.$inferSelect;
+export type InsertCustomerDocument = z.infer<typeof insertCustomerDocumentSchema>;
+
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
 });
