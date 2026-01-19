@@ -471,6 +471,7 @@ export default function CustomerSubmitJob() {
                         return {
                           method: "PUT" as const,
                           url: data.url,
+                          key: data.key,
                         };
                       }}
                       onComplete={(result) => {

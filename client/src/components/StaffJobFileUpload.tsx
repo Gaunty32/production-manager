@@ -77,7 +77,8 @@ export function StaffJobFileUpload({ jobId, onFileAdded }: StaffJobFileUploadPro
             const data = await res.json();
             return {
               method: "PUT" as const,
-              url: data.uploadURL,
+              url: data.url,
+              key: data.key,
             };
           }}
           onComplete={(result) => {

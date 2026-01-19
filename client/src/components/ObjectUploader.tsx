@@ -16,6 +16,7 @@ interface ObjectUploaderProps {
   onGetUploadParameters: () => Promise<{
     method: "PUT";
     url: string;
+    key?: string;
   }>;
   onComplete?: (
     result: UploadResult<Record<string, unknown>, Record<string, unknown>>
@@ -47,7 +48,17 @@ export function ObjectUploader({
     })
       .use(AwsS3, {
         shouldUseMultipart: false,
-        getUploadParameters: onGetUploadParameters,
+        getUploadParameters: async (file) => {
+          const params = await onGetUploadParameters();
+          // Store the key in file meta so it's available in onComplete
+          if (params.key) {
+            file.meta.key = params.key;
+          }
+          return {
+            method: params.method,
+            url: params.url,
+          };
+        },
       })
       .on("complete", (result) => {
         onComplete?.(result);
