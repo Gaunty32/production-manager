@@ -848,7 +848,7 @@ export const insertJobFileSchema = createInsertSchema(jobFiles).omit({
   createdAt: true,
 }).extend({
   fileName: z.string().min(1),
-  fileUrl: z.string().url(),
+  fileUrl: z.string().min(1), // Path or URL - not required to be a full URL
   fileSize: z.number().int().positive(),
   fileType: z.string().min(1),
   uploadedBy: z.enum(["customer", "staff"]),
