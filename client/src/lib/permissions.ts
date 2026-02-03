@@ -5,6 +5,7 @@ export interface Permissions {
   canManageCustomers: boolean;
   canManageJobs: boolean;
   canViewReports: boolean;
+  canDeactivateCustomers: boolean;
 }
 
 export function getPermissions(role?: string): Permissions {
@@ -20,5 +21,6 @@ export function getPermissions(role?: string): Permissions {
     canManageCustomers: isSuperAdmin || isAdmin || isManager,
     canManageJobs: isStaff,
     canViewReports: isSuperAdmin || isAdmin || isManager,
+    canDeactivateCustomers: isSuperAdmin,
   };
 }

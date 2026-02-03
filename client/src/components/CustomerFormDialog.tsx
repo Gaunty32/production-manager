@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
 
 const formSchema = insertCustomerSchema
@@ -35,17 +36,19 @@ const formSchema = insertCustomerSchema
     address: z.string().optional(),
     logoUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
     pricingTable: z.enum(["none", "2025", "2026"]).default("none"),
+    active: z.boolean().default(true),
   });
 
 interface CustomerFormDialogProps {
   trigger?: React.ReactNode;
   customer?: Customer;
-  onSubmit: (data: Omit<z.infer<typeof formSchema>, 'pricingTable'> & { pricingTable2025: boolean; pricingTable2026: boolean; logoUrl?: string }) => void;
+  onSubmit: (data: Omit<z.infer<typeof formSchema>, 'pricingTable'> & { pricingTable2025: boolean; pricingTable2026: boolean; logoUrl?: string; active: boolean }) => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  canDeactivateCustomers?: boolean;
 }
 
-export function CustomerFormDialog({ trigger, customer, onSubmit, open: controlledOpen, onOpenChange }: CustomerFormDialogProps) {
+export function CustomerFormDialog({ trigger, customer, onSubmit, open: controlledOpen, onOpenChange, canDeactivateCustomers = false }: CustomerFormDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
@@ -62,6 +65,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
       address: "",
       logoUrl: "",
       pricingTable: "none",
+      active: true,
     },
   });
 
@@ -79,6 +83,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         address: customer.address || "",
         logoUrl: customer.logoUrl || "",
         pricingTable,
+        active: customer.active !== false, // Default to true if undefined
       });
     } else if (!open) {
       form.reset({
@@ -90,17 +95,19 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         address: "",
         logoUrl: "",
         pricingTable: "none",
+        active: true,
       });
     }
   }, [customer, open, form]);
 
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
     // Convert radio button selection to boolean fields
-    const { pricingTable, ...rest } = data;
+    const { pricingTable, active, ...rest } = data;
     const submitData = {
       ...rest,
       pricingTable2025: pricingTable === "2025",
       pricingTable2026: pricingTable === "2026",
+      active: active !== false, // Default to true
     };
     onSubmit(submitData);
     setOpen(false);
@@ -260,6 +267,29 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                 )}
               />
             </div>
+
+            {isEditMode && canDeactivateCustomers && (
+              <div className="space-y-3 pt-2 border-t">
+                <FormField
+                  control={form.control}
+                  name="active"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center gap-3">
+                      <FormControl>
+                        <Checkbox
+                          checked={!field.value}
+                          onCheckedChange={(checked) => field.onChange(!checked)}
+                          data-testid="checkbox-inactive"
+                        />
+                      </FormControl>
+                      <FormLabel className="text-sm font-normal cursor-pointer">
+                        Inactive (dormant account)
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>

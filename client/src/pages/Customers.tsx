@@ -28,7 +28,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 export default function Customers() {
   const { toast } = useToast();
-  const { canImpersonateCustomers } = usePermissions();
+  const { canImpersonateCustomers, canDeactivateCustomers } = usePermissions();
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [portalFilter, setPortalFilter] = useState<'all' | 'has-portal' | 'no-portal'>('all');
@@ -374,6 +374,7 @@ export default function Customers() {
                 </Button>
               }
               onSubmit={(data) => createCustomerMutation.mutate(data)}
+              canDeactivateCustomers={canDeactivateCustomers}
             />
             </div>
           </div>
@@ -684,6 +685,7 @@ export default function Customers() {
             onOpenChange={(open) => !open && setCustomerToEdit(null)}
             customer={customerToEdit}
             onSubmit={(data) => updateCustomerMutation.mutate({ id: customerToEdit.id, data })}
+            canDeactivateCustomers={canDeactivateCustomers}
           />
         )}
 
