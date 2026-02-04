@@ -121,9 +121,11 @@ export default function InvoicingQueue() {
     queryKey: ["/api/jobs"],
   });
 
-  const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
+  const { data: customersData = [], isLoading: customersLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
   });
+  // Only show active customers in selection dropdowns
+  const customers = customersData.filter(c => c.active !== false);
 
   const { data: allLineItems = [] } = useQuery<LineItem[]>({
     queryKey: ["/api/job-line-items"],

@@ -74,6 +74,8 @@ export default function Dashboard() {
 
   // Sort customers alphabetically by name
   const customers = [...customersData].sort((a, b) => a.name.localeCompare(b.name));
+  // Only show active customers in selection dropdowns (inactive customers should not be selectable)
+  const activeCustomers = customers.filter(c => c.active !== false);
 
   const { data: staffData = [], isLoading: staffLoading } = useQuery<Staff[]>({
     queryKey: ["/api/staff"],
@@ -546,7 +548,7 @@ export default function Dashboard() {
                   New Order
                 </Button>
               }
-              customers={customers}
+              customers={activeCustomers}
               staff={staff}
               onJobCreated={async (jobId) => {
                 // Fetch the full job with line items for the worksheet
@@ -606,7 +608,7 @@ export default function Dashboard() {
             <LogoSetupDialog
               open={showLogoSetupDialog}
               onOpenChange={setShowLogoSetupDialog}
-              customers={customers}
+              customers={activeCustomers}
             />
           </div>
         </div>
@@ -735,7 +737,7 @@ export default function Dashboard() {
                   New Order
                 </Button>
               }
-              customers={customers}
+              customers={activeCustomers}
               staff={staff}
               onJobCreated={async (jobId) => {
                 try {
@@ -764,7 +766,7 @@ export default function Dashboard() {
                   New Embroidery Set-Up
                 </Button>
               }
-              customers={customers}
+              customers={activeCustomers}
             />
             <CustomerDocumentsManager
               trigger={
@@ -1287,7 +1289,7 @@ export default function Dashboard() {
                     Add Set-Up
                   </Button>
                 }
-                customers={customers}
+                customers={activeCustomers}
               />
             </div>
             {filteredLogoSetups.length > 0 ? (
@@ -1448,7 +1450,7 @@ export default function Dashboard() {
             goodsReceived: editingJob.goodsReceived ? new Date(editingJob.goodsReceived) : null,
             requiredDispatchDate: editingJob.requiredDispatchDate ? new Date(editingJob.requiredDispatchDate) : null,
           } : null}
-          customers={customers}
+          customers={activeCustomers}
           staff={staff}
           onSubmit={(id, data) => updateJobMutation.mutate({ id, data })}
         />

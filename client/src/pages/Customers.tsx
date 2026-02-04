@@ -355,7 +355,7 @@ export default function Customers() {
                   Create Portal Login
                 </Button>
               }
-              customers={customers}
+              customers={customers.filter(c => c.active !== false)}
               onSubmit={async (data) => {
                 return new Promise((resolve, reject) => {
                   createCustomerUserMutation.mutate(data, {
