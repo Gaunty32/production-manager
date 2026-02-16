@@ -3831,7 +3831,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity: 1,
           unitPrice: 10, // £10 per approved logo setup
           stitchCount: 0,
-          itemCode: "OTHER", // Use OTHER item code for logo setups
+          itemCode: "EMB Set-Up",
         });
       }
 
@@ -4134,7 +4134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity: 1,
           unitPrice: 10, // £10 per approved logo setup
           stitchCount: 0,
-          itemCode: "OTHER", // Use OTHER item code for logo setups
+          itemCode: "EMB Set-Up",
         });
       }
 
