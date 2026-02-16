@@ -388,7 +388,7 @@ export class XeroService {
         description,
         quantity: item.quantity,
         unitAmount: item.unitPrice,
-        accountCode: "4002",
+        accountCode: "1002",
         taxType: "OUTPUT2", // 20% VAT on income
       };
       
@@ -497,7 +497,7 @@ export class XeroService {
         description,
         quantity: item.quantity,
         unitAmount: item.unitPrice,
-        accountCode: "4002",
+        accountCode: "1002",
         taxType: "OUTPUT2", // 20% VAT on income
       };
       
