@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil } from "lucide-react";
 import { format } from "date-fns";
-import { calculateJobPrice, formatPrice, calculateShippingCost } from "@shared/pricing";
+import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
@@ -241,6 +241,171 @@ export default function InvoicingQueue() {
 
   const needsManualPrice = (lineItem: LineItem) => {
     return lineItem.quantity >= 1000 || lineItem.stitchCount >= 50000;
+  };
+
+  const buildInvoicePreviewLines = (customerJobs: Job[], customerId: string) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) return [];
+    
+    const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
+    const previewLines: Array<{ description: string; quantity: number; unitPrice: number | string; itemCode: string }> = [];
+    
+    const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
+    
+    const sortedJobs = [...selectedCustomerJobs].sort((a, b) => {
+      const dateA = a.goodsReceived ? new Date(a.goodsReceived).getTime() : 0;
+      const dateB = b.goodsReceived ? new Date(b.goodsReceived).getTime() : 0;
+      return dateA - dateB;
+    });
+    
+    const shipmentLastIndex = new Map<string, number>();
+    for (let i = 0; i < sortedJobs.length; i++) {
+      const shipmentKey = sortedJobs[i].consolidatedShipmentId || `single-${sortedJobs[i].id}`;
+      shipmentLastIndex.set(shipmentKey, i);
+    }
+    
+    const shipmentJobsMap = new Map<string, Job[]>();
+    
+    for (let i = 0; i < sortedJobs.length; i++) {
+      const job = sortedJobs[i];
+      const shipmentKey = job.consolidatedShipmentId || `single-${job.id}`;
+      
+      if (!shipmentJobsMap.has(shipmentKey)) {
+        shipmentJobsMap.set(shipmentKey, []);
+      }
+      shipmentJobsMap.get(shipmentKey)!.push(job);
+      
+      const jobLineItems = getJobLineItems(job.id);
+      
+      let priceResult: any = null;
+      try {
+        priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
+      } catch {
+        priceResult = null;
+      }
+      
+      jobLineItems.forEach((lineItem, index) => {
+        let unitPrice: number | string;
+        
+        if (manualPrices[lineItem.id]) {
+          unitPrice = parseFloat(manualPrices[lineItem.id]);
+        } else if (priceResult && priceResult.totalPrice !== "POA") {
+          const lineItemPrice = priceResult.lineItemPrices[index];
+          unitPrice = typeof lineItemPrice === 'number' ? lineItemPrice : (lineItemPrice?.unitPrice ?? 0);
+        } else {
+          unitPrice = "POA";
+        }
+        
+        const jobTypeLower = lineItem.jobType?.toLowerCase() || '';
+        let itemCode = "Emb";
+        let description = lineItem.description || '';
+        
+        if (jobTypeLower === "print") {
+          itemCode = "DTF";
+          const printSize = CODE_TO_PRINT_SIZE[lineItem.stitchCount as keyof typeof CODE_TO_PRINT_SIZE];
+          description = description || job.jobName;
+          if (printSize) {
+            description = `${description}, ${printSize} Print`;
+          }
+          if (job.poNumber) {
+            description += ` (PO: ${job.poNumber})`;
+          }
+        } else if (jobTypeLower === "bagging") {
+          itemCode = "BAG";
+          description = description || job.jobName;
+          if (job.poNumber) {
+            description += ` (PO: ${job.poNumber})`;
+          }
+        } else if (jobTypeLower === "other") {
+          itemCode = "-";
+          description = description || job.jobName;
+          if (job.poNumber) {
+            description += ` (PO: ${job.poNumber})`;
+          }
+        } else {
+          description = `${job.jobName}, ${lineItem.stitchCount.toLocaleString()} Stitches`;
+          if (job.poNumber) {
+            description += ` (PO: ${job.poNumber})`;
+          }
+        }
+        
+        previewLines.push({ description, quantity: lineItem.quantity, unitPrice, itemCode });
+      });
+      
+      if (shipmentLastIndex.get(shipmentKey) === i) {
+        const shipmentJobs = shipmentJobsMap.get(shipmentKey)!;
+        let totalShippingCost = 0;
+        let shippingMethod = '';
+        let hasShipping = false;
+        
+        for (const sJob of shipmentJobs) {
+          let shippingCost: number | null = null;
+          
+          if (sJob.shippingCost === "TBA") {
+            if (manualShippingCosts[sJob.id]) {
+              shippingCost = Number(manualShippingCosts[sJob.id]);
+            }
+          } else if (sJob.shippingCost) {
+            shippingCost = parseFloat(sJob.shippingCost);
+          }
+          
+          if (shippingCost !== null && !isNaN(shippingCost) && shippingCost > 0) {
+            totalShippingCost += shippingCost;
+            hasShipping = true;
+            if (!shippingMethod) shippingMethod = sJob.shippingMethod || '';
+          }
+        }
+        
+        if (hasShipping && totalShippingCost > 0) {
+          const isConsolidated = shipmentJobs.length > 1;
+          const jobDetails = shipmentJobs.map(j => j.poNumber ? `${j.jobName} (PO: ${j.poNumber})` : j.jobName).join(', ');
+          
+          let packageInfo = '';
+          if (shippingMethod === 'direct_delivery') {
+            const packageCounts: Record<string, number> = {};
+            for (const sJob of shipmentJobs) {
+              if (sJob.packageCount && sJob.packageType) {
+                const t = sJob.packageType.toLowerCase();
+                packageCounts[t] = (packageCounts[t] || 0) + sJob.packageCount;
+              }
+            }
+            if (Object.keys(packageCounts).length > 0) {
+              const pluralMap: Record<string, string> = { 'box': 'boxes', 'boxes': 'boxes', 'bag': 'bags', 'bags': 'bags', 'pallet': 'pallets', 'pallets': 'pallets', 'package': 'packages', 'packages': 'packages' };
+              const singularMap: Record<string, string> = { 'boxes': 'box', 'bags': 'bag', 'pallets': 'pallet', 'packages': 'package' };
+              const parts = Object.entries(packageCounts).map(([type, count]) => {
+                const singular = singularMap[type] || type;
+                const plural = pluralMap[type] || pluralMap[singular] || type + 's';
+                return `${count} ${count > 1 ? plural : singular}`;
+              });
+              packageInfo = ` (${parts.join(', ')})`;
+            }
+          }
+          
+          const methodLabel = shippingMethod === 'customer_collection' ? 'Customer Collection' : shippingMethod === 'consolidated' ? 'Consolidated Back to Customer' : 'Direct Delivery';
+          
+          previewLines.push({
+            description: `Shipping${isConsolidated ? ' (Consolidated)' : ''} - ${methodLabel}${packageInfo} - ${jobDetails}`,
+            quantity: 1,
+            unitPrice: totalShippingCost,
+            itemCode: "Carriage",
+          });
+        }
+        
+        shipmentJobsMap.delete(shipmentKey);
+      }
+    }
+    
+    const customerLogos = getCustomerApprovedLogos(customerId);
+    for (const logo of customerLogos) {
+      previewLines.push({
+        description: `Logo Set-Up - ${logo.jobName}`,
+        quantity: 1,
+        unitPrice: 10,
+        itemCode: "EMB Set-Up",
+      });
+    }
+    
+    return previewLines;
   };
 
   const getJobPrice = (job: Job) => {
@@ -935,6 +1100,74 @@ export default function InvoicingQueue() {
                                   )}
                                 </div>
                               ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Invoice Line Preview */}
+                      {(() => {
+                        const hasSelectedJobs = customerJobs.some(job => selectedJobs.has(job.id));
+                        const hasLogoSetups = getCustomerApprovedLogos(customerId).length > 0;
+                        if (!hasSelectedJobs && !hasLogoSetups) return null;
+                        
+                        const previewLines = buildInvoicePreviewLines(customerJobs, customerId);
+                        if (previewLines.length === 0) return null;
+                        
+                        const previewTotal = previewLines.reduce((sum, line) => {
+                          if (typeof line.unitPrice === 'number') {
+                            return sum + (line.unitPrice * line.quantity);
+                          }
+                          return sum;
+                        }, 0);
+                        const hasPOA = previewLines.some(line => line.unitPrice === "POA");
+                        
+                        return (
+                          <div className="mt-6 pt-6 border-t">
+                            <div className="flex items-center gap-2 mb-3">
+                              <FileText className="h-4 w-4 text-primary" />
+                              <h4 className="font-semibold text-sm">Xero Invoice Preview</h4>
+                              <Badge variant="outline" className="ml-auto">
+                                {previewLines.length} {previewLines.length === 1 ? 'line' : 'lines'}
+                              </Badge>
+                            </div>
+                            <div className="rounded-lg border overflow-hidden">
+                              <table className="w-full text-sm" data-testid={`table-invoice-preview-${customerId}`}>
+                                <thead>
+                                  <tr className="bg-muted/50">
+                                    <th className="text-left p-2 font-medium text-muted-foreground">Item Code</th>
+                                    <th className="text-left p-2 font-medium text-muted-foreground">Description</th>
+                                    <th className="text-right p-2 font-medium text-muted-foreground">Qty</th>
+                                    <th className="text-right p-2 font-medium text-muted-foreground">Unit Price</th>
+                                    <th className="text-right p-2 font-medium text-muted-foreground">Amount</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {previewLines.map((line, idx) => (
+                                    <tr key={idx} className="border-t">
+                                      <td className="p-2">
+                                        <Badge variant="outline" className="text-xs">{line.itemCode}</Badge>
+                                      </td>
+                                      <td className="p-2 text-foreground">{line.description}</td>
+                                      <td className="p-2 text-right text-muted-foreground">{line.quantity}</td>
+                                      <td className="p-2 text-right text-muted-foreground">
+                                        {typeof line.unitPrice === 'number' ? `£${line.unitPrice.toFixed(2)}` : line.unitPrice}
+                                      </td>
+                                      <td className="p-2 text-right font-medium">
+                                        {typeof line.unitPrice === 'number' ? `£${(line.unitPrice * line.quantity).toFixed(2)}` : line.unitPrice}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="border-t bg-muted/30">
+                                    <td colSpan={4} className="p-2 text-right font-semibold">Subtotal (excl. VAT)</td>
+                                    <td className="p-2 text-right font-bold">
+                                      {hasPOA ? "POA" : `£${previewTotal.toFixed(2)}`}
+                                    </td>
+                                  </tr>
+                                </tfoot>
+                              </table>
                             </div>
                           </div>
                         );
