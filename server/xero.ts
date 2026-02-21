@@ -392,15 +392,13 @@ export class XeroService {
         taxType: "OUTPUT2", // 20% VAT on income
       };
       
-      // Only include itemCode if it's a recognized code (not OTHER)
       if (item.itemCode === "CARRIAGE") {
-        lineItem.itemCode = "Carriage"; // Map CARRIAGE to Carriage for Xero
+        lineItem.itemCode = "Carriage";
       } else if (item.itemCode === "Print DTF") {
-        lineItem.itemCode = "DTF"; // Map Print DTF to DTF for Xero
-      } else if (item.itemCode !== "OTHER") {
-        lineItem.itemCode = item.itemCode; // Include other valid codes like Emb, BAG
+        lineItem.itemCode = "DTF";
+      } else if (item.itemCode === "Emb" || item.itemCode === "BAG") {
+        lineItem.itemCode = item.itemCode;
       }
-      // Omit itemCode for OTHER - let Xero handle it without a specific item code
       
       return lineItem;
     });
@@ -501,15 +499,13 @@ export class XeroService {
         taxType: "OUTPUT2", // 20% VAT on income
       };
       
-      // Only include itemCode if it's a recognized code (not OTHER)
       if (item.itemCode === "CARRIAGE") {
-        lineItem.itemCode = "Carriage"; // Map CARRIAGE to Carriage for Xero
+        lineItem.itemCode = "Carriage";
       } else if (item.itemCode === "Print DTF") {
-        lineItem.itemCode = "DTF"; // Map Print DTF to DTF for Xero
-      } else if (item.itemCode !== "OTHER") {
-        lineItem.itemCode = item.itemCode; // Include other valid codes like Emb, BAG
+        lineItem.itemCode = "DTF";
+      } else if (item.itemCode === "Emb" || item.itemCode === "BAG") {
+        lineItem.itemCode = item.itemCode;
       }
-      // Omit itemCode for OTHER - let Xero handle it without a specific item code
       
       return lineItem;
     });

@@ -401,7 +401,7 @@ export default function InvoicingQueue() {
         description: `Logo Set-Up - ${logo.jobName}`,
         quantity: 1,
         unitPrice: 10,
-        itemCode: "EMB Set-Up",
+        itemCode: "-",
       });
     }
     
