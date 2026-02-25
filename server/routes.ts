@@ -4042,7 +4042,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }).join(', ');
               
               let packageInfo = '';
-              if (shippingMethod === 'direct_delivery') {
+              {
                 const packageCounts: { [key: string]: number } = {};
                 for (const shipmentJob of jobs) {
                   if (shipmentJob.packageCount && shipmentJob.packageType) {
@@ -4054,9 +4054,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 if (Object.keys(packageCounts).length > 0) {
                   const pluralMap: { [key: string]: string } = {
                     'box': 'boxes',
-                    'boxes': 'boxes', // Handle already-plural form
+                    'boxes': 'boxes',
                     'bag': 'bags',
-                    'bags': 'bags', // Handle already-plural form
+                    'bags': 'bags',
                     'pallet': 'pallets',
                     'pallets': 'pallets',
                     'package': 'packages',

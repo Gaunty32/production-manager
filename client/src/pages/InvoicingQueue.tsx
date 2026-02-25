@@ -44,9 +44,11 @@ interface LineItem {
 
 interface EditShippingState {
   jobId: string;
+  customerId: string;
   dhlTrackingNumber: string;
   packageCount: number | undefined;
   packageType: "boxes" | "bags" | undefined;
+  consolidateWithJobIds: string[];
 }
 
 interface EditLineItemsState {
@@ -97,8 +99,11 @@ export default function InvoicingQueue() {
   };
 
   const updateShippingMutation = useMutation({
-    mutationFn: async (data: { jobId: string; dhlTrackingNumber?: string; packageCount?: number; packageType?: string }) => {
-      const { jobId, ...updates } = data;
+    mutationFn: async (data: { jobId: string; dhlTrackingNumber?: string; packageCount?: number; packageType?: string; shippingMethod?: string; consolidatedJobIds?: string[] }) => {
+      const { jobId, consolidatedJobIds, ...updates } = data;
+      if (consolidatedJobIds && consolidatedJobIds.length > 0) {
+        return apiRequest("PATCH", `/api/jobs/${jobId}`, { ...updates, consolidatedJobIds });
+      }
       const shippingCostResult = updates.packageType && updates.packageCount 
         ? calculateShippingCost(updates.packageType as "boxes" | "bags", updates.packageCount)
         : undefined;
@@ -361,7 +366,7 @@ export default function InvoicingQueue() {
           const jobDetails = shipmentJobs.map(j => j.poNumber ? `${j.jobName} (PO: ${j.poNumber})` : j.jobName).join(', ');
           
           let packageInfo = '';
-          if (shippingMethod === 'direct_delivery') {
+          {
             const packageCounts: Record<string, number> = {};
             for (const sJob of shipmentJobs) {
               if (sJob.packageCount && sJob.packageType) {
@@ -921,9 +926,11 @@ export default function InvoicingQueue() {
                                               e.stopPropagation();
                                               setEditingShipping({
                                                 jobId: job.id,
+                                                customerId: job.customerId,
                                                 dhlTrackingNumber: job.dhlTrackingNumber || "",
                                                 packageCount: job.packageCount || undefined,
                                                 packageType: job.packageType as "boxes" | "bags" | undefined,
+                                                consolidateWithJobIds: consolidatedJobs.map(cj => cj.id),
                                               });
                                             }}
                                             data-testid={`button-edit-shipping-${job.id}`}
@@ -1187,63 +1194,106 @@ export default function InvoicingQueue() {
           <DialogHeader>
             <DialogTitle>Edit Shipping Information</DialogTitle>
             <DialogDescription>
-              Update tracking number and package details for this order.
+              Update tracking number and package details. You can also consolidate multiple jobs onto one shipping charge.
             </DialogDescription>
           </DialogHeader>
-          {editingShipping && (
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="tracking">DHL Tracking Number</Label>
-                <Input
-                  id="tracking"
-                  value={editingShipping.dhlTrackingNumber}
-                  onChange={(e) => setEditingShipping({ ...editingShipping, dhlTrackingNumber: e.target.value })}
-                  placeholder="Enter tracking number"
-                  data-testid="input-edit-tracking"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+          {editingShipping && (() => {
+            const otherCustomerJobs = jobs.filter(j =>
+              j.customerId === editingShipping.customerId &&
+              j.id !== editingShipping.jobId &&
+              (j.invoiceStatus === 'ready' || j.invoiceStatus === 'draft')
+            );
+            return (
+              <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="packageCount">Package Count</Label>
+                  <Label htmlFor="tracking">DHL Tracking Number</Label>
                   <Input
-                    id="packageCount"
-                    type="number"
-                    min="1"
-                    value={editingShipping.packageCount || ""}
-                    onChange={(e) => setEditingShipping({ ...editingShipping, packageCount: e.target.value ? parseInt(e.target.value) : undefined })}
-                    placeholder="Number of packages"
-                    data-testid="input-edit-package-count"
+                    id="tracking"
+                    value={editingShipping.dhlTrackingNumber}
+                    onChange={(e) => setEditingShipping({ ...editingShipping, dhlTrackingNumber: e.target.value })}
+                    placeholder="Enter tracking number"
+                    data-testid="input-edit-tracking"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="packageType">Package Type</Label>
-                  <Select
-                    value={editingShipping.packageType || ""}
-                    onValueChange={(value) => setEditingShipping({ ...editingShipping, packageType: value as "boxes" | "bags" })}
-                  >
-                    <SelectTrigger data-testid="select-edit-package-type">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="boxes">Boxes</SelectItem>
-                      <SelectItem value="bags">Bags</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {editingShipping.packageType && editingShipping.packageCount && (() => {
-                const result = calculateShippingCost(editingShipping.packageType, editingShipping.packageCount);
-                const displayCost = result.cost === "TBA" ? "TBA" : formatPrice(result.cost);
-                return (
-                  <div className="p-3 bg-muted rounded-md">
-                    <p className="text-sm text-muted-foreground">
-                      Shipping cost will be updated to: <span className="font-medium text-foreground">{displayCost}</span>
-                    </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="packageCount">Package Count</Label>
+                    <Input
+                      id="packageCount"
+                      type="number"
+                      min="1"
+                      value={editingShipping.packageCount || ""}
+                      onChange={(e) => setEditingShipping({ ...editingShipping, packageCount: e.target.value ? parseInt(e.target.value) : undefined })}
+                      placeholder="Number of packages"
+                      data-testid="input-edit-package-count"
+                    />
                   </div>
-                );
-              })()}
-            </div>
-          )}
+                  <div className="space-y-2">
+                    <Label htmlFor="packageType">Package Type</Label>
+                    <Select
+                      value={editingShipping.packageType || ""}
+                      onValueChange={(value) => setEditingShipping({ ...editingShipping, packageType: value as "boxes" | "bags" })}
+                    >
+                      <SelectTrigger data-testid="select-edit-package-type">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="boxes">Boxes</SelectItem>
+                        <SelectItem value="bags">Bags</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {editingShipping.packageType && editingShipping.packageCount && (() => {
+                  const result = calculateShippingCost(editingShipping.packageType!, editingShipping.packageCount!);
+                  const displayCost = result.cost === "TBA" ? "TBA" : formatPrice(result.cost);
+                  return (
+                    <div className="p-3 bg-muted rounded-md">
+                      <p className="text-sm text-muted-foreground">
+                        Shipping cost will be updated to: <span className="font-medium text-foreground">{displayCost}</span>
+                      </p>
+                    </div>
+                  );
+                })()}
+                {otherCustomerJobs.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Consolidate shipping with other jobs</Label>
+                    <p className="text-xs text-muted-foreground">Select jobs that were shipped in the same parcel. They will share this shipping charge — their individual charges will be removed.</p>
+                    <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2">
+                      {otherCustomerJobs.map(j => (
+                        <div key={j.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`consolidate-${j.id}`}
+                            checked={editingShipping.consolidateWithJobIds.includes(j.id)}
+                            onCheckedChange={(checked) => {
+                              setEditingShipping({
+                                ...editingShipping,
+                                consolidateWithJobIds: checked
+                                  ? [...editingShipping.consolidateWithJobIds, j.id]
+                                  : editingShipping.consolidateWithJobIds.filter(id => id !== j.id),
+                              });
+                            }}
+                            data-testid={`checkbox-consolidate-${j.id}`}
+                          />
+                          <label htmlFor={`consolidate-${j.id}`} className="text-sm cursor-pointer flex-1">
+                            {j.jobName}
+                            {j.shippingCost && j.shippingCost !== 'TBA' && (
+                              <span className="text-muted-foreground ml-1">(current: {formatPrice(parseFloat(j.shippingCost))})</span>
+                            )}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    {editingShipping.consolidateWithJobIds.length > 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Shipping charges on the {editingShipping.consolidateWithJobIds.length} selected job{editingShipping.consolidateWithJobIds.length > 1 ? 's' : ''} will be replaced by this single consolidated charge.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingShipping(null)} data-testid="button-cancel-edit-shipping">
               Cancel
@@ -1251,12 +1301,23 @@ export default function InvoicingQueue() {
             <Button
               onClick={() => {
                 if (editingShipping) {
-                  updateShippingMutation.mutate({
-                    jobId: editingShipping.jobId,
-                    dhlTrackingNumber: editingShipping.dhlTrackingNumber || undefined,
-                    packageCount: editingShipping.packageCount,
-                    packageType: editingShipping.packageType,
-                  });
+                  if (editingShipping.consolidateWithJobIds.length > 0) {
+                    updateShippingMutation.mutate({
+                      jobId: editingShipping.jobId,
+                      shippingMethod: "consolidated",
+                      dhlTrackingNumber: editingShipping.dhlTrackingNumber || undefined,
+                      packageCount: editingShipping.packageCount,
+                      packageType: editingShipping.packageType,
+                      consolidatedJobIds: editingShipping.consolidateWithJobIds,
+                    });
+                  } else {
+                    updateShippingMutation.mutate({
+                      jobId: editingShipping.jobId,
+                      dhlTrackingNumber: editingShipping.dhlTrackingNumber || undefined,
+                      packageCount: editingShipping.packageCount,
+                      packageType: editingShipping.packageType,
+                    });
+                  }
                 }
               }}
               disabled={updateShippingMutation.isPending}
