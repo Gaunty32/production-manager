@@ -1374,12 +1374,13 @@ export default function Dashboard() {
                     <TableHead className="py-1 px-2 w-[80px]">Dispatched</TableHead>
                     <TableHead className="py-1 px-2 w-[100px]">Tracking</TableHead>
                     <TableHead className="py-1 px-2 w-[70px]">Errors</TableHead>
+                    <TableHead className="py-1 px-2 w-[80px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredCompletedJobs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-4 text-muted-foreground text-sm">
+                      <TableCell colSpan={8} className="text-center py-4 text-muted-foreground text-sm">
                         {searchTerm ? `No completed orders match "${searchTerm}"` : "No completed orders yet"}
                       </TableCell>
                     </TableRow>
@@ -1431,6 +1432,28 @@ export default function Dashboard() {
                               users={users}
                               staff={staff}
                             />
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-xs px-2"
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(`/api/jobs/${job.id}`, { credentials: 'include' });
+                                  if (response.ok) {
+                                    const fullJob = await response.json();
+                                    setWorksheetJob(fullJob);
+                                  }
+                                } catch (error) {
+                                  console.error('Failed to fetch job for worksheet:', error);
+                                }
+                              }}
+                              data-testid={`button-worksheet-completed-${job.id}`}
+                            >
+                              <FileText className="h-3 w-3 mr-1" />
+                              Sheet
+                            </Button>
                           </TableCell>
                         </TableRow>
                       );
