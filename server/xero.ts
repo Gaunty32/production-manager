@@ -363,14 +363,15 @@ export class XeroService {
       
       if (item.itemCode === "CARRIAGE") {
         description = item.description; // Use the full description for shipping
+      } else if (item.itemCode === "EMB Set-Up") {
+        // Logo set-ups: use the pre-built description (contains the actual job name)
+        description = item.description;
       } else if (item.itemCode === "Print DTF" || item.itemCode === "PRINT") {
-        // For print jobs, don't mention stitches (support both old and new item codes)
         description = item.description || item.jobName;
         if (item.poNumber) {
           description += ` (PO: ${item.poNumber})`;
         }
       } else if (item.itemCode === "OTHER" || item.itemCode === "BAG") {
-        // For other jobs and bagging, use the description or job name
         description = item.description || item.jobName;
         if (item.poNumber) {
           description += ` (PO: ${item.poNumber})`;
@@ -399,6 +400,7 @@ export class XeroService {
       } else if (item.itemCode === "Emb" || item.itemCode === "BAG") {
         lineItem.itemCode = item.itemCode;
       }
+      // EMB Set-Up: no itemCode sent to Xero (not a recognised Xero inventory item)
       
       return lineItem;
     });
@@ -470,14 +472,15 @@ export class XeroService {
       
       if (item.itemCode === "CARRIAGE") {
         description = item.description; // Use the full description for shipping
+      } else if (item.itemCode === "EMB Set-Up") {
+        // Logo set-ups: use the pre-built description (contains the actual job name)
+        description = item.description;
       } else if (item.itemCode === "Print DTF" || item.itemCode === "PRINT") {
-        // For print jobs, don't mention stitches (support both old and new item codes)
         description = item.description || item.jobName;
         if (item.poNumber) {
           description += ` (PO: ${item.poNumber})`;
         }
       } else if (item.itemCode === "OTHER" || item.itemCode === "BAG") {
-        // For other jobs and bagging, use the description or job name
         description = item.description || item.jobName;
         if (item.poNumber) {
           description += ` (PO: ${item.poNumber})`;
@@ -506,6 +509,7 @@ export class XeroService {
       } else if (item.itemCode === "Emb" || item.itemCode === "BAG") {
         lineItem.itemCode = item.itemCode;
       }
+      // EMB Set-Up: no itemCode sent to Xero (not a recognised Xero inventory item)
       
       return lineItem;
     });
