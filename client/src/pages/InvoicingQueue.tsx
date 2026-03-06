@@ -51,6 +51,11 @@ interface EditShippingState {
   consolidateWithJobIds: string[];
 }
 
+interface MergeShippingState {
+  customerId: string;
+  shippingJobs: Job[];
+}
+
 interface EditLineItemsState {
   jobId: string;
   jobName: string;
@@ -69,6 +74,9 @@ export default function InvoicingQueue() {
   const [editingShipping, setEditingShipping] = useState<EditShippingState | null>(null);
   const [editingLineItems, setEditingLineItems] = useState<EditLineItemsState | null>(null);
   const [editedLineItems, setEditedLineItems] = useState<Record<string, { stitchCount: number }>>({});
+  const [mergingShipping, setMergingShipping] = useState<MergeShippingState | null>(null);
+  const [mergePackageCount, setMergePackageCount] = useState<number | undefined>(undefined);
+  const [mergePackageType, setMergePackageType] = useState<"boxes" | "bags">("boxes");
 
   const updateLineItemMutation = useMutation({
     mutationFn: async (data: { lineItemId: string; stitchCount: number }) => {
@@ -119,6 +127,26 @@ export default function InvoicingQueue() {
     },
     onError: (error) => {
       toast({ title: "Update Failed", description: error instanceof Error ? error.message : "Failed to update shipping information", variant: "destructive" });
+    },
+  });
+
+  const mergeShippingMutation = useMutation({
+    mutationFn: async (data: { primaryJobId: string; otherJobIds: string[]; packageCount: number; packageType: string }) => {
+      return apiRequest("PATCH", `/api/jobs/${data.primaryJobId}`, {
+        shippingMethod: "consolidated",
+        consolidatedJobIds: data.otherJobIds,
+        packageCount: data.packageCount,
+        packageType: data.packageType,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: "Shipping merged", description: "All shipping charges have been consolidated into one line." });
+      setMergingShipping(null);
+      setMergePackageCount(undefined);
+    },
+    onError: (error) => {
+      toast({ title: "Merge failed", description: error instanceof Error ? error.message : "Failed to merge shipping charges", variant: "destructive" });
     },
   });
   
@@ -1129,14 +1157,35 @@ export default function InvoicingQueue() {
                         }, 0);
                         const hasPOA = previewLines.some(line => line.unitPrice === "POA");
                         
+                        const carriageLines = previewLines.filter(l => l.itemCode === "Carriage");
+                        const jobsWithShipping = customerJobs.filter(j =>
+                          selectedJobs.has(j.id) && j.shippingCost && j.shippingCost !== "TBA" && parseFloat(j.shippingCost) > 0
+                        );
+
                         return (
                           <div className="mt-6 pt-6 border-t">
-                            <div className="flex items-center gap-2 mb-3">
+                            <div className="flex items-center gap-2 mb-3 flex-wrap">
                               <FileText className="h-4 w-4 text-primary" />
                               <h4 className="font-semibold text-sm">Xero Invoice Preview</h4>
                               <Badge variant="outline" className="ml-auto">
                                 {previewLines.length} {previewLines.length === 1 ? 'line' : 'lines'}
                               </Badge>
+                              {carriageLines.length > 1 && jobsWithShipping.length > 1 && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs h-7"
+                                  onClick={() => {
+                                    setMergePackageCount(undefined);
+                                    setMergePackageType("boxes");
+                                    setMergingShipping({ customerId, shippingJobs: jobsWithShipping });
+                                  }}
+                                  data-testid={`button-merge-shipping-${customerId}`}
+                                >
+                                  <Truck className="h-3 w-3 mr-1" />
+                                  Merge {carriageLines.length} shipping charges
+                                </Button>
+                              )}
                             </div>
                             <div className="rounded-lg border overflow-hidden">
                               <table className="w-full text-sm" data-testid={`table-invoice-preview-${customerId}`}>
@@ -1187,6 +1236,95 @@ export default function InvoicingQueue() {
           </div>
         )}
       </div>
+
+      {/* Merge Shipping Dialog */}
+      <Dialog open={!!mergingShipping} onOpenChange={(open) => !open && setMergingShipping(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Merge Shipping Charges</DialogTitle>
+            <DialogDescription>
+              Combine all separate shipping charges into one consolidated line. Set the total package count for the combined shipment.
+            </DialogDescription>
+          </DialogHeader>
+          {mergingShipping && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Jobs being consolidated ({mergingShipping.shippingJobs.length})</Label>
+                <div className="space-y-1 rounded-md border p-2 text-sm">
+                  {mergingShipping.shippingJobs.map((j, i) => (
+                    <div key={j.id} className="flex items-center justify-between py-1">
+                      <span className={i === 0 ? "font-medium" : "text-muted-foreground"}>
+                        {j.jobName}{i === 0 ? " (primary)" : ""}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {j.shippingCost ? formatPrice(parseFloat(j.shippingCost)) : "-"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">The first job keeps the shipping charge; others are set to £0.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="merge-package-count">Total Package Count</Label>
+                  <Input
+                    id="merge-package-count"
+                    type="number"
+                    min="1"
+                    value={mergePackageCount || ""}
+                    onChange={(e) => setMergePackageCount(e.target.value ? parseInt(e.target.value) : undefined)}
+                    placeholder="e.g. 2"
+                    data-testid="input-merge-package-count"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merge-package-type">Package Type</Label>
+                  <Select value={mergePackageType} onValueChange={(v) => setMergePackageType(v as "boxes" | "bags")}>
+                    <SelectTrigger data-testid="select-merge-package-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="boxes">Boxes</SelectItem>
+                      <SelectItem value="bags">Bags</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {mergePackageCount && mergePackageType && (() => {
+                const result = calculateShippingCost(mergePackageType, mergePackageCount);
+                const displayCost = result.cost === "TBA" ? "TBA" : formatPrice(result.cost);
+                return (
+                  <div className="p-3 bg-muted rounded-md">
+                    <p className="text-sm text-muted-foreground">
+                      New single shipping charge: <span className="font-medium text-foreground">{displayCost}</span>
+                    </p>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMergingShipping(null)}>Cancel</Button>
+            <Button
+              disabled={!mergePackageCount || mergeShippingMutation.isPending}
+              onClick={() => {
+                if (mergingShipping && mergePackageCount) {
+                  const [primary, ...others] = mergingShipping.shippingJobs;
+                  mergeShippingMutation.mutate({
+                    primaryJobId: primary.id,
+                    otherJobIds: others.map(j => j.id),
+                    packageCount: mergePackageCount,
+                    packageType: mergePackageType,
+                  });
+                }
+              }}
+              data-testid="button-confirm-merge-shipping"
+            >
+              {mergeShippingMutation.isPending ? "Merging..." : "Merge shipping"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Shipping Dialog */}
       <Dialog open={!!editingShipping} onOpenChange={(open) => !open && setEditingShipping(null)}>
