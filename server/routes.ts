@@ -3794,11 +3794,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (jobTypeLower === "print") {
           itemCode = "Print DTF";
-          // Add print size to description for Print jobs
+          // Add print size to description for Print jobs (job name added by xero.ts)
           const printSize = CODE_TO_PRINT_SIZE[lineItem.stitchCount as keyof typeof CODE_TO_PRINT_SIZE];
           if (printSize) {
-            description = description || job.jobName;
-            description = `${description}, ${printSize} Print`;
+            description = description ? `${description}, ${printSize} Print` : `${printSize} Print`;
           }
         } else if (jobTypeLower === "bagging") {
           itemCode = "BAG";
@@ -3973,11 +3972,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           if (jobTypeLower === "print") {
             itemCode = "Print DTF";
-            // Add print size to description for Print jobs
+            // Add print size to description for Print jobs (job name added by xero.ts)
             const printSize = CODE_TO_PRINT_SIZE[lineItem.stitchCount as keyof typeof CODE_TO_PRINT_SIZE];
             if (printSize) {
-              description = description || job.jobName;
-              description = `${description}, ${printSize} Print`;
+              description = description ? `${description}, ${printSize} Print` : `${printSize} Print`;
             }
           } else if (jobTypeLower === "bagging") {
             itemCode = "BAG";

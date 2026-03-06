@@ -336,9 +336,11 @@ export default function InvoicingQueue() {
         if (jobTypeLower === "print") {
           itemCode = "DTF";
           const printSize = CODE_TO_PRINT_SIZE[lineItem.stitchCount as keyof typeof CODE_TO_PRINT_SIZE];
-          description = description || job.jobName;
+          const positionPart = description ? `, ${description}` : '';
           if (printSize) {
-            description = `${description}, ${printSize} Print`;
+            description = `${job.jobName}${positionPart}, ${printSize} Print`;
+          } else {
+            description = `${job.jobName}${positionPart}`;
           }
           if (job.poNumber) {
             description += ` (PO: ${job.poNumber})`;

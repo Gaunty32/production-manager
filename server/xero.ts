@@ -367,7 +367,8 @@ export class XeroService {
         // Logo set-ups: use the pre-built description (contains the actual job name)
         description = item.description;
       } else if (item.itemCode === "Print DTF" || item.itemCode === "PRINT") {
-        description = item.description || item.jobName;
+        const positionPart = item.description ? `, ${item.description}` : '';
+        description = `${item.jobName}${positionPart}`;
         if (item.poNumber) {
           description += ` (PO: ${item.poNumber})`;
         }
@@ -476,7 +477,8 @@ export class XeroService {
         // Logo set-ups: use the pre-built description (contains the actual job name)
         description = item.description;
       } else if (item.itemCode === "Print DTF" || item.itemCode === "PRINT") {
-        description = item.description || item.jobName;
+        const positionPart = item.description ? `, ${item.description}` : '';
+        description = `${item.jobName}${positionPart}`;
         if (item.poNumber) {
           description += ` (PO: ${item.poNumber})`;
         }
