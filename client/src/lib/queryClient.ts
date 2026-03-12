@@ -17,7 +17,11 @@ async function throwIfResNotOk(res: Response) {
       }
       // Extract error message from object
       if (parsed && typeof parsed === 'object' && parsed.error) {
-        errorMessage = parsed.error;
+        if (Array.isArray(parsed.error)) {
+          errorMessage = parsed.error.map((e: any) => e.message || String(e)).join(', ');
+        } else {
+          errorMessage = parsed.error;
+        }
       } else if (typeof parsed === 'string') {
         errorMessage = parsed;
       }

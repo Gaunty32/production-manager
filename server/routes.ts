@@ -1141,7 +1141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(customerUser);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: error.errors });
+        res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
       } else if (error instanceof Error && error.message.includes("already exists")) {
         res.status(409).json({ error: error.message });
       } else {
@@ -1168,7 +1168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: error.errors });
+        res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
       } else {
         res.status(401).json({ error: error instanceof Error ? error.message : "Login failed" });
       }
