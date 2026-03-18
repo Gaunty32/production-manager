@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PRICING_2026 } from "@shared/pricing";
+import selectLogo from "@assets/Logo350px_180px_1773835583737.jpg";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -225,6 +226,14 @@ export default function CustomerLogin() {
 
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
+          <div className="flex items-center justify-center mb-2">
+            <img
+              src={selectLogo}
+              alt="Select Branding Solutions"
+              className="max-h-16 max-w-full object-contain"
+              data-testid="img-select-logo"
+            />
+          </div>
           {customerInfo?.found && customerInfo.logoUrl ? (
             <div className="flex items-center justify-center mb-4">
               <img 
