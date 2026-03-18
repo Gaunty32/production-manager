@@ -8,7 +8,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Clock, Zap, PoundSterling } from "lucide-react";
+import { Clock, Zap, PoundSterling, HardHat } from "lucide-react";
 import { PRICING_2026 } from "@shared/pricing";
 
 interface PricingTableDialogProps {
@@ -119,6 +119,37 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
                 <div>
                   <p className="font-medium text-foreground">48-Hour Express</p>
                   <p className="text-sm text-muted-foreground">Available with 100% surcharge</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Caps Section */}
+            <div className="pt-2 border-t" data-testid="section-caps-pricing">
+              <div className="flex items-center gap-2 mb-3">
+                <HardHat className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold text-foreground">Caps</h3>
+              </div>
+              <div className="space-y-3">
+                <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-caps-standard">
+                  <p className="font-medium text-foreground mb-1">Standard Embroidery</p>
+                  <p className="text-muted-foreground">The pricing table above applies to standard embroidery on caps.</p>
+                </div>
+                <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-caps-3d">
+                  <p className="font-medium text-foreground mb-2">3D Embroidery</p>
+                  <ul className="text-muted-foreground space-y-1.5">
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary font-bold mt-0.5">+</span>
+                      <span>A one-off set-up cost of <span className="font-medium text-foreground">£10</span> per design applies to cover the cost of the foam.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary font-bold mt-0.5">+</span>
+                      <span>A <span className="font-medium text-foreground">100% surcharge</span> is applied to the standard unit cost to cover the foam.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary font-bold mt-0.5">+</span>
+                      <span>Subject to a <span className="font-medium text-foreground">minimum order quantity of 12 units</span> of the same design.</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>
