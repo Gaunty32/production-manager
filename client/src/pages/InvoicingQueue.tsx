@@ -1346,7 +1346,7 @@ export default function InvoicingQueue() {
             return (
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="tracking">DHL Tracking Number</Label>
+                  <Label htmlFor="tracking">DPD Local Tracking Number</Label>
                   <Input
                     id="tracking"
                     value={editingShipping.dhlTrackingNumber}

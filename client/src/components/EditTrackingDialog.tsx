@@ -74,7 +74,7 @@ export function EditTrackingDialog({
             Edit Tracking Number
           </DialogTitle>
           <DialogDescription>
-            {jobName ? `Update tracking info for "${jobName}"` : "Update the DHL tracking number for this order."}
+            {jobName ? `Update tracking info for "${jobName}"` : "Update the DPD Local tracking number for this order."}
           </DialogDescription>
         </DialogHeader>
 
@@ -85,11 +85,11 @@ export function EditTrackingDialog({
               name="dhlTrackingNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>DHL Tracking Number</FormLabel>
+                  <FormLabel>DPD Local Tracking Number</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="Enter DHL tracking number"
+                      placeholder="Enter DPD Local tracking number"
                       disabled={isPending}
                       data-testid="input-edit-tracking"
                     />

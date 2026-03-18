@@ -536,10 +536,10 @@ export default function CustomerDashboard() {
                       {/* Tracking Info for Completed Jobs */}
                       {job.completed && job.dhlTrackingNumber && (
                         <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-                          <p className="text-xs text-muted-foreground mb-1">DHL Tracking Number</p>
+                          <p className="text-xs text-muted-foreground mb-1">DPD Local Tracking Number</p>
                           <div className="flex items-center justify-between gap-2">
                             <a
-                              href={`https://www.dhl.com/gb-en/home/tracking.html?tracking-id=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                              href={`https://track.dpdlocal.co.uk/search?search.searchType.0=reference&search.query.0=${encodeURIComponent(job.dhlTrackingNumber)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm font-mono font-semibold text-primary hover:underline"
@@ -696,7 +696,7 @@ export default function CustomerDashboard() {
                           <TableCell>
                             {job.completed && job.dhlTrackingNumber ? (
                               <a
-                                href={`https://www.dhl.com/gb-en/home/tracking.html?tracking-id=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                                href={`https://track.dpdlocal.co.uk/search?search.searchType.0=reference&search.query.0=${encodeURIComponent(job.dhlTrackingNumber)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-xs font-mono text-primary hover:underline"
@@ -755,7 +755,7 @@ export default function CustomerDashboard() {
                         <TableCell>
                           {index === 0 && job.completed && job.dhlTrackingNumber ? (
                             <a
-                              href={`https://www.dhl.com/gb-en/home/tracking.html?tracking-id=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                              href={`https://track.dpdlocal.co.uk/search?search.searchType.0=reference&search.query.0=${encodeURIComponent(job.dhlTrackingNumber)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs font-mono text-primary hover:underline"

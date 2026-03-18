@@ -49,7 +49,7 @@ const shippingSchema = z.object({
   }
   return true;
 }, {
-  message: "DHL tracking number is required for this shipping method",
+  message: "DPD Local tracking number is required for this shipping method",
   path: ["dhlTrackingNumber"],
 }).refine((data) => {
   if (data.shippingMethod === "consolidated" || data.shippingMethod === "direct_delivery") {
@@ -311,13 +311,13 @@ export function ShippingInfoDialog({
                   name="dhlTrackingNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>DHL Tracking Number</FormLabel>
+                      <FormLabel>DPD Local Tracking Number</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
-                          placeholder="Enter DHL tracking number"
+                          placeholder="Enter DPD Local tracking number"
                           disabled={isPending || isSubmitting || !!selectedExistingShipment}
-                          data-testid="input-dhl-tracking"
+                          data-testid="input-dpdlocal-tracking"
                           readOnly={!!selectedExistingShipment}
                         />
                       </FormControl>
