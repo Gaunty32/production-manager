@@ -177,7 +177,7 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
               <img
                 src={logoImage}
                 alt="Select Branding Solutions"
-                className="h-10 md:h-12 object-contain"
+                className="h-32 md:h-36 object-contain"
                 data-testid="logo-icon"
               />
             </div>
