@@ -1129,65 +1129,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getAllJobLineItems(),
       ]);
 
-      // Jobs in the selected date range (by createdAt)
+      // Jobs in the selected date range (by createdAt) — use Number() coercion throughout
       const rangeJobs = allJobs.filter(j => {
         const d = new Date(j.createdAt);
         return d >= startDate && d <= endDate;
       });
 
-      // Active customers in range
-      const activeCustomerIds = new Set(rangeJobs.map(j => j.customerId));
+      // Active customers in range (use string keys to avoid type mismatches)
+      const activeCustomerIds = new Set(rangeJobs.map(j => String(j.customerId)));
       const activeCustomerCount = activeCustomerIds.size;
 
-      // Line items for jobs in range, summed by customer
-      const rangeJobIds = new Set(rangeJobs.map(j => j.id));
-      const quantityByCustomer: Record<number, number> = {};
-      const jobCountByCustomer: Record<number, number> = {};
-      for (const li of allLineItems) {
-        if (!rangeJobIds.has(li.jobId)) continue;
-        const job = allJobs.find(j => j.id === li.jobId);
-        if (!job) continue;
-        quantityByCustomer[job.customerId] = (quantityByCustomer[job.customerId] || 0) + (li.quantity || 0);
-        jobCountByCustomer[job.customerId] = (jobCountByCustomer[job.customerId] || 0);
-      }
+      // Build job count and quantity maps keyed by string customerId
+      const rangeJobIds = new Set(rangeJobs.map(j => Number(j.id)));
+      const quantityByCustomer: Record<string, number> = {};
+      const jobCountByCustomer: Record<string, number> = {};
+
       for (const job of rangeJobs) {
-        jobCountByCustomer[job.customerId] = (jobCountByCustomer[job.customerId] || 0) + 1;
+        const key = String(job.customerId);
+        jobCountByCustomer[key] = (jobCountByCustomer[key] || 0) + 1;
       }
 
-      const topCustomers = Object.entries(quantityByCustomer)
-        .map(([customerId, totalQty]) => {
-          const customer = allCustomers.find(c => c.id === Number(customerId));
+      for (const li of allLineItems) {
+        if (!rangeJobIds.has(Number(li.jobId))) continue;
+        const job = allJobs.find(j => Number(j.id) === Number(li.jobId));
+        if (!job) continue;
+        const key = String(job.customerId);
+        quantityByCustomer[key] = (quantityByCustomer[key] || 0) + (li.quantity || 0);
+      }
+
+      // Top 5: build from job count (all range customers), merge in quantity
+      const topCustomers = Object.entries(jobCountByCustomer)
+        .map(([key, jobCount]) => {
+          const customer = allCustomers.find(c => String(c.id) === key);
           return {
-            customerId: Number(customerId),
+            customerId: Number(key),
             customerName: customer?.name || "Unknown",
-            totalQuantity: totalQty,
-            jobCount: jobCountByCustomer[Number(customerId)] || 0,
+            totalQuantity: quantityByCustomer[key] || 0,
+            jobCount,
           };
         })
-        .sort((a, b) => b.totalQuantity - a.totalQuantity)
+        .sort((a, b) => b.totalQuantity - a.totalQuantity || b.jobCount - a.jobCount)
         .slice(0, 5);
 
       // Dormant customers: have had jobs before, but none in the last 28 days
       const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
-      const recentJobCustomerIds = new Set(
-        allJobs.filter(j => new Date(j.createdAt) >= fourWeeksAgo).map(j => j.customerId)
+      const recentJobCustomerKeys = new Set(
+        allJobs.filter(j => new Date(j.createdAt) >= fourWeeksAgo).map(j => String(j.customerId))
       );
-      const everActiveCustomerIds = new Set(allJobs.map(j => j.customerId));
+      const everActiveCustomerKeys = new Set(allJobs.map(j => String(j.customerId)));
 
       const dormantCustomers = allCustomers
-        .filter(c => everActiveCustomerIds.has(c.id) && !recentJobCustomerIds.has(c.id))
+        .filter(c => everActiveCustomerKeys.has(String(c.id)) && !recentJobCustomerKeys.has(String(c.id)))
         .map(c => {
-          const customerJobs = allJobs.filter(j => j.customerId === c.id);
-          const lastJob = customerJobs.sort((a, b) =>
+          const customerJobs = allJobs.filter(j => String(j.customerId) === String(c.id));
+          const lastJob = [...customerJobs].sort((a, b) =>
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )[0];
-          const daysSinceLastOrder = lastJob
+          const daysSinceLastOrder = lastJob?.createdAt
             ? Math.floor((Date.now() - new Date(lastJob.createdAt).getTime()) / (1000 * 60 * 60 * 24))
             : null;
           return {
             customerId: c.id,
             customerName: c.name,
-            lastOrderDate: lastJob?.createdAt || null,
+            lastOrderDate: lastJob?.createdAt ?? null,
             daysSinceLastOrder,
           };
         })
