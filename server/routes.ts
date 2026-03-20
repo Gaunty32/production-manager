@@ -1104,6 +1104,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer Insights Report
+  app.get("/api/reports/customer-insights", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const querySchema = z.object({
+        startDate: z.string().optional().transform((val) => {
+          if (!val) return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          const date = new Date(val);
+          return isNaN(date.getTime()) ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) : date;
+        }),
+        endDate: z.string().optional().transform((val) => {
+          if (!val) return new Date();
+          const date = new Date(val);
+          return isNaN(date.getTime()) ? new Date() : date;
+        }),
+      });
+
+      const params = querySchema.parse(req.query);
+      const { startDate, endDate } = params;
+
+      const [allJobs, allCustomers, allLineItems] = await Promise.all([
+        storage.getJobs(),
+        storage.getCustomers(),
+        storage.getAllJobLineItems(),
+      ]);
+
+      // Jobs in the selected date range (by createdAt)
+      const rangeJobs = allJobs.filter(j => {
+        const d = new Date(j.createdAt);
+        return d >= startDate && d <= endDate;
+      });
+
+      // Active customers in range
+      const activeCustomerIds = new Set(rangeJobs.map(j => j.customerId));
+      const activeCustomerCount = activeCustomerIds.size;
+
+      // Line items for jobs in range, summed by customer
+      const rangeJobIds = new Set(rangeJobs.map(j => j.id));
+      const quantityByCustomer: Record<number, number> = {};
+      const jobCountByCustomer: Record<number, number> = {};
+      for (const li of allLineItems) {
+        if (!rangeJobIds.has(li.jobId)) continue;
+        const job = allJobs.find(j => j.id === li.jobId);
+        if (!job) continue;
+        quantityByCustomer[job.customerId] = (quantityByCustomer[job.customerId] || 0) + (li.quantity || 0);
+        jobCountByCustomer[job.customerId] = (jobCountByCustomer[job.customerId] || 0);
+      }
+      for (const job of rangeJobs) {
+        jobCountByCustomer[job.customerId] = (jobCountByCustomer[job.customerId] || 0) + 1;
+      }
+
+      const topCustomers = Object.entries(quantityByCustomer)
+        .map(([customerId, totalQty]) => {
+          const customer = allCustomers.find(c => c.id === Number(customerId));
+          return {
+            customerId: Number(customerId),
+            customerName: customer?.name || "Unknown",
+            totalQuantity: totalQty,
+            jobCount: jobCountByCustomer[Number(customerId)] || 0,
+          };
+        })
+        .sort((a, b) => b.totalQuantity - a.totalQuantity)
+        .slice(0, 5);
+
+      // Dormant customers: have had jobs before, but none in the last 28 days
+      const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
+      const recentJobCustomerIds = new Set(
+        allJobs.filter(j => new Date(j.createdAt) >= fourWeeksAgo).map(j => j.customerId)
+      );
+      const everActiveCustomerIds = new Set(allJobs.map(j => j.customerId));
+
+      const dormantCustomers = allCustomers
+        .filter(c => everActiveCustomerIds.has(c.id) && !recentJobCustomerIds.has(c.id))
+        .map(c => {
+          const customerJobs = allJobs.filter(j => j.customerId === c.id);
+          const lastJob = customerJobs.sort((a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )[0];
+          const daysSinceLastOrder = lastJob
+            ? Math.floor((Date.now() - new Date(lastJob.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+            : null;
+          return {
+            customerId: c.id,
+            customerName: c.name,
+            lastOrderDate: lastJob?.createdAt || null,
+            daysSinceLastOrder,
+          };
+        })
+        .sort((a, b) => (b.daysSinceLastOrder || 0) - (a.daysSinceLastOrder || 0));
+
+      res.json({ activeCustomerCount, topCustomers, dormantCustomers });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching customer insights:", error);
+      res.status(500).json({ error: "Failed to fetch customer insights" });
+    }
+  });
+
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
     try {

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon } from "lucide-react";
+import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle } from "lucide-react";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
@@ -111,6 +111,22 @@ interface WeeklyProductionData {
   }>;
 }
 
+interface CustomerInsightsData {
+  activeCustomerCount: number;
+  topCustomers: Array<{
+    customerId: number;
+    customerName: string;
+    totalQuantity: number;
+    jobCount: number;
+  }>;
+  dormantCustomers: Array<{
+    customerId: number;
+    customerName: string;
+    lastOrderDate: string | null;
+    daysSinceLastOrder: number | null;
+  }>;
+}
+
 function formatMinutes(minutes: number): string {
   if (minutes <= 0) return "0m";
   const hours = Math.floor(minutes / 60);
@@ -199,6 +215,16 @@ export default function WeeklyReports() {
   const { data: weeklyTrendData, isLoading: isLoadingTrend, error: trendError } = useQuery<WeeklyTrendData[]>({
     queryKey: ['/api/reports/weekly-performance', weeksCount, dateRange.to.toISOString()],
     queryFn: () => fetchWithParams('/api/reports/weekly-performance'),
+  });
+
+  const { data: customerInsights, isLoading: isLoadingCustomers, error: customersError } = useQuery<CustomerInsightsData>({
+    queryKey: ['/api/reports/customer-insights', dateRange.from.toISOString(), dateRange.to.toISOString()],
+    queryFn: async () => {
+      const url = `/api/reports/customer-insights?startDate=${dateRange.from.toISOString()}&endDate=${dateRange.to.toISOString()}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch customer insights");
+      return res.json();
+    },
   });
 
   const isLoading = isLoadingPerformance || isLoadingErrors || isLoadingProduction || isLoadingWeekly || isLoadingTrend;
@@ -409,6 +435,10 @@ export default function WeeklyReports() {
           <TabsTrigger value="trends" data-testid="tab-trends">
             <LineChartIcon className="h-4 w-4 mr-2" />
             Contract Embroidery
+          </TabsTrigger>
+          <TabsTrigger value="customers" data-testid="tab-customers">
+            <Building2 className="h-4 w-4 mr-2" />
+            Customers
           </TabsTrigger>
         </TabsList>
 
@@ -850,6 +880,127 @@ export default function WeeklyReports() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Customers Tab */}
+        <TabsContent value="customers" className="space-y-6">
+          {isLoadingCustomers ? (
+            <div className="space-y-4">
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-64 w-full" />
+              <Skeleton className="h-64 w-full" />
+            </div>
+          ) : customersError ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                Failed to load customer insights.
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* KPI card */}
+              <Card data-testid="card-active-customers">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-primary/10 rounded-md">
+                      <Building2 className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Active Customers</p>
+                      <p className="text-3xl font-bold" data-testid="text-active-customer-count">
+                        {customerInsights?.activeCustomerCount ?? 0}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Customers with jobs placed in the selected period
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Top 5 by volume */}
+              <Card data-testid="card-top-customers">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-primary" />
+                    Top 5 Customers by Volume
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {customerInsights?.topCustomers?.length ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-8">#</TableHead>
+                          <TableHead>Customer</TableHead>
+                          <TableHead className="text-right">Jobs</TableHead>
+                          <TableHead className="text-right">Total Items</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {customerInsights.topCustomers.map((c, idx) => (
+                          <TableRow key={c.customerId} data-testid={`row-top-customer-${c.customerId}`}>
+                            <TableCell>
+                              <span className={`font-bold ${idx === 0 ? "text-yellow-500" : idx === 1 ? "text-slate-400" : idx === 2 ? "text-amber-600" : "text-muted-foreground"}`}>
+                                {idx + 1}
+                              </span>
+                            </TableCell>
+                            <TableCell className="font-medium">{c.customerName}</TableCell>
+                            <TableCell className="text-right">{c.jobCount}</TableCell>
+                            <TableCell className="text-right font-semibold">{c.totalQuantity.toLocaleString()}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-6">No order data for the selected period.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Dormant customers */}
+              <Card data-testid="card-dormant-customers">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-orange-500" />
+                    No Orders in Last 4 Weeks
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {customerInsights?.dormantCustomers?.length ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Customer</TableHead>
+                          <TableHead className="text-right">Last Order</TableHead>
+                          <TableHead className="text-right">Days Ago</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {customerInsights.dormantCustomers.map((c) => (
+                          <TableRow key={c.customerId} data-testid={`row-dormant-customer-${c.customerId}`}>
+                            <TableCell className="font-medium">{c.customerName}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              {c.lastOrderDate ? format(new Date(c.lastOrderDate), "dd MMM yyyy") : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {c.daysSinceLastOrder !== null ? (
+                                <Badge variant={c.daysSinceLastOrder > 60 ? "destructive" : "secondary"} data-testid={`badge-days-${c.customerId}`}>
+                                  {c.daysSinceLastOrder}d
+                                </Badge>
+                              ) : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-6">All customers have placed orders in the last 4 weeks.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>
