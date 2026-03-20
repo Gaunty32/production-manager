@@ -1104,6 +1104,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sync historical invoice totals from Xero
+  app.post("/api/reports/sync-invoice-totals", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      // Only allow admins/super_admins
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !canViewPrices(user.role)) {
+        return res.status(403).json({ error: "Permission denied" });
+      }
+
+      // Get all invoiced jobs that are missing invoice_total
+      const allJobs = await storage.getJobs();
+      const jobsMissingTotal = allJobs.filter(
+        j => j.invoiceStatus === "invoiced" && j.invoicedAt && (j.invoiceTotal === null || j.invoiceTotal === undefined)
+      );
+
+      if (jobsMissingTotal.length === 0) {
+        return res.json({ synced: 0, message: "All invoiced jobs already have totals." });
+      }
+
+      // Group jobs by invoiceReference so we don't double-count consolidated invoices
+      const byReference: Record<string, typeof jobsMissingTotal> = {};
+      for (const job of jobsMissingTotal) {
+        if (!job.invoiceReference) continue;
+        if (!byReference[job.invoiceReference]) byReference[job.invoiceReference] = [];
+        byReference[job.invoiceReference].push(job);
+      }
+
+      const invoiceNumbers = Object.keys(byReference);
+      if (invoiceNumbers.length === 0) {
+        return res.json({ synced: 0, message: "No invoice references found on jobs to sync." });
+      }
+
+      // Fetch invoice totals from Xero
+      const xeroInvoices = await xeroService.getInvoicesByNumbers(invoiceNumbers);
+      const xeroByNumber: Record<string, number> = {};
+      for (const inv of xeroInvoices) {
+        if (inv.InvoiceNumber && inv.SubTotal != null) {
+          xeroByNumber[inv.InvoiceNumber] = inv.SubTotal;
+        }
+      }
+
+      // Save totals: full amount on first job, 0 on the rest (avoids double-counting)
+      let synced = 0;
+      for (const [ref, jobs] of Object.entries(byReference)) {
+        const subTotal = xeroByNumber[ref];
+        if (subTotal == null) continue;
+
+        // Assign full total to the first job, 0 to subsequent jobs in same invoice
+        for (let i = 0; i < jobs.length; i++) {
+          await storage.updateJob(jobs[i].id, { invoiceTotal: i === 0 ? subTotal : 0 });
+          synced++;
+        }
+      }
+
+      res.json({ synced, invoicesFound: xeroInvoices.length, message: `Updated ${synced} job(s) from ${xeroInvoices.length} Xero invoice(s).` });
+    } catch (error) {
+      console.error("Sync invoice totals error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to sync invoice totals" });
+    }
+  });
+
   // Customer Insights Report
   app.get("/api/reports/customer-insights", isStaffAuthenticated, async (req: any, res) => {
     try {

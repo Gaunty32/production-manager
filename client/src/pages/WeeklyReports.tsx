@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,9 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle } from "lucide-react";
+import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw } from "lucide-react";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 type DatePreset = "this-week" | "last-week" | "last-4-weeks" | "last-12-weeks" | "custom";
 
@@ -167,8 +169,21 @@ function getPresetDateRange(preset: DatePreset): DateRange {
 }
 
 export default function WeeklyReports() {
+  const { toast } = useToast();
   const [selectedPreset, setSelectedPreset] = useState<DatePreset>("last-12-weeks");
   const [customDateRange, setCustomDateRange] = useState<DateRange | null>(null);
+
+  const syncMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/reports/sync-invoice-totals"),
+    onSuccess: async (res) => {
+      const data = await res.json();
+      toast({ title: "Sync complete", description: data.message });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/weekly-performance'] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Sync failed", description: err.message || "Could not sync invoice totals from Xero.", variant: "destructive" });
+    },
+  });
   
   const dateRange = useMemo(() => {
     if (selectedPreset === "custom" && customDateRange) {
@@ -770,9 +785,22 @@ export default function WeeklyReports() {
           </div>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Contract Embroidery Trend</CardTitle>
-              <p className="text-sm text-muted-foreground">Weekly output and invoice value over time</p>
+            <CardHeader className="flex flex-row items-start justify-between gap-2">
+              <div>
+                <CardTitle className="text-base">Contract Embroidery Trend</CardTitle>
+                <p className="text-sm text-muted-foreground">Weekly output and invoice value over time</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending}
+                data-testid="button-sync-xero"
+                title="Pull invoice totals from Xero for historical jobs"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncMutation.isPending ? "Syncing…" : "Sync from Xero"}
+              </Button>
             </CardHeader>
             <CardContent>
               {isLoadingTrend ? (

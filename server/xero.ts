@@ -642,6 +642,48 @@ export class XeroService {
 
     return response.json();
   }
+
+  // Fetch specific invoices by their invoice numbers (batched)
+  async getInvoicesByNumbers(invoiceNumbers: string[]): Promise<Array<{ InvoiceNumber: string; SubTotal: number; Total: number; Status: string }>> {
+    if (!this.isConfigured()) {
+      throw new Error("Xero is not configured");
+    }
+    if (invoiceNumbers.length === 0) return [];
+
+    const token = await this.getAccessToken();
+    const tenantId = this.getTenantId();
+
+    const allInvoices: Array<{ InvoiceNumber: string; SubTotal: number; Total: number; Status: string }> = [];
+
+    // Xero allows up to 100 invoice numbers per request
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < invoiceNumbers.length; i += BATCH_SIZE) {
+      const batch = invoiceNumbers.slice(i, i + BATCH_SIZE);
+      const params = new URLSearchParams({ InvoiceNumbers: batch.join(",") });
+
+      const response = await fetch(`${this.apiUrl}/Invoices?${params}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "xero-tenant-id": tenantId,
+          "Accept": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error(`Xero invoice fetch failed for batch: ${text}`);
+        continue;
+      }
+
+      const data = await response.json();
+      if (data.Invoices) {
+        allInvoices.push(...data.Invoices);
+      }
+    }
+
+    return allInvoices;
+  }
 }
 
 export const xeroService = new XeroService();
