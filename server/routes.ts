@@ -3938,7 +3938,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const invoice = await xeroService.createInvoice(job, customer, lineItemsWithPricing);
-      
+
+      // Calculate and save the invoice total and mark job as invoiced
+      const invoiceTotal = lineItemsWithPricing.reduce((sum, item) => sum + (item.quantity || 0) * item.unitPrice, 0);
+      const invoiceId = invoice.Invoices?.[0]?.InvoiceID || "unknown";
+      const invoiceNumber = invoice.Invoices?.[0]?.InvoiceNumber || null;
+      await storage.updateJob(job.id, {
+        invoiceStatus: "invoiced",
+        invoicedAt: new Date(),
+        invoiceReference: invoiceNumber || invoiceId,
+        invoiceTotal,
+      });
+
       // Only delete logo setups after successful invoice creation
       for (const setup of customerLogoSetups) {
         await storage.deleteLogoSetup(setup.id);
@@ -4019,6 +4030,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get line items and calculate pricing for each job
       // Build line items in order: job items, then carriage for that job, repeat
       const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number; itemCode: string }> = [];
+      // Track per-job invoice subtotals so we can save them to the DB
+      const jobInvoiceTotals: Record<number, number> = {};
       let hasPOA = false;
       let hasTBA = false;
 
@@ -4069,6 +4082,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             unitPrice = 0;
           }
           
+          // Accumulate per-job invoice total
+          jobInvoiceTotals[job.id] = (jobInvoiceTotals[job.id] || 0) + (lineItem.quantity || 0) * unitPrice;
+
           const jobTypeLower = lineItem.jobType?.toLowerCase() || '';
           let itemCode = "Emb";
           let description = lineItem.description || '';
@@ -4182,6 +4198,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }
               }
               
+              // Attribute shipping cost to the primary (first) job in the shipment
+              jobInvoiceTotals[jobs[0].id] = (jobInvoiceTotals[jobs[0].id] || 0) + totalShippingCost;
+
               lineItemsWithPricing.push({
                 jobName: isConsolidated ? `${jobs.length} jobs` : jobs[0].jobName,
                 poNumber: jobs[0].poNumber,
@@ -4227,6 +4246,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No approved logo setups found for this customer" });
       }
       
+      // Attribute logo setup costs to the first job (or stand-alone if logo-only invoice)
+      const logoSetupTotal = customerLogoSetups.length * 10;
+      if (logoSetupTotal > 0 && selectedJobs.length > 0) {
+        jobInvoiceTotals[selectedJobs[0].id] = (jobInvoiceTotals[selectedJobs[0].id] || 0) + logoSetupTotal;
+      }
+
       for (const setup of customerLogoSetups) {
         lineItemsWithPricing.push({
           jobName: "Logo Set-Up",
@@ -4255,13 +4280,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.deleteLogoSetup(setup.id);
       }
 
-      // Update all jobs with invoice status
+      // Update all jobs with invoice status and their calculated totals
       const now = new Date();
       for (const job of selectedJobs) {
         await storage.updateJob(job.id, {
           invoiceStatus: "invoiced",
           invoicedAt: now,
           invoiceReference: invoiceNumber || invoiceId,
+          invoiceTotal: jobInvoiceTotals[job.id] || 0,
         });
       }
 
