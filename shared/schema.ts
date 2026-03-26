@@ -194,6 +194,8 @@ export const logoSetups = pgTable("logo_setups", {
   approved: boolean("approved").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   approvedAt: timestamp("approved_at"),
+  invoicedAt: timestamp("invoiced_at"),
+  invoiceReference: varchar("invoice_reference"),
   notes: text("notes"),
 });
 
@@ -788,6 +790,8 @@ export const insertLogoSetupSchema = createInsertSchema(logoSetups).omit({
   id: true,
   createdAt: true,
   approvedAt: true,
+  invoicedAt: true,
+  invoiceReference: true,
 }).extend({
   jobName: z.string().min(1, "Job name is required"),
   customerId: z.string().min(1, "Customer is required"),

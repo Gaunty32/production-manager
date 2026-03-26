@@ -4011,9 +4011,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoiceTotal,
       });
 
-      // Only delete logo setups after successful invoice creation
+      // Mark logo setups as invoiced (keep for history rather than deleting)
       for (const setup of customerLogoSetups) {
-        await storage.deleteLogoSetup(setup.id);
+        await storage.updateLogoSetup(setup.id, { invoicedAt: new Date(), invoiceReference: invoiceNumber || invoiceId });
       }
       
       res.json(invoice);
@@ -4336,9 +4336,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invoiceId = invoiceResponse.Invoices?.[0]?.InvoiceID || "unknown";
       const invoiceNumber = invoiceResponse.Invoices?.[0]?.InvoiceNumber || null;
 
-      // Only delete logo setups after successful invoice creation
+      // Mark logo setups as invoiced (keep for history rather than deleting)
       for (const setup of customerLogoSetups) {
-        await storage.deleteLogoSetup(setup.id);
+        await storage.updateLogoSetup(setup.id, { invoicedAt: new Date(), invoiceReference: invoiceNumber || invoiceId });
       }
 
       // Update all jobs with invoice status and their calculated totals
@@ -4375,6 +4375,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching logo setups:", error);
       res.status(500).json({ error: "Failed to fetch logo setups" });
+    }
+  });
+
+  app.get("/api/logo-setups/completed", isStaffAuthenticated, async (req, res) => {
+    try {
+      const completed = await storage.getCompletedLogoSetups();
+      res.json(completed);
+    } catch (error) {
+      console.error("Error fetching completed logo setups:", error);
+      res.status(500).json({ error: "Failed to fetch completed logo setups" });
     }
   });
 

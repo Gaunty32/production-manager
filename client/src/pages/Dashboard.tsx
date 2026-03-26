@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, Package, Coins, ArrowUpDown, Printer, Truck, FileText } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [showLogoSetupDialog, setShowLogoSetupDialog] = useState(false);
+  const [showCompletedSetups, setShowCompletedSetups] = useState(false);
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
   const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'production' | 'completed' | 'setups'>('production');
@@ -90,6 +91,10 @@ export default function Dashboard() {
 
   const { data: logoSetups = [], isLoading: logoSetupsLoading } = useQuery<LogoSetup[]>({
     queryKey: ["/api/logo-setups"],
+  });
+
+  const { data: completedLogoSetups = [] } = useQuery<LogoSetup[]>({
+    queryKey: ["/api/logo-setups/completed"],
   });
 
   const { data: users = [] } = useQuery<User[]>({
@@ -1347,6 +1352,57 @@ export default function Dashboard() {
                   : "No pending set-ups"}
               </div>
             )}
+
+            {/* Completed Set-ups collapsible section */}
+            <div className="mt-6">
+              <button
+                className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowCompletedSetups(v => !v)}
+                data-testid="button-toggle-completed-setups"
+              >
+                {showCompletedSetups ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                Completed Set-ups ({completedLogoSetups.length})
+              </button>
+
+              {showCompletedSetups && (
+                <div className="mt-3 space-y-2">
+                  {completedLogoSetups.length === 0 ? (
+                    <div className="border rounded-md p-6 text-center text-muted-foreground text-sm">
+                      No completed set-ups yet
+                    </div>
+                  ) : (
+                    completedLogoSetups.map((setup) => {
+                      const customer = customers.find(c => c.id === setup.customerId);
+                      return (
+                        <div
+                          key={setup.id}
+                          className="flex items-center justify-between bg-muted/40 border rounded-md p-4"
+                          data-testid={`completed-setup-${setup.id}`}
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{customer?.name || "Unknown Customer"}</span>
+                              <span className="text-muted-foreground">-</span>
+                              <span className="text-sm">{setup.jobName}</span>
+                            </div>
+                            {setup.notes && (
+                              <p className="text-xs text-muted-foreground mt-1">{setup.notes}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Invoiced {setup.invoicedAt ? format(new Date(setup.invoicedAt), "MMM d, yyyy") : "—"}
+                              {setup.invoiceReference && <span className="ml-2 font-mono">{setup.invoiceReference}</span>}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground border rounded px-2 py-1">Invoiced £10</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

@@ -57,7 +57,7 @@ import {
   type InsertCustomerDocument
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sql, isNull, isNotNull, desc } from "drizzle-orm";
 import { MACHINE_HEADS } from "@shared/machines";
 import { createHash } from "crypto";
 
@@ -138,6 +138,7 @@ export interface IStorage {
   getStaffProductionMetrics(staffId?: string): Promise<any[]>;
   
   getLogoSetups(): Promise<LogoSetup[]>;
+  getCompletedLogoSetups(): Promise<LogoSetup[]>;
   createLogoSetup(logoSetup: InsertLogoSetup): Promise<LogoSetup>;
   updateLogoSetup(id: string, logoSetup: Partial<LogoSetup>): Promise<LogoSetup>;
   deleteLogoSetup(id: string): Promise<void>;
@@ -1138,7 +1139,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getLogoSetups(): Promise<LogoSetup[]> {
-    return await db.select().from(logoSetups);
+    return await db.select().from(logoSetups).where(isNull(logoSetups.invoicedAt));
+  }
+
+  async getCompletedLogoSetups(): Promise<LogoSetup[]> {
+    return await db.select().from(logoSetups).where(isNotNull(logoSetups.invoicedAt))
+      .orderBy(desc(logoSetups.invoicedAt));
   }
 
   async createLogoSetup(insertLogoSetup: InsertLogoSetup): Promise<LogoSetup> {
