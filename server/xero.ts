@@ -343,6 +343,61 @@ export class XeroService {
     }
   }
 
+  // Determine the sales account code based on customer name
+  private getSalesAccountCode(customerName: string): string {
+    // PC Sports uses a dedicated sales account
+    if (customerName.toLowerCase().includes("pc sports")) {
+      return "4006";
+    }
+    return "4002";
+  }
+
+  // Build Xero line items from priced items, applying the correct account code
+  private buildXeroLineItems(
+    lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number; itemCode: string }>,
+    accountCode: string
+  ): XeroInvoiceLineItem[] {
+    return lineItemsWithPricing.map(item => {
+      let description = '';
+
+      if (item.itemCode === "CARRIAGE") {
+        description = item.description;
+      } else if (item.itemCode === "EMB Set-Up") {
+        description = item.description;
+      } else if (item.itemCode === "Print DTF" || item.itemCode === "PRINT") {
+        const positionPart = item.description ? `, ${item.description}` : '';
+        description = `${item.jobName}${positionPart}`;
+        if (item.poNumber) description += ` (PO: ${item.poNumber})`;
+      } else if (item.itemCode === "OTHER" || item.itemCode === "BAG") {
+        description = item.description || item.jobName;
+        if (item.poNumber) description += ` (PO: ${item.poNumber})`;
+      } else {
+        // Embroidery: include stitch count
+        description = `${item.jobName}, ${item.stitchCount} Stitches`;
+        if (item.poNumber) description += ` (PO: ${item.poNumber})`;
+      }
+
+      const lineItem: any = {
+        description,
+        quantity: item.quantity,
+        unitAmount: item.unitPrice,
+        accountCode,
+        taxType: "OUTPUT2", // 20% VAT
+      };
+
+      if (item.itemCode === "CARRIAGE") {
+        lineItem.itemCode = "Carriage";
+      } else if (item.itemCode === "Print DTF") {
+        lineItem.itemCode = "DTF";
+      } else if (item.itemCode === "Emb" || item.itemCode === "BAG") {
+        lineItem.itemCode = item.itemCode;
+      }
+      // EMB Set-Up: no itemCode (not a recognised Xero inventory item)
+
+      return lineItem;
+    });
+  }
+
   async createInvoice(
     job: Job, 
     customer: Customer, 
@@ -357,54 +412,8 @@ export class XeroService {
     // Try to find existing contact in Xero
     const xeroContact = await this.findContact(customer);
 
-    // Create line items with proper descriptions
-    const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => {
-      let description = '';
-      
-      if (item.itemCode === "CARRIAGE") {
-        description = item.description; // Use the full description for shipping
-      } else if (item.itemCode === "EMB Set-Up") {
-        // Logo set-ups: use the pre-built description (contains the actual job name)
-        description = item.description;
-      } else if (item.itemCode === "Print DTF" || item.itemCode === "PRINT") {
-        const positionPart = item.description ? `, ${item.description}` : '';
-        description = `${item.jobName}${positionPart}`;
-        if (item.poNumber) {
-          description += ` (PO: ${item.poNumber})`;
-        }
-      } else if (item.itemCode === "OTHER" || item.itemCode === "BAG") {
-        description = item.description || item.jobName;
-        if (item.poNumber) {
-          description += ` (PO: ${item.poNumber})`;
-        }
-      } else {
-        // For embroidery (EMB), include stitch count
-        description = `${item.jobName}, ${item.stitchCount} Stitches`;
-        if (item.poNumber) {
-          description += ` (PO: ${item.poNumber})`;
-        }
-      }
-      
-      // Build the line item
-      const lineItem: any = {
-        description,
-        quantity: item.quantity,
-        unitAmount: item.unitPrice,
-        accountCode: "1002",
-        taxType: "OUTPUT2", // 20% VAT on income
-      };
-      
-      if (item.itemCode === "CARRIAGE") {
-        lineItem.itemCode = "Carriage";
-      } else if (item.itemCode === "Print DTF") {
-        lineItem.itemCode = "DTF";
-      } else if (item.itemCode === "Emb" || item.itemCode === "BAG") {
-        lineItem.itemCode = item.itemCode;
-      }
-      // EMB Set-Up: no itemCode sent to Xero (not a recognised Xero inventory item)
-      
-      return lineItem;
-    });
+    const accountCode = this.getSalesAccountCode(customer.name);
+    const xeroLineItems = this.buildXeroLineItems(lineItemsWithPricing, accountCode);
 
     const invoice: XeroInvoice = {
       type: "ACCREC",
@@ -464,57 +473,8 @@ export class XeroService {
     // Try to find existing contact in Xero
     const xeroContact = await this.findContact(customer);
 
-    // Get sales account code from environment or use default
-    const salesAccountCode = process.env.XERO_SALES_ACCOUNT_CODE || "200";
-
-    // Create line items from job line items
-    const xeroLineItems: XeroInvoiceLineItem[] = lineItemsWithPricing.map(item => {
-      let description = '';
-      
-      if (item.itemCode === "CARRIAGE") {
-        description = item.description; // Use the full description for shipping
-      } else if (item.itemCode === "EMB Set-Up") {
-        // Logo set-ups: use the pre-built description (contains the actual job name)
-        description = item.description;
-      } else if (item.itemCode === "Print DTF" || item.itemCode === "PRINT") {
-        const positionPart = item.description ? `, ${item.description}` : '';
-        description = `${item.jobName}${positionPart}`;
-        if (item.poNumber) {
-          description += ` (PO: ${item.poNumber})`;
-        }
-      } else if (item.itemCode === "OTHER" || item.itemCode === "BAG") {
-        description = item.description || item.jobName;
-        if (item.poNumber) {
-          description += ` (PO: ${item.poNumber})`;
-        }
-      } else {
-        // For embroidery (EMB), include stitch count
-        description = `${item.jobName}, ${item.stitchCount} Stitches`;
-        if (item.poNumber) {
-          description += ` (PO: ${item.poNumber})`;
-        }
-      }
-      
-      // Build the line item
-      const lineItem: any = {
-        description,
-        quantity: item.quantity,
-        unitAmount: item.unitPrice,
-        accountCode: "1002",
-        taxType: "OUTPUT2", // 20% VAT on income
-      };
-      
-      if (item.itemCode === "CARRIAGE") {
-        lineItem.itemCode = "Carriage";
-      } else if (item.itemCode === "Print DTF") {
-        lineItem.itemCode = "DTF";
-      } else if (item.itemCode === "Emb" || item.itemCode === "BAG") {
-        lineItem.itemCode = item.itemCode;
-      }
-      // EMB Set-Up: no itemCode sent to Xero (not a recognised Xero inventory item)
-      
-      return lineItem;
-    });
+    const accountCode = this.getSalesAccountCode(customer.name);
+    const xeroLineItems = this.buildXeroLineItems(lineItemsWithPricing, accountCode);
 
     // Helper function: Get the most recent Friday (last Friday or today if it's Friday)
     const getLastFriday = (): Date => {
