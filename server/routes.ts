@@ -4175,7 +4175,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         if (job.shippingCost === "TBA") {
-          if (!manualShippingCosts || !manualShippingCosts[job.id]) {
+          // A TBA job is covered if ANY job in the same tracking-number group
+          // (or consolidated group, or itself if standalone) has a manual cost.
+          let groupHasCost = false;
+          if (manualShippingCosts) {
+            if (job.dhlTrackingNumber) {
+              groupHasCost = selectedJobs.some(
+                j => j.shippingCost === "TBA" && j.dhlTrackingNumber === job.dhlTrackingNumber && !!manualShippingCosts[j.id]
+              );
+            } else if (job.consolidatedShipmentId) {
+              groupHasCost = selectedJobs.some(
+                j => j.shippingCost === "TBA" && j.consolidatedShipmentId === job.consolidatedShipmentId && !!manualShippingCosts[j.id]
+              );
+            } else {
+              groupHasCost = !!manualShippingCosts[job.id];
+            }
+          }
+          if (!groupHasCost) {
             hasTBA = true;
           }
         }
