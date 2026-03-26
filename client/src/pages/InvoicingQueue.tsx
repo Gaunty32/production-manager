@@ -392,16 +392,24 @@ export default function InvoicingQueue() {
         }
         
         if (hasShipping && totalShippingCost > 0) {
-          const isConsolidated = shipmentJobs.length > 1;
-          const jobDetails = shipmentJobs.map(j => j.poNumber ? `${j.jobName} (PO: ${j.poNumber})` : j.jobName).join(', ');
+          // Expand the job list to all jobs sharing the same tracking number (same physical delivery),
+          // even if they're in separate consolidated groups or standalone.
+          const trackingNumber = shipmentJobs.find(j => j.dhlTrackingNumber)?.dhlTrackingNumber;
+          const allDeliveryJobs = trackingNumber
+            ? sortedJobs.filter(j => j.dhlTrackingNumber === trackingNumber)
+            : shipmentJobs;
+
+          const isConsolidated = allDeliveryJobs.length > 1;
+          const jobDetails = allDeliveryJobs.map(j => j.poNumber ? `${j.jobName} (PO: ${j.poNumber})` : j.jobName).join(', ');
           
           let packageInfo = '';
           {
             const packageCounts: Record<string, number> = {};
-            for (const sJob of shipmentJobs) {
+            for (const sJob of allDeliveryJobs) {
               if (sJob.packageCount && sJob.packageType) {
                 const t = sJob.packageType.toLowerCase();
-                packageCounts[t] = (packageCounts[t] || 0) + sJob.packageCount;
+                // Use MAX not SUM — same physical boxes shared across all grouped jobs
+                packageCounts[t] = Math.max(packageCounts[t] || 0, sJob.packageCount);
               }
             }
             if (Object.keys(packageCounts).length > 0) {

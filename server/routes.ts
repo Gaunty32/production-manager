@@ -4209,10 +4209,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             
             if (hasShipping && totalShippingCost > 0) {
-              const isConsolidated = jobs.length > 1;
+              // Expand to all jobs sharing the same tracking number (same physical delivery),
+              // even if they're in separate consolidated groups or standalone.
+              const trackingNumber = jobs.find(j => j.dhlTrackingNumber)?.dhlTrackingNumber;
+              const allDeliveryJobs = trackingNumber
+                ? selectedJobs.filter(j => j.dhlTrackingNumber === trackingNumber)
+                : jobs;
+
+              const isConsolidated = allDeliveryJobs.length > 1;
               
               // Build job names with PO numbers
-              const jobDetails = jobs.map(j => {
+              const jobDetails = allDeliveryJobs.map(j => {
                 if (j.poNumber) {
                   return `${j.jobName} (PO: ${j.poNumber})`;
                 }
@@ -4222,10 +4229,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               let packageInfo = '';
               {
                 const packageCounts: { [key: string]: number } = {};
-                for (const shipmentJob of jobs) {
+                for (const shipmentJob of allDeliveryJobs) {
                   if (shipmentJob.packageCount && shipmentJob.packageType) {
                     const normalizedType = shipmentJob.packageType.toLowerCase();
-                    packageCounts[normalizedType] = (packageCounts[normalizedType] || 0) + shipmentJob.packageCount;
+                    // Use MAX not SUM — same physical boxes shared across all grouped jobs
+                    packageCounts[normalizedType] = Math.max(packageCounts[normalizedType] || 0, shipmentJob.packageCount);
                   }
                 }
                 
