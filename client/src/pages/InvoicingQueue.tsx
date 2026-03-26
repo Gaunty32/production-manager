@@ -618,19 +618,7 @@ export default function InvoicingQueue() {
     // Check if any selected job has TBA shipping that needs manual cost.
     // For consolidated shipment groups, only require ONE cost entry per group.
     const jobsNeedingShippingCosts: string[] = [];
-    // Pre-compute representatives: tracking number takes priority (same physical delivery),
-    // then consolidatedShipmentId, then standalone.
-    const trackingRepresentiveJobId = new Map<string, string>(); // trackingNumber -> first TBA jobId
-    const consolidatedRepresentativeJobId = new Map<string, string>(); // shipmentId -> first TBA jobId
-    for (const j of selectedCustomerJobs) {
-      if (j.shippingCost === "TBA") {
-        if (j.dhlTrackingNumber && !trackingRepresentiveJobId.has(j.dhlTrackingNumber)) {
-          trackingRepresentiveJobId.set(j.dhlTrackingNumber, j.id);
-        } else if (!j.dhlTrackingNumber && j.consolidatedShipmentId && !consolidatedRepresentativeJobId.has(j.consolidatedShipmentId)) {
-          consolidatedRepresentativeJobId.set(j.consolidatedShipmentId, j.id);
-        }
-      }
-    }
+    // Check whether any job in each group has a cost entered (robust against ordering differences).
     const checkedTrackingGroups = new Set<string>();
     const checkedConsolidatedGroups = new Set<string>();
     for (const job of selectedCustomerJobs) {
@@ -639,18 +627,22 @@ export default function InvoicingQueue() {
           // All TBA jobs sharing a tracking number are one delivery — only require one cost
           if (!checkedTrackingGroups.has(job.dhlTrackingNumber)) {
             checkedTrackingGroups.add(job.dhlTrackingNumber);
-            const repId = trackingRepresentiveJobId.get(job.dhlTrackingNumber)!;
-            if (!manualShippingCosts[repId]) {
-              jobsNeedingShippingCosts.push(repId);
+            const groupHasCost = selectedCustomerJobs.some(
+              j => j.shippingCost === "TBA" && j.dhlTrackingNumber === job.dhlTrackingNumber && manualShippingCosts[j.id]
+            );
+            if (!groupHasCost) {
+              jobsNeedingShippingCosts.push(job.id);
             }
           }
         } else if (job.consolidatedShipmentId) {
           // Within same consolidated group (no tracking number), only require one cost
           if (!checkedConsolidatedGroups.has(job.consolidatedShipmentId)) {
             checkedConsolidatedGroups.add(job.consolidatedShipmentId);
-            const repId = consolidatedRepresentativeJobId.get(job.consolidatedShipmentId)!;
-            if (!manualShippingCosts[repId]) {
-              jobsNeedingShippingCosts.push(repId);
+            const groupHasCost = selectedCustomerJobs.some(
+              j => j.shippingCost === "TBA" && j.consolidatedShipmentId === job.consolidatedShipmentId && manualShippingCosts[j.id]
+            );
+            if (!groupHasCost) {
+              jobsNeedingShippingCosts.push(job.id);
             }
           }
         } else {
