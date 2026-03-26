@@ -615,11 +615,27 @@ export default function InvoicingQueue() {
       return;
     }
 
-    // Check if any selected job has TBA shipping that needs manual cost
+    // Check if any selected job has TBA shipping that needs manual cost.
+    // For consolidated shipment groups, only require ONE cost entry per group.
     const jobsNeedingShippingCosts: string[] = [];
+    const checkedConsolidatedGroups = new Set<string>();
     for (const job of selectedCustomerJobs) {
-      if (job.shippingCost === "TBA" && !manualShippingCosts[job.id]) {
-        jobsNeedingShippingCosts.push(job.id);
+      if (job.shippingCost === "TBA") {
+        if (job.consolidatedShipmentId) {
+          // First TBA job encountered in this consolidated group is the representative
+          if (!checkedConsolidatedGroups.has(job.consolidatedShipmentId)) {
+            checkedConsolidatedGroups.add(job.consolidatedShipmentId);
+            if (!manualShippingCosts[job.id]) {
+              jobsNeedingShippingCosts.push(job.id);
+            }
+          }
+          // Subsequent jobs in same group: skip (covered by representative)
+        } else {
+          // Non-consolidated — requires its own cost
+          if (!manualShippingCosts[job.id]) {
+            jobsNeedingShippingCosts.push(job.id);
+          }
+        }
       }
     }
 
@@ -890,9 +906,25 @@ export default function InvoicingQueue() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {customerJobs.map(job => {
+                      {(() => {
+                        // Pre-compute which job is the TBA shipping representative for each consolidated group.
+                        // Only the first TBA job in a group gets the input; others show a "covered" note.
+                        const consolidatedTbaRepresentative = new Map<string, string>(); // shipmentId -> jobId
+                        for (const j of customerJobs) {
+                          if (j.consolidatedShipmentId && j.shippingCost === 'TBA') {
+                            if (!consolidatedTbaRepresentative.has(j.consolidatedShipmentId)) {
+                              consolidatedTbaRepresentative.set(j.consolidatedShipmentId, j.id);
+                            }
+                          }
+                        }
+                        return customerJobs.map(job => {
                         const price = getJobPrice(job);
                         const lineItems = getJobLineItems(job.id);
+                        
+                        // Is this job the one that should show the TBA shipping input for its consolidated group?
+                        const isShippingRepresentative = !job.consolidatedShipmentId || 
+                          job.shippingCost !== 'TBA' ||
+                          consolidatedTbaRepresentative.get(job.consolidatedShipmentId) === job.id;
                         
                         // Find other jobs in the same consolidated shipment
                         const consolidatedJobs = job.consolidatedShipmentId 
@@ -982,7 +1014,7 @@ export default function InvoicingQueue() {
                                           <span className="text-muted-foreground">
                                             {job.packageCount} {job.packageType === 'boxes' ? (job.packageCount === 1 ? 'Box' : 'Boxes') : (job.packageCount === 1 ? 'Bag' : 'Bags')}
                                           </span>
-                                          {job.shippingCost === 'TBA' ? (
+                                          {job.shippingCost === 'TBA' && isShippingRepresentative ? (
                                             <div className="flex items-center gap-2 ml-2">
                                               <Badge variant="secondary">Shipping: TBA</Badge>
                                               <span className="text-sm text-muted-foreground">£</span>
@@ -1000,6 +1032,8 @@ export default function InvoicingQueue() {
                                                 data-testid={`input-shipping-cost-${job.id}`}
                                               />
                                             </div>
+                                          ) : job.shippingCost === 'TBA' && !isShippingRepresentative ? (
+                                            <Badge variant="outline" className="ml-2 text-muted-foreground">Shipping: see above</Badge>
                                           ) : job.shippingCost ? (
                                             <Badge variant="secondary" className="ml-2">
                                               Shipping: {formatPrice(parseFloat(job.shippingCost))}
@@ -1007,8 +1041,8 @@ export default function InvoicingQueue() {
                                           ) : null}
                                         </div>
                                       )}
-                                      {/* TBA shipping without package info - still need manual cost entry */}
-                                      {job.shippingCost === 'TBA' && !(job.packageCount && job.packageType) && (
+                                      {/* TBA shipping without package info - only show input for the representative */}
+                                      {job.shippingCost === 'TBA' && !(job.packageCount && job.packageType) && isShippingRepresentative && (
                                         <div className="flex items-center gap-2 ml-5">
                                           <Badge variant="secondary">Shipping: TBA</Badge>
                                           <span className="text-sm text-muted-foreground">£</span>
@@ -1025,6 +1059,11 @@ export default function InvoicingQueue() {
                                             className="w-24 h-7"
                                             data-testid={`input-shipping-cost-${job.id}`}
                                           />
+                                        </div>
+                                      )}
+                                      {job.shippingCost === 'TBA' && !(job.packageCount && job.packageType) && !isShippingRepresentative && (
+                                        <div className="flex items-center gap-2 ml-5">
+                                          <Badge variant="outline" className="text-muted-foreground">Shipping: see above</Badge>
                                         </div>
                                       )}
                                     </div>
@@ -1096,7 +1135,7 @@ export default function InvoicingQueue() {
                             </div>
                           </div>
                         );
-                      })}
+                      }); })()}
 
                       {/* Approved Logo Setups */}
                       {(() => {
