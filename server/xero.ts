@@ -343,6 +343,58 @@ export class XeroService {
     }
   }
 
+  // Create a new contact in Xero using customer details from our system
+  async createContact(customer: Customer): Promise<{ contactID: string; name: string } | null> {
+    if (!this.isConfigured() || !this.isConnected()) return null;
+
+    try {
+      const token = await this.getAccessToken();
+      const tenantId = this.getTenantId();
+
+      const contactPayload: any = { Name: customer.name };
+      if (customer.email) contactPayload.EmailAddress = customer.email;
+      if (customer.telephone) {
+        contactPayload.Phones = [{ PhoneType: "DEFAULT", PhoneNumber: customer.telephone }];
+      }
+      if (customer.address) contactPayload.Addresses = [{ AddressType: "STREET", AttentionTo: customer.name, City: customer.address }];
+
+      const response = await fetch(`${this.apiUrl}/Contacts`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "xero-tenant-id": tenantId,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({ Contacts: [contactPayload] }),
+      });
+
+      if (!response.ok) {
+        console.error("Failed to create Xero contact:", await response.text());
+        return null;
+      }
+
+      const data = await response.json();
+      const created = data.Contacts?.[0];
+      if (created) {
+        console.log(`✓ Created new Xero contact: ${created.Name} (${created.ContactID})`);
+        return { contactID: created.ContactID, name: created.Name };
+      }
+      return null;
+    } catch (error) {
+      console.error("Error creating Xero contact:", error);
+      return null;
+    }
+  }
+
+  // Find an existing Xero contact or create one if not found
+  async findOrCreateContact(customer: Customer): Promise<{ contactID: string; name: string } | null> {
+    const existing = await this.findContact(customer);
+    if (existing) return existing;
+    console.log(`Creating new Xero contact for: ${customer.name}`);
+    return this.createContact(customer);
+  }
+
   // Determine the sales account code based on customer name
   private getSalesAccountCode(customerName: string): string {
     // PC Sports uses a dedicated sales account
@@ -409,8 +461,8 @@ export class XeroService {
 
     const token = await this.getAccessToken();
 
-    // Try to find existing contact in Xero
-    const xeroContact = await this.findContact(customer);
+    // Find existing Xero contact or create a new one with customer details
+    const xeroContact = await this.findOrCreateContact(customer);
 
     const accountCode = this.getSalesAccountCode(customer.name);
     const xeroLineItems = this.buildXeroLineItems(lineItemsWithPricing, accountCode);
@@ -470,8 +522,8 @@ export class XeroService {
     const token = await this.getAccessToken();
     const tenantId = this.getTenantId();
 
-    // Try to find existing contact in Xero
-    const xeroContact = await this.findContact(customer);
+    // Find existing Xero contact or create a new one with customer details
+    const xeroContact = await this.findOrCreateContact(customer);
 
     const accountCode = this.getSalesAccountCode(customer.name);
     const xeroLineItems = this.buildXeroLineItems(lineItemsWithPricing, accountCode);
