@@ -618,20 +618,43 @@ export default function InvoicingQueue() {
     // Check if any selected job has TBA shipping that needs manual cost.
     // For consolidated shipment groups, only require ONE cost entry per group.
     const jobsNeedingShippingCosts: string[] = [];
+    // Pre-compute representatives: tracking number takes priority (same physical delivery),
+    // then consolidatedShipmentId, then standalone.
+    const trackingRepresentiveJobId = new Map<string, string>(); // trackingNumber -> first TBA jobId
+    const consolidatedRepresentativeJobId = new Map<string, string>(); // shipmentId -> first TBA jobId
+    for (const j of selectedCustomerJobs) {
+      if (j.shippingCost === "TBA") {
+        if (j.dhlTrackingNumber && !trackingRepresentiveJobId.has(j.dhlTrackingNumber)) {
+          trackingRepresentiveJobId.set(j.dhlTrackingNumber, j.id);
+        } else if (!j.dhlTrackingNumber && j.consolidatedShipmentId && !consolidatedRepresentativeJobId.has(j.consolidatedShipmentId)) {
+          consolidatedRepresentativeJobId.set(j.consolidatedShipmentId, j.id);
+        }
+      }
+    }
+    const checkedTrackingGroups = new Set<string>();
     const checkedConsolidatedGroups = new Set<string>();
     for (const job of selectedCustomerJobs) {
       if (job.shippingCost === "TBA") {
-        if (job.consolidatedShipmentId) {
-          // First TBA job encountered in this consolidated group is the representative
-          if (!checkedConsolidatedGroups.has(job.consolidatedShipmentId)) {
-            checkedConsolidatedGroups.add(job.consolidatedShipmentId);
-            if (!manualShippingCosts[job.id]) {
-              jobsNeedingShippingCosts.push(job.id);
+        if (job.dhlTrackingNumber) {
+          // All TBA jobs sharing a tracking number are one delivery — only require one cost
+          if (!checkedTrackingGroups.has(job.dhlTrackingNumber)) {
+            checkedTrackingGroups.add(job.dhlTrackingNumber);
+            const repId = trackingRepresentiveJobId.get(job.dhlTrackingNumber)!;
+            if (!manualShippingCosts[repId]) {
+              jobsNeedingShippingCosts.push(repId);
             }
           }
-          // Subsequent jobs in same group: skip (covered by representative)
+        } else if (job.consolidatedShipmentId) {
+          // Within same consolidated group (no tracking number), only require one cost
+          if (!checkedConsolidatedGroups.has(job.consolidatedShipmentId)) {
+            checkedConsolidatedGroups.add(job.consolidatedShipmentId);
+            const repId = consolidatedRepresentativeJobId.get(job.consolidatedShipmentId)!;
+            if (!manualShippingCosts[repId]) {
+              jobsNeedingShippingCosts.push(repId);
+            }
+          }
         } else {
-          // Non-consolidated — requires its own cost
+          // Standalone TBA job — requires its own cost
           if (!manualShippingCosts[job.id]) {
             jobsNeedingShippingCosts.push(job.id);
           }
@@ -907,12 +930,16 @@ export default function InvoicingQueue() {
                   <CardContent>
                     <div className="space-y-3">
                       {(() => {
-                        // Pre-compute which job is the TBA shipping representative for each consolidated group.
-                        // Only the first TBA job in a group gets the input; others show a "covered" note.
-                        const consolidatedTbaRepresentative = new Map<string, string>(); // shipmentId -> jobId
+                        // Pre-compute which job is the TBA shipping representative.
+                        // Priority: tracking number groups (same physical delivery) > consolidatedShipmentId > standalone.
+                        // Only the representative gets the cost input; others show a "covered" badge.
+                        const trackingTbaRepresentative = new Map<string, string>(); // trackingNumber -> first TBA jobId
+                        const consolidatedTbaRepresentative = new Map<string, string>(); // shipmentId -> first TBA jobId
                         for (const j of customerJobs) {
-                          if (j.consolidatedShipmentId && j.shippingCost === 'TBA') {
-                            if (!consolidatedTbaRepresentative.has(j.consolidatedShipmentId)) {
+                          if (j.shippingCost === 'TBA') {
+                            if (j.dhlTrackingNumber && !trackingTbaRepresentative.has(j.dhlTrackingNumber)) {
+                              trackingTbaRepresentative.set(j.dhlTrackingNumber, j.id);
+                            } else if (!j.dhlTrackingNumber && j.consolidatedShipmentId && !consolidatedTbaRepresentative.has(j.consolidatedShipmentId)) {
                               consolidatedTbaRepresentative.set(j.consolidatedShipmentId, j.id);
                             }
                           }
@@ -921,10 +948,11 @@ export default function InvoicingQueue() {
                         const price = getJobPrice(job);
                         const lineItems = getJobLineItems(job.id);
                         
-                        // Is this job the one that should show the TBA shipping input for its consolidated group?
-                        const isShippingRepresentative = !job.consolidatedShipmentId || 
-                          job.shippingCost !== 'TBA' ||
-                          consolidatedTbaRepresentative.get(job.consolidatedShipmentId) === job.id;
+                        // Determine if this job should show the TBA shipping cost input.
+                        const isShippingRepresentative = job.shippingCost !== 'TBA' ? true
+                          : job.dhlTrackingNumber ? trackingTbaRepresentative.get(job.dhlTrackingNumber) === job.id
+                          : job.consolidatedShipmentId ? consolidatedTbaRepresentative.get(job.consolidatedShipmentId) === job.id
+                          : true; // standalone TBA job
                         
                         // Find other jobs in the same consolidated shipment
                         const consolidatedJobs = job.consolidatedShipmentId 
