@@ -52,7 +52,7 @@ export default function CustomerPasswordReset() {
       });
 
       // Redirect to customer dashboard
-      setLocation("/customer");
+      setLocation("/customer/dashboard");
     } catch (error) {
       toast({
         title: "Error",

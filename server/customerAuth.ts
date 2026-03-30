@@ -14,14 +14,13 @@ export async function registerCustomer(data: InsertCustomerUser & { customerId: 
   // Hash the password
   const passwordHash = await bcrypt.hash(data.password, SALT_ROUNDS);
   
-  // Create customer user with password reset required
   const customerUser = await storage.createCustomerUser({
     customerId: data.customerId,
     email: data.email,
     passwordHash,
     firstName: data.firstName,
     lastName: data.lastName,
-    mustResetPassword: true,
+    mustResetPassword: false,
     active: true,
   });
   
