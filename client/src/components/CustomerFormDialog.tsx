@@ -21,7 +21,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
 
@@ -35,14 +34,13 @@ const formSchema = insertCustomerSchema
     telephone: z.string().optional(),
     address: z.string().optional(),
     logoUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
-    pricingTable: z.enum(["none", "2025", "2026"]).default("none"),
     active: z.boolean().default(true),
   });
 
 interface CustomerFormDialogProps {
   trigger?: React.ReactNode;
   customer?: Customer;
-  onSubmit: (data: Omit<z.infer<typeof formSchema>, 'pricingTable'> & { pricingTable2025: boolean; pricingTable2026: boolean; logoUrl?: string; active: boolean }) => void;
+  onSubmit: (data: Omit<z.infer<typeof formSchema>, never> & { pricingTable2025: boolean; pricingTable2026: boolean; logoUrl?: string; active: boolean }) => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   canDeactivateCustomers?: boolean;
@@ -64,16 +62,12 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
       telephone: "",
       address: "",
       logoUrl: "",
-      pricingTable: "none",
       active: true,
     },
   });
 
   useEffect(() => {
     if (customer && open) {
-      // Determine which pricing table is set
-      const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : "none";
-      
       form.reset({
         name: customer.name,
         contactFirstName: customer.contactFirstName || "",
@@ -82,8 +76,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         telephone: customer.telephone || "",
         address: customer.address || "",
         logoUrl: customer.logoUrl || "",
-        pricingTable,
-        active: customer.active !== false, // Default to true if undefined
+        active: customer.active !== false,
       });
     } else if (!open) {
       form.reset({
@@ -94,20 +87,19 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         telephone: "",
         address: "",
         logoUrl: "",
-        pricingTable: "none",
         active: true,
       });
     }
   }, [customer, open, form]);
 
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
-    // Convert radio button selection to boolean fields
-    const { pricingTable, active, ...rest } = data;
+    const { active, ...rest } = data;
     const submitData = {
       ...rest,
-      pricingTable2025: pricingTable === "2025",
-      pricingTable2026: pricingTable === "2026",
-      active: active !== false, // Default to true
+      // New customers always get 2026 pricing; existing customers keep their current setting
+      pricingTable2025: isEditMode ? (customer?.pricingTable2025 ?? false) : false,
+      pricingTable2026: isEditMode ? (customer?.pricingTable2026 ?? true) : true,
+      active: active !== false,
     };
     onSubmit(submitData);
     setOpen(false);
@@ -228,45 +220,6 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                 </FormItem>
               )}
             />
-            
-            <div className="space-y-3 pt-2 border-t">
-              <FormField
-                control={form.control}
-                name="pricingTable"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Pricing Table</FormLabel>
-                    <FormControl>
-                      <RadioGroup
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        className="flex flex-col gap-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          <RadioGroupItem value="none" id="pricing-none" data-testid="radio-pricing-none" />
-                          <label htmlFor="pricing-none" className="text-sm font-normal cursor-pointer">
-                            No Pricing Table
-                          </label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <RadioGroupItem value="2025" id="pricing-2025" data-testid="radio-pricing-2025" />
-                          <label htmlFor="pricing-2025" className="text-sm font-normal cursor-pointer">
-                            Pricing Table 2025
-                          </label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <RadioGroupItem value="2026" id="pricing-2026" data-testid="radio-pricing-2026" />
-                          <label htmlFor="pricing-2026" className="text-sm font-normal cursor-pointer">
-                            Pricing Table 2026
-                          </label>
-                        </div>
-                      </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
 
             {isEditMode && canDeactivateCustomers && (
               <div className="space-y-3 pt-2 border-t">
