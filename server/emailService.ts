@@ -14,6 +14,15 @@ function sanitizeHtml(text: string | null): string {
 }
 
 async function getCredentials() {
+  // Use direct API key if available (most reliable for deployed environments)
+  if (process.env.RESEND_API_KEY) {
+    return {
+      apiKey: process.env.RESEND_API_KEY,
+      fromEmail: 'noreply@selectbrandingsolutions.co.uk'
+    };
+  }
+
+  // Fall back to Replit connector
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.WEB_REPL_RENEWAL
     ? 'depl ' + process.env.WEB_REPL_RENEWAL
