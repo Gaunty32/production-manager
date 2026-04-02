@@ -28,6 +28,8 @@ The production queue uses traffic light indicators for logo approval and goods r
 
 A customer job upload system allows customers to submit new job requests for staff review, with options for approval or rejection. Real-time chat and email notifications facilitate communication. Staff can impersonate customers for support. Secure password generation and reset functionality with mandatory first-login resets are implemented for customer portal access. The system also generates weekly performance reports showing invoiced value and completed quantities. A public demo portal at `/demo` showcases customer portal features with server-side obfuscated job data for marketing, including a lead magnet modal.
 
+A unified messaging system replaces per-job chat silos with a full inbox experience. Customers access `/customer/messages` to see all job conversations in one place, with unread badges on the dashboard "Messages" button and per-conversation unread counts. Staff access `/messages` via the sidebar (with unread badge) to view all customer conversations across all jobs. The `jobMessages` table tracks `readByStaff`/`readByCustomer` flags. Messages auto-refresh via polling. Customers can start conversations on any job (production or pending) via `/api/customer-portal/jobs/:jobId/messages/send`. Staff reply via `/api/staff/jobs/:jobId/messages` (POST/GET).
+
 ## Feature Specifications
 
 -   **Weekly Performance Report Date Filtering**: Allows filtering of weekly performance reports by date range (preset options and custom date picker).

@@ -57,7 +57,7 @@ import {
   type InsertCustomerDocument
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, sql, isNull, isNotNull, desc } from "drizzle-orm";
+import { eq, and, gte, lte, sql, isNull, isNotNull, desc, inArray } from "drizzle-orm";
 import { MACHINE_HEADS } from "@shared/machines";
 import { createHash } from "crypto";
 
@@ -156,6 +156,10 @@ export interface IStorage {
   getJobMessages(jobId: string): Promise<JobMessage[]>;
   createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
   markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void>;
+  getConversationsForCustomer(customerId: string): Promise<any[]>;
+  getUnreadCountForCustomer(customerId: string): Promise<number>;
+  getAllConversationsForStaff(): Promise<any[]>;
+  getUnreadCountForStaff(): Promise<number>;
   getJobFiles(jobId: string): Promise<JobFile[]>;
   createJobFile(file: InsertJobFile): Promise<JobFile>;
   deleteJobFile(id: string): Promise<void>;
@@ -1256,6 +1260,133 @@ export class DatabaseStorage implements IStorage {
         .set({ readByCustomer: true })
         .where(eq(jobMessages.jobId, jobId));
     }
+  }
+
+  async getConversationsForCustomer(customerId: string): Promise<any[]> {
+    // Get all jobs for this customer that have at least one message
+    const customerJobs = await db.select().from(jobs).where(eq(jobs.customerId, customerId));
+    const jobIds = customerJobs.map(j => j.id);
+    if (jobIds.length === 0) return [];
+
+    const allMessages = await db
+      .select()
+      .from(jobMessages)
+      .where(inArray(jobMessages.jobId, jobIds))
+      .orderBy(jobMessages.createdAt);
+
+    // Group by jobId
+    const byJob = new Map<string, typeof allMessages>();
+    for (const msg of allMessages) {
+      if (!byJob.has(msg.jobId)) byJob.set(msg.jobId, []);
+      byJob.get(msg.jobId)!.push(msg);
+    }
+
+    const result = [];
+    for (const job of customerJobs) {
+      const msgs = byJob.get(job.id) || [];
+      const unread = msgs.filter(m => m.senderType === 'staff' && !m.readByCustomer).length;
+      const latest = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+      result.push({
+        jobId: job.id,
+        jobName: job.jobName,
+        status: job.status,
+        completed: job.completed,
+        messageCount: msgs.length,
+        unreadCount: unread,
+        latestMessage: latest ? { message: latest.message, senderType: latest.senderType, createdAt: latest.createdAt } : null,
+      });
+    }
+
+    // Sort by latest message desc, then by job name
+    result.sort((a, b) => {
+      if (a.latestMessage && b.latestMessage) {
+        return new Date(b.latestMessage.createdAt).getTime() - new Date(a.latestMessage.createdAt).getTime();
+      }
+      if (a.latestMessage) return -1;
+      if (b.latestMessage) return 1;
+      return a.jobName.localeCompare(b.jobName);
+    });
+
+    return result;
+  }
+
+  async getUnreadCountForCustomer(customerId: string): Promise<number> {
+    const customerJobs = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.customerId, customerId));
+    const jobIds = customerJobs.map(j => j.id);
+    if (jobIds.length === 0) return 0;
+
+    const unread = await db
+      .select()
+      .from(jobMessages)
+      .where(
+        and(
+          inArray(jobMessages.jobId, jobIds),
+          eq(jobMessages.senderType, 'staff'),
+          eq(jobMessages.readByCustomer, false)
+        )
+      );
+    return unread.length;
+  }
+
+  async getAllConversationsForStaff(): Promise<any[]> {
+    // Get all jobs that have at least one message
+    const allMsgs = await db.select().from(jobMessages).orderBy(jobMessages.createdAt);
+    if (allMsgs.length === 0) return [];
+
+    const jobIdSet = new Set(allMsgs.map(m => m.jobId));
+    const jobIdArr = Array.from(jobIdSet);
+    const allJobs = await db.select().from(jobs).where(inArray(jobs.id, jobIdArr));
+    const allCustomers = await db.select().from(customers);
+    const customerMap = new Map(allCustomers.map(c => [c.id, c]));
+
+    const byJob = new Map<string, typeof allMsgs>();
+    for (const msg of allMsgs) {
+      if (!byJob.has(msg.jobId)) byJob.set(msg.jobId, []);
+      byJob.get(msg.jobId)!.push(msg);
+    }
+
+    const result = [];
+    for (const job of allJobs) {
+      const msgs = byJob.get(job.id) || [];
+      const unread = msgs.filter(m => m.senderType === 'customer' && !m.readByStaff).length;
+      const latest = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+      const customer = customerMap.get(job.customerId);
+      result.push({
+        jobId: job.id,
+        jobName: job.jobName,
+        customerId: job.customerId,
+        customerName: customer?.name || 'Unknown',
+        status: job.status,
+        completed: job.completed,
+        messageCount: msgs.length,
+        unreadCount: unread,
+        latestMessage: latest ? { message: latest.message, senderType: latest.senderType, createdAt: latest.createdAt } : null,
+      });
+    }
+
+    result.sort((a, b) => {
+      if (a.latestMessage && b.latestMessage) {
+        return new Date(b.latestMessage.createdAt).getTime() - new Date(a.latestMessage.createdAt).getTime();
+      }
+      if (a.latestMessage) return -1;
+      if (b.latestMessage) return 1;
+      return 0;
+    });
+
+    return result;
+  }
+
+  async getUnreadCountForStaff(): Promise<number> {
+    const unread = await db
+      .select()
+      .from(jobMessages)
+      .where(
+        and(
+          eq(jobMessages.senderType, 'customer'),
+          eq(jobMessages.readByStaff, false)
+        )
+      );
+    return unread.length;
   }
 
   async getJobFiles(jobId: string): Promise<JobFile[]> {

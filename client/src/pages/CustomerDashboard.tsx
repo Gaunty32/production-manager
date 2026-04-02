@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, PoundSterling, Key } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, PoundSterling, Key, MessageSquare } from "lucide-react";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
@@ -185,6 +185,13 @@ export default function CustomerDashboard() {
     queryKey: ["/api/customer-portal/jobs"],
     enabled: !!customerUser,
   });
+
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ["/api/customer-portal/messages/unread-count"],
+    enabled: !!customerUser,
+    refetchInterval: 15000,
+  });
+  const unreadMessageCount = unreadData?.count ?? 0;
 
   const customerPostcode = extractUkPostcode(customerUser?.customerAddress);
 
@@ -431,6 +438,24 @@ export default function CustomerDashboard() {
             >
               <FileText className="h-4 w-4 mr-2" />
               Documents
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/customer/messages")}
+              data-testid="button-view-messages"
+              className="relative"
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Messages
+              {unreadMessageCount > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="ml-1.5 h-5 min-w-5 px-1 text-xs"
+                  data-testid="badge-unread-messages"
+                >
+                  {unreadMessageCount}
+                </Badge>
+              )}
             </Button>
           </div>
 

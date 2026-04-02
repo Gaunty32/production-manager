@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock, MessageSquare } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -21,6 +21,7 @@ const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "All Orders", url: "/orders", icon: ClipboardList },
   { title: "Holding Area", url: "/holding-area", icon: Inbox },
+  { title: "Messages", url: "/messages", icon: MessageSquare },
   { title: "Invoicing", url: "/invoicing", icon: FileText },
   { title: "Schedule", url: "/schedule", icon: Calendar },
   { title: "Holidays", url: "/holidays", icon: CalendarClock },
@@ -49,7 +50,13 @@ export function AppSidebar() {
     refetchInterval: 30000,
   });
 
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ["/api/staff/messages/unread-count"],
+    refetchInterval: 15000,
+  });
+
   const pendingCount = pendingJobs.length;
+  const unreadMessageCount = unreadData?.count ?? 0;
 
   return (
     <Sidebar>
@@ -78,6 +85,15 @@ export function AppSidebar() {
                             data-testid="badge-holding-area-count"
                           >
                             {pendingCount}
+                          </Badge>
+                        )}
+                        {item.url === "/messages" && unreadMessageCount > 0 && (
+                          <Badge
+                            variant="destructive"
+                            className="ml-auto h-5 min-w-5 px-1.5 text-xs"
+                            data-testid="badge-messages-unread-count"
+                          >
+                            {unreadMessageCount}
                           </Badge>
                         )}
                       </Link>

@@ -1960,6 +1960,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer Portal - Get all conversations (all jobs with message summary)
+  app.get("/api/customer-portal/conversations", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerId = req.session?.customerUserId
+        ? (await storage.getCustomerUserById(req.session.customerUserId))?.customerId
+        : req.session?.impersonationCustomerUserId
+        ? (await storage.getCustomerUserById(req.session.impersonationCustomerUserId))?.customerId
+        : null;
+      if (!customerId) return res.status(401).json({ error: "Not authenticated" });
+      const conversations = await storage.getConversationsForCustomer(customerId);
+      res.json(conversations);
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  // Customer Portal - Get unread message count
+  app.get("/api/customer-portal/messages/unread-count", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerId = req.session?.customerUserId
+        ? (await storage.getCustomerUserById(req.session.customerUserId))?.customerId
+        : req.session?.impersonationCustomerUserId
+        ? (await storage.getCustomerUserById(req.session.impersonationCustomerUserId))?.customerId
+        : null;
+      if (!customerId) return res.status(401).json({ error: "Not authenticated" });
+      const count = await storage.getUnreadCountForCustomer(customerId);
+      res.json({ count });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch unread count" });
+    }
+  });
+
+  // Customer Portal - Send message on any job (production or pending)
+  app.post("/api/customer-portal/jobs/:jobId/messages/send", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session?.customerUserId || req.session?.impersonationCustomerUserId;
+      const customerUser = await storage.getCustomerUserById(userId);
+      if (!customerUser) return res.status(404).json({ error: "Customer user not found" });
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const message = await storage.createJobMessage({
+        jobId: req.params.jobId,
+        senderType: 'customer',
+        senderId: userId,
+        message: req.body.message,
+      });
+
+      res.json(message);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // Staff - Get all conversations with unread indicators
+  app.get("/api/staff/conversations", isStaffAuthenticated, async (req, res) => {
+    try {
+      const conversations = await storage.getAllConversationsForStaff();
+      res.json(conversations);
+    } catch (error) {
+      console.error("Error fetching staff conversations:", error);
+      res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  // Staff - Get unread message count
+  app.get("/api/staff/messages/unread-count", isStaffAuthenticated, async (req, res) => {
+    try {
+      const count = await storage.getUnreadCountForStaff();
+      res.json({ count });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch unread count" });
+    }
+  });
+
   // Staff - Get pending customer job submissions
   app.get("/api/staff/jobs/pending", isStaffAuthenticated, async (req, res) => {
     try {
