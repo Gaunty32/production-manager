@@ -539,7 +539,7 @@ export default function CustomerDashboard() {
                           <p className="text-xs text-muted-foreground mb-1">DPD Local Tracking Number</p>
                           <div className="flex items-center justify-between gap-2">
                             <a
-                              href={`https://track.dpdlocal.co.uk/search?search.searchType.0=reference&search.query.0=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                              href={`https://track.dpdlocal.co.uk/search?reference=${encodeURIComponent(job.dhlTrackingNumber)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm font-mono font-semibold text-primary hover:underline"
@@ -696,7 +696,7 @@ export default function CustomerDashboard() {
                           <TableCell>
                             {job.completed && job.dhlTrackingNumber ? (
                               <a
-                                href={`https://track.dpdlocal.co.uk/search?search.searchType.0=reference&search.query.0=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                                href={`https://track.dpdlocal.co.uk/search?reference=${encodeURIComponent(job.dhlTrackingNumber)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-xs font-mono text-primary hover:underline"
@@ -755,7 +755,7 @@ export default function CustomerDashboard() {
                         <TableCell>
                           {index === 0 && job.completed && job.dhlTrackingNumber ? (
                             <a
-                              href={`https://track.dpdlocal.co.uk/search?search.searchType.0=reference&search.query.0=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                              href={`https://track.dpdlocal.co.uk/search?reference=${encodeURIComponent(job.dhlTrackingNumber)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs font-mono text-primary hover:underline"
