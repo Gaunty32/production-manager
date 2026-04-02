@@ -93,7 +93,19 @@ type CustomerUser = {
   lastName: string | null;
   customerName: string | null;
   customerLogoUrl: string | null;
+  customerAddress: string | null;
 };
+
+function extractUkPostcode(address: string | null | undefined): string | null {
+  if (!address) return null;
+  const match = address.match(/\b([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})\b/i);
+  return match ? match[1].replace(/\s+/, " ").toUpperCase() : null;
+}
+
+function dpdLocalUrl(trackingNumber: string, postcode: string | null): string {
+  const base = `https://track.dpdlocal.co.uk/search?reference=${encodeURIComponent(trackingNumber)}`;
+  return postcode ? `${base}&postcode=${encodeURIComponent(postcode)}` : base;
+}
 
 export default function CustomerDashboard() {
   const [, setLocation] = useLocation();
@@ -173,6 +185,8 @@ export default function CustomerDashboard() {
     queryKey: ["/api/customer-portal/jobs"],
     enabled: !!customerUser,
   });
+
+  const customerPostcode = extractUkPostcode(customerUser?.customerAddress);
 
   // Filter by status and search term, then sort
   const filteredJobs = jobs
@@ -539,7 +553,7 @@ export default function CustomerDashboard() {
                           <p className="text-xs text-muted-foreground mb-1">DPD Local Tracking Number</p>
                           <div className="flex items-center justify-between gap-2">
                             <a
-                              href={`https://track.dpdlocal.co.uk/search?reference=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                              href={dpdLocalUrl(job.dhlTrackingNumber, customerPostcode)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm font-mono font-semibold text-primary hover:underline"
@@ -696,7 +710,7 @@ export default function CustomerDashboard() {
                           <TableCell>
                             {job.completed && job.dhlTrackingNumber ? (
                               <a
-                                href={`https://track.dpdlocal.co.uk/search?reference=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                                href={dpdLocalUrl(job.dhlTrackingNumber, customerPostcode)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-xs font-mono text-primary hover:underline"
@@ -755,7 +769,7 @@ export default function CustomerDashboard() {
                         <TableCell>
                           {index === 0 && job.completed && job.dhlTrackingNumber ? (
                             <a
-                              href={`https://track.dpdlocal.co.uk/search?reference=${encodeURIComponent(job.dhlTrackingNumber)}`}
+                              href={dpdLocalUrl(job.dhlTrackingNumber, customerPostcode)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs font-mono text-primary hover:underline"

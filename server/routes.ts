@@ -1618,6 +1618,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isImpersonating,
         customerName: customer?.name || null,
         customerLogoUrl: customer?.logoUrl || null,
+        customerAddress: customer?.address || null,
       });
     } catch (error) {
       console.error("Error fetching customer user:", error);
