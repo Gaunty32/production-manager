@@ -15,10 +15,10 @@ function sanitizeHtml(text: string | null): string {
 
 async function getCredentials() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+  const xReplitToken = process.env.WEB_REPL_RENEWAL
+    ? 'depl ' + process.env.WEB_REPL_RENEWAL
+    : process.env.REPL_IDENTITY
+    ? 'repl ' + process.env.REPL_IDENTITY
     : null;
 
   if (!xReplitToken) {
