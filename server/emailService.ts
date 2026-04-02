@@ -18,7 +18,7 @@ async function getCredentials() {
   if (process.env.RESEND_API_KEY) {
     return {
       apiKey: process.env.RESEND_API_KEY,
-      fromEmail: 'chris@selectuniforms.co.uk'
+      fromEmail: 'onboarding@resend.dev'
     };
   }
 
