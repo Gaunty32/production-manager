@@ -713,7 +713,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(req.params.id);
       if (!user) return res.status(404).json({ error: "User not found" });
 
-      const bcrypt = await import("bcrypt");
       const passwordHash = await bcrypt.hash(password, 10);
       await storage.updateUserPassword(req.params.id, passwordHash);
       res.json({ message: `Password updated for ${user.email}` });
