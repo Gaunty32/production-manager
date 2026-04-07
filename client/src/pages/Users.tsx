@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { UserPlus, Pencil, Mail, CheckCircle2, XCircle } from "lucide-react";
+import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -34,8 +34,17 @@ const editUserSchema = z.object({
   lastName: z.string().optional(),
 });
 
+const setPasswordSchema = z.object({
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string(),
+}).refine((d) => d.password === d.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
 type CreateUserFormData = z.infer<typeof createUserSchema>;
 type EditUserFormData = z.infer<typeof editUserSchema>;
+type SetPasswordFormData = z.infer<typeof setPasswordSchema>;
 
 export default function Users() {
   const { toast } = useToast();
@@ -43,6 +52,8 @@ export default function Users() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [setPasswordDialogOpen, setSetPasswordDialogOpen] = useState(false);
+  const [setPasswordUser, setSetPasswordUser] = useState<User | null>(null);
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -67,6 +78,26 @@ export default function Users() {
       email: "",
       firstName: "",
       lastName: "",
+    },
+  });
+
+  const setPasswordForm = useForm<SetPasswordFormData>({
+    resolver: zodResolver(setPasswordSchema),
+    defaultValues: { password: "", confirmPassword: "" },
+  });
+
+  const setPasswordMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const res = await apiRequest("POST", `/api/users/${userId}/set-password`, { password });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Password updated", description: data.message });
+      setSetPasswordDialogOpen(false);
+      setPasswordForm.reset();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to set password", variant: "destructive" });
     },
   });
 
@@ -469,6 +500,19 @@ export default function Users() {
                       <Mail className="h-4 w-4 mr-2" />
                       Send Password Reset
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSetPasswordUser(user);
+                        setPasswordForm.reset();
+                        setSetPasswordDialogOpen(true);
+                      }}
+                      data-testid={`button-set-password-${user.id}`}
+                    >
+                      <KeyRound className="h-4 w-4 mr-2" />
+                      Set Password
+                    </Button>
                     <div className="flex items-center gap-2 ml-auto">
                       <Label 
                         htmlFor={`active-toggle-${user.id}`}
@@ -591,6 +635,62 @@ export default function Users() {
                     data-testid="button-submit-edit"
                   >
                     {editUserMutation.isPending ? "Updating..." : "Update User"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Set Password Dialog */}
+        <Dialog open={setPasswordDialogOpen} onOpenChange={setSetPasswordDialogOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Set Password</DialogTitle>
+              <DialogDescription>
+                Directly set a new password for {setPasswordUser?.firstName || setPasswordUser?.username}. No email required.
+              </DialogDescription>
+            </DialogHeader>
+            <Form {...setPasswordForm}>
+              <form
+                onSubmit={setPasswordForm.handleSubmit((data) => {
+                  if (!setPasswordUser) return;
+                  setPasswordMutation.mutate({ userId: setPasswordUser.id, password: data.password });
+                })}
+                className="space-y-4"
+              >
+                <FormField
+                  control={setPasswordForm.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>New Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="Minimum 8 characters" data-testid="input-set-password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={setPasswordForm.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="Repeat password" data-testid="input-confirm-set-password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex gap-2 justify-end">
+                  <Button type="button" variant="outline" onClick={() => setSetPasswordDialogOpen(false)} data-testid="button-cancel-set-password">
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={setPasswordMutation.isPending} data-testid="button-submit-set-password">
+                    {setPasswordMutation.isPending ? "Saving..." : "Set Password"}
                   </Button>
                 </div>
               </form>

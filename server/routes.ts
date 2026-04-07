@@ -703,6 +703,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Trigger password reset email for a user (super admin only)
+  // Directly set a user's password (super admin only, no email required)
+  app.post("/api/users/:id/set-password", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const { password } = req.body;
+      if (!password || password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+      const user = await storage.getUser(req.params.id);
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      const bcrypt = await import("bcrypt");
+      const passwordHash = await bcrypt.hash(password, 10);
+      await storage.updateUserPassword(req.params.id, passwordHash);
+      res.json({ message: `Password updated for ${user.email}` });
+    } catch (error: any) {
+      console.error("Error setting password:", error);
+      res.status(500).json({ error: "Failed to set password" });
+    }
+  });
+
   app.post("/api/users/:id/reset-password", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
     try {
       const user = await storage.getUser(req.params.id);
