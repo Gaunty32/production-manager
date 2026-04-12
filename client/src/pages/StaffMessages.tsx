@@ -65,6 +65,14 @@ type ChatMessage = {
 
 type Customer = { id: string; name: string };
 
+type Job = {
+  id: string;
+  jobName: string;
+  customerId: string;
+  customerName: string;
+  status: string;
+};
+
 function formatConvoTime(iso: string) {
   const d = new Date(iso);
   if (isToday(d)) return format(d, "h:mm a");
@@ -88,11 +96,17 @@ export default function StaffMessages() {
   const prevCustomerMsgCount = useRef(0);
   const isInitialLoad = useRef(true);
 
-  // New conversation dialog
+  // New direct conversation dialog
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
   const [newCustomerId, setNewCustomerId] = useState("");
   const [newFirstMessage, setNewFirstMessage] = useState("");
+
+  // New order chat dialog
+  const [showNewOrderChat, setShowNewOrderChat] = useState(false);
+  const [newOrderCustomerId, setNewOrderCustomerId] = useState("");
+  const [newOrderJobId, setNewOrderJobId] = useState("");
+  const [newOrderMessage, setNewOrderMessage] = useState("");
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: jobConversations = [], isLoading: isLoadingJobConvos } = useQuery<JobConversation[]>({
@@ -107,6 +121,10 @@ export default function StaffMessages() {
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
+  });
+
+  const { data: allJobs = [] } = useQuery<Job[]>({
+    queryKey: ["/api/jobs"],
   });
 
   const jobId = selected?.type === "job" ? selected.jobId : null;
@@ -217,6 +235,24 @@ export default function StaffMessages() {
     onError: () => toast({ title: "Failed to create conversation", variant: "destructive" }),
   });
 
+  const createOrderChatMutation = useMutation({
+    mutationFn: async ({ jobId, message }: { jobId: string; message: string }) => {
+      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/messages`, { message });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${variables.jobId}/messages`] });
+      setShowNewOrderChat(false);
+      setNewOrderCustomerId("");
+      setNewOrderJobId("");
+      setNewOrderMessage("");
+      setTab("job");
+      setSelected({ type: "job", jobId: variables.jobId });
+    },
+    onError: () => toast({ title: "Failed to start order chat", variant: "destructive" }),
+  });
+
   const archiveConvoMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("PATCH", `/api/staff/direct-conversations/${id}`, { status: "archived" });
@@ -271,9 +307,19 @@ export default function StaffMessages() {
           </div>
         </div>
 
-        {/* New conversation button (direct only) */}
-        {tab === "direct" && (
-          <div className="px-3 py-2 border-b">
+        {/* New chat buttons */}
+        <div className="px-3 py-2 border-b">
+          {tab === "job" ? (
+            <Button
+              size="sm"
+              className="w-full h-8 text-xs"
+              onClick={() => setShowNewOrderChat(true)}
+              data-testid="button-new-order-chat"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              New Order Chat
+            </Button>
+          ) : (
             <Button
               size="sm"
               className="w-full h-8 text-xs"
@@ -283,8 +329,8 @@ export default function StaffMessages() {
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               New Conversation
             </Button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Conversation list */}
         <div className="flex-1 overflow-y-auto">
@@ -429,6 +475,68 @@ export default function StaffMessages() {
           </div>
         </div>
       )}
+
+      {/* New order chat dialog */}
+      <Dialog open={showNewOrderChat} onOpenChange={(open) => {
+        setShowNewOrderChat(open);
+        if (!open) { setNewOrderCustomerId(""); setNewOrderJobId(""); setNewOrderMessage(""); }
+      }}>
+        <DialogContent data-testid="dialog-new-order-chat">
+          <DialogHeader>
+            <DialogTitle>New Order Chat</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Customer *</label>
+              <Select value={newOrderCustomerId} onValueChange={(v) => { setNewOrderCustomerId(v); setNewOrderJobId(""); }}>
+                <SelectTrigger data-testid="select-order-chat-customer">
+                  <SelectValue placeholder="Select customer…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Order / Job *</label>
+              <Select
+                value={newOrderJobId}
+                onValueChange={setNewOrderJobId}
+                disabled={!newOrderCustomerId}
+              >
+                <SelectTrigger data-testid="select-order-chat-job">
+                  <SelectValue placeholder={newOrderCustomerId ? "Select job…" : "Select a customer first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {allJobs
+                    .filter(j => j.customerId === newOrderCustomerId)
+                    .map(j => <SelectItem key={j.id} value={j.id}>{j.jobName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">First message *</label>
+              <Textarea
+                placeholder="Type your opening message…"
+                rows={3}
+                value={newOrderMessage}
+                onChange={e => setNewOrderMessage(e.target.value)}
+                data-testid="input-order-chat-message"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewOrderChat(false)}>Cancel</Button>
+            <Button
+              onClick={() => createOrderChatMutation.mutate({ jobId: newOrderJobId, message: newOrderMessage.trim() })}
+              disabled={!newOrderJobId || !newOrderMessage.trim() || createOrderChatMutation.isPending}
+              data-testid="button-start-order-chat"
+            >
+              {createOrderChatMutation.isPending ? "Starting…" : "Start Chat"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* New conversation dialog */}
       <Dialog open={showNewConvo} onOpenChange={setShowNewConvo}>

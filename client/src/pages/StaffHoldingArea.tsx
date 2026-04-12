@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Clock, FileText, MessageSquare, Package, CheckCircle, XCircle, Calendar, Eye, Upload } from "lucide-react";
+import { Clock, FileText, MessageSquare, Package, CheckCircle, XCircle, Calendar, Eye, Upload, Plus } from "lucide-react";
 import { format } from "date-fns";
 import {
   Accordion,
@@ -24,6 +24,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { StaffJobFileUpload } from "@/components/StaffJobFileUpload";
+import { JobFormDialog } from "@/components/JobFormDialog";
 
 type Job = {
   id: string;
@@ -60,6 +61,16 @@ export default function StaffHoldingArea() {
     queryKey: ["/api/staff/jobs/pending"],
     refetchInterval: 5000, // Poll every 5 seconds for new messages
   });
+
+  const { data: customers = [] } = useQuery<{ id: string; name: string; isActive: boolean }[]>({
+    queryKey: ["/api/customers"],
+  });
+
+  const { data: staff = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/staff"],
+  });
+
+  const activeCustomers = customers.filter(c => c.isActive);
 
   // Track which card is most visible using IntersectionObserver
   useEffect(() => {
@@ -227,11 +238,28 @@ export default function StaffHoldingArea() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="px-4 py-4 md:py-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">Customer Job Submissions</h1>
-        <p className="text-sm text-muted-foreground">
-          Review and approve customer job requests ({pendingJobs.length} pending)
-        </p>
+      <div className="px-4 py-4 md:py-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">Customer Job Submissions</h1>
+          <p className="text-sm text-muted-foreground">
+            Review and approve customer job requests ({pendingJobs.length} pending)
+          </p>
+        </div>
+        <div className="flex-shrink-0">
+          <JobFormDialog
+            trigger={
+              <Button data-testid="button-new-job-holding">
+                <Plus className="h-4 w-4 mr-2" />
+                New Job
+              </Button>
+            }
+            customers={activeCustomers}
+            staff={staff}
+            onJobCreated={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+            }}
+          />
+        </div>
       </div>
 
       {pendingJobs.length === 0 ? (
