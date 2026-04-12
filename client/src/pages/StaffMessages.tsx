@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
@@ -30,6 +32,9 @@ import {
   Plus,
   MessageCircle,
   Archive,
+  Search,
+  Paperclip,
+  X,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 
@@ -65,14 +70,6 @@ type ChatMessage = {
 
 type Customer = { id: string; name: string };
 
-type Job = {
-  id: string;
-  jobName: string;
-  customerId: string;
-  customerName: string;
-  status: string;
-};
-
 function formatConvoTime(iso: string) {
   const d = new Date(iso);
   if (isToday(d)) return format(d, "h:mm a");
@@ -105,8 +102,13 @@ export default function StaffMessages() {
   // New order chat dialog
   const [showNewOrderChat, setShowNewOrderChat] = useState(false);
   const [newOrderCustomerId, setNewOrderCustomerId] = useState("");
-  const [newOrderJobId, setNewOrderJobId] = useState("");
+  const [newOrderCustomerSearch, setNewOrderCustomerSearch] = useState("");
+  const [newOrderJobName, setNewOrderJobName] = useState("");
+  const [newOrderColleagues, setNewOrderColleagues] = useState<string[]>([]);
   const [newOrderMessage, setNewOrderMessage] = useState("");
+  const [newOrderFiles, setNewOrderFiles] = useState<File[]>([]);
+  const [isCreatingOrderChat, setIsCreatingOrderChat] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: jobConversations = [], isLoading: isLoadingJobConvos } = useQuery<JobConversation[]>({
@@ -123,8 +125,8 @@ export default function StaffMessages() {
     queryKey: ["/api/customers"],
   });
 
-  const { data: allJobs = [] } = useQuery<Job[]>({
-    queryKey: ["/api/jobs"],
+  const { data: staffList = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/staff"],
   });
 
   const jobId = selected?.type === "job" ? selected.jobId : null;
@@ -235,23 +237,70 @@ export default function StaffMessages() {
     onError: () => toast({ title: "Failed to create conversation", variant: "destructive" }),
   });
 
-  const createOrderChatMutation = useMutation({
-    mutationFn: async ({ jobId, message }: { jobId: string; message: string }) => {
-      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/messages`, { message });
-      return res.json();
-    },
-    onSuccess: (_data, variables) => {
+  const resetOrderChatForm = () => {
+    setNewOrderCustomerId("");
+    setNewOrderCustomerSearch("");
+    setNewOrderJobName("");
+    setNewOrderColleagues([]);
+    setNewOrderMessage("");
+    setNewOrderFiles([]);
+  };
+
+  const handleCreateOrderChat = async () => {
+    if (!newOrderCustomerId || !newOrderJobName.trim() || !newOrderMessage.trim()) return;
+    setIsCreatingOrderChat(true);
+    try {
+      // 1. Create new job
+      const jobRes = await apiRequest("POST", "/api/jobs", {
+        customerId: newOrderCustomerId,
+        jobName: newOrderJobName.trim(),
+        quantity: 1,
+      });
+      const newJob = await jobRes.json();
+      const createdJobId = newJob.id;
+
+      // 2. Upload files if any
+      for (const file of newOrderFiles) {
+        try {
+          const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
+          const { url, key } = await uploadRes.json();
+          await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
+          await apiRequest("POST", `/api/jobs/${createdJobId}/files`, {
+            objectKey: key,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type || "application/octet-stream",
+          });
+        } catch {
+          toast({ title: `Failed to upload ${file.name}`, variant: "destructive" });
+        }
+      }
+
+      // 3. Build message (prepend CC list if colleagues selected)
+      const ccNames = newOrderColleagues
+        .map(id => staffList.find(s => s.id === id)?.name)
+        .filter(Boolean)
+        .join(", ");
+      const fullMessage = ccNames
+        ? `CC: ${ccNames}\n\n${newOrderMessage.trim()}`
+        : newOrderMessage.trim();
+
+      // 4. Send first message
+      await apiRequest("POST", `/api/staff/jobs/${createdJobId}/messages`, { message: fullMessage });
+
+      // 5. Refresh and navigate
       queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${variables.jobId}/messages`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setShowNewOrderChat(false);
-      setNewOrderCustomerId("");
-      setNewOrderJobId("");
-      setNewOrderMessage("");
+      resetOrderChatForm();
       setTab("job");
-      setSelected({ type: "job", jobId: variables.jobId });
-    },
-    onError: () => toast({ title: "Failed to start order chat", variant: "destructive" }),
-  });
+      setSelected({ type: "job", jobId: createdJobId });
+    } catch {
+      toast({ title: "Failed to create order chat", variant: "destructive" });
+    } finally {
+      setIsCreatingOrderChat(false);
+    }
+  };
 
   const archiveConvoMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -479,60 +528,161 @@ export default function StaffMessages() {
       {/* New order chat dialog */}
       <Dialog open={showNewOrderChat} onOpenChange={(open) => {
         setShowNewOrderChat(open);
-        if (!open) { setNewOrderCustomerId(""); setNewOrderJobId(""); setNewOrderMessage(""); }
+        if (!open) resetOrderChatForm();
       }}>
-        <DialogContent data-testid="dialog-new-order-chat">
+        <DialogContent className="max-w-lg" data-testid="dialog-new-order-chat">
           <DialogHeader>
             <DialogTitle>New Order Chat</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Customer *</label>
-              <Select value={newOrderCustomerId} onValueChange={(v) => { setNewOrderCustomerId(v); setNewOrderJobId(""); }}>
-                <SelectTrigger data-testid="select-order-chat-customer">
-                  <SelectValue placeholder="Select customer…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+
+          <ScrollArea className="max-h-[70vh] pr-1">
+            <div className="space-y-4 py-1 pr-3">
+
+              {/* Customer — searchable, alphabetical */}
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Customer *</label>
+                <div className="border rounded-md overflow-hidden">
+                  <div className="flex items-center px-3 py-2 border-b bg-muted/30">
+                    <Search className="h-3.5 w-3.5 text-muted-foreground mr-2 shrink-0" />
+                    <input
+                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                      placeholder="Search customers…"
+                      value={newOrderCustomerSearch}
+                      onChange={e => setNewOrderCustomerSearch(e.target.value)}
+                      data-testid="input-order-chat-customer-search"
+                    />
+                  </div>
+                  <div className="max-h-40 overflow-y-auto">
+                    {customers
+                      .filter(c => c.name.toLowerCase().includes(newOrderCustomerSearch.toLowerCase()))
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setNewOrderCustomerId(c.id)}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                            newOrderCustomerId === c.id
+                              ? "bg-primary text-primary-foreground"
+                              : "hover:bg-muted/60"
+                          }`}
+                          data-testid={`option-customer-${c.id}`}
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Job name */}
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Job Name *</label>
+                <Input
+                  placeholder="e.g. Polo shirts — Spring 2026"
+                  value={newOrderJobName}
+                  onChange={e => setNewOrderJobName(e.target.value)}
+                  data-testid="input-order-chat-job-name"
+                />
+              </div>
+
+              {/* Colleagues */}
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Include Colleagues</label>
+                <div className="border rounded-md divide-y max-h-36 overflow-y-auto">
+                  {staffList.length === 0 ? (
+                    <p className="text-xs text-muted-foreground px-3 py-2">No staff found</p>
+                  ) : (
+                    staffList.map(s => (
+                      <label
+                        key={s.id}
+                        className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/40 text-sm"
+                        data-testid={`option-colleague-${s.id}`}
+                      >
+                        <Checkbox
+                          checked={newOrderColleagues.includes(s.id)}
+                          onCheckedChange={(checked) => {
+                            setNewOrderColleagues(prev =>
+                              checked ? [...prev, s.id] : prev.filter(id => id !== s.id)
+                            );
+                          }}
+                        />
+                        {s.name}
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Message */}
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Message *</label>
+                <Textarea
+                  placeholder="Type your opening message…"
+                  rows={3}
+                  value={newOrderMessage}
+                  onChange={e => setNewOrderMessage(e.target.value)}
+                  data-testid="input-order-chat-message"
+                />
+              </div>
+
+              {/* Attachments */}
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Attachments</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={e => {
+                    const picked = Array.from(e.target.files || []);
+                    setNewOrderFiles(prev => [...prev, ...picked]);
+                    e.target.value = "";
+                  }}
+                  data-testid="input-order-chat-files"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  data-testid="button-attach-files"
+                >
+                  <Paperclip className="h-3.5 w-3.5 mr-1.5" />
+                  Attach Files
+                </Button>
+                {newOrderFiles.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {newOrderFiles.map((f, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs bg-muted rounded px-2 py-1.5">
+                        <span className="truncate mr-2">{f.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewOrderFiles(prev => prev.filter((_, idx) => idx !== i))}
+                          className="text-muted-foreground hover:text-foreground shrink-0"
+                          data-testid={`button-remove-file-${i}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
             </div>
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Order / Job *</label>
-              <Select
-                value={newOrderJobId}
-                onValueChange={setNewOrderJobId}
-                disabled={!newOrderCustomerId}
-              >
-                <SelectTrigger data-testid="select-order-chat-job">
-                  <SelectValue placeholder={newOrderCustomerId ? "Select job…" : "Select a customer first"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {allJobs
-                    .filter(j => j.customerId === newOrderCustomerId)
-                    .map(j => <SelectItem key={j.id} value={j.id}>{j.jobName}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">First message *</label>
-              <Textarea
-                placeholder="Type your opening message…"
-                rows={3}
-                value={newOrderMessage}
-                onChange={e => setNewOrderMessage(e.target.value)}
-                data-testid="input-order-chat-message"
-              />
-            </div>
-          </div>
+          </ScrollArea>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewOrderChat(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowNewOrderChat(false)} disabled={isCreatingOrderChat}>
+              Cancel
+            </Button>
             <Button
-              onClick={() => createOrderChatMutation.mutate({ jobId: newOrderJobId, message: newOrderMessage.trim() })}
-              disabled={!newOrderJobId || !newOrderMessage.trim() || createOrderChatMutation.isPending}
+              onClick={handleCreateOrderChat}
+              disabled={!newOrderCustomerId || !newOrderJobName.trim() || !newOrderMessage.trim() || isCreatingOrderChat}
               data-testid="button-start-order-chat"
             >
-              {createOrderChatMutation.isPending ? "Starting…" : "Start Chat"}
+              {isCreatingOrderChat ? "Creating…" : "Start Chat"}
             </Button>
           </DialogFooter>
         </DialogContent>
