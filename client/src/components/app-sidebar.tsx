@@ -2,6 +2,7 @@ import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy
 import {
   Sidebar,
   SidebarContent,
+  SidebarHeader,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -17,6 +18,7 @@ import { isSuperAdmin, canViewPrices } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import type { Job } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
+import logoImage from "@assets/logo_transparent.png";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
@@ -67,6 +69,17 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
+      <SidebarHeader className="p-3 border-b">
+        <Link href="/" onClick={handleNavClick} data-testid="link-logo-home">
+          <img
+            src={logoImage}
+            alt="Select Branding Solutions"
+            className="w-full object-contain"
+            style={{ maxHeight: "72px" }}
+            data-testid="logo-sidebar"
+          />
+        </Link>
+      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Production Manager</SidebarGroupLabel>

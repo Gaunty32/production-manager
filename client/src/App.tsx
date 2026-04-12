@@ -42,7 +42,6 @@ import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import logoImage from "@assets/Logo350px_180px_1773835583737.jpg";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isLoading } = useAuth();
@@ -177,17 +176,9 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="relative flex items-center justify-between p-3 md:p-4 border-b sticky top-0 bg-background z-10 gap-2">
+          <header className="flex items-center justify-between p-3 md:p-4 border-b sticky top-0 bg-background z-10 gap-2">
             <div className="flex items-center gap-2 md:gap-3">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
-            </div>
-            <div className="absolute left-1/2 -translate-x-1/2 flex items-center" data-testid="app-logo">
-              <img
-                src={logoImage}
-                alt="Select Branding Solutions"
-                className="h-14 md:h-16 object-contain"
-                data-testid="logo-icon"
-              />
             </div>
             <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
               <DropdownMenu>
