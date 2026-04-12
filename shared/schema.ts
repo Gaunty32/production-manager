@@ -262,6 +262,53 @@ export const jobFiles = pgTable("job_files", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Direct conversations - not tied to a specific job
+export const conversations = pgTable("conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  subject: varchar("subject").notNull(),
+  status: varchar("status").notNull().default("open"), // 'open' | 'archived'
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const conversationMessages = pgTable("conversation_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  senderType: varchar("sender_type").notNull(), // 'customer' | 'staff'
+  senderId: varchar("sender_id").notNull(),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  readByStaff: boolean("read_by_staff").notNull().default(false),
+  readByCustomer: boolean("read_by_customer").notNull().default(false),
+});
+
+// Samples - staff upload samples for customer approval
+export const samples = pgTable("samples", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }), // optional link to a job
+  title: varchar("title").notNull(),
+  description: text("description"),
+  status: varchar("status").notNull().default("pending_approval"), // 'pending_approval' | 'amends_required' | 'approved'
+  customerNotes: text("customer_notes"), // customer notes when requesting amends
+  uploadedById: varchar("uploaded_by_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const sampleFiles = pgTable("sample_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sampleId: varchar("sample_id").notNull().references(() => samples.id, { onDelete: "cascade" }),
+  fileName: varchar("file_name").notNull(),
+  fileUrl: varchar("file_url").notNull(),
+  fileSize: integer("file_size").notNull(),
+  fileType: varchar("file_type").notNull(),
+  uploadedBy: varchar("uploaded_by").notNull(), // 'customer' | 'staff'
+  uploaderId: varchar("uploader_id").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Job errors - track quality issues on completed orders
 export const jobErrors = pgTable("job_errors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -876,6 +923,57 @@ export type InsertJobMessage = z.infer<typeof insertJobMessageSchema>;
 export type JobMessage = typeof jobMessages.$inferSelect;
 export type InsertJobFile = z.infer<typeof insertJobFileSchema>;
 export type JobFile = typeof jobFiles.$inferSelect;
+
+// Direct conversations
+export const insertConversationSchema = createInsertSchema(conversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  subject: z.string().min(1, "Subject is required"),
+});
+
+export const insertConversationMessageSchema = createInsertSchema(conversationMessages).omit({
+  id: true,
+  createdAt: true,
+  readByStaff: true,
+  readByCustomer: true,
+}).extend({
+  message: z.string().min(1, "Message cannot be empty"),
+  senderType: z.enum(["customer", "staff"]),
+});
+
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
+export type ConversationMessage = typeof conversationMessages.$inferSelect;
+
+// Samples
+export const insertSampleSchema = createInsertSchema(samples).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  customerNotes: true,
+}).extend({
+  title: z.string().min(1, "Title is required"),
+  status: z.enum(["pending_approval", "amends_required", "approved"]).default("pending_approval"),
+});
+
+export const insertSampleFileSchema = createInsertSchema(sampleFiles).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  fileName: z.string().min(1),
+  fileUrl: z.string().min(1),
+  fileSize: z.number().int().positive(),
+  fileType: z.string().min(1),
+  uploadedBy: z.enum(["customer", "staff"]),
+});
+
+export type InsertSample = z.infer<typeof insertSampleSchema>;
+export type Sample = typeof samples.$inferSelect;
+export type InsertSampleFile = z.infer<typeof insertSampleFileSchema>;
+export type SampleFile = typeof sampleFiles.$inferSelect;
 
 // Staff authentication schemas
 export const staffLoginSchema = z.object({

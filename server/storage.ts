@@ -20,6 +20,10 @@ import {
   impersonationSessions,
   jobErrors,
   customerDocuments,
+  conversations,
+  conversationMessages,
+  samples,
+  sampleFiles,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -54,7 +58,15 @@ import {
   type JobError,
   type InsertJobError,
   type CustomerDocument,
-  type InsertCustomerDocument
+  type InsertCustomerDocument,
+  type Conversation,
+  type InsertConversation,
+  type ConversationMessage,
+  type InsertConversationMessage,
+  type Sample,
+  type InsertSample,
+  type SampleFile,
+  type InsertSampleFile,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql, isNull, isNotNull, desc, inArray } from "drizzle-orm";
@@ -214,6 +226,30 @@ export interface IStorage {
   createCustomerDocument(doc: InsertCustomerDocument): Promise<CustomerDocument>;
   updateCustomerDocument(id: string, doc: Partial<CustomerDocument>): Promise<CustomerDocument>;
   deleteCustomerDocument(id: string): Promise<void>;
+
+  // Direct conversations
+  getConversations(): Promise<Conversation[]>;
+  getConversationsByCustomer(customerId: string): Promise<Conversation[]>;
+  getConversation(id: string): Promise<Conversation | undefined>;
+  createConversation(data: InsertConversation): Promise<Conversation>;
+  updateConversation(id: string, data: Partial<Conversation>): Promise<Conversation>;
+  getConversationMessages(conversationId: string): Promise<ConversationMessage[]>;
+  createConversationMessage(data: InsertConversationMessage): Promise<ConversationMessage>;
+  markConversationMessagesReadByStaff(conversationId: string): Promise<void>;
+  markConversationMessagesReadByCustomer(conversationId: string): Promise<void>;
+  getUnreadConversationCountForStaff(): Promise<number>;
+  getUnreadConversationCountForCustomer(customerId: string): Promise<number>;
+
+  // Samples
+  getSamples(): Promise<Sample[]>;
+  getSamplesByCustomer(customerId: string): Promise<Sample[]>;
+  getSample(id: string): Promise<Sample | undefined>;
+  createSample(data: InsertSample): Promise<Sample>;
+  updateSample(id: string, data: Partial<Sample>): Promise<Sample>;
+  deleteSample(id: string): Promise<void>;
+  getSampleFiles(sampleId: string): Promise<SampleFile[]>;
+  createSampleFile(data: InsertSampleFile): Promise<SampleFile>;
+  deleteSampleFile(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2494,6 +2530,129 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCustomerDocument(id: string): Promise<void> {
     await db.delete(customerDocuments).where(eq(customerDocuments.id, id));
+  }
+
+  // Direct conversations
+  async getConversations(): Promise<Conversation[]> {
+    return await db.select().from(conversations).orderBy(desc(conversations.updatedAt));
+  }
+
+  async getConversationsByCustomer(customerId: string): Promise<Conversation[]> {
+    return await db.select().from(conversations)
+      .where(eq(conversations.customerId, customerId))
+      .orderBy(desc(conversations.updatedAt));
+  }
+
+  async getConversation(id: string): Promise<Conversation | undefined> {
+    const [row] = await db.select().from(conversations).where(eq(conversations.id, id));
+    return row;
+  }
+
+  async createConversation(data: InsertConversation): Promise<Conversation> {
+    const [row] = await db.insert(conversations).values(data).returning();
+    return row;
+  }
+
+  async updateConversation(id: string, data: Partial<Conversation>): Promise<Conversation> {
+    const [row] = await db.update(conversations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(conversations.id, id))
+      .returning();
+    return row;
+  }
+
+  async getConversationMessages(conversationId: string): Promise<ConversationMessage[]> {
+    return await db.select().from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, conversationId))
+      .orderBy(conversationMessages.createdAt);
+  }
+
+  async createConversationMessage(data: InsertConversationMessage): Promise<ConversationMessage> {
+    const [row] = await db.insert(conversationMessages).values(data).returning();
+    // Bump parent conversation updatedAt
+    await db.update(conversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(conversations.id, data.conversationId));
+    return row;
+  }
+
+  async markConversationMessagesReadByStaff(conversationId: string): Promise<void> {
+    await db.update(conversationMessages)
+      .set({ readByStaff: true })
+      .where(and(eq(conversationMessages.conversationId, conversationId), eq(conversationMessages.readByStaff, false)));
+  }
+
+  async markConversationMessagesReadByCustomer(conversationId: string): Promise<void> {
+    await db.update(conversationMessages)
+      .set({ readByCustomer: true })
+      .where(and(eq(conversationMessages.conversationId, conversationId), eq(conversationMessages.readByCustomer, false)));
+  }
+
+  async getUnreadConversationCountForStaff(): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(conversationMessages)
+      .where(and(eq(conversationMessages.senderType, 'customer'), eq(conversationMessages.readByStaff, false)));
+    return Number(result[0]?.count ?? 0);
+  }
+
+  async getUnreadConversationCountForCustomer(customerId: string): Promise<number> {
+    const customerConvos = await db.select({ id: conversations.id })
+      .from(conversations)
+      .where(eq(conversations.customerId, customerId));
+    if (customerConvos.length === 0) return 0;
+    const ids = customerConvos.map(c => c.id);
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(conversationMessages)
+      .where(and(inArray(conversationMessages.conversationId, ids), eq(conversationMessages.senderType, 'staff'), eq(conversationMessages.readByCustomer, false)));
+    return Number(result[0]?.count ?? 0);
+  }
+
+  // Samples
+  async getSamples(): Promise<Sample[]> {
+    return await db.select().from(samples).orderBy(desc(samples.updatedAt));
+  }
+
+  async getSamplesByCustomer(customerId: string): Promise<Sample[]> {
+    return await db.select().from(samples)
+      .where(eq(samples.customerId, customerId))
+      .orderBy(desc(samples.updatedAt));
+  }
+
+  async getSample(id: string): Promise<Sample | undefined> {
+    const [row] = await db.select().from(samples).where(eq(samples.id, id));
+    return row;
+  }
+
+  async createSample(data: InsertSample): Promise<Sample> {
+    const [row] = await db.insert(samples).values(data).returning();
+    return row;
+  }
+
+  async updateSample(id: string, data: Partial<Sample>): Promise<Sample> {
+    const [row] = await db.update(samples)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(samples.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteSample(id: string): Promise<void> {
+    await db.delete(samples).where(eq(samples.id, id));
+  }
+
+  async getSampleFiles(sampleId: string): Promise<SampleFile[]> {
+    return await db.select().from(sampleFiles)
+      .where(eq(sampleFiles.sampleId, sampleId))
+      .orderBy(sampleFiles.createdAt);
+  }
+
+  async createSampleFile(data: InsertSampleFile): Promise<SampleFile> {
+    const [row] = await db.insert(sampleFiles).values(data).returning();
+    return row;
+  }
+
+  async deleteSampleFile(id: string): Promise<void> {
+    await db.delete(sampleFiles).where(eq(sampleFiles.id, id));
   }
 }
 

@@ -26,7 +26,11 @@ import {
   insertLogoSetupSchema,
   updateLogoSetupSchema,
   insertJobErrorSchema,
-  updateJobErrorSchema
+  updateJobErrorSchema,
+  insertConversationSchema,
+  insertConversationMessageSchema,
+  insertSampleSchema,
+  insertSampleFileSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { xeroService } from "./xero";
@@ -4691,6 +4695,356 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error disconnecting from Xero:", error);
       res.status(500).json({ error: "Failed to disconnect from Xero" });
+    }
+  });
+
+  // ─── Direct Conversations ─────────────────────────────────────────────────
+
+  // Staff: list all direct conversations enriched with customer name + latest message + unread
+  app.get("/api/staff/direct-conversations", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const convos = await storage.getConversations();
+      const customers = await storage.getCustomers();
+      const custMap = new Map(customers.map(c => [c.id, c]));
+      const enriched = await Promise.all(convos.map(async (c) => {
+        const msgs = await storage.getConversationMessages(c.id);
+        const unread = msgs.filter(m => m.senderType === "customer" && !m.readByStaff).length;
+        const latest = msgs[msgs.length - 1] ?? null;
+        return { ...c, customerName: custMap.get(c.customerId)?.name ?? "Unknown", unreadCount: unread, latestMessage: latest };
+      }));
+      res.json(enriched);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  // Staff: get messages for a direct conversation (marks as read by staff)
+  app.get("/api/staff/direct-conversations/:id/messages", isStaffAuthenticated, async (req, res) => {
+    try {
+      const msgs = await storage.getConversationMessages(req.params.id);
+      await storage.markConversationMessagesReadByStaff(req.params.id);
+      res.json(msgs);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Staff: reply in a direct conversation
+  app.post("/api/staff/direct-conversations/:id/messages", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const convo = await storage.getConversation(req.params.id);
+      if (!convo) return res.status(404).json({ error: "Conversation not found" });
+      const msg = await storage.createConversationMessage({
+        conversationId: req.params.id,
+        senderType: "staff",
+        senderId: String(req.session.userId),
+        message: req.body.message,
+      });
+      res.json(msg);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // Staff: create a new direct conversation on behalf of a customer (or initiate one)
+  app.post("/api/staff/direct-conversations", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const data = insertConversationSchema.parse(req.body);
+      const convo = await storage.createConversation(data);
+      if (req.body.message) {
+        await storage.createConversationMessage({
+          conversationId: convo.id,
+          senderType: "staff",
+          senderId: String(req.session.userId),
+          message: req.body.message,
+        });
+      }
+      res.json(convo);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to create conversation" });
+    }
+  });
+
+  // Staff: archive / update a conversation
+  app.patch("/api/staff/direct-conversations/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      const convo = await storage.updateConversation(req.params.id, req.body);
+      res.json(convo);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to update conversation" });
+    }
+  });
+
+  // Staff: unread count (direct conversations)
+  app.get("/api/staff/direct-conversations/unread-count", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const count = await storage.getUnreadConversationCountForStaff();
+      res.json({ count });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to get unread count" });
+    }
+  });
+
+  // Customer: list their direct conversations
+  app.get("/api/customer-portal/direct-conversations", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const convos = await storage.getConversationsByCustomer(customerUser.customerId);
+      const enriched = await Promise.all(convos.map(async (c) => {
+        const msgs = await storage.getConversationMessages(c.id);
+        const unread = msgs.filter(m => m.senderType === "staff" && !m.readByCustomer).length;
+        const latest = msgs[msgs.length - 1] ?? null;
+        return { ...c, unreadCount: unread, latestMessage: latest };
+      }));
+      res.json(enriched);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  // Customer: start a new direct conversation
+  app.post("/api/customer-portal/direct-conversations", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const data = insertConversationSchema.parse({ ...req.body, customerId: customerUser.customerId });
+      const convo = await storage.createConversation(data);
+      if (req.body.message) {
+        await storage.createConversationMessage({
+          conversationId: convo.id,
+          senderType: "customer",
+          senderId: req.session.customerUserId,
+          message: req.body.message,
+        });
+      }
+      res.json(convo);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to create conversation" });
+    }
+  });
+
+  // Customer: get messages for a conversation (marks as read)
+  app.get("/api/customer-portal/direct-conversations/:id/messages", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const convo = await storage.getConversation(req.params.id);
+      if (!convo || convo.customerId !== customerUser.customerId) return res.status(404).json({ error: "Not found" });
+      const msgs = await storage.getConversationMessages(req.params.id);
+      await storage.markConversationMessagesReadByCustomer(req.params.id);
+      res.json(msgs);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Customer: send a message in a direct conversation
+  app.post("/api/customer-portal/direct-conversations/:id/messages", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const convo = await storage.getConversation(req.params.id);
+      if (!convo || convo.customerId !== customerUser.customerId) return res.status(404).json({ error: "Not found" });
+      const msg = await storage.createConversationMessage({
+        conversationId: req.params.id,
+        senderType: "customer",
+        senderId: req.session.customerUserId,
+        message: req.body.message,
+      });
+      res.json(msg);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // ─── Samples ───────────────────────────────────────────────────────────────
+
+  // Staff: list all samples (enriched with customer name + files)
+  app.get("/api/staff/samples", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const allSamples = await storage.getSamples();
+      const customers = await storage.getCustomers();
+      const custMap = new Map(customers.map(c => [c.id, c]));
+      const enriched = await Promise.all(allSamples.map(async (s) => {
+        const files = await storage.getSampleFiles(s.id);
+        return { ...s, customerName: custMap.get(s.customerId)?.name ?? "Unknown", files };
+      }));
+      res.json(enriched);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch samples" });
+    }
+  });
+
+  // Staff: create a sample
+  app.post("/api/staff/samples", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const data = insertSampleSchema.parse({ ...req.body, uploadedById: String(req.session.userId) });
+      const sample = await storage.createSample(data);
+      res.json(sample);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors });
+      res.status(500).json({ error: "Failed to create sample" });
+    }
+  });
+
+  // Staff: update a sample (status, title, description, notes)
+  app.patch("/api/staff/samples/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      const sample = await storage.updateSample(req.params.id, req.body);
+      res.json(sample);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to update sample" });
+    }
+  });
+
+  // Staff: delete a sample
+  app.delete("/api/staff/samples/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteSample(req.params.id);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to delete sample" });
+    }
+  });
+
+  // Staff: attach a file to a sample
+  app.post("/api/staff/samples/:id/files", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const sample = await storage.getSample(req.params.id);
+      if (!sample) return res.status(404).json({ error: "Sample not found" });
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const rawKey = req.body.objectKey;
+      if (!rawKey) return res.status(400).json({ error: "Missing objectKey" });
+      const fileUrl = objectStorageService.normalizeObjectEntityPath(rawKey);
+      const fileData = insertSampleFileSchema.parse({
+        sampleId: req.params.id,
+        fileName: req.body.fileName,
+        fileUrl,
+        fileSize: req.body.fileSize,
+        fileType: req.body.fileType,
+        uploadedBy: "staff",
+        uploaderId: String(req.session.userId),
+      });
+      const file = await storage.createSampleFile(fileData);
+      res.json(file);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors });
+      res.status(500).json({ error: "Failed to attach file" });
+    }
+  });
+
+  // Staff: delete a sample file
+  app.delete("/api/staff/samples/:id/files/:fileId", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteSampleFile(req.params.fileId);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to delete file" });
+    }
+  });
+
+  // Staff: upload URL for sample files
+  app.post("/api/staff/samples/objects/upload", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const { url, key } = await objectStorageService.getObjectEntityUploadURLWithKey();
+      res.json({ url, key });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to get upload URL" });
+    }
+  });
+
+  // Customer: list their samples (with files)
+  app.get("/api/customer-portal/samples", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const allSamples = await storage.getSamplesByCustomer(customerUser.customerId);
+      const enriched = await Promise.all(allSamples.map(async (s) => {
+        const files = await storage.getSampleFiles(s.id);
+        return { ...s, files };
+      }));
+      res.json(enriched);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch samples" });
+    }
+  });
+
+  // Customer: get a single sample (with files) - ownership check
+  app.get("/api/customer-portal/samples/:id", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const sample = await storage.getSample(req.params.id);
+      if (!sample || sample.customerId !== customerUser.customerId) return res.status(404).json({ error: "Not found" });
+      const files = await storage.getSampleFiles(sample.id);
+      res.json({ ...sample, files });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch sample" });
+    }
+  });
+
+  // Customer: approve a sample
+  app.post("/api/customer-portal/samples/:id/approve", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const sample = await storage.getSample(req.params.id);
+      if (!sample || sample.customerId !== customerUser.customerId) return res.status(404).json({ error: "Not found" });
+      const updated = await storage.updateSample(req.params.id, { status: "approved", customerNotes: null });
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to approve sample" });
+    }
+  });
+
+  // Customer: request amends on a sample
+  app.post("/api/customer-portal/samples/:id/amends", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const sample = await storage.getSample(req.params.id);
+      if (!sample || sample.customerId !== customerUser.customerId) return res.status(404).json({ error: "Not found" });
+      const updated = await storage.updateSample(req.params.id, {
+        status: "amends_required",
+        customerNotes: req.body.notes || null,
+      });
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to submit amends" });
+    }
+  });
+
+  // Customer: upload file to their own sample (customer-uploaded reference files)
+  app.post("/api/customer-portal/samples/:id/files", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const sample = await storage.getSample(req.params.id);
+      if (!sample || sample.customerId !== customerUser.customerId) return res.status(404).json({ error: "Not found" });
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const rawKey = req.body.objectKey;
+      if (!rawKey) return res.status(400).json({ error: "Missing objectKey" });
+      const fileUrl = objectStorageService.normalizeObjectEntityPath(rawKey);
+      const fileData = insertSampleFileSchema.parse({
+        sampleId: req.params.id,
+        fileName: req.body.fileName,
+        fileUrl,
+        fileSize: req.body.fileSize,
+        fileType: req.body.fileType,
+        uploadedBy: "customer",
+        uploaderId: req.session.customerUserId,
+      });
+      const file = await storage.createSampleFile(fileData);
+      res.json(file);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors });
+      res.status(500).json({ error: "Failed to attach file" });
     }
   });
 

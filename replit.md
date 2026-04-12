@@ -43,6 +43,8 @@ A unified messaging system replaces per-job chat silos with a full inbox experie
 -   **Production Worksheet Printing**: Enhanced print layout for multi-page printing with intelligent page-break controls.
 -   **Auto-Scheduling Improvements**: Case-insensitive job type handling, overdue jobs prioritized, undated jobs scheduled within 30 days, default work hours (7 AM - 6 PM, Mon-Fri) used when no staff shifts configured, and improved error messages.
 -   **Contract Embroidery Trend Chart**: Weekly Reports includes a "Contract Embroidery" tab with a dual-axis line chart (worm chart) showing weekly production output (items completed) on the left axis and invoice value (£) on the right axis. Supports date range filtering with preset options (This Week, Last Week, Last 4 Weeks, Last 12 Weeks) and custom date picker.
+-   **Direct Messaging**: Staff and customers can have direct (non-job-tied) conversations. `conversations`/`conversationMessages` tables with `readByStaff`/`readByCustomer` flags. Staff access `/messages` (with a "Direct Messages" tab added to the existing job chats). Customers access via the "Messages" button in the portal (also has a "Direct Messages" tab with a "New Message" button). Staff can initiate conversations from `/messages`.
+-   **Sample Approvals**: Staff can send samples to customers for review via `/samples`. Samples have `pending_approval`, `amends_required`, and `approved` statuses. Staff can attach files (via Object Storage), mark approved, or delete. Customers access their samples via `/customer/samples` — they can approve or request amends with notes. Tables: `samples`, `sampleFiles`.
 
 # External Dependencies
 
