@@ -8,6 +8,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
 import { MACHINE_NAMES } from "@shared/machines";
@@ -45,6 +46,11 @@ export function AppSidebar() {
   const { user } = useAuth();
   const isUserSuperAdmin = isSuperAdmin(user?.role);
   const userCanViewPrices = canViewPrices(user?.role);
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  const handleNavClick = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   const { data: pendingJobs = [] } = useQuery<Job[]>({
     queryKey: ["/api/staff/jobs/pending"],
@@ -76,7 +82,7 @@ export function AppSidebar() {
                 .map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={location === item.url}>
-                      <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
+                      <Link href={item.url} onClick={handleNavClick} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
                         <item.icon className="h-4 w-4" />
                         <span className="flex-1">{item.title}</span>
                         {item.url === "/holding-area" && pendingCount > 0 && (
@@ -104,7 +110,7 @@ export function AppSidebar() {
               {isUserSuperAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/users"}>
-                    <Link href="/users" data-testid="link-user-management">
+                    <Link href="/users" onClick={handleNavClick} data-testid="link-user-management">
                       <ShieldCheck className="h-4 w-4" />
                       <span>User Management</span>
                     </Link>
@@ -122,7 +128,7 @@ export function AppSidebar() {
               {machineItems.map((item) => (
                 <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton asChild isActive={location === item.url}>
-                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
+                    <Link href={item.url} onClick={handleNavClick} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
