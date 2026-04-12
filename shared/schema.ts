@@ -265,7 +265,8 @@ export const jobFiles = pgTable("job_files", {
 // Direct conversations - not tied to a specific job
 export const conversations = pgTable("conversations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  customerId: varchar("customer_id").references(() => customers.id, { onDelete: "cascade" }), // null when staffRecipientId is set
+  staffRecipientId: varchar("staff_recipient_id").references(() => staff.id, { onDelete: "cascade" }), // null when customerId is set
   subject: varchar("subject").notNull(),
   status: varchar("status").notNull().default("open"), // 'open' | 'archived'
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -931,6 +932,10 @@ export const insertConversationSchema = createInsertSchema(conversations).omit({
   updatedAt: true,
 }).extend({
   subject: z.string().min(1, "Subject is required"),
+  customerId: z.string().optional().nullable(),
+  staffRecipientId: z.string().optional().nullable(),
+}).refine(data => data.customerId || data.staffRecipientId, {
+  message: "Either customerId or staffRecipientId is required",
 });
 
 export const insertConversationMessageSchema = createInsertSchema(conversationMessages).omit({

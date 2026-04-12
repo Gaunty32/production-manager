@@ -4711,17 +4711,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const convos = await storage.getConversations();
       const customers = await storage.getCustomers();
+      const allUsers = await storage.getAllUsers();
       const custMap = new Map(customers.map(c => [c.id, c]));
+      const userMap = new Map(allUsers.map(u => [String(u.id), u]));
       const enriched = await Promise.all(convos.map(async (c) => {
         const msgs = await storage.getConversationMessages(c.id);
         const unread = msgs.filter(m => m.senderType === "customer" && !m.readByStaff).length;
         const latest = msgs[msgs.length - 1] ?? null;
-        return { ...c, customerName: custMap.get(c.customerId)?.name ?? "Unknown", unreadCount: unread, latestMessage: latest };
+        let recipientName = "Unknown";
+        let recipientType: "customer" | "staff" = "customer";
+        if (c.staffRecipientId) {
+          recipientName = userMap.get(c.staffRecipientId)?.name ?? "Staff Member";
+          recipientType = "staff";
+        } else if (c.customerId) {
+          recipientName = custMap.get(c.customerId)?.name ?? "Unknown";
+        }
+        return { ...c, customerName: recipientName, recipientName, recipientType, unreadCount: unread, latestMessage: latest };
       }));
       res.json(enriched);
     } catch (e) {
       console.error(e);
       res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  // Staff: list all users (active) for messaging
+  app.get("/api/staff/messaging-users", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      const active = users.filter(u => u.isActive !== false);
+      res.json(active.map(u => ({ id: String(u.id), name: u.name, email: u.email, role: u.role })));
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch users" });
     }
   });
 
@@ -4753,21 +4774,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Staff: create a new direct conversation on behalf of a customer (or initiate one)
+  // Staff: create a new direct conversation (with a customer or a staff member)
   app.post("/api/staff/direct-conversations", isStaffAuthenticated, async (req: any, res) => {
     try {
-      const data = insertConversationSchema.parse(req.body);
-      const convo = await storage.createConversation(data);
-      if (req.body.message) {
+      const { message, ...rest } = req.body;
+      const data = insertConversationSchema.parse(rest);
+      const convo = await storage.createConversation(data as any);
+      if (message) {
         await storage.createConversationMessage({
           conversationId: convo.id,
           senderType: "staff",
           senderId: String(req.session.userId),
-          message: req.body.message,
+          message,
         });
       }
       res.json(convo);
     } catch (e) {
+      console.error(e);
       res.status(500).json({ error: "Failed to create conversation" });
     }
   });

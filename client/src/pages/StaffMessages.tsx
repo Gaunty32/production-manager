@@ -52,14 +52,19 @@ type JobConversation = {
 
 type DirectConversation = {
   id: string;
-  customerId: string;
+  customerId: string | null;
+  staffRecipientId: string | null;
   customerName: string;
+  recipientName: string;
+  recipientType: "customer" | "staff";
   subject: string;
   status: string;
   unreadCount: number;
   latestMessage: { message: string; senderType: "customer" | "staff"; createdAt: string } | null;
   updatedAt: string;
 };
+
+type MessagingUser = { id: string; name: string; email: string; role: string };
 
 type ChatMessage = {
   id: string;
@@ -96,7 +101,9 @@ export default function StaffMessages() {
   // New direct conversation dialog
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
-  const [newCustomerId, setNewCustomerId] = useState("");
+  const [newRecipientId, setNewRecipientId] = useState("");
+  const [newRecipientType, setNewRecipientType] = useState<"customer" | "staff">("customer");
+  const [newRecipientSearch, setNewRecipientSearch] = useState("");
   const [newFirstMessage, setNewFirstMessage] = useState("");
 
   // New order chat dialog
@@ -127,6 +134,10 @@ export default function StaffMessages() {
 
   const { data: staffList = [] } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["/api/staff"],
+  });
+
+  const { data: messagingUsers = [] } = useQuery<MessagingUser[]>({
+    queryKey: ["/api/staff/messaging-users"],
   });
 
   const jobId = selected?.type === "job" ? selected.jobId : null;
@@ -220,17 +231,22 @@ export default function StaffMessages() {
 
   const createConvoMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/staff/direct-conversations", {
-        customerId: newCustomerId,
+      const payload: Record<string, string | undefined> = {
         subject: newSubject,
         message: newFirstMessage || undefined,
-      });
+      };
+      if (newRecipientType === "customer") {
+        payload.customerId = newRecipientId;
+      } else {
+        payload.staffRecipientId = newRecipientId;
+      }
+      const res = await apiRequest("POST", "/api/staff/direct-conversations", payload);
       return res.json();
     },
     onSuccess: (convo) => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/direct-conversations"] });
       setShowNewConvo(false);
-      setNewSubject(""); setNewCustomerId(""); setNewFirstMessage("");
+      setNewSubject(""); setNewRecipientId(""); setNewRecipientSearch(""); setNewFirstMessage("");
       setTab("direct");
       setSelected({ type: "direct", conversationId: convo.id });
     },
@@ -689,22 +705,69 @@ export default function StaffMessages() {
       </Dialog>
 
       {/* New conversation dialog */}
-      <Dialog open={showNewConvo} onOpenChange={setShowNewConvo}>
+      <Dialog open={showNewConvo} onOpenChange={(open) => {
+        setShowNewConvo(open);
+        if (!open) { setNewSubject(""); setNewRecipientId(""); setNewRecipientSearch(""); setNewFirstMessage(""); }
+      }}>
         <DialogContent data-testid="dialog-new-conversation">
           <DialogHeader>
             <DialogTitle>New Direct Message</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Customer *</label>
-              <Select value={newCustomerId} onValueChange={setNewCustomerId}>
-                <SelectTrigger data-testid="select-convo-customer">
-                  <SelectValue placeholder="Select customer…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium mb-1.5 block">To *</label>
+              <Input
+                placeholder="Search customers or staff…"
+                value={newRecipientSearch}
+                onChange={e => { setNewRecipientSearch(e.target.value); setNewRecipientId(""); }}
+                data-testid="input-convo-recipient-search"
+                autoComplete="off"
+              />
+              {newRecipientSearch.trim() && !newRecipientId && (() => {
+                const q = newRecipientSearch.toLowerCase();
+                const matchedCustomers = customers
+                  .filter(c => c.name.toLowerCase().includes(q))
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .slice(0, 5)
+                  .map(c => ({ id: c.id, name: c.name, type: "customer" as const }));
+                const matchedStaff = messagingUsers
+                  .filter(u => u.name.toLowerCase().includes(q))
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .slice(0, 5)
+                  .map(u => ({ id: u.id, name: u.name, type: "staff" as const }));
+                const results = [...matchedCustomers, ...matchedStaff];
+                if (results.length === 0) return (
+                  <div className="border rounded-md mt-1 p-3 text-sm text-muted-foreground">No results found</div>
+                );
+                return (
+                  <div className="border rounded-md mt-1 overflow-hidden max-h-48 overflow-y-auto" data-testid="list-convo-recipients">
+                    {results.map(r => (
+                      <button
+                        key={`${r.type}-${r.id}`}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover-elevate flex items-center gap-2"
+                        onClick={() => {
+                          setNewRecipientId(r.id);
+                          setNewRecipientType(r.type);
+                          setNewRecipientSearch(r.name);
+                        }}
+                        data-testid={`option-recipient-${r.id}`}
+                      >
+                        <span className="flex-1">{r.name}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${r.type === "staff" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" : "bg-muted text-muted-foreground"}`}>
+                          {r.type === "staff" ? "Staff" : "Customer"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+              {newRecipientId && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Selected: <span className="font-medium">{newRecipientSearch}</span>
+                  {" · "}<button type="button" className="text-destructive underline text-xs" onClick={() => { setNewRecipientId(""); setNewRecipientSearch(""); }}>Clear</button>
+                </p>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Subject *</label>
@@ -730,7 +793,7 @@ export default function StaffMessages() {
             <Button variant="outline" onClick={() => setShowNewConvo(false)}>Cancel</Button>
             <Button
               onClick={() => createConvoMutation.mutate()}
-              disabled={!newSubject.trim() || !newCustomerId || createConvoMutation.isPending}
+              disabled={!newSubject.trim() || !newRecipientId || createConvoMutation.isPending}
               data-testid="button-create-conversation"
             >
               {createConvoMutation.isPending ? "Creating…" : "Start Conversation"}
