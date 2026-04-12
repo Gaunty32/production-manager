@@ -296,7 +296,22 @@ export default function InvoicingQueue() {
       const shipmentKey = sortedJobs[i].consolidatedShipmentId || `single-${sortedJobs[i].id}`;
       shipmentLastIndex.set(shipmentKey, i);
     }
-    
+
+    // For each tracking number, determine which shipmentKey processes last.
+    // This ensures we only emit ONE carriage line per physical delivery
+    // even when multiple consolidated groups share the same tracking number.
+    const trackingLastShipmentKey = new Map<string, string>();
+    for (const [sk, lastIdx] of shipmentLastIndex.entries()) {
+      const skJobs = sortedJobs.filter(j => (j.consolidatedShipmentId || `single-${j.id}`) === sk);
+      const tn = skJobs.find(j => j.dhlTrackingNumber)?.dhlTrackingNumber;
+      if (tn) {
+        const existingSk = trackingLastShipmentKey.get(tn);
+        if (!existingSk || shipmentLastIndex.get(existingSk)! < lastIdx) {
+          trackingLastShipmentKey.set(tn, sk);
+        }
+      }
+    }
+
     const shipmentJobsMap = new Map<string, Job[]>();
     
     for (let i = 0; i < sortedJobs.length; i++) {
@@ -369,71 +384,82 @@ export default function InvoicingQueue() {
       
       if (shipmentLastIndex.get(shipmentKey) === i) {
         const shipmentJobs = shipmentJobsMap.get(shipmentKey)!;
-        let totalShippingCost = 0;
-        let shippingMethod = '';
-        let hasShipping = false;
-        
-        for (const sJob of shipmentJobs) {
-          let shippingCost: number | null = null;
-          
-          if (sJob.shippingCost === "TBA") {
-            if (manualShippingCosts[sJob.id]) {
-              shippingCost = Number(manualShippingCosts[sJob.id]);
-            }
-          } else if (sJob.shippingCost) {
-            shippingCost = parseFloat(sJob.shippingCost);
-          }
-          
-          if (shippingCost !== null && !isNaN(shippingCost) && shippingCost > 0) {
-            totalShippingCost += shippingCost;
-            hasShipping = true;
-            if (!shippingMethod) shippingMethod = sJob.shippingMethod || '';
-          }
-        }
-        
-        if (hasShipping && totalShippingCost > 0) {
-          // Expand the job list to all jobs sharing the same tracking number (same physical delivery),
-          // even if they're in separate consolidated groups or standalone.
-          const trackingNumber = shipmentJobs.find(j => j.dhlTrackingNumber)?.dhlTrackingNumber;
+
+        // Find the tracking number for this group
+        const trackingNumber = shipmentJobs.find(j => j.dhlTrackingNumber)?.dhlTrackingNumber;
+
+        // If another shipment group with the same tracking number will be processed after
+        // this one, skip emitting carriage here — the designated (last) group will handle it.
+        const isDesignatedEmitter = !trackingNumber || trackingLastShipmentKey.get(trackingNumber) === shipmentKey;
+
+        if (isDesignatedEmitter) {
+          // All jobs in this physical delivery (same tracking number)
           const allDeliveryJobs = trackingNumber
             ? sortedJobs.filter(j => j.dhlTrackingNumber === trackingNumber)
             : shipmentJobs;
 
-          const isConsolidated = allDeliveryJobs.length > 1;
-          const jobDetails = allDeliveryJobs.map(j => j.poNumber ? `${j.jobName} (PO: ${j.poNumber})` : j.jobName).join(', ');
-          
-          let packageInfo = '';
-          {
-            const packageCounts: Record<string, number> = {};
-            for (const sJob of allDeliveryJobs) {
-              if (sJob.packageCount && sJob.packageType) {
-                const t = sJob.packageType.toLowerCase();
-                // Use MAX not SUM — same physical boxes shared across all grouped jobs
-                packageCounts[t] = Math.max(packageCounts[t] || 0, sJob.packageCount);
+          // Compute shipping cost: take the MAX across all delivery jobs
+          // (they're all the same physical shipment — avoid double-counting duplicated costs)
+          let totalShippingCost = 0;
+          let shippingMethod = '';
+          let hasShipping = false;
+
+          for (const sJob of allDeliveryJobs) {
+            let shippingCost: number | null = null;
+
+            if (sJob.shippingCost === "TBA") {
+              if (manualShippingCosts[sJob.id]) {
+                shippingCost = Number(manualShippingCosts[sJob.id]);
               }
+            } else if (sJob.shippingCost) {
+              shippingCost = parseFloat(sJob.shippingCost);
             }
-            if (Object.keys(packageCounts).length > 0) {
-              const pluralMap: Record<string, string> = { 'box': 'boxes', 'boxes': 'boxes', 'bag': 'bags', 'bags': 'bags', 'pallet': 'pallets', 'pallets': 'pallets', 'package': 'packages', 'packages': 'packages' };
-              const singularMap: Record<string, string> = { 'boxes': 'box', 'bags': 'bag', 'pallets': 'pallet', 'packages': 'package' };
-              const parts = Object.entries(packageCounts).map(([type, count]) => {
-                const singular = singularMap[type] || type;
-                const plural = pluralMap[type] || pluralMap[singular] || type + 's';
-                return `${count} ${count > 1 ? plural : singular}`;
-              });
-              packageInfo = ` (${parts.join(', ')})`;
+
+            if (shippingCost !== null && !isNaN(shippingCost) && shippingCost > 0) {
+              // Use MAX — same physical delivery, cost is not per-job
+              totalShippingCost = Math.max(totalShippingCost, shippingCost);
+              hasShipping = true;
+              if (!shippingMethod) shippingMethod = sJob.shippingMethod || '';
             }
           }
-          
-          const methodLabel = shippingMethod === 'customer_collection' ? 'Customer Collection' : shippingMethod === 'consolidated' ? 'Consolidated Back to Customer' : 'Direct Delivery';
-          
-          previewLines.push({
-            description: `Shipping${isConsolidated ? ' (Consolidated)' : ''} - ${methodLabel}${packageInfo} - ${jobDetails}`,
-            quantity: 1,
-            unitPrice: totalShippingCost,
-            itemCode: "Carriage",
-          });
+
+          if (hasShipping && totalShippingCost > 0) {
+            const isConsolidated = allDeliveryJobs.length > 1;
+            const jobDetails = allDeliveryJobs.map(j => j.poNumber ? `${j.jobName} (PO: ${j.poNumber})` : j.jobName).join(', ');
+
+            let packageInfo = '';
+            {
+              const packageCounts: Record<string, number> = {};
+              for (const sJob of allDeliveryJobs) {
+                if (sJob.packageCount && sJob.packageType) {
+                  const t = sJob.packageType.toLowerCase();
+                  // Use MAX not SUM — same physical boxes shared across all grouped jobs
+                  packageCounts[t] = Math.max(packageCounts[t] || 0, sJob.packageCount);
+                }
+              }
+              if (Object.keys(packageCounts).length > 0) {
+                const pluralMap: Record<string, string> = { 'box': 'boxes', 'boxes': 'boxes', 'bag': 'bags', 'bags': 'bags', 'pallet': 'pallets', 'pallets': 'pallets', 'package': 'packages', 'packages': 'packages' };
+                const singularMap: Record<string, string> = { 'boxes': 'box', 'bags': 'bag', 'pallets': 'pallet', 'packages': 'package' };
+                const parts = Object.entries(packageCounts).map(([type, count]) => {
+                  const singular = singularMap[type] || type;
+                  const plural = pluralMap[type] || pluralMap[singular] || type + 's';
+                  return `${count} ${count > 1 ? plural : singular}`;
+                });
+                packageInfo = ` (${parts.join(', ')})`;
+              }
+            }
+
+            const methodLabel = shippingMethod === 'customer_collection' ? 'Customer Collection' : shippingMethod === 'consolidated' ? 'Consolidated Back to Customer' : 'Direct Delivery';
+
+            previewLines.push({
+              description: `Shipping${isConsolidated ? ' (Consolidated)' : ''} - ${methodLabel}${packageInfo} - ${jobDetails}`,
+              quantity: 1,
+              unitPrice: totalShippingCost,
+              itemCode: "Carriage",
+            });
+          }
         }
-        
+
         shipmentJobsMap.delete(shipmentKey);
       }
     }

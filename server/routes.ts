@@ -4206,7 +4206,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const shipmentKey = selectedJobs[i].consolidatedShipmentId || `single-${selectedJobs[i].id}`;
         shipmentLastIndex.set(shipmentKey, i);
       }
-      
+
+      // For each tracking number, determine which shipmentKey processes last so we only
+      // emit ONE carriage line per physical delivery even when multiple consolidated
+      // groups share the same tracking number.
+      const trackingLastShipmentKey = new Map<string, string>();
+      for (const [sk, lastIdx] of shipmentLastIndex.entries()) {
+        const skJobs = selectedJobs.filter(j => (j.consolidatedShipmentId || `single-${j.id}`) === sk);
+        const tn = skJobs.find(j => j.dhlTrackingNumber)?.dhlTrackingNumber;
+        if (tn) {
+          const existingSk = trackingLastShipmentKey.get(tn);
+          if (!existingSk || shipmentLastIndex.get(existingSk)! < lastIdx) {
+            trackingLastShipmentKey.set(tn, sk);
+          }
+        }
+      }
+
       // Accumulate jobs by shipment key
       const shipmentJobsMap = new Map<string, Job[]>();
       
@@ -4303,14 +4318,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // If this is the last occurrence of this shipmentKey, emit carriage
         if (shipmentLastIndex.get(shipmentKey) === i) {
           const shipmentJobs = shipmentJobsMap.get(shipmentKey)!;
-          const emitCarriageForJobs = (jobs: Job[]) => {
+
+          // Find the tracking number for this group
+          const carriageTrackingNumber = shipmentJobs.find(j => j.dhlTrackingNumber)?.dhlTrackingNumber;
+
+          // Only emit carriage if this is the designated group for this tracking number.
+          // This prevents duplicate carriage lines when multiple consolidated groups
+          // share the same tracking number (same physical delivery).
+          const isDesignatedEmitter = !carriageTrackingNumber || trackingLastShipmentKey.get(carriageTrackingNumber) === shipmentKey;
+
+          if (isDesignatedEmitter) {
+            // All jobs in this physical delivery
+            const allDeliveryJobs = carriageTrackingNumber
+              ? selectedJobs.filter(j => j.dhlTrackingNumber === carriageTrackingNumber)
+              : shipmentJobs;
+
+            // Compute shipping cost using MAX across all delivery jobs.
+            // Same physical delivery — avoid double-counting duplicated costs.
             let totalShippingCost = 0;
             let shippingMethod = '';
             let hasShipping = false;
-            
-            for (const shipmentJob of jobs) {
+
+            for (const shipmentJob of allDeliveryJobs) {
               let shippingCost: number | null = null;
-              
+
               if (shipmentJob.shippingCost === "TBA") {
                 if (manualShippingCosts && manualShippingCosts[shipmentJob.id]) {
                   shippingCost = Number(manualShippingCosts[shipmentJob.id]);
@@ -4318,86 +4349,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
               } else if (shipmentJob.shippingCost) {
                 shippingCost = parseFloat(shipmentJob.shippingCost);
               }
-              
+
               if (shippingCost !== null && !isNaN(shippingCost) && shippingCost > 0) {
-                totalShippingCost += shippingCost;
+                // MAX — same physical delivery, cost is not per-job
+                totalShippingCost = Math.max(totalShippingCost, shippingCost);
                 hasShipping = true;
-                if (!shippingMethod) {
-                  shippingMethod = shipmentJob.shippingMethod || '';
-                }
+                if (!shippingMethod) shippingMethod = shipmentJob.shippingMethod || '';
               }
             }
-            
-            if (hasShipping && totalShippingCost > 0) {
-              // Expand to all jobs sharing the same tracking number (same physical delivery),
-              // even if they're in separate consolidated groups or standalone.
-              const trackingNumber = jobs.find(j => j.dhlTrackingNumber)?.dhlTrackingNumber;
-              const allDeliveryJobs = trackingNumber
-                ? selectedJobs.filter(j => j.dhlTrackingNumber === trackingNumber)
-                : jobs;
 
+            if (hasShipping && totalShippingCost > 0) {
               const isConsolidated = allDeliveryJobs.length > 1;
-              
-              // Build job names with PO numbers
-              const jobDetails = allDeliveryJobs.map(j => {
-                if (j.poNumber) {
-                  return `${j.jobName} (PO: ${j.poNumber})`;
-                }
-                return j.jobName;
-              }).join(', ');
-              
+
+              const jobDetails = allDeliveryJobs.map(j =>
+                j.poNumber ? `${j.jobName} (PO: ${j.poNumber})` : j.jobName
+              ).join(', ');
+
               let packageInfo = '';
               {
                 const packageCounts: { [key: string]: number } = {};
                 for (const shipmentJob of allDeliveryJobs) {
                   if (shipmentJob.packageCount && shipmentJob.packageType) {
                     const normalizedType = shipmentJob.packageType.toLowerCase();
-                    // Use MAX not SUM — same physical boxes shared across all grouped jobs
                     packageCounts[normalizedType] = Math.max(packageCounts[normalizedType] || 0, shipmentJob.packageCount);
                   }
                 }
-                
+
                 if (Object.keys(packageCounts).length > 0) {
                   const pluralMap: { [key: string]: string } = {
-                    'box': 'boxes',
-                    'boxes': 'boxes',
-                    'bag': 'bags',
-                    'bags': 'bags',
-                    'pallet': 'pallets',
-                    'pallets': 'pallets',
-                    'package': 'packages',
-                    'packages': 'packages',
+                    'box': 'boxes', 'boxes': 'boxes',
+                    'bag': 'bags', 'bags': 'bags',
+                    'pallet': 'pallets', 'pallets': 'pallets',
+                    'package': 'packages', 'packages': 'packages',
                   };
-                  
                   const singularMap: { [key: string]: string } = {
-                    'boxes': 'box',
-                    'bags': 'bag',
-                    'pallets': 'pallet',
-                    'packages': 'package',
+                    'boxes': 'box', 'bags': 'bag', 'pallets': 'pallet', 'packages': 'package',
                   };
-                  
                   const packageParts = Object.entries(packageCounts).map(([type, count]) => {
                     const singular = singularMap[type] || type;
                     const plural = pluralMap[type] || pluralMap[singular] || type + 's';
-                    const displayType = count > 1 ? plural : singular;
-                    return `${count} ${displayType}`;
+                    return `${count} ${count > 1 ? plural : singular}`;
                   });
-                  
                   packageInfo = ` (${packageParts.join(', ')})`;
                 }
               }
-              
+
               // Attribute shipping cost to the primary (first) job in the shipment
-              jobInvoiceTotals[jobs[0].id] = (jobInvoiceTotals[jobs[0].id] || 0) + totalShippingCost;
+              jobInvoiceTotals[shipmentJobs[0].id] = (jobInvoiceTotals[shipmentJobs[0].id] || 0) + totalShippingCost;
 
               lineItemsWithPricing.push({
-                jobName: isConsolidated ? `${jobs.length} jobs` : jobs[0].jobName,
-                poNumber: jobs[0].poNumber,
+                jobName: isConsolidated ? `${allDeliveryJobs.length} jobs` : shipmentJobs[0].jobName,
+                poNumber: shipmentJobs[0].poNumber,
                 description: `Shipping${isConsolidated ? ' (Consolidated)' : ''} - ${
-                  shippingMethod === 'customer_collection' 
-                    ? 'Customer Collection' 
-                    : shippingMethod === 'consolidated' 
-                      ? 'Consolidated Back to Customer' 
+                  shippingMethod === 'customer_collection'
+                    ? 'Customer Collection'
+                    : shippingMethod === 'consolidated'
+                      ? 'Consolidated Back to Customer'
                       : 'Direct Delivery'
                 }${packageInfo} - ${jobDetails}`,
                 quantity: 1,
@@ -4406,9 +4413,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 itemCode: "CARRIAGE",
               });
             }
-          };
-          
-          emitCarriageForJobs(shipmentJobs);
+          }
+
           // Clear from map to prevent reprocessing
           shipmentJobsMap.delete(shipmentKey);
         }
