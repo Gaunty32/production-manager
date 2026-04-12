@@ -1,5 +1,5 @@
 // Referenced from blueprint:javascript_object_storage
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { ReactNode } from "react";
 import Uppy from "@uppy/core";
 import { DashboardModal } from "@uppy/react";
@@ -38,6 +38,22 @@ export function ObjectUploader({
   children,
 }: ObjectUploaderProps) {
   const [showModal, setShowModal] = useState(false);
+
+  // Keep refs to the latest callbacks to avoid stale closure issues
+  // (Uppy instance is created once, but props can change on re-renders)
+  const onGetUploadParametersRef = useRef(onGetUploadParameters);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onGetUploadParametersRef.current = onGetUploadParameters;
+  }, [onGetUploadParameters]);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  // Map from Uppy file ID → object storage key, populated during getUploadParameters
+  // and consumed in onComplete. Using a ref so it's accessible inside the Uppy closure.
+  const keyMapRef = useRef<Map<string, string>>(new Map());
+
   const [uppy] = useState(() =>
     new Uppy({
       restrictions: {
@@ -49,10 +65,10 @@ export function ObjectUploader({
       .use(AwsS3, {
         shouldUseMultipart: false,
         getUploadParameters: async (file) => {
-          const params = await onGetUploadParameters();
-          // Store the key in file meta so it's available in onComplete
+          const params = await onGetUploadParametersRef.current();
+          // Store the key in the ref map so it's available in onComplete
           if (params.key) {
-            file.meta.key = params.key;
+            keyMapRef.current.set(file.id, params.key);
           }
           return {
             method: params.method,
@@ -61,7 +77,20 @@ export function ObjectUploader({
         },
       })
       .on("complete", (result) => {
-        onComplete?.(result);
+        // Enrich successful files with their stored object keys
+        const enrichedResult = {
+          ...result,
+          successful: result.successful?.map((file) => ({
+            ...file,
+            meta: {
+              ...file.meta,
+              key: keyMapRef.current.get(file.id),
+            },
+          })),
+        };
+        onCompleteRef.current?.(enrichedResult as typeof result);
+        // Clean up the key map for the uploaded files
+        result.successful?.forEach((file) => keyMapRef.current.delete(file.id));
         setShowModal(false);
       })
   );
