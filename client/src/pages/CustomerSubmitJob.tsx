@@ -349,8 +349,9 @@ export default function CustomerSubmitJob() {
                           data-testid="input-dispatch-date"
                         />
                       </FormControl>
-                      <FormDescription>
-                        Standard delivery: 3+ working days. Express (2 days) incurs 100% surcharge.
+                      <FormDescription className="space-y-1">
+                        <span className="block">Standard delivery: 3+ working days from when production begins. Express (2 days) incurs 100% surcharge.</span>
+                        <span className="block font-medium text-foreground">Please note: production time only begins once all garments have been received and all logos have been approved. We will always work towards your required dispatch date, however this is not a guaranteed date.</span>
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
