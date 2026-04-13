@@ -228,7 +228,7 @@ export default function StaffJobDetail() {
         title: "Job approved",
         description: "The job has been approved and moved to production",
       });
-      setLocation("/staff/holding-area");
+      setLocation("/holding-area");
     },
     onError: (error: any) => {
       toast({
@@ -253,7 +253,7 @@ export default function StaffJobDetail() {
         title: "Job rejected",
         description: "The customer has been notified",
       });
-      setLocation("/staff/holding-area");
+      setLocation("/holding-area");
     },
     onError: (error: any) => {
       toast({
@@ -347,7 +347,7 @@ export default function StaffJobDetail() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setLocation("/staff/holding-area")}
+                onClick={() => setLocation("/holding-area")}
                 data-testid="button-back"
               >
                 <ArrowLeft className="h-5 w-5" />
