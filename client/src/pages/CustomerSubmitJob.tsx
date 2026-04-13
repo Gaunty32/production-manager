@@ -157,24 +157,31 @@ export default function CustomerSubmitJob() {
     setIsUploading(true);
     try {
       for (const file of fileArray) {
-        const res = await apiRequest("POST", "/api/customer-portal/objects/upload", {
-          prefix: "job-submissions",
-        });
-        const { url, key } = await res.json();
-        await fetch(url, {
-          method: "PUT",
+        // Upload through our server to avoid CORS issues with object storage
+        const res = await fetch("/api/customer-portal/upload-file", {
+          method: "POST",
+          headers: {
+            "Content-Type": file.type || "application/octet-stream",
+            "X-File-Name": encodeURIComponent(file.name),
+            "X-File-Type": file.type || "application/octet-stream",
+          },
           body: file,
-          headers: { "Content-Type": file.type || "application/octet-stream" },
+          credentials: "include",
         });
-        setUploadedFiles(prev => [...prev, {
-          objectKey: key,
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type || "application/octet-stream",
-        }]);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err?.error || `Upload failed with status ${res.status}`);
+        }
+        const { key, fileName, fileSize, fileType } = await res.json();
+        setUploadedFiles(prev => [...prev, { objectKey: key, fileName, fileSize, fileType }]);
       }
-    } catch {
-      toast({ title: "Upload failed", description: "One or more files could not be uploaded", variant: "destructive" });
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      toast({
+        title: "Upload failed",
+        description: err?.message || "One or more files could not be uploaded",
+        variant: "destructive",
+      });
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";

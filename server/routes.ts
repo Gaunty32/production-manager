@@ -1,3 +1,4 @@
+import express from "express";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -1851,7 +1852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Customer Portal - Get upload URL for file
+  // Customer Portal - Get upload URL for file (legacy signed-URL approach)
   app.post("/api/customer-portal/objects/upload", isCustomerAuthenticated, async (req, res) => {
     try {
       const { ObjectStorageService } = await import("./objectStorage");
@@ -1863,6 +1864,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to get upload URL" });
     }
   });
+
+  // Customer Portal - Server-side file upload (avoids browser CORS issues with GCS)
+  app.post(
+    "/api/customer-portal/upload-file",
+    isCustomerAuthenticated,
+    express.raw({ type: "*/*", limit: "50mb" }),
+    async (req: any, res) => {
+      try {
+        const { objectStorageClient, ObjectStorageService } = await import("./objectStorage");
+        const { randomUUID } = await import("crypto");
+        const objectStorageService = new ObjectStorageService();
+        const privateObjectDir = objectStorageService.getPrivateObjectDir();
+
+        const fileName = req.headers["x-file-name"]
+          ? decodeURIComponent(req.headers["x-file-name"] as string)
+          : "upload";
+        const fileType = (req.headers["x-file-type"] as string) || "application/octet-stream";
+        const fileSize = (req.body as Buffer).length;
+
+        const objectId = randomUUID();
+        const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+        // fullPath format: /bucketName/objectName
+        const parts = fullPath.slice(1).split("/");
+        const bucketName = parts[0];
+        const objectName = parts.slice(1).join("/");
+
+        const bucket = objectStorageClient.bucket(bucketName);
+        const gcsFile = bucket.file(objectName);
+        await gcsFile.save(req.body as Buffer, { contentType: fileType });
+
+        const key = `/objects/uploads/${objectId}`;
+        res.json({ key, fileName, fileSize, fileType });
+      } catch (error: any) {
+        console.error("Error uploading file:", error);
+        res.status(500).json({ error: error?.message || "Failed to upload file" });
+      }
+    }
+  );
 
   // Customer Portal - Add file to job after upload
   app.post("/api/customer-portal/jobs/:jobId/files", isCustomerAuthenticated, async (req: any, res) => {
