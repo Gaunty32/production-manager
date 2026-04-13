@@ -297,3 +297,88 @@ export async function sendJobRejectedEmail(
 
   return data;
 }
+
+export async function sendStaffMessageToCustomerEmail(
+  customerEmail: string,
+  details: {
+    staffName: string;
+    jobName: string;
+    message: string;
+    jobId: string;
+  }
+) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const viewUrl = `${getBaseUrl()}/customer/job/${details.jobId}`;
+  const safeJobName = sanitizeHtml(details.jobName);
+  const safeStaffName = sanitizeHtml(details.staffName);
+  const safeMessage = sanitizeHtml(details.message);
+
+  const { error } = await client.emails.send({
+    from: fromEmail || 'onboarding@resend.dev',
+    to: customerEmail,
+    subject: `New message about your job: ${safeJobName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">New Message from Select Branding</h2>
+        <p><strong>${safeStaffName}</strong> has sent you a message about your job <strong>${safeJobName}</strong>:</p>
+        <div style="background-color: #f5f5f5; padding: 16px; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 0; color: #333; white-space: pre-line;">${safeMessage}</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${viewUrl}"
+             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            View & Reply
+          </a>
+        </div>
+      </div>
+    `,
+  });
+
+  if (error) {
+    console.error('Failed to send staff message notification to customer:', error);
+  }
+}
+
+export async function sendStaffMessageCCEmail(
+  ccEmails: string[],
+  details: {
+    senderName: string;
+    jobName: string;
+    customerName: string;
+    message: string;
+    jobId: string;
+  }
+) {
+  if (!ccEmails.length) return;
+  const { client, fromEmail } = await getUncachableResendClient();
+  const viewUrl = `${getBaseUrl()}/staff/job/${details.jobId}`;
+  const safeJobName = sanitizeHtml(details.jobName);
+  const safeSenderName = sanitizeHtml(details.senderName);
+  const safeCustomerName = sanitizeHtml(details.customerName);
+  const safeMessage = sanitizeHtml(details.message);
+
+  const { error } = await client.emails.send({
+    from: fromEmail || 'onboarding@resend.dev',
+    to: ccEmails,
+    subject: `[CC] Message to ${safeCustomerName} re: ${safeJobName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">You were CC'd on a customer message</h2>
+        <p><strong>${safeSenderName}</strong> sent the following message to <strong>${safeCustomerName}</strong> about job <strong>${safeJobName}</strong>:</p>
+        <div style="background-color: #f5f5f5; padding: 16px; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 0; color: #333; white-space: pre-line;">${safeMessage}</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${viewUrl}"
+             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            View Job
+          </a>
+        </div>
+      </div>
+    `,
+  });
+
+  if (error) {
+    console.error('Failed to send CC email to staff:', error);
+  }
+}

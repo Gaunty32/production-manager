@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useRoute } from "wouter";
-import { ArrowLeft, Send, FileText, Package, Calendar, MessageSquare, CheckCircle, XCircle, Clock, Edit2, Save } from "lucide-react";
+import { ArrowLeft, Send, FileText, MessageSquare, CheckCircle, XCircle, Clock, Edit2, Save, Users, X } from "lucide-react";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -18,6 +18,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 type Job = {
   id: string;
@@ -53,11 +58,19 @@ type Customer = {
   address: string | null;
 };
 
+type StaffMember = {
+  id: string;
+  name: string;
+  email: string | null;
+};
+
 export default function StaffJobDetail() {
   const [, params] = useRoute("/staff/job/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [newMessage, setNewMessage] = useState("");
+  const [ccStaffIds, setCcStaffIds] = useState<string[]>([]);
+  const [showCcPicker, setShowCcPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -97,6 +110,10 @@ export default function StaffJobDetail() {
   const { data: customer } = useQuery<Customer>({
     queryKey: [`/api/customers/${job?.customerId}`],
     enabled: !!job?.customerId,
+  });
+
+  const { data: allStaff = [] } = useQuery<StaffMember[]>({
+    queryKey: ["/api/staff"],
   });
 
   // Initialize edit form when job loads
@@ -140,13 +157,15 @@ export default function StaffJobDetail() {
   }, [messages]);
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (message: string) => {
-      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/messages`, { message });
+    mutationFn: async ({ message, ccIds }: { message: string; ccIds: string[] }) => {
+      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/messages`, { message, ccStaffIds: ccIds });
       return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${jobId}/messages`] });
       setNewMessage("");
+      setCcStaffIds([]);
+      setShowCcPicker(false);
     },
     onError: (error: any) => {
       toast({
@@ -237,8 +256,14 @@ export default function StaffJobDetail() {
 
   const handleSendMessage = () => {
     if (newMessage.trim() && jobId) {
-      sendMessageMutation.mutate(newMessage.trim());
+      sendMessageMutation.mutate({ message: newMessage.trim(), ccIds: ccStaffIds });
     }
+  };
+
+  const toggleCcStaff = (staffId: string) => {
+    setCcStaffIds(prev =>
+      prev.includes(staffId) ? prev.filter(id => id !== staffId) : [...prev, staffId]
+    );
   };
 
   const handleSaveEdit = () => {
@@ -598,10 +623,58 @@ export default function StaffJobDetail() {
                 </div>
 
                 {/* Message Input */}
-                <div className="border-t p-4">
+                <div className="border-t p-4 space-y-2">
+                  {/* CC bar — shown when CC picker is open or CC'd members are selected */}
+                  {(showCcPicker || ccStaffIds.length > 0) && (
+                    <div className="flex flex-wrap items-center gap-1.5 min-h-8">
+                      <span className="text-xs text-muted-foreground shrink-0">CC:</span>
+                      {ccStaffIds.map(id => {
+                        const s = allStaff.find(m => m.id === id);
+                        return s ? (
+                          <Badge key={id} variant="secondary" className="text-xs gap-1 pr-1">
+                            {s.name}
+                            <button
+                              onClick={() => toggleCcStaff(id)}
+                              className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
+                              data-testid={`button-remove-cc-${id}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ) : null;
+                      })}
+                      <Popover open={showCcPicker} onOpenChange={setShowCcPicker}>
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" data-testid="button-add-cc">
+                            + Add
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-52 p-1" align="start">
+                          {allStaff.filter(s => s.email).length === 0 ? (
+                            <p className="text-xs text-muted-foreground p-2">No staff with email found</p>
+                          ) : (
+                            allStaff.filter(s => s.email).map(s => (
+                              <button
+                                key={s.id}
+                                onClick={() => toggleCcStaff(s.id)}
+                                className="w-full text-left px-2 py-1.5 text-sm rounded hover-elevate flex items-center justify-between gap-2"
+                                data-testid={`button-cc-staff-${s.id}`}
+                              >
+                                <span>{s.name}</span>
+                                {ccStaffIds.includes(s.id) && (
+                                  <CheckCircle className="h-3.5 w-3.5 text-primary shrink-0" />
+                                )}
+                              </button>
+                            ))
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     <Textarea
-                      placeholder="Type your message..."
+                      placeholder="Type your message to the customer..."
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyDown={(e) => {
@@ -614,16 +687,31 @@ export default function StaffJobDetail() {
                       className="resize-none"
                       data-testid="input-message"
                     />
-                    <Button
-                      onClick={handleSendMessage}
-                      disabled={!newMessage.trim() || sendMessageMutation.isPending}
-                      size="icon"
-                      className="self-end"
-                      data-testid="button-send-message"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
+                    <div className="flex flex-col gap-1 self-end">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setShowCcPicker(prev => !prev)}
+                        title="CC colleagues"
+                        className={ccStaffIds.length > 0 ? "border-primary" : ""}
+                        data-testid="button-toggle-cc"
+                      >
+                        <Users className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={!newMessage.trim() || sendMessageMutation.isPending}
+                        size="icon"
+                        data-testid="button-send-message"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    This message will be sent to the customer.{ccStaffIds.length > 0 && ` ${ccStaffIds.length} colleague${ccStaffIds.length > 1 ? 's' : ''} will be CC'd.`}
+                  </p>
                 </div>
               </CardContent>
             </Card>

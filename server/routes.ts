@@ -42,7 +42,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail } from "./emailService";
 
 // Helper function to auto-schedule a line item when it has a machine assigned
 async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
@@ -2255,12 +2255,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use staff.id if found, otherwise fall back to the userId (e.g. super_admin with no staff record)
       const senderId = staffMember ? staffMember.id : sessionUserId;
+      const senderName = staffMember?.name || 'Staff';
 
       const message = await storage.createJobMessage({
         jobId: req.params.jobId,
         senderType: 'staff',
         senderId,
         message: req.body.message,
+      });
+
+      // Fire-and-forget email notifications (do not block the response)
+      const ccStaffIds: string[] = Array.isArray(req.body.ccStaffIds) ? req.body.ccStaffIds : [];
+      setImmediate(async () => {
+        try {
+          // Notify the customer via email
+          const customerUsers = await storage.getCustomerUsersByCustomerId(job.customerId);
+          const customers = await storage.getCustomers();
+          const customer = customers.find(c => c.id === job.customerId);
+          for (const cu of customerUsers) {
+            if (cu.email) {
+              await sendStaffMessageToCustomerEmail(cu.email, {
+                staffName: senderName,
+                jobName: job.jobName,
+                message: req.body.message,
+                jobId: job.id,
+              });
+            }
+          }
+
+          // Notify CC'd staff members via email
+          if (ccStaffIds.length > 0) {
+            const ccEmails = allStaff
+              .filter(s => ccStaffIds.includes(s.id) && s.email && s.id !== (staffMember?.id ?? ''))
+              .map(s => s.email as string);
+            if (ccEmails.length > 0) {
+              await sendStaffMessageCCEmail(ccEmails, {
+                senderName,
+                jobName: job.jobName,
+                customerName: customer?.name || 'Customer',
+                message: req.body.message,
+                jobId: job.id,
+              });
+            }
+          }
+        } catch (emailErr) {
+          console.error('Failed to send message notification emails:', emailErr);
+        }
       });
 
       res.json(message);
