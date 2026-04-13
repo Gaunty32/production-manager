@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
@@ -15,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Clock, FileText, MessageSquare, Package, CheckCircle, XCircle, Calendar, Eye, Upload, Plus } from "lucide-react";
+import { Clock, FileText, MessageSquare, CheckCircle, XCircle, Eye, Plus, X } from "lucide-react";
 import { format } from "date-fns";
 import {
   Accordion,
@@ -29,6 +30,7 @@ import { JobFormDialog } from "@/components/JobFormDialog";
 type Job = {
   id: string;
   jobName: string;
+  customerId: string;
   customerName: string;
   poNumber: string | null;
   quantity: number;
@@ -44,14 +46,16 @@ type DialogState = {
   type: "approve" | "reject" | null;
   jobId: string | null;
   jobName: string | null;
+  customerId: string | null;
 };
 
 export default function StaffHoldingArea() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [dialogState, setDialogState] = useState<DialogState>({ type: null, jobId: null, jobName: null });
+  const [dialogState, setDialogState] = useState<DialogState>({ type: null, jobId: null, jobName: null, customerId: null });
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionMessage, setRejectionMessage] = useState("");
+  const [embroiderySetups, setEmbroiderySetups] = useState<string[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const previousMessageCountsRef = useRef<Record<string, number>>({});
   const isInitialLoadRef = useRef<boolean>(true);
@@ -155,18 +159,24 @@ export default function StaffHoldingArea() {
   }, [pendingJobs, isLoading, toast]);
 
   const approveMutation = useMutation({
-    mutationFn: async (jobId: string) => {
+    mutationFn: async ({ jobId, customerId, setupNames }: { jobId: string; customerId: string | null; setupNames: string[] }) => {
       const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/approve`, {});
-      return await res.json();
+      const result = await res.json();
+      for (const name of setupNames.filter(n => n.trim())) {
+        await apiRequest("POST", "/api/logo-setups", { customerId, jobName: name.trim() });
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/jobs/pending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/logo-setups"] });
       toast({
         title: "Job approved",
         description: "The job has been approved and moved to production",
       });
-      setDialogState({ type: null, jobId: null, jobName: null });
+      setDialogState({ type: null, jobId: null, jobName: null, customerId: null });
+      setEmbroiderySetups([]);
     },
     onError: (error: any) => {
       toast({
@@ -191,7 +201,7 @@ export default function StaffHoldingArea() {
         title: "Job rejected",
         description: "The customer has been notified",
       });
-      setDialogState({ type: null, jobId: null, jobName: null });
+      setDialogState({ type: null, jobId: null, jobName: null, customerId: null });
       setRejectionReason("");
       setRejectionMessage("");
     },
@@ -204,17 +214,21 @@ export default function StaffHoldingArea() {
     },
   });
 
-  const handleApprove = (jobId: string, jobName: string) => {
-    setDialogState({ type: "approve", jobId, jobName });
+  const handleApprove = (jobId: string, jobName: string, customerId: string) => {
+    setDialogState({ type: "approve", jobId, jobName, customerId });
   };
 
   const handleReject = (jobId: string, jobName: string) => {
-    setDialogState({ type: "reject", jobId, jobName });
+    setDialogState({ type: "reject", jobId, jobName, customerId: null });
   };
 
   const confirmApprove = () => {
     if (dialogState.jobId) {
-      approveMutation.mutate(dialogState.jobId);
+      approveMutation.mutate({
+        jobId: dialogState.jobId,
+        customerId: dialogState.customerId,
+        setupNames: embroiderySetups,
+      });
     }
   };
 
@@ -401,7 +415,7 @@ export default function StaffHoldingArea() {
                   </Button>
                   <div className="flex gap-2">
                     <Button
-                      onClick={() => handleApprove(job.id, job.jobName)}
+                      onClick={() => handleApprove(job.id, job.jobName, job.customerId)}
                       className="flex-1"
                       data-testid={`button-approve-${job.id}`}
                     >
@@ -433,7 +447,7 @@ export default function StaffHoldingArea() {
                   </Button>
                   <div className="flex gap-2">
                     <Button
-                      onClick={() => handleApprove(job.id, job.jobName)}
+                      onClick={() => handleApprove(job.id, job.jobName, job.customerId)}
                       className="flex-1"
                       size="sm"
                       data-testid={`button-approve-${job.id}`}
@@ -470,7 +484,7 @@ export default function StaffHoldingArea() {
                   </div>
                   <div className="flex gap-2">
                     <Button
-                      onClick={() => handleApprove(activeJob.id, activeJob.jobName)}
+                      onClick={() => handleApprove(activeJob.id, activeJob.jobName, activeJob.customerId)}
                       className="flex-1 bg-background text-foreground hover:bg-background/90"
                       size="sm"
                       data-testid="button-approve-sticky"
@@ -502,19 +516,70 @@ export default function StaffHoldingArea() {
       {/* Approve Confirmation Dialog */}
       <Dialog
         open={dialogState.type === "approve"}
-        onOpenChange={(open) => !open && setDialogState({ type: null, jobId: null, jobName: null })}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDialogState({ type: null, jobId: null, jobName: null, customerId: null });
+            setEmbroiderySetups([]);
+          }
+        }}
       >
-        <DialogContent data-testid="dialog-approve">
+        <DialogContent className="max-w-md" data-testid="dialog-approve">
           <DialogHeader>
             <DialogTitle>Approve Job</DialogTitle>
             <DialogDescription>
-              Are you sure you want to approve "{dialogState.jobName}"? This will move it to the production queue.
+              Approving "{dialogState.jobName}" will move it to the production queue.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Embroidery Set-Up Section */}
+          <div className="space-y-3 py-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Embroidery Set-Up(s)</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEmbroiderySetups(prev => [...prev, ""])}
+                data-testid="button-add-setup"
+              >
+                + Add Set-Up
+              </Button>
+            </div>
+            {embroiderySetups.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Optional — add any new logo/embroidery set-ups to be created for this job.
+              </p>
+            )}
+            {embroiderySetups.map((name, idx) => (
+              <div key={idx} className="flex gap-2 items-center">
+                <Input
+                  placeholder="Set-up name (e.g. Left Chest Logo)"
+                  value={name}
+                  onChange={(e) => {
+                    const updated = [...embroiderySetups];
+                    updated[idx] = e.target.value;
+                    setEmbroiderySetups(updated);
+                  }}
+                  data-testid={`input-setup-name-${idx}`}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setEmbroiderySetups(prev => prev.filter((_, i) => i !== idx))}
+                  data-testid={`button-remove-setup-${idx}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setDialogState({ type: null, jobId: null, jobName: null })}
+              onClick={() => {
+                setDialogState({ type: null, jobId: null, jobName: null, customerId: null });
+                setEmbroiderySetups([]);
+              }}
               data-testid="button-cancel-approve"
             >
               Cancel
@@ -535,7 +600,7 @@ export default function StaffHoldingArea() {
         open={dialogState.type === "reject"}
         onOpenChange={(open) => {
           if (!open) {
-            setDialogState({ type: null, jobId: null, jobName: null });
+            setDialogState({ type: null, jobId: null, jobName: null, customerId: null });
             setRejectionReason("");
             setRejectionMessage("");
           }
@@ -574,7 +639,7 @@ export default function StaffHoldingArea() {
             <Button
               variant="outline"
               onClick={() => {
-                setDialogState({ type: null, jobId: null, jobName: null });
+                setDialogState({ type: null, jobId: null, jobName: null, customerId: null });
                 setRejectionReason("");
                 setRejectionMessage("");
               }}

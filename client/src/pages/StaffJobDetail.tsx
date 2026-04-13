@@ -76,6 +76,7 @@ export default function StaffJobDetail() {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionMessage, setRejectionMessage] = useState("");
+  const [embroiderySetups, setEmbroiderySetups] = useState<string[]>([]);
   const previousCustomerMessageCountRef = useRef<number>(0);
   const isInitialLoadRef = useRef<boolean>(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -207,13 +208,22 @@ export default function StaffJobDetail() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (setupNames: string[]) => {
       const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/approve`, {});
-      return await res.json();
+      const result = await res.json();
+      // Create any embroidery set-ups
+      for (const name of setupNames.filter(n => n.trim())) {
+        await apiRequest("POST", "/api/logo-setups", {
+          customerId: job?.customerId,
+          jobName: name.trim(),
+        });
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/jobs/pending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/logo-setups"] });
       toast({
         title: "Job approved",
         description: "The job has been approved and moved to production",
@@ -295,8 +305,9 @@ export default function StaffJobDetail() {
   };
 
   const confirmApprove = () => {
-    approveMutation.mutate();
+    approveMutation.mutate(embroiderySetups);
     setShowApproveDialog(false);
+    setEmbroiderySetups([]);
   };
 
   const confirmReject = () => {
@@ -342,12 +353,12 @@ export default function StaffJobDetail() {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Job Details</h1>
-                {customer && (
-                  <p className="text-sm text-muted-foreground">
-                    Customer: {customer.name}
-                  </p>
-                )}
+                <h1 className="text-2xl font-bold text-foreground">{job?.jobName || "Job Details"}</h1>
+                {customer ? (
+                  <p className="text-sm text-muted-foreground">{customer.name}</p>
+                ) : job?.customerId ? (
+                  <p className="text-sm text-muted-foreground text-muted-foreground/50">Loading customer...</p>
+                ) : null}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -720,18 +731,63 @@ export default function StaffJobDetail() {
       </main>
 
       {/* Approve Dialog */}
-      <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
-        <DialogContent data-testid="dialog-approve">
+      <Dialog open={showApproveDialog} onOpenChange={(open) => {
+        if (!open) { setShowApproveDialog(false); setEmbroiderySetups([]); }
+      }}>
+        <DialogContent className="max-w-md" data-testid="dialog-approve">
           <DialogHeader>
             <DialogTitle>Approve Job</DialogTitle>
             <DialogDescription>
-              Are you sure you want to approve "{job.jobName}"? This will move the job to production.
+              Approving "{job.jobName}" will move it to the production queue.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Embroidery Set-Up Section */}
+          <div className="space-y-3 py-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Embroidery Set-Up(s)</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEmbroiderySetups(prev => [...prev, ""])}
+                data-testid="button-add-setup"
+              >
+                + Add Set-Up
+              </Button>
+            </div>
+            {embroiderySetups.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Optional — add any new logo/embroidery set-ups to be created for this job.
+              </p>
+            )}
+            {embroiderySetups.map((name, idx) => (
+              <div key={idx} className="flex gap-2 items-center">
+                <Input
+                  placeholder={`Set-up name (e.g. Left Chest Logo)`}
+                  value={name}
+                  onChange={(e) => {
+                    const updated = [...embroiderySetups];
+                    updated[idx] = e.target.value;
+                    setEmbroiderySetups(updated);
+                  }}
+                  data-testid={`input-setup-name-${idx}`}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setEmbroiderySetups(prev => prev.filter((_, i) => i !== idx))}
+                  data-testid={`button-remove-setup-${idx}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowApproveDialog(false)}
+              onClick={() => { setShowApproveDialog(false); setEmbroiderySetups([]); }}
               data-testid="button-cancel-approve"
             >
               Cancel
@@ -741,7 +797,7 @@ export default function StaffJobDetail() {
               disabled={approveMutation.isPending}
               data-testid="button-confirm-approve"
             >
-              {approveMutation.isPending ? "Approving..." : "Approve"}
+              {approveMutation.isPending ? "Approving..." : "Approve Job"}
             </Button>
           </DialogFooter>
         </DialogContent>

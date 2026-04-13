@@ -2264,45 +2264,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: req.body.message,
       });
 
-      // Fire-and-forget email notifications (do not block the response)
-      const ccStaffIds: string[] = Array.isArray(req.body.ccStaffIds) ? req.body.ccStaffIds : [];
-      setImmediate(async () => {
-        try {
-          // Notify the customer via email
-          const customerUsers = await storage.getCustomerUsersByCustomerId(job.customerId);
-          const customers = await storage.getCustomers();
-          const customer = customers.find(c => c.id === job.customerId);
-          for (const cu of customerUsers) {
-            if (cu.email) {
-              await sendStaffMessageToCustomerEmail(cu.email, {
-                staffName: senderName,
-                jobName: job.jobName,
-                message: req.body.message,
-                jobId: job.id,
-              });
-            }
-          }
-
-          // Notify CC'd staff members via email
-          if (ccStaffIds.length > 0) {
-            const ccEmails = allStaff
-              .filter(s => ccStaffIds.includes(s.id) && s.email && s.id !== (staffMember?.id ?? ''))
-              .map(s => s.email as string);
-            if (ccEmails.length > 0) {
-              await sendStaffMessageCCEmail(ccEmails, {
-                senderName,
-                jobName: job.jobName,
-                customerName: customer?.name || 'Customer',
-                message: req.body.message,
-                jobId: job.id,
-              });
-            }
-          }
-        } catch (emailErr) {
-          console.error('Failed to send message notification emails:', emailErr);
-        }
-      });
-
       res.json(message);
     } catch (error) {
       console.error("Error sending message:", error);
@@ -2440,6 +2401,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(customers);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch customers" });
+    }
+  });
+
+  app.get("/api/customers/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === req.params.id);
+      if (!customer) return res.status(404).json({ error: "Customer not found" });
+      res.json(customer);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch customer" });
     }
   });
 
