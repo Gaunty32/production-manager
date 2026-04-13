@@ -27,6 +27,7 @@ import {
   MessageSquare,
   Send,
   ChevronRight,
+  ChevronDown,
   Package,
   ArrowLeft,
   Plus,
@@ -35,6 +36,7 @@ import {
   Search,
   Paperclip,
   X,
+  Building2,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 
@@ -106,6 +108,18 @@ export default function StaffMessages() {
   const [newRecipientSearch, setNewRecipientSearch] = useState("");
   const [newFirstMessage, setNewFirstMessage] = useState("");
 
+  // Expanded customer groups in Order Chats
+  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
+
+  const toggleCustomer = (customerId: string) => {
+    setExpandedCustomers(prev => {
+      const next = new Set(prev);
+      if (next.has(customerId)) next.delete(customerId);
+      else next.add(customerId);
+      return next;
+    });
+  };
+
   // New order chat dialog
   const [showNewOrderChat, setShowNewOrderChat] = useState(false);
   const [newOrderCustomerId, setNewOrderCustomerId] = useState("");
@@ -174,6 +188,32 @@ export default function StaffMessages() {
       setSelected({ type: "direct", conversationId: directConversations[0].id });
     }
   }, [tab, jobConversations, directConversations, jobId, directId]);
+
+  // Auto-expand all customer groups when list first loads; also keep selected customer expanded
+  useEffect(() => {
+    if (jobConversations.length > 0) {
+      setExpandedCustomers(prev => {
+        const next = new Set(prev);
+        jobConversations.forEach(c => next.add(c.customerId));
+        return next;
+      });
+    }
+  }, [jobConversations.length]);
+
+  // When a job is selected, ensure its customer group is expanded
+  useEffect(() => {
+    if (selected?.type === "job") {
+      const convo = jobConversations.find(c => c.jobId === selected.jobId);
+      if (convo) {
+        setExpandedCustomers(prev => {
+          if (prev.has(convo.customerId)) return prev;
+          const next = new Set(prev);
+          next.add(convo.customerId);
+          return next;
+        });
+      }
+    }
+  }, [selected, jobConversations]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -404,21 +444,86 @@ export default function StaffMessages() {
               <LoadingSpinner />
             ) : jobConversations.length === 0 ? (
               <EmptyState label="No job conversations yet" sublabel="Customer messages will appear here" />
-            ) : (
-              jobConversations.map(c => (
-                <ConvoRow
-                  key={c.jobId}
-                  isActive={selected?.type === "job" && selected.jobId === c.jobId}
-                  title={c.customerName}
-                  subtitle={c.jobName}
-                  unread={c.unreadCount}
-                  latest={c.latestMessage}
-                  senderLabel={c.customerName}
-                  onClick={() => setSelected({ type: "job", jobId: c.jobId })}
-                  testId={`job-convo-${c.jobId}`}
-                />
-              ))
-            )
+            ) : (() => {
+              // Group by customer
+              const groups = new Map<string, { customerId: string; customerName: string; jobs: JobConversation[] }>();
+              jobConversations.forEach(c => {
+                if (!groups.has(c.customerId)) {
+                  groups.set(c.customerId, { customerId: c.customerId, customerName: c.customerName, jobs: [] });
+                }
+                groups.get(c.customerId)!.jobs.push(c);
+              });
+              const sorted = Array.from(groups.values()).sort((a, b) => a.customerName.localeCompare(b.customerName));
+              return (
+                <div>
+                  {sorted.map(group => {
+                    const isExpanded = expandedCustomers.has(group.customerId);
+                    const groupUnread = group.jobs.reduce((s, j) => s + j.unreadCount, 0);
+                    return (
+                      <div key={group.customerId}>
+                        {/* Customer header */}
+                        <button
+                          className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover-elevate bg-muted/40 border-b border-border/50"
+                          onClick={() => toggleCustomer(group.customerId)}
+                          data-testid={`customer-group-${group.customerId}`}
+                        >
+                          {isExpanded
+                            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          }
+                          <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="flex-1 text-xs font-semibold truncate">{group.customerName}</span>
+                          {groupUnread > 0 && (
+                            <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                              {groupUnread}
+                            </Badge>
+                          )}
+                          <span className="text-[10px] text-muted-foreground">{group.jobs.length}</span>
+                        </button>
+                        {/* Job rows under this customer */}
+                        {isExpanded && group.jobs.map(c => (
+                          <button
+                            key={c.jobId}
+                            onClick={() => setSelected({ type: "job", jobId: c.jobId })}
+                            className={`w-full flex items-start gap-2 px-4 py-2.5 text-left border-b border-border/30 transition-colors hover-elevate pl-9 ${
+                              selected?.type === "job" && selected.jobId === c.jobId
+                                ? "bg-primary/10"
+                                : ""
+                            }`}
+                            data-testid={`job-convo-${c.jobId}`}
+                          >
+                            <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-medium truncate">{c.jobName}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {c.unreadCount > 0 && (
+                                    <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                                      {c.unreadCount}
+                                    </Badge>
+                                  )}
+                                  {c.latestMessage && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {formatConvoTime(c.latestMessage.createdAt)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {c.latestMessage && (
+                                <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                  {c.latestMessage.senderType === "staff" ? "You: " : ""}
+                                  {c.latestMessage.message}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
           ) : (
             isLoadingDirectConvos ? (
               <LoadingSpinner />
