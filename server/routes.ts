@@ -2248,19 +2248,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Job not found" });
       }
 
-      // Get staff ID from userId (convert both to string for safe comparison)
-      const allStaff = await storage.getStaff();
+      // Resolve sender: prefer a linked staff record, fall back to the user record itself
       const sessionUserId = String(req.session.userId);
-      const staff = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
-      if (!staff) {
-        console.error(`Staff member not found for userId: ${sessionUserId}. Available staff userIds:`, allStaff.map(s => s.userId));
-        return res.status(404).json({ error: "Staff member not found" });
-      }
+      const allStaff = await storage.getStaff();
+      const staffMember = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
+
+      // Use staff.id if found, otherwise fall back to the userId (e.g. super_admin with no staff record)
+      const senderId = staffMember ? staffMember.id : sessionUserId;
 
       const message = await storage.createJobMessage({
         jobId: req.params.jobId,
         senderType: 'staff',
-        senderId: staff.id,
+        senderId,
         message: req.body.message,
       });
 
