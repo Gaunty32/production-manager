@@ -1805,7 +1805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerId: customerUser.customerId,
         jobName: data.jobName,
         poNumber: data.poNumber || null,
-        quantity: data.quantity,
+        quantity: data.quantity ?? 0,
         goodsReceived: null,
         requiredDispatchDate: new Date(data.requiredDispatchDate) as any,
         machineId: null,

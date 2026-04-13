@@ -910,7 +910,7 @@ export const insertJobFileSchema = createInsertSchema(jobFiles).omit({
 export const customerJobSubmissionSchema = z.object({
   jobName: z.string().min(1, "Job name is required"),
   poNumber: z.string().optional(),
-  quantity: z.number().min(1, "Quantity must be at least 1"),
+  quantity: z.number().int().min(1).optional().nullable(),
   notes: z.string().optional(),
   deliveryAddress: z.string().optional(),
   requiredDispatchDate: z.string().min(1, "Dispatch date is required"),

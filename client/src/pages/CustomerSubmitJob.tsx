@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -18,8 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, Upload, FileText, X, AlertTriangle } from "lucide-react";
-import { ObjectUploader } from "@/components/ObjectUploader";
+import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2 } from "lucide-react";
 import { customerJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
@@ -34,7 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { addDays, isSaturday, isSunday, format } from "date-fns";
+import { addDays, format } from "date-fns";
 
 type CustomerUser = {
   id: string;
@@ -46,14 +45,8 @@ type CustomerUser = {
   customerLogoUrl: string | null;
 };
 
-type Customer = {
-  id: string;
-  name: string;
-  address: string | null;
-};
-
 const formSchema = customerJobSubmissionSchema.extend({
-  quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
+  quantity: z.coerce.number().int().min(1).optional().nullable().or(z.literal("")),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -65,82 +58,37 @@ type UploadedFile = {
   fileType: string;
 };
 
-// UK Bank Holidays 2024-2026
 const UK_BANK_HOLIDAYS = [
-  // 2024
-  "2024-01-01", // New Year's Day
-  "2024-03-29", // Good Friday
-  "2024-04-01", // Easter Monday
-  "2024-05-06", // Early May bank holiday
-  "2024-05-27", // Spring bank holiday
-  "2024-08-26", // Summer bank holiday
-  "2024-12-25", // Christmas Day
-  "2024-12-26", // Boxing Day
-  // 2025
-  "2025-01-01", // New Year's Day
-  "2025-04-18", // Good Friday
-  "2025-04-21", // Easter Monday
-  "2025-05-05", // Early May bank holiday
-  "2025-05-26", // Spring bank holiday
-  "2025-08-25", // Summer bank holiday
-  "2025-12-25", // Christmas Day
-  "2025-12-26", // Boxing Day
-  // 2026
-  "2026-01-01", // New Year's Day
-  "2026-04-03", // Good Friday
-  "2026-04-06", // Easter Monday
-  "2026-05-04", // Early May bank holiday
-  "2026-05-25", // Spring bank holiday
-  "2026-08-31", // Summer bank holiday
-  "2026-12-25", // Christmas Day
-  "2026-12-26", // Boxing Day (substitute day)
-  "2026-12-28", // Boxing Day substitute
+  "2024-01-01","2024-03-29","2024-04-01","2024-05-06","2024-05-27","2024-08-26","2024-12-25","2024-12-26",
+  "2025-01-01","2025-04-18","2025-04-21","2025-05-05","2025-05-26","2025-08-25","2025-12-25","2025-12-26",
+  "2026-01-01","2026-04-03","2026-04-06","2026-05-04","2026-05-25","2026-08-31","2026-12-25","2026-12-26","2026-12-28",
 ];
 
-// Helper function to check if a date is a UK bank holiday
-const isUKBankHoliday = (date: Date): boolean => {
-  const dateStr = format(date, "yyyy-MM-dd");
-  return UK_BANK_HOLIDAYS.includes(dateStr);
-};
+const isUKBankHoliday = (date: Date): boolean =>
+  UK_BANK_HOLIDAYS.includes(format(date, "yyyy-MM-dd"));
 
-// Helper function to check if a date is a working day (Monday-Friday, excluding UK bank holidays)
 const isWorkingDay = (date: Date): boolean => {
-  const dayOfWeek = date.getDay();
-  // Sunday = 0, Saturday = 6
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    return false;
-  }
-  return !isUKBankHoliday(date);
+  const d = date.getDay();
+  return d !== 0 && d !== 6 && !isUKBankHoliday(date);
 };
 
-// Helper function to add working days (Mon-Fri, excluding UK bank holidays)
 const addWorkingDays = (date: Date, days: number): Date => {
   let result = new Date(date);
-  let addedDays = 0;
-  
-  while (addedDays < days) {
+  let added = 0;
+  while (added < days) {
     result = addDays(result, 1);
-    if (isWorkingDay(result)) {
-      addedDays++;
-    }
+    if (isWorkingDay(result)) added++;
   }
-  
   return result;
 };
 
-// Helper function to calculate working days between two dates
-// Counts from the day AFTER startDate to endDate (exclusive start, inclusive end)
 const getWorkingDaysBetween = (startDate: Date, endDate: Date): number => {
   let count = 0;
-  let current = addDays(new Date(startDate), 1); // Start counting from next day
-  
+  let current = addDays(new Date(startDate), 1);
   while (current <= endDate) {
-    if (isWorkingDay(current)) {
-      count++;
-    }
+    if (isWorkingDay(current)) count++;
     current = addDays(current, 1);
   }
-  
   return count;
 };
 
@@ -150,44 +98,39 @@ export default function CustomerSubmitJob() {
   const { isImpersonating } = usePermissions();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [showExpressDialog, setShowExpressDialog] = useState(false);
   const [pendingDispatchDate, setPendingDispatchDate] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: customerUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
   });
 
-  // Calculate default dispatch date (7 working days from now)
   const defaultDispatchDate = format(addWorkingDays(new Date(), 7), "yyyy-MM-dd");
-  
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       jobName: "",
       poNumber: "",
-      quantity: 1,
+      quantity: undefined,
       notes: "",
       deliveryAddress: "",
       requiredDispatchDate: defaultDispatchDate,
     },
   });
 
-  // Handle dispatch date change with validation
   const handleDispatchDateChange = (dateStr: string, onChange: (value: string) => void) => {
     const selectedDate = new Date(dateStr);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
     const workingDaysFromNow = getWorkingDaysBetween(today, selectedDate);
-    
-    // Check if it's 2 working days - show express dialog
     if (workingDaysFromNow === 2) {
       setPendingDispatchDate(dateStr);
       setShowExpressDialog(true);
       return;
     }
-    
-    // Check if it's less than 2 working days (today or tomorrow)
     if (workingDaysFromNow < 2) {
       toast({
         title: "Invalid date",
@@ -196,7 +139,6 @@ export default function CustomerSubmitJob() {
       });
       return;
     }
-    
     onChange(dateStr);
   };
 
@@ -209,12 +151,50 @@ export default function CustomerSubmitJob() {
     });
   };
 
+  const uploadFiles = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+    setIsUploading(true);
+    try {
+      for (const file of fileArray) {
+        const res = await apiRequest("POST", "/api/customer-portal/objects/upload", {
+          prefix: "job-submissions",
+        });
+        const { url, key } = await res.json();
+        await fetch(url, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type || "application/octet-stream" },
+        });
+        setUploadedFiles(prev => [...prev, {
+          objectKey: key,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type || "application/octet-stream",
+        }]);
+      }
+    } catch {
+      toast({ title: "Upload failed", description: "One or more files could not be uploaded", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files.length > 0) uploadFiles(e.dataTransfer.files);
+  };
+
   const submitJobMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const res = await apiRequest("POST", "/api/customer-portal/jobs", data);
+      const payload = {
+        ...data,
+        quantity: data.quantity ? Number(data.quantity) : undefined,
+      };
+      const res = await apiRequest("POST", "/api/customer-portal/jobs", payload);
       const job = await res.json();
-      
-      // Attach files to the job
       if (uploadedFiles.length > 0) {
         await Promise.all(
           uploadedFiles.map((file) =>
@@ -227,7 +207,6 @@ export default function CustomerSubmitJob() {
           )
         );
       }
-      
       return job;
     },
     onSuccess: () => {
@@ -247,32 +226,22 @@ export default function CustomerSubmitJob() {
     },
   });
 
-  const handleFileUploaded = (file: UploadedFile) => {
-    setUploadedFiles((prev) => [...prev, file]);
-  };
-
-  const removeFile = (objectKey: string) => {
-    setUploadedFiles((prev) => prev.filter((f) => f.objectKey !== objectKey));
-  };
-
   const onSubmit = (data: FormData) => {
     submitJobMutation.mutate(data);
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Impersonation Banner - only shown when staff is viewing as customer */}
       {isImpersonating && customerUser && (
         <ImpersonationBanner customerEmail={customerUser.email} />
       )}
-      
+
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
-          {/* Customer Logo - Top Center */}
           {customerUser?.customerLogoUrl && (
             <div className="flex justify-center mb-4">
-              <img 
-                src={customerUser.customerLogoUrl} 
+              <img
+                src={customerUser.customerLogoUrl}
                 alt={customerUser.customerName || "Customer logo"}
                 className="max-h-16 max-w-[200px] object-contain"
                 data-testid="img-customer-logo"
@@ -290,9 +259,7 @@ export default function CustomerSubmitJob() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-foreground">Submit New Job</h1>
-              <p className="text-sm text-muted-foreground">
-                Request a new production order
-              </p>
+              <p className="text-sm text-muted-foreground">Request a new production order</p>
             </div>
           </div>
         </div>
@@ -331,13 +298,15 @@ export default function CustomerSubmitJob() {
                     name="quantity"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Garment Quantity *</FormLabel>
+                        <FormLabel>Garment Quantity (Optional)</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
                             min={1}
                             placeholder="e.g., 50"
                             {...field}
+                            value={field.value ?? ""}
+                            onChange={e => field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)}
                             data-testid="input-quantity"
                           />
                         </FormControl>
@@ -426,71 +395,77 @@ export default function CustomerSubmitJob() {
                   )}
                 />
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div>
                     <FormLabel>Attach Files (Optional)</FormLabel>
-                    <p className="text-sm text-muted-foreground mb-3">
+                    <p className="text-sm text-muted-foreground mt-0.5">
                       Upload logos, artwork, or reference images
                     </p>
-                    
-                    {uploadedFiles.length > 0 && (
-                      <div className="mb-4 space-y-2">
-                        {uploadedFiles.map((file) => (
-                          <div
-                            key={file.objectKey}
-                            className="flex items-center justify-between p-3 bg-muted rounded-md"
-                            data-testid={`file-${file.fileName}`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <FileText className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm font-medium">{file.fileName}</span>
-                              <span className="text-xs text-muted-foreground">
-                                ({Math.round(file.fileSize / 1024)} KB)
-                              </span>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeFile(file.objectKey)}
-                              data-testid={`button-remove-${file.fileName}`}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
+                  </div>
+
+                  {uploadedFiles.length > 0 && (
+                    <div className="space-y-2">
+                      {uploadedFiles.map((file) => (
+                        <div
+                          key={file.objectKey}
+                          className="flex items-center justify-between p-3 bg-muted rounded-md"
+                          data-testid={`file-${file.fileName}`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="text-sm font-medium truncate">{file.fileName}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              ({Math.round(file.fileSize / 1024)} KB)
+                            </span>
                           </div>
-                        ))}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setUploadedFiles(prev => prev.filter(f => f.objectKey !== file.objectKey))}
+                            data-testid={`button-remove-${file.fileName}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div
+                    className={`border-2 border-dashed rounded-md p-8 text-center cursor-pointer transition-colors ${
+                      isDragOver
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50 hover:bg-muted/40"
+                    }`}
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={handleDrop}
+                    data-testid="dropzone-files"
+                  >
+                    {isUploading ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+                        <p className="text-sm text-muted-foreground">Uploading…</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="h-8 w-8 text-muted-foreground" />
+                        <p className="text-sm font-medium">Drop your files here or <span className="text-primary underline">browse</span></p>
+                        <p className="text-xs text-muted-foreground">Any file type accepted</p>
                       </div>
                     )}
-                    
-                    <ObjectUploader
-                      maxNumberOfFiles={10}
-                      onGetUploadParameters={async () => {
-                        const res = await apiRequest("POST", "/api/customer-portal/objects/upload", {
-                          prefix: "job-submissions",
-                        });
-                        const data = await res.json();
-                        return {
-                          method: "PUT" as const,
-                          url: data.url,
-                          key: data.key,
-                        };
-                      }}
-                      onComplete={(result) => {
-                        setIsUploading(false);
-                        result.successful?.forEach((file: any) => {
-                          const objectKey = file.meta.key as string;
-                          handleFileUploaded({
-                            objectKey,
-                            fileName: file.name,
-                            fileSize: file.size,
-                            fileType: file.type || "application/octet-stream",
-                          });
-                        });
-                      }}
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload Files
-                    </ObjectUploader>
                   </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => { if (e.target.files) uploadFiles(e.target.files); }}
+                    data-testid="input-file-upload"
+                  />
                 </div>
 
                 <div className="flex gap-3 pt-4">
