@@ -4788,9 +4788,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Staff: list all users (active) for messaging
   app.get("/api/staff/messaging-users", isStaffAuthenticated, async (_req, res) => {
     try {
-      const users = await storage.getAllUsers();
-      const active = users.filter(u => u.isActive !== false);
-      res.json(active.map(u => ({ id: String(u.id), name: u.name, email: u.email, role: u.role })));
+      const allUsers = await storage.getAllUsers();
+      const active = allUsers.filter(u => u.active !== false);
+      res.json(active.map(u => ({
+        id: String(u.id),
+        name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || "Unknown",
+        email: u.email,
+        role: u.role,
+      })));
     } catch (e) {
       res.status(500).json({ error: "Failed to fetch users" });
     }
