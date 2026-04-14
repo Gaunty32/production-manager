@@ -2284,21 +2284,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Mark messages as read by staff
       await storage.markMessagesAsRead(req.params.jobId, 'staff');
       
-      // Enrich messages with sender names
+      // Enrich messages with sender names and profile images
       const allStaff = await storage.getStaff();
+      const allUsers = await storage.getAllUsers();
       const enrichedMessages = await Promise.all(
         messages.map(async (msg) => {
           if (msg.senderType === 'staff' && msg.senderId) {
-            const staff = allStaff.find(s => s.id === msg.senderId);
-            return { ...msg, senderName: staff?.name || null };
+            const staffMember = allStaff.find(s => s.id === msg.senderId);
+            const linkedUser = staffMember?.userId
+              ? allUsers.find(u => u.id === staffMember.userId)
+              : allUsers.find(u => u.id === msg.senderId);
+            return {
+              ...msg,
+              senderName: staffMember?.name || null,
+              senderImageUrl: linkedUser?.profileImageUrl || null,
+            };
           } else if (msg.senderType === 'customer' && msg.senderId) {
             const customerUser = await storage.getCustomerUserById(msg.senderId);
             const name = [customerUser?.firstName, customerUser?.lastName]
               .filter(Boolean)
               .join(' ') || null;
-            return { ...msg, senderName: name };
+            return { ...msg, senderName: name, senderImageUrl: null };
           }
-          return { ...msg, senderName: null };
+          return { ...msg, senderName: null, senderImageUrl: null };
         })
       );
 
@@ -4806,7 +4814,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const msgs = await storage.getConversationMessages(req.params.id);
       await storage.markConversationMessagesReadByStaff(req.params.id);
-      res.json(msgs);
+      const allStaff = await storage.getStaff();
+      const allUsers = await storage.getAllUsers();
+      const enriched = await Promise.all(msgs.map(async (msg) => {
+        if (msg.senderType === 'staff' && msg.senderId) {
+          const staffMember = allStaff.find(s => s.id === msg.senderId);
+          const linkedUser = staffMember?.userId
+            ? allUsers.find(u => u.id === staffMember.userId)
+            : allUsers.find(u => u.id === msg.senderId);
+          return {
+            ...msg,
+            senderName: staffMember?.name || [linkedUser?.firstName, linkedUser?.lastName].filter(Boolean).join(' ') || null,
+            senderImageUrl: linkedUser?.profileImageUrl || null,
+          };
+        } else if (msg.senderType === 'customer' && msg.senderId) {
+          const customerUser = await storage.getCustomerUserById(msg.senderId);
+          const name = [customerUser?.firstName, customerUser?.lastName].filter(Boolean).join(' ') || null;
+          return { ...msg, senderName: name, senderImageUrl: null };
+        }
+        return { ...msg, senderName: null, senderImageUrl: null };
+      }));
+      res.json(enriched);
     } catch (e) {
       res.status(500).json({ error: "Failed to fetch messages" });
     }

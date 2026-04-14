@@ -37,6 +37,8 @@ import {
   Paperclip,
   X,
   Building2,
+  EyeOff,
+  Eye,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 
@@ -71,6 +73,8 @@ type MessagingUser = { id: string; name: string; email: string; role: string };
 type ChatMessage = {
   id: string;
   senderType: "customer" | "staff";
+  senderName: string | null;
+  senderImageUrl: string | null;
   message: string;
   createdAt: string;
 };
@@ -107,6 +111,27 @@ export default function StaffMessages() {
   const [newRecipientType, setNewRecipientType] = useState<"customer" | "staff">("customer");
   const [newRecipientSearch, setNewRecipientSearch] = useState("");
   const [newFirstMessage, setNewFirstMessage] = useState("");
+
+  // Hidden/archived job IDs (persisted in localStorage)
+  const [hiddenJobIds, setHiddenJobIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("hiddenJobChats");
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
+  const [showHidden, setShowHidden] = useState(false);
+
+  const toggleHideJob = (jobId: string) => {
+    setHiddenJobIds(prev => {
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      localStorage.setItem("hiddenJobChats", JSON.stringify([...next]));
+      return next;
+    });
+    // If hiding the currently selected conversation, deselect it
+    if (selected?.type === "job" && selected.jobId === jobId) setSelected(null);
+  };
 
   // Expanded customer groups in Order Chats
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
@@ -445,9 +470,14 @@ export default function StaffMessages() {
             ) : jobConversations.length === 0 ? (
               <EmptyState label="No job conversations yet" sublabel="Customer messages will appear here" />
             ) : (() => {
-              // Group by customer
+              // Group by customer, respecting hidden filter
+              const visibleConvos = showHidden
+                ? jobConversations
+                : jobConversations.filter(c => !hiddenJobIds.has(c.jobId));
+              const hiddenCount = jobConversations.filter(c => hiddenJobIds.has(c.jobId)).length;
+
               const groups = new Map<string, { customerId: string; customerName: string; jobs: JobConversation[] }>();
-              jobConversations.forEach(c => {
+              visibleConvos.forEach(c => {
                 if (!groups.has(c.customerId)) {
                   groups.set(c.customerId, { customerId: c.customerId, customerName: c.customerName, jobs: [] });
                 }
@@ -455,72 +485,101 @@ export default function StaffMessages() {
               });
               const sorted = Array.from(groups.values()).sort((a, b) => a.customerName.localeCompare(b.customerName));
               return (
-                <div>
-                  {sorted.map(group => {
-                    const isExpanded = expandedCustomers.has(group.customerId);
-                    const groupUnread = group.jobs.reduce((s, j) => s + j.unreadCount, 0);
-                    return (
-                      <div key={group.customerId}>
-                        {/* Customer header */}
-                        <button
-                          className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover-elevate bg-muted/40 border-b border-border/50"
-                          onClick={() => toggleCustomer(group.customerId)}
-                          data-testid={`customer-group-${group.customerId}`}
-                        >
-                          {isExpanded
-                            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          }
-                          <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="flex-1 text-xs font-semibold truncate">{group.customerName}</span>
-                          {groupUnread > 0 && (
-                            <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
-                              {groupUnread}
-                            </Badge>
-                          )}
-                          <span className="text-[10px] text-muted-foreground">{group.jobs.length}</span>
-                        </button>
-                        {/* Job rows under this customer */}
-                        {isExpanded && group.jobs.map(c => (
+                <div className="flex flex-col h-full">
+                  <div className="flex-1 overflow-y-auto">
+                    {sorted.length === 0 && !showHidden && hiddenCount > 0 ? (
+                      <div className="p-4 text-center text-xs text-muted-foreground">All conversations are hidden</div>
+                    ) : sorted.length === 0 ? null : sorted.map(group => {
+                      const isExpanded = expandedCustomers.has(group.customerId);
+                      const groupUnread = group.jobs.reduce((s, j) => s + j.unreadCount, 0);
+                      return (
+                        <div key={group.customerId}>
+                          {/* Customer header */}
                           <button
-                            key={c.jobId}
-                            onClick={() => setSelected({ type: "job", jobId: c.jobId })}
-                            className={`w-full flex items-start gap-2 px-4 py-2.5 text-left border-b border-border/30 transition-colors hover-elevate pl-9 ${
-                              selected?.type === "job" && selected.jobId === c.jobId
-                                ? "bg-primary/10"
-                                : ""
-                            }`}
-                            data-testid={`job-convo-${c.jobId}`}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover-elevate bg-muted/40 border-b border-border/50"
+                            onClick={() => toggleCustomer(group.customerId)}
+                            data-testid={`customer-group-${group.customerId}`}
                           >
-                            <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-1">
-                                <span className="text-xs font-medium truncate">{c.jobName}</span>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  {c.unreadCount > 0 && (
-                                    <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
-                                      {c.unreadCount}
-                                    </Badge>
-                                  )}
-                                  {c.latestMessage && (
-                                    <span className="text-[10px] text-muted-foreground">
-                                      {formatConvoTime(c.latestMessage.createdAt)}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              {c.latestMessage && (
-                                <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                                  {c.latestMessage.senderType === "staff" ? "You: " : ""}
-                                  {c.latestMessage.message}
-                                </p>
-                              )}
-                            </div>
+                            {isExpanded
+                              ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            }
+                            <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="flex-1 text-xs font-semibold truncate">{group.customerName}</span>
+                            {groupUnread > 0 && (
+                              <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                                {groupUnread}
+                              </Badge>
+                            )}
+                            <span className="text-[10px] text-muted-foreground">{group.jobs.length}</span>
                           </button>
-                        ))}
-                      </div>
-                    );
-                  })}
+                          {/* Job rows under this customer */}
+                          {isExpanded && group.jobs.map(c => {
+                            const isHidden = hiddenJobIds.has(c.jobId);
+                            return (
+                              <div
+                                key={c.jobId}
+                                className={`flex items-start border-b border-border/30 pl-9 group/jobrow ${
+                                  selected?.type === "job" && selected.jobId === c.jobId ? "bg-primary/10" : isHidden ? "opacity-50" : ""
+                                }`}
+                              >
+                                <button
+                                  onClick={() => setSelected({ type: "job", jobId: c.jobId })}
+                                  className="flex-1 flex items-start gap-2 px-2 py-2.5 text-left hover-elevate min-w-0"
+                                  data-testid={`job-convo-${c.jobId}`}
+                                >
+                                  <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="text-xs font-medium truncate">{c.jobName}</span>
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        {c.unreadCount > 0 && (
+                                          <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                                            {c.unreadCount}
+                                          </Badge>
+                                        )}
+                                        {c.latestMessage && (
+                                          <span className="text-[10px] text-muted-foreground">
+                                            {formatConvoTime(c.latestMessage.createdAt)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {c.latestMessage && (
+                                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                        {c.latestMessage.senderType === "staff" ? "You: " : ""}
+                                        {c.latestMessage.message}
+                                      </p>
+                                    )}
+                                  </div>
+                                </button>
+                                {/* Hide/show toggle — visible on hover */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleHideJob(c.jobId); }}
+                                  className="shrink-0 mt-2.5 mr-2 text-muted-foreground opacity-0 group-hover/jobrow:opacity-100 transition-opacity"
+                                  title={isHidden ? "Unhide" : "Hide conversation"}
+                                  data-testid={`button-hide-job-${c.jobId}`}
+                                >
+                                  {isHidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Show/hide archived toggle */}
+                  {hiddenCount > 0 && (
+                    <button
+                      onClick={() => setShowHidden(h => !h)}
+                      className="flex items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground border-t hover-elevate"
+                      data-testid="button-toggle-hidden"
+                    >
+                      {showHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                      {showHidden ? "Hide archived" : `Show ${hiddenCount} archived`}
+                    </button>
+                  )}
                 </div>
               );
             })()
@@ -588,29 +647,49 @@ export default function StaffMessages() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto px-4 pt-4 pb-6 space-y-5">
             {isLoadingMessages ? (
               <LoadingSpinner />
             ) : messages.length === 0 ? (
               <EmptyState label="No messages yet" />
             ) : (
-              messages.map(msg => (
-                <div key={msg.id} className={`flex ${msg.senderType === "staff" ? "justify-end" : "justify-start"}`} data-testid={`message-${msg.id}`}>
-                  {msg.senderType === "customer" && (
-                    <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mr-2 mt-1">
-                      <span className="text-[10px] font-bold text-muted-foreground">
-                        {(selected.type === "job" ? selectedJobConvo?.customerName : selectedDirectConvo?.customerName)?.[0]?.toUpperCase() || "C"}
-                      </span>
+              messages.map(msg => {
+                const isStaff = msg.senderType === "staff";
+                const initials = msg.senderName
+                  ? msg.senderName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+                  : isStaff ? "S" : (selected.type === "job" ? selectedJobConvo?.customerName : selectedDirectConvo?.customerName)?.[0]?.toUpperCase() || "C";
+                return (
+                  <div key={msg.id} className={`flex ${isStaff ? "justify-end" : "justify-start"}`} data-testid={`message-${msg.id}`}>
+                    <div className={`relative max-w-[75%] ${isStaff ? "mr-3" : "ml-3"}`}>
+                      <div className={`rounded-2xl px-4 py-2.5 ${isStaff ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted rounded-bl-sm"}`}>
+                        {msg.senderName && (
+                          <p className={`text-[10px] font-semibold mb-0.5 ${isStaff ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                            {msg.senderName}
+                          </p>
+                        )}
+                        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
+                        <p className={`text-[10px] mt-1 ${isStaff ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                          {format(new Date(msg.createdAt), "d MMM, h:mm a")}
+                        </p>
+                      </div>
+                      {/* Small sender avatar — bottom corner outside the bubble */}
+                      <div
+                        className={`absolute -bottom-2.5 ${isStaff ? "-right-3" : "-left-3"} h-5 w-5 rounded-full overflow-hidden border-2 border-background flex items-center justify-center shrink-0`}
+                        style={{ backgroundColor: isStaff ? "hsl(var(--primary))" : "hsl(var(--muted))" }}
+                        title={msg.senderName || undefined}
+                      >
+                        {msg.senderImageUrl ? (
+                          <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className={`text-[8px] font-bold leading-none ${isStaff ? "text-primary-foreground" : "text-muted-foreground"}`}>
+                            {initials}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${msg.senderType === "staff" ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted rounded-bl-sm"}`}>
-                    <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
-                    <p className={`text-[10px] mt-1 ${msg.senderType === "staff" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
-                      {format(new Date(msg.createdAt), "d MMM, h:mm a")}
-                    </p>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
             <div ref={messagesEndRef} />
           </div>
