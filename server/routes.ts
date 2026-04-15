@@ -38,7 +38,7 @@ import { xeroService } from "./xero";
 import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
-import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, type Job } from "@shared/schema";
+import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, updateMachineSchema, type Job } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
@@ -5157,6 +5157,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (e) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors });
       res.status(500).json({ error: "Failed to attach file" });
+    }
+  });
+
+  // ─── Machine management ───────────────────────────────────────────
+  app.get("/api/machines", isStaffAuthenticated, async (_req, res) => {
+    const all = await storage.getMachines();
+    res.json(all);
+  });
+
+  app.patch("/api/machines/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid machine id" });
+      const data = updateMachineSchema.parse(req.body);
+      const updated = await storage.updateMachine(id, data);
+      res.json(updated);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors });
+      res.status(500).json({ error: "Failed to update machine" });
     }
   });
 

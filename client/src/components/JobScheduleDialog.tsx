@@ -36,7 +36,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { insertJobScheduleSchema, type JobWithLineItems, type Staff, type JobLineItem } from "@shared/schema";
-import { MACHINE_NAMES, suggestMachine } from "@shared/machines";
+import { suggestMachine } from "@shared/machines";
+import { useMachines } from "@/hooks/useMachines";
 import { Plus, Loader2, AlertCircle, Zap, CheckCircle2 } from "lucide-react";
 import { formatTimeDisplay } from "@shared/machines";
 
@@ -110,6 +111,7 @@ export function JobScheduleDialog({
   const [open, setOpen] = useState(false);
   const [useManualTime, setUseManualTime] = useState(false);
   const { toast } = useToast();
+  const { machines: dbMachines } = useMachines();
 
   const { data: jobs = [] } = useQuery<JobWithLineItems[]>({
     queryKey: ["/api/jobs"],
@@ -421,9 +423,9 @@ export function JobScheduleDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.entries(MACHINE_NAMES).map(([id, name]) => (
-                        <SelectItem key={id} value={id}>
-                          {name}
+                      {dbMachines.map((m) => (
+                        <SelectItem key={m.id} value={m.id.toString()} disabled={!m.isActive}>
+                          {m.name}{!m.isActive ? " (Offline)" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>

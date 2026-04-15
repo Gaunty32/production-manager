@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock, MessageSquare, Package } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock, MessageSquare, Package, Settings } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -12,9 +12,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
-import { MACHINE_NAMES } from "@shared/machines";
 import { useAuth } from "@/hooks/useAuth";
 import { isSuperAdmin, canViewPrices } from "@shared/schema";
+import type { Machine } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import type { Job } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
@@ -36,13 +36,6 @@ const menuItems = [
   { title: "Staff", url: "/staff", icon: UserCog },
 ];
 
-const machineItems = [
-  { title: MACHINE_NAMES[1], url: "/machine/1", icon: Cog },
-  { title: MACHINE_NAMES[2], url: "/machine/2", icon: Cog },
-  { title: MACHINE_NAMES[3], url: "/machine/3", icon: Cog },
-  { title: MACHINE_NAMES[4], url: "/machine/4", icon: Cog },
-];
-
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
@@ -62,6 +55,11 @@ export function AppSidebar() {
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/staff/messages/unread-count"],
     refetchInterval: 15000,
+  });
+
+  const { data: machines = [] } = useQuery<Machine[]>({
+    queryKey: ["/api/machines"],
+    refetchInterval: 60000,
   });
 
   const pendingCount = pendingJobs.length;
@@ -138,12 +136,26 @@ export function AppSidebar() {
           <SidebarGroupLabel>Machines</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {machineItems.map((item) => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild isActive={location === item.url}>
-                    <Link href={item.url} onClick={handleNavClick} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/machines"}>
+                  <Link href="/machines" onClick={handleNavClick} data-testid="link-machine-settings">
+                    <Settings className="h-4 w-4" />
+                    <span>Machine Settings</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {machines.map((machine) => (
+                <SidebarMenuItem key={machine.id}>
+                  <SidebarMenuButton asChild isActive={location === `/machine/${machine.id}`}>
+                    <Link href={`/machine/${machine.id}`} onClick={handleNavClick} data-testid={`link-machine-${machine.id}`}>
+                      <div className="relative flex-shrink-0">
+                        <Cog className="h-4 w-4" />
+                        <span
+                          className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full border border-sidebar-background ${machine.isActive ? "bg-green-500" : "bg-muted-foreground"}`}
+                          title={machine.isActive ? "Online" : "Offline"}
+                        />
+                      </div>
+                      <span className={machine.isActive ? "" : "text-muted-foreground"}>{machine.name}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

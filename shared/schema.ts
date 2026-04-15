@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, index, jsonb, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, serial, timestamp, boolean, index, jsonb, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1097,3 +1097,28 @@ export interface ProductionDisplayLeaderboard {
   };
   leaders: ProductionDisplayLeader[];
 }
+
+// Machines table — stores each embroidery machine with capacity and status
+export const machines = pgTable("machines", {
+  id: serial("id").primaryKey(),
+  name: varchar("name").notNull(),
+  heads: integer("heads").notNull().default(6),
+  stitchesPerMinute: integer("stitches_per_minute").notNull().default(750),
+  changeoverTimeMinutes: integer("changeover_time_minutes").notNull().default(3),
+  isActive: boolean("is_active").notNull().default(true),
+  notes: text("notes"),
+});
+
+export const insertMachineSchema = createInsertSchema(machines).omit({ id: true });
+
+export const updateMachineSchema = z.object({
+  name: z.string().min(1).optional(),
+  heads: z.number().int().min(1).max(50).optional(),
+  stitchesPerMinute: z.number().int().min(100).max(5000).optional(),
+  changeoverTimeMinutes: z.number().int().min(0).max(60).optional(),
+  isActive: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+
+export type InsertMachine = z.infer<typeof insertMachineSchema>;
+export type Machine = typeof machines.$inferSelect;

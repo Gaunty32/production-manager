@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { MACHINE_NAMES } from "@shared/machines";
+import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
 import { PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { z } from "zod";
@@ -136,6 +136,7 @@ interface JobEditDialogProps {
 export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSubmit }: JobEditDialogProps) {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { machines: dbMachines } = useMachines();
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [deletedLineItemIds, setDeletedLineItemIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -881,9 +882,9 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="unassigned">Not assigned</SelectItem>
-                                {[1, 2, 3, 4, 5].map((machineNum) => (
-                                  <SelectItem key={machineNum} value={machineNum.toString()}>
-                                    {MACHINE_NAMES[machineNum]}
+                                {dbMachines.map((m) => (
+                                  <SelectItem key={m.id} value={m.id.toString()} disabled={!m.isActive}>
+                                    {m.name}{!m.isActive ? " (Offline)" : ""}
                                   </SelectItem>
                                 ))}
                               </SelectContent>

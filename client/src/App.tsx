@@ -38,6 +38,7 @@ import StaffMessages from "@/pages/StaffMessages";
 import StaffSamples from "@/pages/StaffSamples";
 import CustomerSamples from "@/pages/CustomerSamples";
 import DemoPortal from "@/pages/DemoPortal";
+import MachineManagement from "@/pages/MachineManagement";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -77,6 +78,7 @@ function StaffRouter() {
       <Route path="/messages"><StaffMessages /></Route>
       <Route path="/samples"><StaffSamples /></Route>
       <Route path="/staff/job/:id"><StaffJobDetail /></Route>
+      <Route path="/machines"><MachineManagement /></Route>
       <Route path="/machine/:id"><Dashboard /></Route>
       <Route><NotFound /></Route>
     </Switch>

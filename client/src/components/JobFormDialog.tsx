@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema, type Customer } from "@shared/schema";
-import { MACHINE_NAMES, suggestMachine } from "@shared/machines";
+import { suggestMachine } from "@shared/machines";
+import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
 import { getPrice, getPrintPrice, formatPrice, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { z } from "zod";
@@ -113,6 +114,7 @@ interface JobFormDialogProps {
 }
 
 export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFormDialogProps) {
+  const { machines: dbMachines } = useMachines();
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, position: null, positionOther: null }]);
@@ -1135,9 +1137,9 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="unassigned">Not assigned</SelectItem>
-                                {[1, 2, 3, 4, 5].map((machineNum) => (
-                                  <SelectItem key={machineNum} value={machineNum.toString()}>
-                                    {MACHINE_NAMES[machineNum]}
+                                {dbMachines.map((m) => (
+                                  <SelectItem key={m.id} value={m.id.toString()} disabled={!m.isActive}>
+                                    {m.name}{!m.isActive ? " (Offline)" : ""}
                                   </SelectItem>
                                 ))}
                               </SelectContent>

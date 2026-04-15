@@ -24,6 +24,7 @@ import {
   conversationMessages,
   samples,
   sampleFiles,
+  machines,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -67,6 +68,8 @@ import {
   type InsertSample,
   type SampleFile,
   type InsertSampleFile,
+  type Machine,
+  type InsertMachine,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql, isNull, isNotNull, desc, inArray } from "drizzle-orm";
@@ -250,6 +253,12 @@ export interface IStorage {
   getSampleFiles(sampleId: string): Promise<SampleFile[]>;
   createSampleFile(data: InsertSampleFile): Promise<SampleFile>;
   deleteSampleFile(id: string): Promise<void>;
+
+  // Machine management
+  getMachines(): Promise<Machine[]>;
+  getMachine(id: number): Promise<Machine | undefined>;
+  updateMachine(id: number, data: Partial<Machine>): Promise<Machine>;
+  seedMachines(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2656,6 +2665,43 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSampleFile(id: string): Promise<void> {
     await db.delete(sampleFiles).where(eq(sampleFiles.id, id));
+  }
+
+  async getMachines(): Promise<Machine[]> {
+    return await db.select().from(machines).orderBy(machines.id);
+  }
+
+  async getMachine(id: number): Promise<Machine | undefined> {
+    const [row] = await db.select().from(machines).where(eq(machines.id, id));
+    return row;
+  }
+
+  async updateMachine(id: number, data: Partial<Machine>): Promise<Machine> {
+    const [row] = await db.update(machines).set(data).where(eq(machines.id, id)).returning();
+    return row;
+  }
+
+  async seedMachines(): Promise<void> {
+    const existing = await db.select().from(machines);
+    if (existing.length > 0) return;
+
+    const defaults = [
+      { id: 1, name: "Barudan 8", heads: 8, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
+      { id: 2, name: "Barudan 6 1", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
+      { id: 3, name: "SWF 6 1", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
+      { id: 4, name: "SWF 6 2", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
+      { id: 5, name: "Barudan 6 2", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
+    ];
+
+    for (const m of defaults) {
+      await db.execute(sql`
+        INSERT INTO machines (id, name, heads, stitches_per_minute, changeover_time_minutes, is_active)
+        VALUES (${m.id}, ${m.name}, ${m.heads}, ${m.stitchesPerMinute}, ${m.changeoverTimeMinutes}, ${m.isActive})
+        ON CONFLICT (id) DO NOTHING
+      `);
+    }
+    // Reset the serial sequence so next auto-insert starts after 5
+    await db.execute(sql`SELECT setval('machines_id_seq', 5, true)`);
   }
 }
 
