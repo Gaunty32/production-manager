@@ -4,6 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { Upload, FileText, X, ExternalLink, Download } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 type JobFile = {
   id: string;
@@ -22,16 +23,36 @@ type UploadedFile = {
   fileType: string;
 };
 
+type JobMessage = {
+  id: string;
+  senderType: string;
+};
+
 interface StaffJobFileUploadProps {
   jobId: string;
   onFileAdded?: () => void;
+  autoMessageOnDownload?: boolean;
 }
 
-export function StaffJobFileUpload({ jobId, onFileAdded }: StaffJobFileUploadProps) {
+const AUTO_MESSAGE = "Thank you for submitting your files. They are being reviewed by our team.";
+
+export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload = false }: StaffJobFileUploadProps) {
   const [pendingFiles, setPendingFiles] = useState<UploadedFile[]>([]);
+  const { toast } = useToast();
 
   const { data: existingFiles = [], isLoading } = useQuery<JobFile[]>({
     queryKey: ["/api/jobs", jobId, "files"],
+  });
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async (message: string) => {
+      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/messages`, { message });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${jobId}/messages`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/messages"] });
+    },
   });
 
   const addFileMutation = useMutation({
@@ -66,13 +87,27 @@ export function StaffJobFileUpload({ jobId, onFileAdded }: StaffJobFileUploadPro
     await addFileMutation.mutateAsync(file);
   };
 
-  const handleDownloadAll = () => {
+  const handleDownloadAll = async () => {
     const a = document.createElement("a");
     a.href = `/api/jobs/${jobId}/files/download-all`;
     a.download = "";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+
+    if (autoMessageOnDownload) {
+      try {
+        const res = await apiRequest("GET", `/api/staff/jobs/${jobId}/messages`);
+        const messages: JobMessage[] = await res.json();
+        const hasExistingMessages = Array.isArray(messages) && messages.length > 0;
+        if (!hasExistingMessages) {
+          await sendMessageMutation.mutateAsync(AUTO_MESSAGE);
+          toast({ description: "Message sent to customer." });
+        }
+      } catch {
+        // Non-critical — download still succeeded
+      }
+    }
   };
 
   return (
@@ -93,32 +128,32 @@ export function StaffJobFileUpload({ jobId, onFileAdded }: StaffJobFileUploadPro
             </Button>
           )}
           <ObjectUploader
-          maxNumberOfFiles={10}
-          onGetUploadParameters={async () => {
-            const res = await apiRequest("POST", "/api/staff/objects/upload", {});
-            const data = await res.json();
-            return {
-              method: "PUT" as const,
-              url: data.url,
-              key: data.key,
-            };
-          }}
-          onComplete={(result) => {
-            result.successful?.forEach((file: any) => {
-              const objectKey = file.meta.key as string;
-              handleFileUploaded({
-                objectKey,
-                fileName: file.name,
-                fileSize: file.size,
-                fileType: file.type || "application/octet-stream",
+            maxNumberOfFiles={10}
+            onGetUploadParameters={async () => {
+              const res = await apiRequest("POST", "/api/staff/objects/upload", {});
+              const data = await res.json();
+              return {
+                method: "PUT" as const,
+                url: data.url,
+                key: data.key,
+              };
+            }}
+            onComplete={(result) => {
+              result.successful?.forEach((file: any) => {
+                const objectKey = file.meta.key as string;
+                handleFileUploaded({
+                  objectKey,
+                  fileName: file.name,
+                  fileSize: file.size,
+                  fileType: file.type || "application/octet-stream",
+                });
               });
-            });
-          }}
-          buttonClassName="h-8"
-        >
-          <Upload className="h-3 w-3 mr-1" />
-          Upload
-        </ObjectUploader>
+            }}
+            buttonClassName="h-8"
+          >
+            <Upload className="h-3 w-3 mr-1" />
+            Upload
+          </ObjectUploader>
         </div>
       </div>
 

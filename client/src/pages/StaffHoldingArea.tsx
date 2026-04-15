@@ -365,7 +365,7 @@ export default function StaffHoldingArea() {
                     </div>
                   )}
 
-                  <StaffJobFileUpload jobId={job.id} />
+                  <StaffJobFileUpload jobId={job.id} autoMessageOnDownload />
                 </div>
 
                 {/* Mobile: Accordion for notes/files */}
@@ -389,7 +389,7 @@ export default function StaffHoldingArea() {
                         Files
                       </AccordionTrigger>
                       <AccordionContent>
-                        <StaffJobFileUpload jobId={job.id} />
+                        <StaffJobFileUpload jobId={job.id} autoMessageOnDownload />
                       </AccordionContent>
                     </AccordionItem>
                   </Accordion>
