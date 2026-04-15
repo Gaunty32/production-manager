@@ -9,8 +9,105 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Cog, Zap, Timer, Hash, WifiOff, Wifi } from "lucide-react";
+import { Cog, Zap, Timer, Hash, WifiOff, Wifi, TrendingUp } from "lucide-react";
 import { useState } from "react";
+
+const OPTIMAL_STITCH_COUNT = 7500;
+
+const REFERENCE_STITCH_COUNTS = [
+  { stitches: 5000, label: "5,000" },
+  { stitches: 7500, label: "7,500", optimal: true },
+  { stitches: 10000, label: "10,000" },
+  { stitches: 15000, label: "15,000" },
+];
+
+function calcThroughput(
+  heads: number,
+  stitchesPerMinute: number,
+  changeoverTimeMinutes: number,
+  stitchCount: number
+) {
+  if (!stitchesPerMinute || !heads) return { logosPerHour: 0, runsPerHour: 0, minutesPerRun: 0 };
+  const embroideryMinutes = stitchCount / stitchesPerMinute;
+  const minutesPerRun = embroideryMinutes + changeoverTimeMinutes;
+  const runsPerHour = 60 / minutesPerRun;
+  const logosPerHour = Math.floor(runsPerHour * heads);
+  return {
+    logosPerHour,
+    runsPerHour,
+    minutesPerRun,
+  };
+}
+
+function ThroughputTable({
+  heads,
+  stitchesPerMinute,
+  changeoverTimeMinutes,
+}: {
+  heads: number;
+  stitchesPerMinute: number;
+  changeoverTimeMinutes: number;
+}) {
+  const optimal = calcThroughput(heads, stitchesPerMinute, changeoverTimeMinutes, OPTIMAL_STITCH_COUNT);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5">
+        <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Throughput Estimates</span>
+      </div>
+
+      {/* Optimal highlight */}
+      <div className="rounded-md bg-primary/8 border border-primary/20 px-3 py-2 flex items-center justify-between">
+        <div>
+          <span className="text-xs font-semibold text-primary">Optimal (7,500 stitches)</span>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {optimal.minutesPerRun.toFixed(1)} min/run · {optimal.runsPerHour.toFixed(1)} runs/hr
+          </p>
+        </div>
+        <div className="text-right">
+          <span className="text-xl font-bold tabular-nums text-foreground">{optimal.logosPerHour}</span>
+          <p className="text-xs text-muted-foreground">logos/hr</p>
+        </div>
+      </div>
+
+      {/* Reference table */}
+      <div className="rounded-md border overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-muted/50">
+              <th className="text-left px-2.5 py-1.5 text-muted-foreground font-medium">Stitches</th>
+              <th className="text-right px-2.5 py-1.5 text-muted-foreground font-medium">Min/run</th>
+              <th className="text-right px-2.5 py-1.5 text-muted-foreground font-medium">Runs/hr</th>
+              <th className="text-right px-2.5 py-1.5 text-muted-foreground font-medium">Logos/hr</th>
+            </tr>
+          </thead>
+          <tbody>
+            {REFERENCE_STITCH_COUNTS.map(({ stitches, label, optimal: isOptimal }) => {
+              const t = calcThroughput(heads, stitchesPerMinute, changeoverTimeMinutes, stitches);
+              return (
+                <tr
+                  key={stitches}
+                  className={`border-t ${isOptimal ? "bg-primary/5 font-semibold" : ""}`}
+                >
+                  <td className="px-2.5 py-1.5 tabular-nums">
+                    {label}
+                    {isOptimal && (
+                      <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0 h-4">opt</Badge>
+                    )}
+                  </td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums text-muted-foreground">{t.minutesPerRun.toFixed(1)}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums text-muted-foreground">{t.runsPerHour.toFixed(1)}</td>
+                  <td className="px-2.5 py-1.5 text-right tabular-nums font-medium">{t.logosPerHour}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function MachineCard({ machine }: { machine: Machine }) {
   const { toast } = useToast();
@@ -61,17 +158,22 @@ function MachineCard({ machine }: { machine: Machine }) {
     setEditing(false);
   };
 
+  // Use live form values when editing so the table updates in real time
+  const previewHeads = editing ? (Number(form.heads) || machine.heads) : machine.heads;
+  const previewSpm = editing ? (Number(form.stitchesPerMinute) || machine.stitchesPerMinute) : machine.stitchesPerMinute;
+  const previewChangeover = editing ? (Number(form.changeoverTimeMinutes) || 0) : machine.changeoverTimeMinutes;
+
   return (
     <Card data-testid={`card-machine-${machine.id}`} className={machine.isActive ? "" : "opacity-60"}>
       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="relative flex-shrink-0">
             <Cog className="h-5 w-5 text-muted-foreground" />
             <span
               className={`absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card ${machine.isActive ? "bg-green-500" : "bg-muted-foreground"}`}
             />
           </div>
-          <div>
+          <div className="min-w-0">
             {editing ? (
               <Input
                 value={form.name}
@@ -80,11 +182,9 @@ function MachineCard({ machine }: { machine: Machine }) {
                 data-testid={`input-machine-name-${machine.id}`}
               />
             ) : (
-              <CardTitle className="text-base">{machine.name}</CardTitle>
+              <CardTitle className="text-base truncate">{machine.name}</CardTitle>
             )}
-            <CardDescription className="mt-0.5">
-              Machine #{machine.id}
-            </CardDescription>
+            <CardDescription className="mt-0.5">Machine #{machine.id}</CardDescription>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -109,6 +209,7 @@ function MachineCard({ machine }: { machine: Machine }) {
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* Specs */}
         <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground flex items-center gap-1">
@@ -162,6 +263,13 @@ function MachineCard({ machine }: { machine: Machine }) {
             )}
           </div>
         </div>
+
+        {/* Throughput estimates — update live when editing */}
+        <ThroughputTable
+          heads={previewHeads}
+          stitchesPerMinute={previewSpm}
+          changeoverTimeMinutes={previewChangeover}
+        />
 
         {editing && (
           <div className="space-y-1">
@@ -223,8 +331,14 @@ export default function MachineManagement() {
     queryKey: ["/api/machines"],
   });
 
-  const onlineCount = machines.filter(m => m.isActive).length;
+  const onlineMachines = machines.filter(m => m.isActive);
   const offlineCount = machines.filter(m => !m.isActive).length;
+
+  // Fleet total at optimal stitch count
+  const fleetTotal = onlineMachines.reduce((sum, m) => {
+    const t = calcThroughput(m.heads, m.stitchesPerMinute, m.changeoverTimeMinutes, OPTIMAL_STITCH_COUNT);
+    return sum + t.logosPerHour;
+  }, 0);
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
@@ -232,33 +346,41 @@ export default function MachineManagement() {
         <div>
           <h1 className="text-2xl font-bold">Machine Settings</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Manage production capacity and machine availability
+            Production capacity, speed, and availability per machine
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="h-2.5 w-2.5 rounded-full bg-green-500 inline-block" />
-            <span className="text-muted-foreground">{onlineCount} online</span>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Fleet capacity (7,500 stitches)</p>
+            <p className="text-lg font-bold tabular-nums">
+              {fleetTotal} <span className="text-sm font-normal text-muted-foreground">logos/hr</span>
+            </p>
           </div>
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground inline-block" />
-            <span className="text-muted-foreground">{offlineCount} offline</span>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
+              <span className="text-muted-foreground">{onlineMachines.length} online</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="h-2 w-2 rounded-full bg-muted-foreground inline-block" />
+              <span className="text-muted-foreground">{offlineCount} offline</span>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="bg-muted/50 rounded-md p-3 text-sm text-muted-foreground">
-        <strong className="text-foreground">How this affects scheduling:</strong> Offline machines are excluded from automatic job scheduling and the machine suggestion system. The number of heads and stitch speed are used to calculate production time estimates.
+        <strong className="text-foreground">How estimates work:</strong> Each run = (stitch count ÷ stitches/min) + changeover time. Logos/hr = runs/hr × heads. The <strong className="text-foreground">7,500 stitch optimal</strong> is the standard reference point — at 750 stitches/min with 3 min changeover that gives 4.6 runs/hr.
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
           {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="h-48 rounded-md bg-muted animate-pulse" />
+            <div key={i} className="h-80 rounded-md bg-muted animate-pulse" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
           {machines.map(machine => (
             <MachineCard key={machine.id} machine={machine} />
           ))}
