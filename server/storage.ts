@@ -391,11 +391,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteStaff(id: string): Promise<void> {
-    await db
-      .update(jobs)
-      .set({ completedById: null })
-      .where(eq(jobs.completedById, id));
-    
+    // Clear nullable completedById references (jobs and line items)
+    await db.update(jobs).set({ completedById: null }).where(eq(jobs.completedById, id));
+    await db.update(jobLineItems).set({ completedById: null }).where(eq(jobLineItems.completedById, id));
+
+    // Remove non-nullable, non-cascade dependent records
+    await db.delete(jobSchedule).where(eq(jobSchedule.staffId, id));
+    await db.delete(productionEntries).where(eq(productionEntries.staffId, id));
+
     await db.delete(staff).where(eq(staff.id, id));
   }
 
