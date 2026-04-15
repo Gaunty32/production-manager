@@ -400,15 +400,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteStaff(id: string): Promise<void> {
-    // Clear nullable completedById references (jobs and line items)
-    await db.update(jobs).set({ completedById: null }).where(eq(jobs.completedById, id));
-    await db.update(jobLineItems).set({ completedById: null }).where(eq(jobLineItems.completedById, id));
+    await db.transaction(async (tx) => {
+      // Clear all nullable FK references to this staff member
+      await tx.update(jobs).set({ completedById: null }).where(eq(jobs.completedById, id));
+      await tx.update(jobLineItems).set({ completedById: null }).where(eq(jobLineItems.completedById, id));
+      await tx.update(jobErrors).set({ assignedToId: null }).where(eq(jobErrors.assignedToId, id));
 
-    // Remove non-nullable, non-cascade dependent records
-    await db.delete(jobSchedule).where(eq(jobSchedule.staffId, id));
-    await db.delete(productionEntries).where(eq(productionEntries.staffId, id));
+      // Delete non-nullable, non-cascade dependent records
+      await tx.delete(jobSchedule).where(eq(jobSchedule.staffId, id));
+      await tx.delete(productionEntries).where(eq(productionEntries.staffId, id));
 
-    await db.delete(staff).where(eq(staff.id, id));
+      await tx.delete(staff).where(eq(staff.id, id));
+    });
   }
 
   async getJob(id: string): Promise<Job | undefined> {
