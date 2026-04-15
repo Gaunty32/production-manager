@@ -424,7 +424,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getJobsByMachine(machineId: number): Promise<Job[]> {
-    return await db.select().from(jobs).where(eq(jobs.machineId, machineId));
+    // Machine assignments live on line items, not the top-level job.
+    // Return all jobs that have at least one line item assigned to this machine.
+    const lineItemRows = await db
+      .selectDistinct({ jobId: jobLineItems.jobId })
+      .from(jobLineItems)
+      .where(eq(jobLineItems.machineId, machineId));
+    const jobIds = lineItemRows.map(r => r.jobId);
+    if (jobIds.length === 0) return [];
+    return await db.select().from(jobs).where(inArray(jobs.id, jobIds));
   }
 
   async getJobsByCustomerId(customerId: string): Promise<Job[]> {
