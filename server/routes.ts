@@ -47,7 +47,7 @@ import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail
 // Helper function to auto-schedule a line item when it has a machine assigned
 async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { findAvailableSlots, calculateJobDuration, minutesToTime } = await import("@shared/scheduling");
+    const { findAvailableSlots, minutesToTime } = await import("@shared/scheduling");
     
     const lineItem = await storage.getJobLineItem(lineItemId);
     if (!lineItem) {
@@ -72,6 +72,12 @@ async function autoScheduleLineItem(lineItemId: string): Promise<{ success: bool
       return { success: false, error: "Job not found" };
     }
     
+    // Fetch machine specs from DB for accurate duration calculation
+    const machine = await storage.getMachine(lineItem.machineId);
+    const heads = machine?.heads ?? 6;
+    const spm = machine?.stitchesPerMinute ?? 750;
+    const changeover = machine?.changeoverTimeMinutes ?? 3;
+    
     // Calculate duration from quantity and stitch count
     const quantity = lineItem.quantity || 0;
     const stitchCount = lineItem.stitchCount || 0;
@@ -80,7 +86,14 @@ async function autoScheduleLineItem(lineItemId: string): Promise<{ success: bool
       return { success: false, error: "Line item has no quantity" };
     }
     
-    let effectiveDuration = calculateJobDuration(quantity, stitchCount, lineItem.machineId);
+    const calcDuration = (qty: number, stitches: number): number => {
+      if (!stitches || !qty) return 0;
+      const runs = Math.ceil(qty / heads);
+      const timePerRun = (stitches / spm) + changeover;
+      return Math.ceil((runs * timePerRun) / 10) * 10;
+    };
+    
+    let effectiveDuration = calcDuration(quantity, stitchCount);
     
     // If no duration calculated (missing stitch count), estimate based on quantity
     // Assume approximately 1 minute per 5 items as a conservative baseline
@@ -3762,8 +3775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Stitch count is required for scheduling" });
       }
       
-      const { findAvailableSlots, calculateJobDuration, minutesToTime } = await import("@shared/scheduling");
-      const { MACHINE_NAMES, MACHINE_HEADS, calculateProductionMetrics } = await import("@shared/machines");
+      const { findAvailableSlots, minutesToTime } = await import("@shared/scheduling");
       
       // Get all scheduling data
       const staffMembers = await storage.getStaff();
@@ -3774,16 +3786,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const staffHolidays = await storage.getStaffHolidays();
       const bankHolidays = await storage.getBankHolidays();
       
+      // Use LIVE DB machines — filters out offline machines automatically
+      const allMachines = await storage.getMachines();
+      const activeMachines = allMachines.filter(m => m.isActive);
+      
+      // Calculate production duration using the machine's actual DB specs
+      const calcDurationFromSpecs = (qty: number, stitches: number, heads: number, spm: number, changeover: number): number => {
+        if (!stitches || !qty) return 0;
+        const runs = Math.ceil(qty / heads);
+        const timePerRun = (stitches / spm) + changeover;
+        const total = runs * timePerRun;
+        return Math.ceil(total / 10) * 10;
+      };
+      
       const startDate = new Date();
       startDate.setHours(0, 0, 0, 0);
       const endDate = targetDate > startDate ? targetDate : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
       
-      const machineIds = Object.keys(MACHINE_NAMES).map(Number);
       const suggestions: any[] = [];
       
-      for (const machineId of machineIds) {
-        const duration = calculateJobDuration(jobQuantity, jobStitchCount, machineId);
-        const metrics = calculateProductionMetrics(jobQuantity, jobStitchCount, machineId);
+      for (const machine of activeMachines) {
+        const machineId = machine.id;
+        const heads = machine.heads;
+        const spm = machine.stitchesPerMinute;
+        const changeover = machine.changeoverTimeMinutes;
+        const duration = calcDurationFromSpecs(jobQuantity, jobStitchCount, heads, spm, changeover);
+        const runs = Math.ceil(jobQuantity / heads);
         
         if (duration === 0) continue;
         
@@ -3854,10 +3882,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           suggestions.push({
             machineId,
-            machineName: MACHINE_NAMES[machineId],
-            heads: MACHINE_HEADS[machineId],
+            machineName: machine.name,
+            heads: machine.heads,
             estimatedDuration: duration,
-            estimatedRuns: metrics?.runs || 0,
+            estimatedRuns: runs,
             earliestDate: bestSlot.date.toISOString().split('T')[0],
             startTime: bestSlot.startTime,
             endTime: bestSlot.endTime,
