@@ -322,7 +322,7 @@ export default function StaffJobDetail() {
 
   if (isLoadingJob) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
@@ -330,7 +330,7 @@ export default function StaffJobDetail() {
 
   if (!job) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <p className="text-muted-foreground">Job not found</p>
       </div>
     );
@@ -339,7 +339,7 @@ export default function StaffJobDetail() {
   const isPending = job.status === "pending_customer_approval";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-full overflow-y-auto bg-background">
       <header className="border-b bg-card sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
