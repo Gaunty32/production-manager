@@ -67,18 +67,18 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-3 border-b">
+      <SidebarHeader className="p-2 border-b flex-shrink-0">
         <Link href="/" onClick={handleNavClick} data-testid="link-logo-home">
           <img
             src={logoImage}
             alt="Select Branding Solutions"
             className="w-full object-contain"
-            style={{ maxHeight: "72px" }}
+            style={{ maxHeight: "56px" }}
             data-testid="logo-sidebar"
           />
         </Link>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="overflow-y-auto" style={{ overflowY: 'auto' }}>
         <SidebarGroup>
           <SidebarGroupLabel>Production Manager</SidebarGroupLabel>
           <SidebarGroupContent>
