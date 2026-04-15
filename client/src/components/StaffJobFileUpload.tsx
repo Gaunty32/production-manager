@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { ObjectUploader } from "@/components/ObjectUploader";
-import { Upload, FileText, X, ExternalLink } from "lucide-react";
+import { Upload, FileText, X, ExternalLink, Download } from "lucide-react";
 
 type JobFile = {
   id: string;
@@ -66,11 +66,33 @@ export function StaffJobFileUpload({ jobId, onFileAdded }: StaffJobFileUploadPro
     await addFileMutation.mutateAsync(file);
   };
 
+  const handleDownloadAll = () => {
+    const a = document.createElement("a");
+    a.href = `/api/jobs/${jobId}/files/download-all`;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">Files</span>
-        <ObjectUploader
+        <div className="flex items-center gap-1">
+          {existingFiles.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadAll}
+              data-testid="button-download-all-files"
+              className="h-8 text-xs"
+            >
+              <Download className="h-3 w-3 mr-1" />
+              Download All
+            </Button>
+          )}
+          <ObjectUploader
           maxNumberOfFiles={10}
           onGetUploadParameters={async () => {
             const res = await apiRequest("POST", "/api/staff/objects/upload", {});
@@ -97,6 +119,7 @@ export function StaffJobFileUpload({ jobId, onFileAdded }: StaffJobFileUploadPro
           <Upload className="h-3 w-3 mr-1" />
           Upload
         </ObjectUploader>
+        </div>
       </div>
 
       {isLoading ? (

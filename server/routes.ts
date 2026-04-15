@@ -2346,6 +2346,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff - Download all files for a job as a ZIP
+  app.get("/api/jobs/:jobId/files/download-all", isStaffAuthenticated, async (req, res) => {
+    try {
+      const archiver = (await import("archiver")).default;
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const files = await storage.getJobFiles(req.params.jobId);
+      if (files.length === 0) {
+        return res.status(404).json({ error: "No files to download" });
+      }
+
+      const safeJobName = (job.jobName || "files").replace(/[^a-zA-Z0-9\s\-_]/g, "").trim() || "files";
+
+      res.set({
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${safeJobName}.zip"`,
+      });
+
+      const archive = archiver("zip", { zlib: { level: 6 } });
+      archive.on("error", (err) => {
+        console.error("Archiver error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to create archive" });
+        }
+      });
+
+      archive.pipe(res);
+
+      for (const file of files) {
+        try {
+          const objectFile = await objectStorageService.getObjectEntityFile(file.fileUrl);
+          const stream = objectFile.createReadStream();
+          archive.append(stream, { name: file.fileName });
+        } catch (err) {
+          console.error(`Skipping file ${file.fileName}:`, err);
+        }
+      }
+
+      await archive.finalize();
+    } catch (error) {
+      console.error("Error creating ZIP download:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to download files" });
+      }
+    }
+  });
+
   // Staff - Get upload URL for file
   app.post("/api/staff/objects/upload", isStaffAuthenticated, async (req, res) => {
     try {
