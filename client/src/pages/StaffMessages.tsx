@@ -39,6 +39,9 @@ import {
   Building2,
   EyeOff,
   Eye,
+  ImagePlus,
+  CheckCircle,
+  Pin,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 
@@ -76,6 +79,7 @@ type ChatMessage = {
   senderName: string | null;
   senderImageUrl: string | null;
   message: string;
+  imageUrl?: string | null;
   createdAt: string;
 };
 
@@ -155,6 +159,10 @@ export default function StaffMessages() {
   const [newOrderFiles, setNewOrderFiles] = useState<File[]>([]);
   const [isCreatingOrderChat, setIsCreatingOrderChat] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatImageInputRef = useRef<HTMLInputElement>(null);
+  const [chatImageKey, setChatImageKey] = useState<string | null>(null);
+  const [chatImagePreview, setChatImagePreview] = useState<string | null>(null);
+  const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: jobConversations = [], isLoading: isLoadingJobConvos } = useQuery<JobConversation[]>({
@@ -269,14 +277,16 @@ export default function StaffMessages() {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const sendJobMessageMutation = useMutation({
-    mutationFn: async (msg: string) => {
-      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/messages`, { message: msg });
+    mutationFn: async ({ message, imageUrl }: { message: string; imageUrl?: string }) => {
+      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/messages`, { message, ...(imageUrl ? { imageUrl } : {}) });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${jobId}/messages`] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations"] });
       setNewMessage("");
+      setChatImageKey(null);
+      setChatImagePreview(null);
     },
     onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
   });
@@ -394,9 +404,33 @@ export default function StaffMessages() {
   });
 
   const handleSend = () => {
-    if (!newMessage.trim() || !selected) return;
-    if (selected.type === "job") sendJobMessageMutation.mutate(newMessage.trim());
-    else sendDirectMessageMutation.mutate(newMessage.trim());
+    if ((!newMessage.trim() && !chatImageKey) || !selected) return;
+    if (selected.type === "job") {
+      sendJobMessageMutation.mutate({ message: newMessage.trim() || " ", imageUrl: chatImageKey ?? undefined });
+    } else {
+      sendDirectMessageMutation.mutate(newMessage.trim());
+    }
+  };
+
+  const handleChatImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingChatImage(true);
+    try {
+      const previewUrl = URL.createObjectURL(file);
+      setChatImagePreview(previewUrl);
+      const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
+      const { url, key } = await uploadRes.json();
+      await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
+      const normalizedKey = `/objects${key.replace("/objects", "")}`;
+      setChatImageKey(normalizedKey);
+    } catch {
+      toast({ title: "Failed to upload image", variant: "destructive" });
+      setChatImagePreview(null);
+    } finally {
+      setIsUploadingChatImage(false);
+      if (chatImageInputRef.current) chatImageInputRef.current.value = "";
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -647,6 +681,34 @@ export default function StaffMessages() {
             )}
           </div>
 
+          {/* Pinned samples strip — only shown for job chats with image messages */}
+          {selected.type === "job" && messages.some(m => m.imageUrl) && (
+            <div className="border-b bg-muted/30 px-4 py-2">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Pin className="h-3 w-3 text-muted-foreground" />
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Sample Images</span>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {messages.filter(m => m.imageUrl).map(m => (
+                  <a
+                    key={m.id}
+                    href={m.imageUrl!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block"
+                    data-testid={`pinned-sample-${m.id}`}
+                  >
+                    <img
+                      src={m.imageUrl!}
+                      alt="Sample"
+                      className="h-14 w-14 rounded-md object-cover border border-border hover:opacity-80 transition-opacity"
+                    />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto px-4 pt-4 pb-6 space-y-5">
             {isLoadingMessages ? (
               <LoadingSpinner />
@@ -667,7 +729,18 @@ export default function StaffMessages() {
                             {msg.senderName}
                           </p>
                         )}
-                        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
+                        {msg.message.trim() && (
+                          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
+                        )}
+                        {msg.imageUrl && (
+                          <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
+                            <img
+                              src={msg.imageUrl}
+                              alt="Sample"
+                              className="max-w-full rounded-lg max-h-48 object-contain border border-white/20 hover:opacity-90 transition-opacity"
+                            />
+                          </a>
+                        )}
                         <p className={`text-[10px] mt-1 ${isStaff ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
                           {format(new Date(msg.createdAt), "d MMM, h:mm a")}
                         </p>
@@ -695,7 +768,47 @@ export default function StaffMessages() {
           </div>
 
           <div className="border-t p-3 bg-card/40">
+            {/* Image preview strip */}
+            {chatImagePreview && (
+              <div className="mb-2 flex items-start gap-2">
+                <div className="relative">
+                  <img src={chatImagePreview} alt="Preview" className="h-16 w-16 rounded-md object-cover border border-border" />
+                  <button
+                    type="button"
+                    onClick={() => { setChatImagePreview(null); setChatImageKey(null); }}
+                    className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"
+                    data-testid="button-remove-chat-image"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+                {isUploadingChatImage && (
+                  <span className="text-xs text-muted-foreground mt-1">Uploading…</span>
+                )}
+              </div>
+            )}
+            <input
+              ref={chatImageInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleChatImageSelect}
+              data-testid="input-chat-image-file"
+            />
             <div className="flex gap-2 items-end">
+              {selected.type === "job" && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  type="button"
+                  onClick={() => chatImageInputRef.current?.click()}
+                  disabled={isUploadingChatImage}
+                  data-testid="button-attach-chat-image"
+                  title="Attach sample image"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </Button>
+              )}
               <Textarea
                 placeholder="Reply… (Enter to send, Shift+Enter for new line)"
                 value={newMessage}
@@ -707,7 +820,7 @@ export default function StaffMessages() {
               />
               <Button
                 onClick={handleSend}
-                disabled={!newMessage.trim() || sendJobMessageMutation.isPending || sendDirectMessageMutation.isPending}
+                disabled={(!newMessage.trim() && !chatImageKey) || isUploadingChatImage || sendJobMessageMutation.isPending || sendDirectMessageMutation.isPending}
                 size="icon"
                 data-testid="button-staff-send"
               >

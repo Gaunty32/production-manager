@@ -244,6 +244,7 @@ export const jobMessages = pgTable("job_messages", {
   senderType: varchar("sender_type").notNull(), // 'customer' or 'staff'
   senderId: varchar("sender_id").notNull(), // customerUserId or userId
   message: text("message").notNull(),
+  imageUrl: varchar("image_url"), // optional: object-storage path for a sample image
   createdAt: timestamp("created_at").notNull().defaultNow(),
   readByStaff: boolean("read_by_staff").notNull().default(false),
   readByCustomer: boolean("read_by_customer").notNull().default(false),

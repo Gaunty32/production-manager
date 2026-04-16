@@ -1996,6 +1996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         senderType: 'customer',
         senderId: (req.session as any).customerUserId,
         message: req.body.message,
+        ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
       });
 
       const message = await storage.createJobMessage(messageData);
@@ -2275,6 +2276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         senderType: 'staff',
         senderId,
         message: req.body.message,
+        ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
       });
 
       res.json(message);
