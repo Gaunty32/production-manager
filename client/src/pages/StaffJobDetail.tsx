@@ -77,6 +77,7 @@ export default function StaffJobDetail() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionMessage, setRejectionMessage] = useState("");
   const [embroiderySetups, setEmbroiderySetups] = useState<string[]>([]);
+  const [setupNotRequired, setSetupNotRequired] = useState(false);
   const previousCustomerMessageCountRef = useRef<number>(0);
   const isInitialLoadRef = useRef<boolean>(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -308,6 +309,7 @@ export default function StaffJobDetail() {
     approveMutation.mutate(embroiderySetups);
     setShowApproveDialog(false);
     setEmbroiderySetups([]);
+    setSetupNotRequired(false);
   };
 
   const confirmReject = () => {
@@ -732,7 +734,7 @@ export default function StaffJobDetail() {
 
       {/* Approve Dialog */}
       <Dialog open={showApproveDialog} onOpenChange={(open) => {
-        if (!open) { setShowApproveDialog(false); setEmbroiderySetups([]); }
+        if (!open) { setShowApproveDialog(false); setEmbroiderySetups([]); setSetupNotRequired(false); }
       }}>
         <DialogContent className="max-w-md" data-testid="dialog-approve">
           <DialogHeader>
@@ -744,26 +746,46 @@ export default function StaffJobDetail() {
 
           {/* Embroidery Set-Up Section */}
           <div className="space-y-3 py-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-medium">Embroidery Set-Up(s)</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEmbroiderySetups(prev => [...prev, ""])}
-                data-testid="button-add-setup"
-              >
-                + Add Set-Up
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant={setupNotRequired ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setSetupNotRequired(prev => !prev);
+                    setEmbroiderySetups([]);
+                  }}
+                  data-testid="button-setup-not-required"
+                >
+                  Not Required
+                </Button>
+                {!setupNotRequired && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEmbroiderySetups(prev => [...prev, ""])}
+                    data-testid="button-add-setup"
+                  >
+                    + Add Set-Up
+                  </Button>
+                )}
+              </div>
             </div>
-            {embroiderySetups.length === 0 && (
+            {!setupNotRequired && embroiderySetups.length === 0 && (
               <p className="text-xs text-muted-foreground">
                 Optional — add any new logo/embroidery set-ups to be created for this job.
               </p>
             )}
-            {embroiderySetups.map((name, idx) => (
+            {setupNotRequired && (
+              <p className="text-xs text-muted-foreground">
+                No embroidery set-up needed for this job.
+              </p>
+            )}
+            {!setupNotRequired && embroiderySetups.map((name, idx) => (
               <div key={idx} className="flex gap-2 items-center">
                 <Input
-                  placeholder={`Set-up name (e.g. Left Chest Logo)`}
+                  placeholder="Set-up name (e.g. Left Chest Logo)"
                   value={name}
                   onChange={(e) => {
                     const updated = [...embroiderySetups];
@@ -787,7 +809,7 @@ export default function StaffJobDetail() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => { setShowApproveDialog(false); setEmbroiderySetups([]); }}
+              onClick={() => { setShowApproveDialog(false); setEmbroiderySetups([]); setSetupNotRequired(false); }}
               data-testid="button-cancel-approve"
             >
               Cancel
