@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
@@ -17,17 +18,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   MessageSquare,
   Send,
   ChevronRight,
-  ChevronDown,
   Package,
   ArrowLeft,
   Plus,
@@ -36,12 +29,13 @@ import {
   Search,
   Paperclip,
   X,
-  Building2,
   EyeOff,
   Eye,
   ImagePlus,
-  CheckCircle,
   Pin,
+  Lock,
+  Camera,
+  User,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 
@@ -80,7 +74,19 @@ type ChatMessage = {
   senderImageUrl: string | null;
   message: string;
   imageUrl?: string | null;
+  isInternal?: boolean;
   createdAt: string;
+};
+
+type CurrentUser = {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImageUrl?: string | null;
+  staffName?: string | null;
+  staffId?: string | null;
+  role?: string;
 };
 
 type Customer = { id: string; name: string };
@@ -92,11 +98,30 @@ function formatConvoTime(iso: string) {
   return format(d, "d MMM");
 }
 
+function getInitials(name: string | null | undefined, fallback = "?") {
+  if (!name) return fallback;
+  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
+// Color palette for customer avatars
+const CUSTOMER_COLORS = [
+  "bg-violet-500", "bg-blue-500", "bg-emerald-500", "bg-amber-500",
+  "bg-rose-500", "bg-cyan-500", "bg-fuchsia-500", "bg-orange-500",
+];
+function customerColor(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffff;
+  return CUSTOMER_COLORS[h % CUSTOMER_COLORS.length];
+}
+
 type Tab = "job" | "direct";
 type Selected =
   | { type: "job"; jobId: string }
   | { type: "direct"; conversationId: string }
   | null;
+
+// Left panel view in "job" tab:  "tiles" = customer grid, "jobs" = job list for a customer
+type LeftView = "tiles" | "jobs";
 
 export default function StaffMessages() {
   const { toast } = useToast();
@@ -104,9 +129,14 @@ export default function StaffMessages() {
   const [tab, setTab] = useState<Tab>("job");
   const [selected, setSelected] = useState<Selected>(null);
   const [newMessage, setNewMessage] = useState("");
+  const [isInternal, setIsInternal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevCustomerMsgCount = useRef(0);
   const isInitialLoad = useRef(true);
+
+  // Left panel navigation
+  const [leftView, setLeftView] = useState<LeftView>("tiles");
+  const [drillCustomerId, setDrillCustomerId] = useState<string | null>(null);
 
   // New direct conversation dialog
   const [showNewConvo, setShowNewConvo] = useState(false);
@@ -133,20 +163,7 @@ export default function StaffMessages() {
       localStorage.setItem("hiddenJobChats", JSON.stringify([...next]));
       return next;
     });
-    // If hiding the currently selected conversation, deselect it
     if (selected?.type === "job" && selected.jobId === jobId) setSelected(null);
-  };
-
-  // Expanded customer groups in Order Chats
-  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
-
-  const toggleCustomer = (customerId: string) => {
-    setExpandedCustomers(prev => {
-      const next = new Set(prev);
-      if (next.has(customerId)) next.delete(customerId);
-      else next.add(customerId);
-      return next;
-    });
   };
 
   // New order chat dialog
@@ -160,11 +177,18 @@ export default function StaffMessages() {
   const [isCreatingOrderChat, setIsCreatingOrderChat] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatImageInputRef = useRef<HTMLInputElement>(null);
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
   const [chatImageKey, setChatImageKey] = useState<string | null>(null);
   const [chatImagePreview, setChatImagePreview] = useState<string | null>(null);
   const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
+  const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
   // ── Queries ────────────────────────────────────────────────────────────────
+  const { data: currentUser, refetch: refetchMe } = useQuery<CurrentUser>({
+    queryKey: ["/api/staff/me"],
+  });
+
   const { data: jobConversations = [], isLoading: isLoadingJobConvos } = useQuery<JobConversation[]>({
     queryKey: ["/api/staff/conversations"],
     refetchInterval: 15000,
@@ -212,41 +236,12 @@ export default function StaffMessages() {
   const selectedJobConvo = jobConversations.find(c => c.jobId === jobId) ?? null;
   const selectedDirectConvo = directConversations.find(c => c.id === directId) ?? null;
 
-  // Auto-select first conversation per tab
+  // Auto-select first conversation per tab on load
   useEffect(() => {
-    if (tab === "job" && jobConversations.length > 0 && !jobId) {
-      setSelected({ type: "job", jobId: jobConversations[0].jobId });
-    }
     if (tab === "direct" && directConversations.length > 0 && !directId) {
       setSelected({ type: "direct", conversationId: directConversations[0].id });
     }
-  }, [tab, jobConversations, directConversations, jobId, directId]);
-
-  // Auto-expand all customer groups when list first loads; also keep selected customer expanded
-  useEffect(() => {
-    if (jobConversations.length > 0) {
-      setExpandedCustomers(prev => {
-        const next = new Set(prev);
-        jobConversations.forEach(c => next.add(c.customerId));
-        return next;
-      });
-    }
-  }, [jobConversations.length]);
-
-  // When a job is selected, ensure its customer group is expanded
-  useEffect(() => {
-    if (selected?.type === "job") {
-      const convo = jobConversations.find(c => c.jobId === selected.jobId);
-      if (convo) {
-        setExpandedCustomers(prev => {
-          if (prev.has(convo.customerId)) return prev;
-          const next = new Set(prev);
-          next.add(convo.customerId);
-          return next;
-        });
-      }
-    }
-  }, [selected, jobConversations]);
+  }, [tab, directConversations, directId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -277,14 +272,19 @@ export default function StaffMessages() {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const sendJobMessageMutation = useMutation({
-    mutationFn: async ({ message, imageUrl }: { message: string; imageUrl?: string }) => {
-      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/messages`, { message, ...(imageUrl ? { imageUrl } : {}) });
+    mutationFn: async ({ message, imageUrl, isInternal }: { message: string; imageUrl?: string; isInternal?: boolean }) => {
+      const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/messages`, {
+        message,
+        ...(imageUrl ? { imageUrl } : {}),
+        ...(isInternal ? { isInternal: true } : {}),
+      });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${jobId}/messages`] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations"] });
       setNewMessage("");
+      setIsInternal(false);
       setChatImageKey(null);
       setChatImagePreview(null);
     },
@@ -343,7 +343,6 @@ export default function StaffMessages() {
     if (!newOrderCustomerId || !newOrderJobName.trim() || !newOrderMessage.trim()) return;
     setIsCreatingOrderChat(true);
     try {
-      // 1. Create new job
       const jobRes = await apiRequest("POST", "/api/jobs", {
         customerId: newOrderCustomerId,
         jobName: newOrderJobName.trim(),
@@ -352,7 +351,6 @@ export default function StaffMessages() {
       const newJob = await jobRes.json();
       const createdJobId = newJob.id;
 
-      // 2. Upload files if any
       for (const file of newOrderFiles) {
         try {
           const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
@@ -369,19 +367,13 @@ export default function StaffMessages() {
         }
       }
 
-      // 3. Build message (prepend CC list if colleagues selected)
       const ccNames = newOrderColleagues
         .map(id => staffList.find(s => s.id === id)?.name)
         .filter(Boolean)
         .join(", ");
-      const fullMessage = ccNames
-        ? `CC: ${ccNames}\n\n${newOrderMessage.trim()}`
-        : newOrderMessage.trim();
-
-      // 4. Send first message
+      const fullMessage = ccNames ? `CC: ${ccNames}\n\n${newOrderMessage.trim()}` : newOrderMessage.trim();
       await apiRequest("POST", `/api/staff/jobs/${createdJobId}/messages`, { message: fullMessage });
 
-      // 5. Refresh and navigate
       queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setShowNewOrderChat(false);
@@ -407,7 +399,7 @@ export default function StaffMessages() {
 
   const handleSend = () => {
     if ((!newMessage.trim() && !chatImageKey) || !selected) return;
-    const payload = { message: newMessage.trim() || " ", imageUrl: chatImageKey ?? undefined };
+    const payload = { message: newMessage.trim() || " ", imageUrl: chatImageKey ?? undefined, isInternal };
     if (selected.type === "job") {
       sendJobMessageMutation.mutate(payload);
     } else {
@@ -436,6 +428,27 @@ export default function StaffMessages() {
     }
   };
 
+  const handleProfileImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingProfile(true);
+    try {
+      const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
+      const { url, key } = await uploadRes.json();
+      await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
+      const normalizedKey = `/objects${key.replace("/objects", "")}`;
+      await apiRequest("PUT", "/api/staff/me/profile-picture", { profileImageUrl: normalizedKey });
+      await refetchMe();
+      toast({ title: "Profile picture updated" });
+      setShowProfileDialog(false);
+    } catch {
+      toast({ title: "Failed to upload profile picture", variant: "destructive" });
+    } finally {
+      setIsUploadingProfile(false);
+      if (profileImageInputRef.current) profileImageInputRef.current.value = "";
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
@@ -443,20 +456,97 @@ export default function StaffMessages() {
   const jobUnread = jobConversations.reduce((s, c) => s + c.unreadCount, 0);
   const directUnread = directConversations.reduce((s, c) => s + c.unreadCount, 0);
 
-  const showList = !selected || window.innerWidth >= 640;
-  const showChat = !!selected;
+  // Build customer groups for tile grid
+  const visibleConvos = showHidden ? jobConversations : jobConversations.filter(c => !hiddenJobIds.has(c.jobId));
+  const hiddenCount = jobConversations.filter(c => hiddenJobIds.has(c.jobId)).length;
+  const customerGroups = new Map<string, { customerId: string; customerName: string; jobs: JobConversation[] }>();
+  visibleConvos.forEach(c => {
+    if (!customerGroups.has(c.customerId)) {
+      customerGroups.set(c.customerId, { customerId: c.customerId, customerName: c.customerName, jobs: [] });
+    }
+    customerGroups.get(c.customerId)!.jobs.push(c);
+  });
+  const sortedGroups = Array.from(customerGroups.values()).sort((a, b) => a.customerName.localeCompare(b.customerName));
+
+  const drilledGroup = drillCustomerId ? customerGroups.get(drillCustomerId) : null;
+
+  const handleCustomerTileClick = (group: { customerId: string; customerName: string; jobs: JobConversation[] }) => {
+    if (group.jobs.length === 1) {
+      setSelected({ type: "job", jobId: group.jobs[0].jobId });
+    } else {
+      setDrillCustomerId(group.customerId);
+      setLeftView("jobs");
+    }
+  };
+
+  const handleBackToTiles = () => {
+    setLeftView("tiles");
+    setDrillCustomerId(null);
+  };
+
+  // When a job is selected, if we're in tile view, make sure we switch to jobs view for multi-job customers
+  useEffect(() => {
+    if (selected?.type === "job") {
+      const convo = jobConversations.find(c => c.jobId === selected.jobId);
+      if (convo && customerGroups.has(convo.customerId)) {
+        const group = customerGroups.get(convo.customerId)!;
+        if (group.jobs.length > 1) {
+          setDrillCustomerId(convo.customerId);
+          setLeftView("jobs");
+        }
+      }
+    }
+  }, [selected?.type === "job" ? selected.jobId : null]);
+
+  const currentUserName = currentUser?.staffName || [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ") || currentUser?.email;
+  const currentUserInitials = getInitials(currentUserName, "ME");
+
+  // Show left panel: always on desktop, only when no chat selected on mobile
+  const showLeftPanel = !selected || window.innerWidth >= 640;
+  const showChatPanel = !!selected;
 
   return (
     <div className="h-full flex overflow-hidden">
-      {/* Left panel: tabs + conversation list */}
+      {/* ── Left panel ──────────────────────────────────────────────────────── */}
       <div className={`w-full sm:w-80 flex-shrink-0 border-r flex flex-col overflow-hidden ${selected ? "hidden sm:flex" : "flex"}`}>
+
+        {/* Profile strip at top */}
+        <div className="px-3 py-2 border-b flex items-center gap-2">
+          <button
+            onClick={() => setShowProfileDialog(true)}
+            className="relative group"
+            data-testid="button-my-profile"
+            title="Update your profile picture"
+          >
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={currentUser?.profileImageUrl || undefined} />
+              <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                {currentUserInitials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <Camera className="h-3 w-3 text-white" />
+            </div>
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold truncate">{currentUserName || "Staff"}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{currentUser?.email}</p>
+          </div>
+        </div>
+
         {/* Tabs */}
         <div className="border-b">
           <div className="flex">
             {(["job", "direct"] as Tab[]).map(t => (
               <button
                 key={t}
-                onClick={() => { setTab(t); setSelected(null); isInitialLoad.current = true; }}
+                onClick={() => {
+                  setTab(t);
+                  setSelected(null);
+                  setLeftView("tiles");
+                  setDrillCustomerId(null);
+                  isInitialLoad.current = true;
+                }}
                 className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
                   tab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
@@ -474,25 +564,15 @@ export default function StaffMessages() {
           </div>
         </div>
 
-        {/* New chat buttons */}
+        {/* New chat button */}
         <div className="px-3 py-2 border-b">
           {tab === "job" ? (
-            <Button
-              size="sm"
-              className="w-full h-8 text-xs"
-              onClick={() => setShowNewOrderChat(true)}
-              data-testid="button-new-order-chat"
-            >
+            <Button size="sm" className="w-full" onClick={() => setShowNewOrderChat(true)} data-testid="button-new-order-chat">
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               New Order Chat
             </Button>
           ) : (
-            <Button
-              size="sm"
-              className="w-full h-8 text-xs"
-              onClick={() => setShowNewConvo(true)}
-              data-testid="button-new-conversation"
-            >
+            <Button size="sm" className="w-full" onClick={() => setShowNewConvo(true)} data-testid="button-new-conversation">
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               New Conversation
             </Button>
@@ -506,121 +586,128 @@ export default function StaffMessages() {
               <LoadingSpinner />
             ) : jobConversations.length === 0 ? (
               <EmptyState label="No job conversations yet" sublabel="Customer messages will appear here" />
-            ) : (() => {
-              // Group by customer, respecting hidden filter
-              const visibleConvos = showHidden
-                ? jobConversations
-                : jobConversations.filter(c => !hiddenJobIds.has(c.jobId));
-              const hiddenCount = jobConversations.filter(c => hiddenJobIds.has(c.jobId)).length;
-
-              const groups = new Map<string, { customerId: string; customerName: string; jobs: JobConversation[] }>();
-              visibleConvos.forEach(c => {
-                if (!groups.has(c.customerId)) {
-                  groups.set(c.customerId, { customerId: c.customerId, customerName: c.customerName, jobs: [] });
-                }
-                groups.get(c.customerId)!.jobs.push(c);
-              });
-              const sorted = Array.from(groups.values()).sort((a, b) => a.customerName.localeCompare(b.customerName));
-              return (
-                <div className="flex flex-col h-full">
-                  <div className="flex-1 overflow-y-auto">
-                    {sorted.length === 0 && !showHidden && hiddenCount > 0 ? (
-                      <div className="p-4 text-center text-xs text-muted-foreground">All conversations are hidden</div>
-                    ) : sorted.length === 0 ? null : sorted.map(group => {
-                      const isExpanded = expandedCustomers.has(group.customerId);
-                      const groupUnread = group.jobs.reduce((s, j) => s + j.unreadCount, 0);
-                      return (
-                        <div key={group.customerId}>
-                          {/* Customer header */}
+            ) : leftView === "jobs" && drilledGroup ? (
+              // ── Job picker for a specific customer ─────────────────────────
+              <div className="flex flex-col h-full">
+                <button
+                  onClick={handleBackToTiles}
+                  className="flex items-center gap-2 px-3 py-2.5 border-b text-xs text-muted-foreground hover-elevate bg-muted/30 w-full text-left"
+                  data-testid="button-back-to-tiles"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <div className={`h-5 w-5 rounded-full flex items-center justify-center shrink-0 text-white text-[10px] font-bold ${customerColor(drilledGroup.customerId)}`}>
+                    {getInitials(drilledGroup.customerName)}
+                  </div>
+                  <span className="font-semibold text-foreground">{drilledGroup.customerName}</span>
+                </button>
+                <div className="flex-1 overflow-y-auto">
+                  {drilledGroup.jobs.map(c => {
+                    const isActive = selected?.type === "job" && selected.jobId === c.jobId;
+                    const isHidden = hiddenJobIds.has(c.jobId);
+                    return (
+                      <div key={c.jobId} className={`group/jobrow flex items-center border-b border-border/30 ${isActive ? "bg-primary/8" : isHidden ? "opacity-50" : ""}`}>
+                        <button
+                          onClick={() => setSelected({ type: "job", jobId: c.jobId })}
+                          className="flex-1 flex items-start gap-3 px-4 py-3 text-left hover-elevate min-w-0"
+                          data-testid={`job-convo-${c.jobId}`}
+                        >
+                          <Package className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className={`text-xs font-medium truncate ${isActive ? "text-primary" : ""}`}>{c.jobName}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {c.unreadCount > 0 && (
+                                  <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">{c.unreadCount}</Badge>
+                                )}
+                                {c.latestMessage && (
+                                  <span className="text-[10px] text-muted-foreground">{formatConvoTime(c.latestMessage.createdAt)}</span>
+                                )}
+                              </div>
+                            </div>
+                            {c.latestMessage && (
+                              <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                {c.latestMessage.senderType === "staff" ? "You: " : ""}
+                                {c.latestMessage.message}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleHideJob(c.jobId); }}
+                          className="shrink-0 mx-2 text-muted-foreground opacity-0 group-hover/jobrow:opacity-100 transition-opacity"
+                          title={isHidden ? "Unhide" : "Hide conversation"}
+                          data-testid={`button-hide-job-${c.jobId}`}
+                        >
+                          {isHidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              // ── Customer tile grid ─────────────────────────────────────────
+              <div className="flex flex-col h-full">
+                <div className="flex-1 overflow-y-auto p-3">
+                  {sortedGroups.length === 0 ? (
+                    <EmptyState label="All conversations are hidden" />
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {sortedGroups.map(group => {
+                        const groupUnread = group.jobs.reduce((s, j) => s + j.unreadCount, 0);
+                        const isSelectedCustomer = group.jobs.some(j => selected?.type === "job" && selected.jobId === j.jobId);
+                        const lastMsg = group.jobs
+                          .map(j => j.latestMessage)
+                          .filter(Boolean)
+                          .sort((a, b) => new Date(b!.createdAt).getTime() - new Date(a!.createdAt).getTime())[0];
+                        return (
                           <button
-                            className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover-elevate bg-muted/40 border-b border-border/50"
-                            onClick={() => toggleCustomer(group.customerId)}
-                            data-testid={`customer-group-${group.customerId}`}
+                            key={group.customerId}
+                            onClick={() => handleCustomerTileClick(group)}
+                            className={`relative rounded-md border flex flex-col items-center gap-1.5 p-3 text-center hover-elevate transition-colors ${
+                              isSelectedCustomer ? "border-primary bg-primary/5" : "border-border bg-card"
+                            }`}
+                            data-testid={`customer-tile-${group.customerId}`}
                           >
-                            {isExpanded
-                              ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                              : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            }
-                            <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="flex-1 text-xs font-semibold truncate">{group.customerName}</span>
                             {groupUnread > 0 && (
-                              <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                              <Badge
+                                variant="destructive"
+                                className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px] z-10"
+                              >
                                 {groupUnread}
                               </Badge>
                             )}
-                            <span className="text-[10px] text-muted-foreground">{group.jobs.length}</span>
+                            <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${customerColor(group.customerId)}`}>
+                              {getInitials(group.customerName)}
+                            </div>
+                            <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2">{group.customerName}</p>
+                            <div className="flex items-center gap-1">
+                              <Package className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-[10px] text-muted-foreground">{group.jobs.length} job{group.jobs.length !== 1 ? "s" : ""}</span>
+                            </div>
+                            {lastMsg && (
+                              <p className="text-[10px] text-muted-foreground">{formatConvoTime(lastMsg.createdAt)}</p>
+                            )}
                           </button>
-                          {/* Job rows under this customer */}
-                          {isExpanded && group.jobs.map(c => {
-                            const isHidden = hiddenJobIds.has(c.jobId);
-                            return (
-                              <div
-                                key={c.jobId}
-                                className={`flex items-start border-b border-border/30 pl-9 group/jobrow ${
-                                  selected?.type === "job" && selected.jobId === c.jobId ? "bg-primary/10" : isHidden ? "opacity-50" : ""
-                                }`}
-                              >
-                                <button
-                                  onClick={() => setSelected({ type: "job", jobId: c.jobId })}
-                                  className="flex-1 flex items-start gap-2 px-2 py-2.5 text-left hover-elevate min-w-0"
-                                  data-testid={`job-convo-${c.jobId}`}
-                                >
-                                  <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between gap-1">
-                                      <span className="text-xs font-medium truncate">{c.jobName}</span>
-                                      <div className="flex items-center gap-1 shrink-0">
-                                        {c.unreadCount > 0 && (
-                                          <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
-                                            {c.unreadCount}
-                                          </Badge>
-                                        )}
-                                        {c.latestMessage && (
-                                          <span className="text-[10px] text-muted-foreground">
-                                            {formatConvoTime(c.latestMessage.createdAt)}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                    {c.latestMessage && (
-                                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                                        {c.latestMessage.senderType === "staff" ? "You: " : ""}
-                                        {c.latestMessage.message}
-                                      </p>
-                                    )}
-                                  </div>
-                                </button>
-                                {/* Hide/show toggle — visible on hover */}
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); toggleHideJob(c.jobId); }}
-                                  className="shrink-0 mt-2.5 mr-2 text-muted-foreground opacity-0 group-hover/jobrow:opacity-100 transition-opacity"
-                                  title={isHidden ? "Unhide" : "Hide conversation"}
-                                  data-testid={`button-hide-job-${c.jobId}`}
-                                >
-                                  {isHidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {/* Show/hide archived toggle */}
-                  {hiddenCount > 0 && (
-                    <button
-                      onClick={() => setShowHidden(h => !h)}
-                      className="flex items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground border-t hover-elevate"
-                      data-testid="button-toggle-hidden"
-                    >
-                      {showHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                      {showHidden ? "Hide archived" : `Show ${hiddenCount} archived`}
-                    </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-              );
-            })()
+                {hiddenCount > 0 && (
+                  <button
+                    onClick={() => setShowHidden(h => !h)}
+                    className="flex items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground border-t hover-elevate"
+                    data-testid="button-toggle-hidden"
+                  >
+                    {showHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    {showHidden ? "Hide archived" : `Show ${hiddenCount} archived`}
+                  </button>
+                )}
+              </div>
+            )
           ) : (
+            // ── Direct messages list ─────────────────────────────────────────
             isLoadingDirectConvos ? (
               <LoadingSpinner />
             ) : directConversations.filter(c => c.status === "open").length === 0 ? (
@@ -644,47 +731,49 @@ export default function StaffMessages() {
         </div>
       </div>
 
-      {/* Right panel: chat */}
+      {/* ── Chat panel ──────────────────────────────────────────────────────── */}
       {selected ? (
         <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Chat header */}
           <div className="px-4 py-3 border-b bg-card/40 flex items-center gap-3">
-            <Button variant="ghost" size="sm" className="sm:hidden" onClick={() => setSelected(null)}>
+            <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setSelected(null)}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-              {selected.type === "job" ? <Package className="h-4 w-4 text-primary" /> : <MessageCircle className="h-4 w-4 text-primary" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              {selected.type === "job" ? (
-                <>
+            {selected.type === "job" ? (
+              <>
+                <div className={`h-9 w-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${customerColor(selectedJobConvo?.customerId || "")}`}>
+                  {getInitials(selectedJobConvo?.customerName)}
+                </div>
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{selectedJobConvo?.jobName}</p>
                   <p className="text-xs text-muted-foreground">{selectedJobConvo?.customerName}</p>
-                </>
-              ) : (
-                <>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setLocation(`/staff/job/${selectedJobConvo?.jobId}`)} data-testid="button-view-job">
+                  View Job
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <MessageCircle className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{selectedDirectConvo?.subject}</p>
                   <p className="text-xs text-muted-foreground">{selectedDirectConvo?.customerName}</p>
-                </>
-              )}
-            </div>
-            {selected.type === "job" && selectedJobConvo && (
-              <Button variant="outline" size="sm" onClick={() => setLocation(`/staff/job/${selectedJobConvo.jobId}`)} data-testid="button-view-job">
-                View Job
-              </Button>
-            )}
-            {selected.type === "direct" && selectedDirectConvo && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => archiveConvoMutation.mutate(selectedDirectConvo.id)}
-                data-testid="button-archive-convo"
-              >
-                <Archive className="h-4 w-4" />
-              </Button>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => archiveConvoMutation.mutate(selectedDirectConvo!.id)}
+                  data-testid="button-archive-convo"
+                >
+                  <Archive className="h-4 w-4" />
+                </Button>
+              </>
             )}
           </div>
 
-          {/* Pinned samples strip — shown whenever any message in this conversation has an image */}
+          {/* Pinned sample images strip */}
           {messages.some(m => m.imageUrl) && (
             <div className="border-b bg-muted/30 px-4 py-2">
               <div className="flex items-center gap-1.5 mb-1.5">
@@ -693,74 +782,72 @@ export default function StaffMessages() {
               </div>
               <div className="flex gap-2 flex-wrap">
                 {messages.filter(m => m.imageUrl).map(m => (
-                  <a
-                    key={m.id}
-                    href={m.imageUrl!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block"
-                    data-testid={`pinned-sample-${m.id}`}
-                  >
-                    <img
-                      src={m.imageUrl!}
-                      alt="Sample"
-                      className="h-14 w-14 rounded-md object-cover border border-border hover:opacity-80 transition-opacity"
-                    />
+                  <a key={m.id} href={m.imageUrl!} target="_blank" rel="noopener noreferrer" className="block" data-testid={`pinned-sample-${m.id}`}>
+                    <img src={m.imageUrl!} alt="Sample" className="h-14 w-14 rounded-md object-cover border border-border hover:opacity-80 transition-opacity" />
                   </a>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto px-4 pt-4 pb-6 space-y-5">
+          {/* Messages area */}
+          <div className="flex-1 overflow-y-auto px-4 pt-4 pb-6 space-y-3">
             {isLoadingMessages ? (
               <LoadingSpinner />
             ) : messages.length === 0 ? (
               <EmptyState label="No messages yet" />
             ) : (
-              messages.map(msg => {
+              messages.map((msg, idx) => {
                 const isStaff = msg.senderType === "staff";
-                const initials = msg.senderName
-                  ? msg.senderName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
-                  : isStaff ? "S" : (selected.type === "job" ? selectedJobConvo?.customerName : selectedDirectConvo?.customerName)?.[0]?.toUpperCase() || "C";
+                const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                const sameGroup = prevMsg && prevMsg.senderType === msg.senderType && prevMsg.senderName === msg.senderName;
+                const showAvatar = !sameGroup;
+                const initials = getInitials(msg.senderName, isStaff ? "S" : "C");
                 return (
-                  <div key={msg.id} className={`flex ${isStaff ? "justify-end" : "justify-start"}`} data-testid={`message-${msg.id}`}>
-                    <div className={`relative max-w-[75%] ${isStaff ? "mr-3" : "ml-3"}`}>
-                      <div className={`rounded-2xl px-4 py-2.5 ${isStaff ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted rounded-bl-sm"}`}>
-                        {msg.senderName && (
-                          <p className={`text-[10px] font-semibold mb-0.5 ${isStaff ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                            {msg.senderName}
-                          </p>
-                        )}
+                  <div key={msg.id} className={`flex items-end gap-2.5 ${isStaff ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
+                    {/* Avatar */}
+                    <div className={`h-8 w-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center border-2 border-background ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"} ${isStaff ? "bg-primary" : "bg-muted"}`}>
+                      {msg.senderImageUrl ? (
+                        <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className={`text-[10px] font-bold leading-none ${isStaff ? "text-primary-foreground" : "text-muted-foreground"}`}>
+                          {initials}
+                        </span>
+                      )}
+                    </div>
+                    {/* Bubble */}
+                    <div className={`max-w-[72%] ${isStaff ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
+                      {showAvatar && msg.senderName && (
+                        <p className={`text-[10px] font-semibold px-1 ${isStaff ? "text-right text-muted-foreground" : "text-muted-foreground"}`}>
+                          {msg.senderName}
+                          {msg.isInternal && (
+                            <span className="ml-1.5 inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
+                              <Lock className="h-2.5 w-2.5" /> Team only
+                            </span>
+                          )}
+                        </p>
+                      )}
+                      <div className={`rounded-2xl px-4 py-2.5 ${
+                        msg.isInternal
+                          ? "bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/50 text-foreground rounded-br-sm"
+                          : isStaff
+                            ? "bg-primary text-primary-foreground rounded-br-sm"
+                            : "bg-muted rounded-bl-sm"
+                      }`}>
                         {msg.message.trim() && (
                           <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
                         )}
                         {msg.imageUrl && (
                           <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
-                            <img
-                              src={msg.imageUrl}
-                              alt="Sample"
-                              className="max-w-full rounded-lg max-h-48 object-contain border border-white/20 hover:opacity-90 transition-opacity"
-                            />
+                            <img src={msg.imageUrl} alt="Sample" className="max-w-full rounded-lg max-h-48 object-contain border border-white/20 hover:opacity-90 transition-opacity" />
                           </a>
                         )}
-                        <p className={`text-[10px] mt-1 ${isStaff ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
-                          {format(new Date(msg.createdAt), "d MMM, h:mm a")}
-                        </p>
-                      </div>
-                      {/* Small sender avatar — bottom corner outside the bubble */}
-                      <div
-                        className={`absolute -bottom-2.5 ${isStaff ? "-right-3" : "-left-3"} h-5 w-5 rounded-full overflow-hidden border-2 border-background flex items-center justify-center shrink-0`}
-                        style={{ backgroundColor: isStaff ? "hsl(var(--primary))" : "hsl(var(--muted))" }}
-                        title={msg.senderName || undefined}
-                      >
-                        {msg.senderImageUrl ? (
-                          <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
-                        ) : (
-                          <span className={`text-[8px] font-bold leading-none ${isStaff ? "text-primary-foreground" : "text-muted-foreground"}`}>
-                            {initials}
-                          </span>
-                        )}
+                        <div className={`flex items-center gap-1.5 mt-1 ${isStaff ? "justify-end" : ""}`}>
+                          {msg.isInternal && <Lock className={`h-2.5 w-2.5 ${msg.isInternal ? "text-amber-600 dark:text-amber-400" : ""}`} />}
+                          <p className={`text-[10px] ${msg.isInternal ? "text-amber-600/70 dark:text-amber-400/70" : isStaff ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                            {format(new Date(msg.createdAt), "d MMM, h:mm a")}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -770,8 +857,31 @@ export default function StaffMessages() {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Compose area */}
           <div className="border-t p-3 bg-card/40">
-            {/* Image preview strip */}
+            {/* Internal toggle — only for job chats */}
+            {selected.type === "job" && (
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  onClick={() => setIsInternal(v => !v)}
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border transition-colors ${
+                    isInternal
+                      ? "bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-400"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                  data-testid="button-toggle-internal"
+                >
+                  <Lock className="h-3 w-3" />
+                  {isInternal ? "Team only" : "Reply to customer"}
+                </button>
+                {isInternal && (
+                  <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                    Customer will not see this message
+                  </span>
+                )}
+              </div>
+            )}
+            {/* Image preview */}
             {chatImagePreview && (
               <div className="mb-2 flex items-start gap-2">
                 <div className="relative">
@@ -785,20 +895,11 @@ export default function StaffMessages() {
                     <X className="h-2.5 w-2.5" />
                   </button>
                 </div>
-                {isUploadingChatImage && (
-                  <span className="text-xs text-muted-foreground mt-1">Uploading…</span>
-                )}
+                {isUploadingChatImage && <span className="text-xs text-muted-foreground mt-1">Uploading…</span>}
               </div>
             )}
-            <input
-              ref={chatImageInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleChatImageSelect}
-              data-testid="input-chat-image-file"
-            />
-            <div className="flex gap-2 items-end">
+            <input ref={chatImageInputRef} type="file" accept="image/*" className="hidden" onChange={handleChatImageSelect} data-testid="input-chat-image-file" />
+            <div className={`flex gap-2 items-end ${isInternal ? "opacity-100" : ""}`}>
               <Button
                 variant="outline"
                 size="icon"
@@ -811,18 +912,19 @@ export default function StaffMessages() {
                 <ImagePlus className="h-4 w-4" />
               </Button>
               <Textarea
-                placeholder="Reply… (Enter to send, Shift+Enter for new line)"
+                placeholder={isInternal ? "Internal note (staff only)…" : "Reply… (Enter to send, Shift+Enter for new line)"}
                 value={newMessage}
                 onChange={e => setNewMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
                 rows={2}
-                className="resize-none text-sm"
+                className={`resize-none text-sm ${isInternal ? "border-amber-300 focus-visible:ring-amber-400 dark:border-amber-700" : ""}`}
                 data-testid="input-staff-message"
               />
               <Button
                 onClick={handleSend}
                 disabled={(!newMessage.trim() && !chatImageKey) || isUploadingChatImage || sendJobMessageMutation.isPending || sendDirectMessageMutation.isPending}
                 size="icon"
+                className={isInternal ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}
                 data-testid="button-staff-send"
               >
                 <Send className="h-4 w-4" />
@@ -839,20 +941,55 @@ export default function StaffMessages() {
         </div>
       )}
 
-      {/* New order chat dialog */}
-      <Dialog open={showNewOrderChat} onOpenChange={(open) => {
-        setShowNewOrderChat(open);
-        if (!open) resetOrderChatForm();
-      }}>
+      {/* ── Profile picture dialog ───────────────────────────────────────────── */}
+      <Dialog open={showProfileDialog} onOpenChange={setShowProfileDialog}>
+        <DialogContent className="max-w-sm" data-testid="dialog-profile">
+          <DialogHeader>
+            <DialogTitle>Your Profile</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-2">
+            <div className="relative">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={currentUser?.profileImageUrl || undefined} />
+                <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">
+                  {currentUserInitials}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            <div className="text-center">
+              <p className="font-semibold">{currentUserName}</p>
+              <p className="text-sm text-muted-foreground">{currentUser?.email}</p>
+            </div>
+            <input
+              ref={profileImageInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleProfileImageSelect}
+              data-testid="input-profile-image-file"
+            />
+            <Button
+              onClick={() => profileImageInputRef.current?.click()}
+              disabled={isUploadingProfile}
+              variant="outline"
+              className="w-full"
+              data-testid="button-upload-profile-picture"
+            >
+              <Camera className="h-4 w-4 mr-2" />
+              {isUploadingProfile ? "Uploading…" : "Change Profile Picture"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── New order chat dialog ──────────────────────────────────────────── */}
+      <Dialog open={showNewOrderChat} onOpenChange={(open) => { setShowNewOrderChat(open); if (!open) resetOrderChatForm(); }}>
         <DialogContent className="max-w-lg" data-testid="dialog-new-order-chat">
           <DialogHeader>
             <DialogTitle>New Order Chat</DialogTitle>
           </DialogHeader>
-
           <ScrollArea className="max-h-[70vh] pr-1">
             <div className="space-y-4 py-1 pr-3">
-
-              {/* Customer — searchable, alphabetical */}
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Customer *</label>
                 <div className="border rounded-md overflow-hidden">
@@ -867,115 +1004,56 @@ export default function StaffMessages() {
                     />
                   </div>
                   <div className="max-h-40 overflow-y-auto">
-                    {customers
-                      .filter(c => c.name.toLowerCase().includes(newOrderCustomerSearch.toLowerCase()))
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map(c => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setNewOrderCustomerId(c.id)}
-                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                            newOrderCustomerId === c.id
-                              ? "bg-primary text-primary-foreground"
-                              : "hover:bg-muted/60"
-                          }`}
-                          data-testid={`option-customer-${c.id}`}
-                        >
-                          {c.name}
-                        </button>
-                      ))}
+                    {customers.filter(c => c.name.toLowerCase().includes(newOrderCustomerSearch.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name)).map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setNewOrderCustomerId(c.id)}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${newOrderCustomerId === c.id ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"}`}
+                        data-testid={`option-customer-${c.id}`}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
-
-              {/* Job name */}
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Job Name *</label>
-                <Input
-                  placeholder="e.g. Polo shirts — Spring 2026"
-                  value={newOrderJobName}
-                  onChange={e => setNewOrderJobName(e.target.value)}
-                  data-testid="input-order-chat-job-name"
-                />
+                <Input placeholder="e.g. Polo shirts — Spring 2026" value={newOrderJobName} onChange={e => setNewOrderJobName(e.target.value)} data-testid="input-order-chat-job-name" />
               </div>
-
-              {/* Colleagues */}
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Include Colleagues</label>
                 <div className="border rounded-md divide-y max-h-36 overflow-y-auto">
                   {staffList.length === 0 ? (
                     <p className="text-xs text-muted-foreground px-3 py-2">No staff found</p>
-                  ) : (
-                    staffList.map(s => (
-                      <label
-                        key={s.id}
-                        className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/40 text-sm"
-                        data-testid={`option-colleague-${s.id}`}
-                      >
-                        <Checkbox
-                          checked={newOrderColleagues.includes(s.id)}
-                          onCheckedChange={(checked) => {
-                            setNewOrderColleagues(prev =>
-                              checked ? [...prev, s.id] : prev.filter(id => id !== s.id)
-                            );
-                          }}
-                        />
-                        {s.name}
-                      </label>
-                    ))
-                  )}
+                  ) : staffList.map(s => (
+                    <label key={s.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/40 text-sm" data-testid={`option-colleague-${s.id}`}>
+                      <Checkbox
+                        checked={newOrderColleagues.includes(s.id)}
+                        onCheckedChange={(checked) => setNewOrderColleagues(prev => checked ? [...prev, s.id] : prev.filter(id => id !== s.id))}
+                      />
+                      {s.name}
+                    </label>
+                  ))}
                 </div>
               </div>
-
-              {/* Message */}
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Message *</label>
-                <Textarea
-                  placeholder="Type your opening message…"
-                  rows={3}
-                  value={newOrderMessage}
-                  onChange={e => setNewOrderMessage(e.target.value)}
-                  data-testid="input-order-chat-message"
-                />
+                <Textarea placeholder="Type your opening message…" rows={3} value={newOrderMessage} onChange={e => setNewOrderMessage(e.target.value)} data-testid="input-order-chat-message" />
               </div>
-
-              {/* Attachments */}
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Attachments</label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={e => {
-                    const picked = Array.from(e.target.files || []);
-                    setNewOrderFiles(prev => [...prev, ...picked]);
-                    e.target.value = "";
-                  }}
-                  data-testid="input-order-chat-files"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  data-testid="button-attach-files"
-                >
-                  <Paperclip className="h-3.5 w-3.5 mr-1.5" />
-                  Attach Files
+                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => { const picked = Array.from(e.target.files || []); setNewOrderFiles(prev => [...prev, ...picked]); e.target.value = ""; }} data-testid="input-order-chat-files" />
+                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} data-testid="button-attach-files">
+                  <Paperclip className="h-3.5 w-3.5 mr-1.5" />Attach Files
                 </Button>
                 {newOrderFiles.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {newOrderFiles.map((f, i) => (
                       <div key={i} className="flex items-center justify-between text-xs bg-muted rounded px-2 py-1.5">
                         <span className="truncate mr-2">{f.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => setNewOrderFiles(prev => prev.filter((_, idx) => idx !== i))}
-                          className="text-muted-foreground hover:text-foreground shrink-0"
-                          data-testid={`button-remove-file-${i}`}
-                        >
+                        <button type="button" onClick={() => setNewOrderFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-foreground shrink-0" data-testid={`button-remove-file-${i}`}>
                           <X className="h-3 w-3" />
                         </button>
                       </div>
@@ -983,30 +1061,19 @@ export default function StaffMessages() {
                   </div>
                 )}
               </div>
-
             </div>
           </ScrollArea>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewOrderChat(false)} disabled={isCreatingOrderChat}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateOrderChat}
-              disabled={!newOrderCustomerId || !newOrderJobName.trim() || !newOrderMessage.trim() || isCreatingOrderChat}
-              data-testid="button-start-order-chat"
-            >
+            <Button variant="outline" onClick={() => setShowNewOrderChat(false)} disabled={isCreatingOrderChat}>Cancel</Button>
+            <Button onClick={handleCreateOrderChat} disabled={!newOrderCustomerId || !newOrderJobName.trim() || !newOrderMessage.trim() || isCreatingOrderChat} data-testid="button-start-order-chat">
               {isCreatingOrderChat ? "Creating…" : "Start Chat"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* New conversation dialog */}
-      <Dialog open={showNewConvo} onOpenChange={(open) => {
-        setShowNewConvo(open);
-        if (!open) { setNewSubject(""); setNewRecipientId(""); setNewRecipientSearch(""); setNewFirstMessage(""); }
-      }}>
+      {/* ── New direct conversation dialog ────────────────────────────────────── */}
+      <Dialog open={showNewConvo} onOpenChange={(open) => { setShowNewConvo(open); if (!open) { setNewSubject(""); setNewRecipientId(""); setNewRecipientSearch(""); setNewFirstMessage(""); } }}>
         <DialogContent data-testid="dialog-new-conversation">
           <DialogHeader>
             <DialogTitle>New Direct Message</DialogTitle>
@@ -1023,38 +1090,16 @@ export default function StaffMessages() {
               />
               {newRecipientSearch.trim() && !newRecipientId && (() => {
                 const q = newRecipientSearch.toLowerCase();
-                const matchedCustomers = customers
-                  .filter(c => c.name.toLowerCase().includes(q))
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .slice(0, 5)
-                  .map(c => ({ id: c.id, name: c.name, type: "customer" as const }));
-                const matchedStaff = messagingUsers
-                  .filter(u => u.name.toLowerCase().includes(q))
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .slice(0, 5)
-                  .map(u => ({ id: u.id, name: u.name, type: "staff" as const }));
+                const matchedCustomers = customers.filter(c => c.name.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 5).map(c => ({ id: c.id, name: c.name, type: "customer" as const }));
+                const matchedStaff = messagingUsers.filter(u => u.name.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 5).map(u => ({ id: u.id, name: u.name, type: "staff" as const }));
                 const results = [...matchedCustomers, ...matchedStaff];
-                if (results.length === 0) return (
-                  <div className="border rounded-md mt-1 p-3 text-sm text-muted-foreground">No results found</div>
-                );
+                if (results.length === 0) return <div className="border rounded-md mt-1 p-3 text-sm text-muted-foreground">No results found</div>;
                 return (
                   <div className="border rounded-md mt-1 overflow-hidden max-h-48 overflow-y-auto" data-testid="list-convo-recipients">
                     {results.map(r => (
-                      <button
-                        key={`${r.type}-${r.id}`}
-                        type="button"
-                        className="w-full text-left px-3 py-2 text-sm hover-elevate flex items-center gap-2"
-                        onClick={() => {
-                          setNewRecipientId(r.id);
-                          setNewRecipientType(r.type);
-                          setNewRecipientSearch(r.name);
-                        }}
-                        data-testid={`option-recipient-${r.id}`}
-                      >
+                      <button key={`${r.type}-${r.id}`} type="button" className="w-full text-left px-3 py-2 text-sm hover-elevate flex items-center gap-2" onClick={() => { setNewRecipientId(r.id); setNewRecipientType(r.type); setNewRecipientSearch(r.name); }} data-testid={`option-recipient-${r.id}`}>
                         <span className="flex-1">{r.name}</span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${r.type === "staff" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" : "bg-muted text-muted-foreground"}`}>
-                          {r.type === "staff" ? "Staff" : "Customer"}
-                        </span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${r.type === "staff" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" : "bg-muted text-muted-foreground"}`}>{r.type === "staff" ? "Staff" : "Customer"}</span>
                       </button>
                     ))}
                   </div>
@@ -1069,31 +1114,16 @@ export default function StaffMessages() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Subject *</label>
-              <Input
-                placeholder="e.g. Delivery update for order #123"
-                value={newSubject}
-                onChange={e => setNewSubject(e.target.value)}
-                data-testid="input-convo-subject"
-              />
+              <Input placeholder="e.g. Delivery update for order #123" value={newSubject} onChange={e => setNewSubject(e.target.value)} data-testid="input-convo-subject" />
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">First message (optional)</label>
-              <Textarea
-                placeholder="Type your opening message…"
-                rows={3}
-                value={newFirstMessage}
-                onChange={e => setNewFirstMessage(e.target.value)}
-                data-testid="input-convo-first-message"
-              />
+              <Textarea placeholder="Type your opening message…" rows={3} value={newFirstMessage} onChange={e => setNewFirstMessage(e.target.value)} data-testid="input-convo-first-message" />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewConvo(false)}>Cancel</Button>
-            <Button
-              onClick={() => createConvoMutation.mutate()}
-              disabled={!newSubject.trim() || !newRecipientId || createConvoMutation.isPending}
-              data-testid="button-create-conversation"
-            >
+            <Button onClick={() => createConvoMutation.mutate()} disabled={!newSubject.trim() || !newRecipientId || createConvoMutation.isPending} data-testid="button-create-conversation">
               {createConvoMutation.isPending ? "Creating…" : "Start Conversation"}
             </Button>
           </DialogFooter>

@@ -2024,12 +2024,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Job not found" });
       }
 
-      const messages = await storage.getJobMessages(req.params.jobId);
+      const allMessages = await storage.getJobMessages(req.params.jobId);
+      // Filter out internal (staff-only) messages from customer view
+      const messages = allMessages.filter((m: any) => !m.isInternal);
       
-      // Mark messages as read by customer
+      // Mark messages as read by customer (only non-internal ones)
       await storage.markMessagesAsRead(req.params.jobId, 'customer');
+
+      // Enrich with sender display name and profile image
+      const allStaff = await storage.getStaff();
+      const allUsers = await storage.getAllUsers();
+      const enriched = await Promise.all(messages.map(async (msg: any) => {
+        if (msg.senderType === 'staff') {
+          const staffMember = allStaff.find((s: any) => s.id === msg.senderId);
+          const linkedUser = staffMember ? allUsers.find((u: any) => u.id === staffMember.userId) : null;
+          return { ...msg, senderName: staffMember?.name || null, senderImageUrl: linkedUser?.profileImageUrl || null };
+        } else if (msg.senderType === 'customer') {
+          const customerUser = await storage.getCustomerUserById(msg.senderId);
+          const displayName = customerUser ? [customerUser.firstName, customerUser.lastName].filter(Boolean).join(' ') || customerUser.email : null;
+          return { ...msg, senderName: displayName, senderImageUrl: (customerUser as any)?.profileImageUrl || null };
+        }
+        return { ...msg, senderName: null, senderImageUrl: null };
+      }));
       
-      res.json(messages);
+      res.json(enriched);
     } catch (error) {
       console.error("Error fetching messages:", error);
       res.status(500).json({ error: "Failed to fetch messages" });
@@ -2277,6 +2295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         senderId,
         message: req.body.message,
         ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
+        ...(req.body.isInternal ? { isInternal: true } : {}),
       });
 
       res.json(message);
@@ -2318,8 +2337,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const customerUser = await storage.getCustomerUserById(msg.senderId);
             const name = [customerUser?.firstName, customerUser?.lastName]
               .filter(Boolean)
-              .join(' ') || null;
-            return { ...msg, senderName: name, senderImageUrl: null };
+              .join(' ') || customerUser?.email || null;
+            return { ...msg, senderName: name, senderImageUrl: (customerUser as any)?.profileImageUrl || null };
           }
           return { ...msg, senderName: null, senderImageUrl: null };
         })
@@ -2411,6 +2430,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting upload URL:", error);
       res.status(500).json({ error: "Failed to get upload URL" });
+    }
+  });
+
+  // Staff - Get current user info
+  app.get("/api/staff/me", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      if (!userId) return res.status(401).json({ error: "Not authenticated" });
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      const allStaff = await storage.getStaff();
+      const staffMember = allStaff.find(s => s.userId === userId);
+      res.json({ ...user, staffName: staffMember?.name || null, staffId: staffMember?.id || null });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get user" });
+    }
+  });
+
+  // Customer Portal - Get current user info
+  app.get("/api/customer-portal/me", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = (req.session as any).customerUserId;
+      if (!customerUserId) return res.status(401).json({ error: "Not authenticated" });
+      const user = await storage.getCustomerUserById(customerUserId);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      res.json(user);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get user" });
+    }
+  });
+
+  // Staff - Update own profile picture
+  app.put("/api/staff/me/profile-picture", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const userId = (req.session as any).userId;
+      if (!userId) return res.status(401).json({ error: "Not authenticated" });
+      const { profileImageUrl } = req.body;
+      if (!profileImageUrl) return res.status(400).json({ error: "profileImageUrl required" });
+      await storage.updateUserProfileImage(userId, profileImageUrl);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating profile picture:", error);
+      res.status(500).json({ error: "Failed to update profile picture" });
+    }
+  });
+
+  // Customer Portal - Update own profile picture
+  app.put("/api/customer-portal/me/profile-picture", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = (req.session as any).customerUserId;
+      if (!customerUserId) return res.status(401).json({ error: "Not authenticated" });
+      const { profileImageUrl } = req.body;
+      if (!profileImageUrl) return res.status(400).json({ error: "profileImageUrl required" });
+      await storage.updateCustomerUserProfileImage(customerUserId, profileImageUrl);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating profile picture:", error);
+      res.status(500).json({ error: "Failed to update profile picture" });
     }
   });
 

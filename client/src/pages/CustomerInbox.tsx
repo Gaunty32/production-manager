@@ -52,6 +52,8 @@ type DirectConversation = {
 type ChatMessage = {
   id: string;
   senderType: "customer" | "staff";
+  senderName?: string | null;
+  senderImageUrl?: string | null;
   message: string;
   imageUrl?: string | null;
   createdAt: string;
@@ -404,33 +406,47 @@ export default function CustomerInbox() {
               ) : messages.length === 0 ? (
                 <EmptyState label="No messages yet" sublabel="Start the conversation below" />
               ) : (
-                messages.map(msg => (
-                  <div key={msg.id} className={`flex ${msg.senderType === "customer" ? "justify-end" : "justify-start"}`} data-testid={`message-${msg.id}`}>
-                    {msg.senderType === "staff" && (
-                      <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0 mr-2 mt-1">
-                        <span className="text-[10px] font-bold text-primary">SB</span>
+                messages.map((msg, idx) => {
+                  const isStaff = msg.senderType === "staff";
+                  const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                  const sameGroup = prevMsg && prevMsg.senderType === msg.senderType && prevMsg.senderName === msg.senderName;
+                  const showAvatar = !sameGroup;
+                  const staffInitials = msg.senderName
+                    ? msg.senderName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+                    : "SB";
+                  return (
+                    <div key={msg.id} className={`flex items-end gap-2.5 ${msg.senderType === "customer" ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
+                      {/* Staff avatar */}
+                      {isStaff && (
+                        <div className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center border-2 border-background shrink-0 bg-primary/15 ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+                          {msg.senderImageUrl ? (
+                            <img src={msg.senderImageUrl} alt={msg.senderName || "Staff"} className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="text-[10px] font-bold text-primary">{staffInitials}</span>
+                          )}
+                        </div>
+                      )}
+                      <div className="max-w-[72%] flex flex-col gap-0.5">
+                        {showAvatar && isStaff && msg.senderName && (
+                          <p className="text-[10px] font-semibold text-muted-foreground px-1">{msg.senderName}</p>
+                        )}
+                        <div className={`rounded-2xl px-4 py-2.5 ${msg.senderType === "customer" ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted rounded-bl-sm"}`}>
+                          {msg.message.trim() && (
+                            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
+                          )}
+                          {msg.imageUrl && (
+                            <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
+                              <img src={msg.imageUrl} alt="Sample" className="max-w-full rounded-lg max-h-48 object-contain border border-white/20 hover:opacity-90 transition-opacity" />
+                            </a>
+                          )}
+                          <p className={`text-[10px] mt-1 ${msg.senderType === "customer" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                            {format(new Date(msg.createdAt), "d MMM, h:mm a")}
+                          </p>
+                        </div>
                       </div>
-                    )}
-                    <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${msg.senderType === "customer" ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted rounded-bl-sm"}`}>
-                      {msg.message.trim() && (
-                        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
-                      )}
-                      {msg.imageUrl && (
-                        <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
-                          <img
-                            src={msg.imageUrl}
-                            alt="Sample"
-                            className="max-w-full rounded-lg max-h-48 object-contain border border-white/20 hover:opacity-90 transition-opacity"
-                          />
-                        </a>
-                      )}
-                      <p className={`text-[10px] mt-1 ${msg.senderType === "customer" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
-                        {msg.senderType === "staff" ? "Select Branding · " : ""}
-                        {format(new Date(msg.createdAt), "d MMM, h:mm a")}
-                      </p>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
               <div ref={messagesEndRef} />
             </div>

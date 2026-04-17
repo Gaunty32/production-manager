@@ -85,6 +85,8 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserRole(id: string, role: string): Promise<User>;
   updateUser(id: string, updates: { username?: string; email?: string; firstName?: string; lastName?: string }): Promise<User>;
+  updateUserProfileImage(id: string, profileImageUrl: string): Promise<void>;
+  updateCustomerUserProfileImage(id: string, profileImageUrl: string): Promise<void>;
   updateUserActive(id: string, active: boolean): Promise<void>;
   updateUserUsername(id: string, username: string): Promise<void>;
   ensureUsernameColumn(): Promise<void>;
@@ -1269,6 +1271,20 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(customerUsers)
       .set({ active })
+      .where(eq(customerUsers.id, id));
+  }
+
+  async updateUserProfileImage(id: string, profileImageUrl: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ profileImageUrl } as any)
+      .where(eq(users.id, id));
+  }
+
+  async updateCustomerUserProfileImage(id: string, profileImageUrl: string): Promise<void> {
+    await db
+      .update(customerUsers)
+      .set({ profileImageUrl } as any)
       .where(eq(customerUsers.id, id));
   }
 

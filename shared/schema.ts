@@ -207,6 +207,7 @@ export const customerUsers = pgTable("customer_users", {
   passwordHash: varchar("password_hash").notNull(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
   mustResetPassword: boolean("must_reset_password").notNull().default(true),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -245,6 +246,7 @@ export const jobMessages = pgTable("job_messages", {
   senderId: varchar("sender_id").notNull(), // customerUserId or userId
   message: text("message").notNull(),
   imageUrl: varchar("image_url"), // optional: object-storage path for a sample image
+  isInternal: boolean("is_internal").notNull().default(false), // staff-only message, hidden from customer
   createdAt: timestamp("created_at").notNull().defaultNow(),
   readByStaff: boolean("read_by_staff").notNull().default(false),
   readByCustomer: boolean("read_by_customer").notNull().default(false),
