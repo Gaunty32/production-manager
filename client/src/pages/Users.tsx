@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ImageCropDialog } from "@/components/ImageCropDialog";
 
 const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -65,6 +66,7 @@ export default function Users() {
   const [uploadingProfileFor, setUploadingProfileFor] = useState<string | null>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
   const [profileTargetUserId, setProfileTargetUserId] = useState<string | null>(null);
+  const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -78,14 +80,23 @@ export default function Users() {
     }
   };
 
-  const handleProfileImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File selected → open crop dialog
+  const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !profileTargetUserId) return;
+    setPendingCropFile(file);
+    if (profileInputRef.current) profileInputRef.current.value = "";
+  };
+
+  // Crop confirmed → upload blob
+  const handleCropConfirm = async (blob: Blob) => {
+    if (!profileTargetUserId) return;
+    setPendingCropFile(null);
     setUploadingProfileFor(profileTargetUserId);
     try {
       const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
       const { url, key } = await uploadRes.json();
-      await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
+      await fetch(url, { method: "PUT", body: blob, headers: { "Content-Type": "image/jpeg" } });
       const normalizedKey = `/api/img${key.replace("/objects", "")}`;
       await apiRequest("PUT", `/api/users/${profileTargetUserId}/profile-picture`, { profileImageUrl: normalizedKey });
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
@@ -96,6 +107,11 @@ export default function Users() {
       setUploadingProfileFor(null);
       setProfileTargetUserId(null);
     }
+  };
+
+  const handleCropCancel = () => {
+    setPendingCropFile(null);
+    setProfileTargetUserId(null);
   };
 
   const createUserForm = useForm<CreateUserFormData>({
