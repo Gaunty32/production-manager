@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,10 +13,11 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound } from "lucide-react";
+import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -46,6 +47,13 @@ type CreateUserFormData = z.infer<typeof createUserSchema>;
 type EditUserFormData = z.infer<typeof editUserSchema>;
 type SetPasswordFormData = z.infer<typeof setPasswordSchema>;
 
+function getInitials(name: string | null | undefined): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
 export default function Users() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -54,10 +62,41 @@ export default function Users() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [setPasswordDialogOpen, setSetPasswordDialogOpen] = useState(false);
   const [setPasswordUser, setSetPasswordUser] = useState<User | null>(null);
+  const [uploadingProfileFor, setUploadingProfileFor] = useState<string | null>(null);
+  const profileInputRef = useRef<HTMLInputElement>(null);
+  const [profileTargetUserId, setProfileTargetUserId] = useState<string | null>(null);
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
+
+  const handleProfilePhotoClick = (userId: string) => {
+    setProfileTargetUserId(userId);
+    if (profileInputRef.current) {
+      profileInputRef.current.value = "";
+      profileInputRef.current.click();
+    }
+  };
+
+  const handleProfileImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profileTargetUserId) return;
+    setUploadingProfileFor(profileTargetUserId);
+    try {
+      const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
+      const { url, key } = await uploadRes.json();
+      await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
+      const normalizedKey = `/objects${key.replace("/objects", "")}`;
+      await apiRequest("PUT", `/api/users/${profileTargetUserId}/profile-picture`, { profileImageUrl: normalizedKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "Profile picture updated" });
+    } catch {
+      toast({ title: "Failed to update profile picture", variant: "destructive" });
+    } finally {
+      setUploadingProfileFor(null);
+      setProfileTargetUserId(null);
+    }
+  };
 
   const createUserForm = useForm<CreateUserFormData>({
     resolver: zodResolver(createUserSchema),
@@ -422,43 +461,74 @@ export default function Users() {
           )}
         </div>
 
+        {/* Hidden file input for profile picture upload */}
+        <input
+          ref={profileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleProfileImageSelect}
+        />
+
         <Card>
           <CardHeader>
             <CardTitle>System Users</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {users?.map((user) => (
+              {users?.map((user) => {
+                const displayName = user.firstName && user.lastName
+                  ? `${user.firstName} ${user.lastName}`
+                  : user.email || "Unknown User";
+                return (
                 <div 
                   key={user.id} 
                   className="flex flex-col gap-3 p-4 border rounded-lg"
                   data-testid={`user-row-${user.id}`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="font-medium" data-testid={`user-name-${user.id}`}>
-                          {user.firstName && user.lastName 
-                            ? `${user.firstName} ${user.lastName}`
-                            : user.email || "Unknown User"}
-                        </div>
-                        {user.active === false ? (
-                          <Badge variant="destructive" className="text-xs" data-testid={`badge-inactive-${user.id}`}>
-                            <XCircle className="h-3 w-3 mr-1" />
-                            Inactive
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-xs" data-testid={`badge-active-${user.id}`}>
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            Active
-                          </Badge>
-                        )}
-                        {user.id === currentUser?.id && (
-                          <span className="text-xs text-muted-foreground">(You)</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {/* Avatar with optional upload button */}
+                      <div className="relative flex-shrink-0">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={user.profileImageUrl || undefined} alt={displayName} />
+                          <AvatarFallback className="text-sm">{getInitials(displayName)}</AvatarFallback>
+                        </Avatar>
+                        {currentUser?.role === UserRole.SUPER_ADMIN && (
+                          <button
+                            className="absolute -bottom-1 -right-1 bg-background border border-border rounded-full p-0.5 hover-elevate"
+                            onClick={() => handleProfilePhotoClick(user.id)}
+                            disabled={uploadingProfileFor === user.id}
+                            title="Change photo"
+                            data-testid={`button-change-photo-${user.id}`}
+                          >
+                            <Camera className="h-3 w-3 text-muted-foreground" />
+                          </button>
                         )}
                       </div>
-                      <div className="text-sm text-muted-foreground" data-testid={`user-email-${user.id}`}>
-                        {user.email}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="font-medium" data-testid={`user-name-${user.id}`}>
+                            {displayName}
+                          </div>
+                          {user.active === false ? (
+                            <Badge variant="destructive" className="text-xs" data-testid={`badge-inactive-${user.id}`}>
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Inactive
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs" data-testid={`badge-active-${user.id}`}>
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Active
+                            </Badge>
+                          )}
+                          {user.id === currentUser?.id && (
+                            <span className="text-xs text-muted-foreground">(You)</span>
+                          )}
+                        </div>
+                        <div className="text-sm text-muted-foreground truncate" data-testid={`user-email-${user.id}`}>
+                          {user.email}
+                        </div>
                       </div>
                     </div>
                     <Select
@@ -530,7 +600,8 @@ export default function Users() {
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+              })}
               {(!users || users.length === 0) && (
                 <p className="text-center text-muted-foreground py-8">No users found.</p>
               )}

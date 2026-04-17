@@ -229,6 +229,23 @@ async function recalculateJobProductionTime(jobId: string): Promise<void> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Serve object storage files — must be before Vite catch-all
+  app.get("/objects/*", async (req, res) => {
+    try {
+      const { ObjectStorageService, ObjectNotFoundError } = await import("./objectStorage");
+      const svc = new ObjectStorageService();
+      const objectPath = req.path; // e.g. /objects/uploads/uuid
+      const file = await svc.getObjectEntityFile(objectPath);
+      await svc.downloadObject(file, res, 86400); // cache 24h
+    } catch (err: any) {
+      if (err?.name === "ObjectNotFoundError") {
+        return res.status(404).json({ error: "Not found" });
+      }
+      console.error("Object serve error:", err);
+      res.status(500).json({ error: "Failed to serve file" });
+    }
+  });
+
   // Production database setup endpoint (only in production)
   if (process.env.NODE_ENV === 'production') {
     app.get('/api/setup-production', setupProductionDatabase);
@@ -2487,6 +2504,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error("Error updating profile picture:", error);
+      res.status(500).json({ error: "Failed to update profile picture" });
+    }
+  });
+
+  // Super Admin - Update any user's profile picture
+  app.put("/api/users/:userId/profile-picture", isStaffAuthenticated, requireSuperAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const { profileImageUrl } = req.body;
+      if (!profileImageUrl) return res.status(400).json({ error: "profileImageUrl required" });
+      await storage.updateUserProfileImage(userId, profileImageUrl);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating user profile picture:", error);
       res.status(500).json({ error: "Failed to update profile picture" });
     }
   });
