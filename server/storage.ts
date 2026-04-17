@@ -1277,14 +1277,14 @@ export class DatabaseStorage implements IStorage {
   async updateUserProfileImage(id: string, profileImageUrl: string): Promise<void> {
     await db
       .update(users)
-      .set({ profileImageUrl } as any)
+      .set({ profileImageUrl })
       .where(eq(users.id, id));
   }
 
   async updateCustomerUserProfileImage(id: string, profileImageUrl: string): Promise<void> {
     await db
       .update(customerUsers)
-      .set({ profileImageUrl } as any)
+      .set({ profileImageUrl })
       .where(eq(customerUsers.id, id));
   }
 

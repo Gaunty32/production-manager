@@ -229,12 +229,14 @@ async function recalculateJobProductionTime(jobId: string): Promise<void> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Serve object storage files — must be before Vite catch-all
-  app.get("/objects/*", async (req, res) => {
+  // Serve object storage files via /api/img/* — distinct path avoids platform CDN interception
+  app.get("/api/img/*", async (req, res) => {
     try {
-      const { ObjectStorageService, ObjectNotFoundError } = await import("./objectStorage");
+      const { ObjectStorageService } = await import("./objectStorage");
       const svc = new ObjectStorageService();
-      const objectPath = req.path; // e.g. /objects/uploads/uuid
+      // req.path is e.g. /api/img/uploads/uuid → translate to /objects/uploads/uuid
+      const suffix = req.path.replace("/api/img", "");
+      const objectPath = `/objects${suffix}`;
       const file = await svc.getObjectEntityFile(objectPath);
       await svc.downloadObject(file, res, 86400); // cache 24h
     } catch (err: any) {
@@ -635,11 +637,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
+  // Normalise stored object-storage paths: old /objects/ prefix → /api/img/
+  function normalizeImgUrl(url: string | null | undefined): string | null {
+    if (!url) return null;
+    if (url.startsWith("/objects/")) return url.replace("/objects/", "/api/img/");
+    return url;
+  }
+
   // User management routes - protected for super admins only
   app.get("/api/users", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
-      res.json(users);
+      res.json(users.map(u => ({ ...u, profileImageUrl: normalizeImgUrl(u.profileImageUrl) })));
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ error: "Failed to fetch users" });
@@ -2055,13 +2064,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (msg.senderType === 'staff') {
           const staffMember = allStaff.find((s: any) => s.id === msg.senderId);
           const linkedUser = staffMember ? allUsers.find((u: any) => u.id === staffMember.userId) : null;
-          return { ...msg, senderName: staffMember?.name || null, senderImageUrl: linkedUser?.profileImageUrl || null };
+          return { ...msg, imageUrl: normalizeImgUrl((msg as any).imageUrl), senderName: staffMember?.name || null, senderImageUrl: normalizeImgUrl(linkedUser?.profileImageUrl) };
         } else if (msg.senderType === 'customer') {
           const customerUser = await storage.getCustomerUserById(msg.senderId);
           const displayName = customerUser ? [customerUser.firstName, customerUser.lastName].filter(Boolean).join(' ') || customerUser.email : null;
-          return { ...msg, senderName: displayName, senderImageUrl: (customerUser as any)?.profileImageUrl || null };
+          return { ...msg, imageUrl: normalizeImgUrl((msg as any).imageUrl), senderName: displayName, senderImageUrl: normalizeImgUrl((customerUser as any)?.profileImageUrl) };
         }
-        return { ...msg, senderName: null, senderImageUrl: null };
+        return { ...msg, imageUrl: normalizeImgUrl((msg as any).imageUrl), senderName: null, senderImageUrl: null };
       }));
       
       res.json(enriched);
@@ -2347,17 +2356,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
               : allUsers.find(u => u.id === msg.senderId);
             return {
               ...msg,
+              imageUrl: normalizeImgUrl((msg as any).imageUrl),
               senderName: staffMember?.name || null,
-              senderImageUrl: linkedUser?.profileImageUrl || null,
+              senderImageUrl: normalizeImgUrl(linkedUser?.profileImageUrl),
             };
           } else if (msg.senderType === 'customer' && msg.senderId) {
             const customerUser = await storage.getCustomerUserById(msg.senderId);
             const name = [customerUser?.firstName, customerUser?.lastName]
               .filter(Boolean)
               .join(' ') || customerUser?.email || null;
-            return { ...msg, senderName: name, senderImageUrl: (customerUser as any)?.profileImageUrl || null };
+            return { ...msg, imageUrl: normalizeImgUrl((msg as any).imageUrl), senderName: name, senderImageUrl: normalizeImgUrl((customerUser as any)?.profileImageUrl) };
           }
-          return { ...msg, senderName: null, senderImageUrl: null };
+          return { ...msg, imageUrl: normalizeImgUrl((msg as any).imageUrl), senderName: null, senderImageUrl: null };
         })
       );
 
@@ -2459,7 +2469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) return res.status(404).json({ error: "User not found" });
       const allStaff = await storage.getStaff();
       const staffMember = allStaff.find(s => s.userId === userId);
-      res.json({ ...user, staffName: staffMember?.name || null, staffId: staffMember?.id || null });
+      res.json({ ...user, profileImageUrl: normalizeImgUrl(user.profileImageUrl), staffName: staffMember?.name || null, staffId: staffMember?.id || null });
     } catch (error) {
       res.status(500).json({ error: "Failed to get user" });
     }
@@ -2472,7 +2482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!customerUserId) return res.status(401).json({ error: "Not authenticated" });
       const user = await storage.getCustomerUserById(customerUserId);
       if (!user) return res.status(404).json({ error: "User not found" });
-      res.json(user);
+      res.json({ ...user, profileImageUrl: normalizeImgUrl(user.profileImageUrl) });
     } catch (error) {
       res.status(500).json({ error: "Failed to get user" });
     }
@@ -5015,15 +5025,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             : allUsers.find(u => u.id === msg.senderId);
           return {
             ...msg,
+            imageUrl: normalizeImgUrl((msg as any).imageUrl),
             senderName: staffMember?.name || [linkedUser?.firstName, linkedUser?.lastName].filter(Boolean).join(' ') || null,
-            senderImageUrl: linkedUser?.profileImageUrl || null,
+            senderImageUrl: normalizeImgUrl(linkedUser?.profileImageUrl),
           };
         } else if (msg.senderType === 'customer' && msg.senderId) {
           const customerUser = await storage.getCustomerUserById(msg.senderId);
           const name = [customerUser?.firstName, customerUser?.lastName].filter(Boolean).join(' ') || null;
-          return { ...msg, senderName: name, senderImageUrl: null };
+          return { ...msg, imageUrl: normalizeImgUrl((msg as any).imageUrl), senderName: name, senderImageUrl: null };
         }
-        return { ...msg, senderName: null, senderImageUrl: null };
+        return { ...msg, imageUrl: normalizeImgUrl((msg as any).imageUrl), senderName: null, senderImageUrl: null };
       }));
       res.json(enriched);
     } catch (e) {
@@ -5138,7 +5149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!convo || convo.customerId !== customerUser.customerId) return res.status(404).json({ error: "Not found" });
       const msgs = await storage.getConversationMessages(req.params.id);
       await storage.markConversationMessagesReadByCustomer(req.params.id);
-      res.json(msgs);
+      res.json(msgs.map((m: any) => ({ ...m, imageUrl: normalizeImgUrl(m.imageUrl) })));
     } catch (e) {
       res.status(500).json({ error: "Failed to fetch messages" });
     }

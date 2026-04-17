@@ -417,7 +417,7 @@ export default function StaffMessages() {
       const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
       const { url, key } = await uploadRes.json();
       await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
-      const normalizedKey = `/objects${key.replace("/objects", "")}`;
+      const normalizedKey = `/api/img${key.replace("/objects", "")}`;
       setChatImageKey(normalizedKey);
     } catch {
       toast({ title: "Failed to upload image", variant: "destructive" });
@@ -436,7 +436,7 @@ export default function StaffMessages() {
       const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
       const { url, key } = await uploadRes.json();
       await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
-      const normalizedKey = `/objects${key.replace("/objects", "")}`;
+      const normalizedKey = `/api/img${key.replace("/objects", "")}`;
       await apiRequest("PUT", "/api/staff/me/profile-picture", { profileImageUrl: normalizedKey });
       await refetchMe();
       toast({ title: "Profile picture updated" });

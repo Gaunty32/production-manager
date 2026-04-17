@@ -439,7 +439,7 @@ function SampleCard({
                 {Math.round(f.fileSize / 1024)} KB
               </span>
               <a
-                href={`/objects${f.fileUrl.replace("/objects", "")}`}
+                href={`/api/img${f.fileUrl.replace("/objects", "")}`}
                 target="_blank"
                 rel="noreferrer"
                 className="text-muted-foreground hover:text-foreground shrink-0"

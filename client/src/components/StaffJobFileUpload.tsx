@@ -181,7 +181,7 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6"
-                    onClick={() => window.open(`/objects${file.fileUrl.replace('/objects', '')}`, '_blank')}
+                    onClick={() => window.open(`/api/img${file.fileUrl.replace('/objects', '')}`, '_blank')}
                     data-testid={`button-view-${file.id}`}
                   >
                     <ExternalLink className="h-3 w-3" />

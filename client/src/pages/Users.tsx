@@ -86,7 +86,7 @@ export default function Users() {
       const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
       const { url, key } = await uploadRes.json();
       await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
-      const normalizedKey = `/objects${key.replace("/objects", "")}`;
+      const normalizedKey = `/api/img${key.replace("/objects", "")}`;
       await apiRequest("PUT", `/api/users/${profileTargetUserId}/profile-picture`, { profileImageUrl: normalizedKey });
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: "Profile picture updated" });

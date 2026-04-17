@@ -293,7 +293,7 @@ function SampleSection({
                     {sample.files.map(f => (
                       <a
                         key={f.id}
-                        href={`/objects${f.fileUrl.replace("/objects", "")}`}
+                        href={`/api/img${f.fileUrl.replace("/objects", "")}`}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center gap-3 p-3 bg-muted rounded-md hover:bg-muted/80 transition-colors"
