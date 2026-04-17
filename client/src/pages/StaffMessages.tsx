@@ -38,6 +38,7 @@ import {
   User,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
+import { ImageCropDialog } from "@/components/ImageCropDialog";
 
 type JobConversation = {
   jobId: string;
@@ -183,6 +184,7 @@ export default function StaffMessages() {
   const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+  const [pendingProfileCropFile, setPendingProfileCropFile] = useState<File | null>(null);
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: currentUser, refetch: refetchMe } = useQuery<CurrentUser>({
@@ -428,14 +430,22 @@ export default function StaffMessages() {
     }
   };
 
-  const handleProfileImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File selected → open crop dialog
+  const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPendingProfileCropFile(file);
+    if (profileImageInputRef.current) profileImageInputRef.current.value = "";
+  };
+
+  // Crop confirmed → upload blob
+  const handleProfileCropConfirm = async (blob: Blob) => {
+    setPendingProfileCropFile(null);
     setIsUploadingProfile(true);
     try {
       const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
       const { url, key } = await uploadRes.json();
-      await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
+      await fetch(url, { method: "PUT", body: blob, headers: { "Content-Type": "image/jpeg" } });
       const normalizedKey = `/api/img${key.replace("/objects", "")}`;
       await apiRequest("PUT", "/api/staff/me/profile-picture", { profileImageUrl: normalizedKey });
       await refetchMe();
@@ -445,7 +455,6 @@ export default function StaffMessages() {
       toast({ title: "Failed to upload profile picture", variant: "destructive" });
     } finally {
       setIsUploadingProfile(false);
-      if (profileImageInputRef.current) profileImageInputRef.current.value = "";
     }
   };
 
@@ -981,6 +990,12 @@ export default function StaffMessages() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ImageCropDialog
+        file={pendingProfileCropFile}
+        onConfirm={handleProfileCropConfirm}
+        onCancel={() => setPendingProfileCropFile(null)}
+      />
 
       {/* ── New order chat dialog ──────────────────────────────────────────── */}
       <Dialog open={showNewOrderChat} onOpenChange={(open) => { setShowNewOrderChat(open); if (!open) resetOrderChatForm(); }}>

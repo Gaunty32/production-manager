@@ -486,6 +486,12 @@ export default function Users() {
           onChange={handleProfileImageSelect}
         />
 
+        <ImageCropDialog
+          file={pendingCropFile}
+          onConfirm={handleCropConfirm}
+          onCancel={handleCropCancel}
+        />
+
         <Card>
           <CardHeader>
             <CardTitle>System Users</CardTitle>
