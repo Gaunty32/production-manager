@@ -4933,6 +4933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         senderType: "staff",
         senderId: String(req.session.userId),
         message: req.body.message,
+        ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
       });
       res.json(msg);
     } catch (e) {

@@ -292,14 +292,16 @@ export default function StaffMessages() {
   });
 
   const sendDirectMessageMutation = useMutation({
-    mutationFn: async (msg: string) => {
-      const res = await apiRequest("POST", `/api/staff/direct-conversations/${directId}/messages`, { message: msg });
+    mutationFn: async ({ message, imageUrl }: { message: string; imageUrl?: string }) => {
+      const res = await apiRequest("POST", `/api/staff/direct-conversations/${directId}/messages`, { message, ...(imageUrl ? { imageUrl } : {}) });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/direct-conversations", directId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff/direct-conversations"] });
       setNewMessage("");
+      setChatImageKey(null);
+      setChatImagePreview(null);
     },
     onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
   });
@@ -405,10 +407,11 @@ export default function StaffMessages() {
 
   const handleSend = () => {
     if ((!newMessage.trim() && !chatImageKey) || !selected) return;
+    const payload = { message: newMessage.trim() || " ", imageUrl: chatImageKey ?? undefined };
     if (selected.type === "job") {
-      sendJobMessageMutation.mutate({ message: newMessage.trim() || " ", imageUrl: chatImageKey ?? undefined });
+      sendJobMessageMutation.mutate(payload);
     } else {
-      sendDirectMessageMutation.mutate(newMessage.trim());
+      sendDirectMessageMutation.mutate(payload);
     }
   };
 
@@ -681,8 +684,8 @@ export default function StaffMessages() {
             )}
           </div>
 
-          {/* Pinned samples strip — only shown for job chats with image messages */}
-          {selected.type === "job" && messages.some(m => m.imageUrl) && (
+          {/* Pinned samples strip — shown whenever any message in this conversation has an image */}
+          {messages.some(m => m.imageUrl) && (
             <div className="border-b bg-muted/30 px-4 py-2">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Pin className="h-3 w-3 text-muted-foreground" />
@@ -796,19 +799,17 @@ export default function StaffMessages() {
               data-testid="input-chat-image-file"
             />
             <div className="flex gap-2 items-end">
-              {selected.type === "job" && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  type="button"
-                  onClick={() => chatImageInputRef.current?.click()}
-                  disabled={isUploadingChatImage}
-                  data-testid="button-attach-chat-image"
-                  title="Attach sample image"
-                >
-                  <ImagePlus className="h-4 w-4" />
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                size="icon"
+                type="button"
+                onClick={() => chatImageInputRef.current?.click()}
+                disabled={isUploadingChatImage}
+                data-testid="button-attach-chat-image"
+                title="Attach image"
+              >
+                <ImagePlus className="h-4 w-4" />
+              </Button>
               <Textarea
                 placeholder="Reply… (Enter to send, Shift+Enter for new line)"
                 value={newMessage}
