@@ -1434,14 +1434,14 @@ export default function Dashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredCompletedJobs.length === 0 ? (
+                  {sortedCompletedJobs.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-4 text-muted-foreground text-sm">
                         {searchTerm ? `No completed orders match "${searchTerm}"` : "No completed orders yet"}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredCompletedJobs.map((job) => {
+                    sortedCompletedJobs.map((job) => {
                       const totalQty = job.lineItems?.reduce((sum, li) => sum + li.quantity, 0) || job.quantity;
                       
                       return (
