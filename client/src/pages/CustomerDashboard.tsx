@@ -49,6 +49,72 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
+function getWelcomeMessage(firstName: string | null | undefined): string {
+  const name = firstName || "there";
+  const now = new Date();
+  const hour = now.getHours();
+  const day = now.getDay(); // 0=Sunday, 6=Saturday
+  const isWeekend = day === 0 || day === 6;
+
+  const startOfYear = new Date(now.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / 86400000);
+
+  if (isWeekend) {
+    const msgs = [
+      `Hi ${name}, working on a weekend? We're pleased to see you, but don't forget weekends are for enjoying yourself!`,
+      `Hey ${name}! Even the best take a breather on weekends — we hope you're getting some rest too!`,
+      `Hi ${name}! Dedication at its finest, but make sure you switch off and recharge this weekend!`,
+    ];
+    return msgs[dayOfYear % msgs.length];
+  }
+
+  if (hour < 8) {
+    const msgs = [
+      `Morning ${name}! The early bird certainly does catch the worm!`,
+      `Up bright and early, ${name}? We admire the dedication!`,
+      `Good morning ${name}! You're ahead of the pack today!`,
+    ];
+    return msgs[dayOfYear % msgs.length];
+  }
+
+  if (hour >= 20) {
+    const msgs = [
+      `Hi ${name}, working late? Don't burn the candle at both ends!`,
+      `Evening ${name}! Still at it this late? Make sure you get some rest soon!`,
+      `Hi ${name}! Burning the midnight oil? Don't forget to clock off!`,
+    ];
+    return msgs[dayOfYear % msgs.length];
+  }
+
+  // Normal working hours — rotating date-related fun facts
+  const facts = [
+    "Did you know? January is named after Janus, the two-faced Roman god who looks back at the old year and forward to the new!",
+    "Fun fact: February is the only month that can pass without a single full moon — rare, but it happens!",
+    "Did you know? March was originally the first month of the Roman calendar — the year used to begin with spring!",
+    "Fun fact: April's name may come from the Latin 'aperire' — meaning 'to open', as in opening buds and flowers!",
+    "Did you know? May is named after Maia, the Greek goddess of fertility, and is one of only two months that never starts on the same day as any other!",
+    "Fun fact: June is named after Juno, the Roman goddess of marriage — no wonder it's the most popular month for weddings!",
+    "Did you know? July was renamed after Julius Caesar. Before him it was simply called 'Quintilis' — the fifth month!",
+    "Fun fact: Emperor Augustus named August after himself and took a day from February to make it 31 days, matching Julius Caesar's July!",
+    "Did you know? September means 'seventh month' in Latin — it was the 7th month before January and February were added to the calendar!",
+    "Fun fact: October means 'eighth month' in Latin. It was the 8th in the original Roman calendar before two months were squeezed in!",
+    "Did you know? November comes from the Latin 'novem' meaning nine — the 9th month in the original Roman calendar!",
+    "Fun fact: December means 'tenth month' but it's our twelfth. After the winter solstice the days start getting longer again!",
+    "Did you know? The word 'fortnight' is uniquely British! It comes from 'fourteen nights' and means exactly two weeks.",
+    "Fun fact: Monday is named after the Moon! From Old English 'Mōnandæg' — Moon's day. No wonder Mondays feel a little out of this world.",
+    "Did you know? The 7-day week was introduced by the ancient Babylonians, based on the four phases of the lunar cycle.",
+    "Fun fact: The Gregorian calendar replaced the Julian calendar in 1582 — the Julian was 11 minutes too long per year, adding up to a 10-day drift!",
+    "Did you know? Bank Holidays in England date back to the Bank Holidays Act of 1871 — that's over 150 years of official days off!",
+    "Fun fact: The longest day in the UK falls around 21st June — London can see over 16 hours of daylight!",
+    "Did you know? The word 'calendar' comes from the Latin 'calendae' — the first day of each Roman month, when debts were traditionally due!",
+    "Fun fact: The UK standardised its time zone in 1880, when the Statutes (Definition of Time) Act made Greenwich Mean Time the legal time across Great Britain!",
+    "Did you know? A 'blue moon' — the second full moon in a calendar month — happens roughly every 2.5 years. That's where 'once in a blue moon' comes from!",
+    "Fun fact: The ancient Egyptians were the first to divide the day into 24 hours — 12 for daylight and 12 for night!",
+  ];
+
+  return `Hi ${name}! ${facts[dayOfYear % facts.length]}`;
+}
+
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
   newPassword: z.string().min(8, "New password must be at least 8 characters"),
@@ -384,8 +450,8 @@ export default function CustomerDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Customer Portal</h1>
-              <p className="text-sm text-muted-foreground">
-                Welcome{customerUser?.firstName ? `, ${customerUser.firstName}` : ""}
+              <p className="text-sm text-muted-foreground max-w-lg">
+                {getWelcomeMessage(customerUser?.firstName)}
               </p>
             </div>
             <div className="flex items-center gap-2">
