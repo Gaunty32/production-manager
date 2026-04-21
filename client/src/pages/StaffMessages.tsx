@@ -90,7 +90,7 @@ type CurrentUser = {
   role?: string;
 };
 
-type Customer = { id: string; name: string };
+type Customer = { id: string; name: string; logoUrl?: string | null };
 
 function formatConvoTime(iso: string) {
   const d = new Date(iso);
@@ -179,8 +179,7 @@ export default function StaffMessages() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatImageInputRef = useRef<HTMLInputElement>(null);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
-  const [chatImageKey, setChatImageKey] = useState<string | null>(null);
-  const [chatImagePreview, setChatImagePreview] = useState<string | null>(null);
+  const [chatImages, setChatImages] = useState<{ key: string; preview: string }[]>([]);
   const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
@@ -237,6 +236,8 @@ export default function StaffMessages() {
 
   const selectedJobConvo = jobConversations.find(c => c.jobId === jobId) ?? null;
   const selectedDirectConvo = directConversations.find(c => c.id === directId) ?? null;
+  const currentCustomerId = selected?.type === "job" ? selectedJobConvo?.customerId : selectedDirectConvo?.customerId;
+  const currentCustomerLogo = customers.find(c => c.id === currentCustomerId)?.logoUrl ?? null;
 
   // Auto-select first conversation per tab on load
   useEffect(() => {
@@ -287,8 +288,7 @@ export default function StaffMessages() {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations"] });
       setNewMessage("");
       setIsInternal(false);
-      setChatImageKey(null);
-      setChatImagePreview(null);
+      setChatImages([]);
     },
     onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
   });
@@ -302,8 +302,7 @@ export default function StaffMessages() {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/direct-conversations", directId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff/direct-conversations"] });
       setNewMessage("");
-      setChatImageKey(null);
-      setChatImagePreview(null);
+      setChatImages([]);
     },
     onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
   });
@@ -399,31 +398,44 @@ export default function StaffMessages() {
     },
   });
 
-  const handleSend = () => {
-    if ((!newMessage.trim() && !chatImageKey) || !selected) return;
-    const payload = { message: newMessage.trim() || " ", imageUrl: chatImageKey ?? undefined, isInternal };
-    if (selected.type === "job") {
-      sendJobMessageMutation.mutate(payload);
+  const handleSend = async () => {
+    const images = [...chatImages];
+    const text = newMessage.trim();
+    if ((!text && images.length === 0) || !selected) return;
+    setNewMessage("");
+    setChatImages([]);
+    images.forEach(img => URL.revokeObjectURL(img.preview));
+    if (images.length === 0) {
+      const payload = { message: text, isInternal };
+      if (selected.type === "job") sendJobMessageMutation.mutate(payload);
+      else sendDirectMessageMutation.mutate(payload);
     } else {
-      sendDirectMessageMutation.mutate(payload);
+      for (let i = 0; i < images.length; i++) {
+        const payload = { message: i === 0 ? (text || " ") : " ", imageUrl: images[i].key, isInternal };
+        try {
+          if (selected.type === "job") await sendJobMessageMutation.mutateAsync(payload);
+          else await sendDirectMessageMutation.mutateAsync(payload);
+        } catch { break; }
+      }
     }
   };
 
   const handleChatImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     setIsUploadingChatImage(true);
     try {
-      const previewUrl = URL.createObjectURL(file);
-      setChatImagePreview(previewUrl);
-      const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
-      const { url, key } = await uploadRes.json();
-      await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
-      const normalizedKey = `/api/img${key.replace("/objects", "")}`;
-      setChatImageKey(normalizedKey);
+      const uploaded = await Promise.all(files.map(async (file) => {
+        const previewUrl = URL.createObjectURL(file);
+        const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
+        const { url, key } = await uploadRes.json();
+        await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
+        const normalizedKey = `/api/img${key.replace("/objects", "")}`;
+        return { key: normalizedKey, preview: previewUrl };
+      }));
+      setChatImages(prev => [...prev, ...uploaded]);
     } catch {
-      toast({ title: "Failed to upload image", variant: "destructive" });
-      setChatImagePreview(null);
+      toast({ title: "Failed to upload image(s)", variant: "destructive" });
     } finally {
       setIsUploadingChatImage(false);
       if (chatImageInputRef.current) chatImageInputRef.current.value = "";
@@ -750,8 +762,11 @@ export default function StaffMessages() {
             </Button>
             {selected.type === "job" ? (
               <>
-                <div className={`h-9 w-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${customerColor(selectedJobConvo?.customerId || "")}`}>
-                  {getInitials(selectedJobConvo?.customerName)}
+                <div className={`h-9 w-9 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-sm shrink-0 ${customerColor(selectedJobConvo?.customerId || "")}`}>
+                  {currentCustomerLogo
+                    ? <img src={currentCustomerLogo} alt={selectedJobConvo?.customerName || ""} className="h-full w-full object-cover" />
+                    : getInitials(selectedJobConvo?.customerName)
+                  }
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{selectedJobConvo?.jobName}</p>
@@ -815,11 +830,13 @@ export default function StaffMessages() {
                 return (
                   <div key={msg.id} className={`flex items-end gap-2.5 ${isStaff ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
                     {/* Avatar */}
-                    <div className={`h-8 w-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center border-2 border-background ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"} ${isStaff ? "bg-primary" : "bg-muted"}`}>
-                      {msg.senderImageUrl ? (
+                    <div className={`h-8 w-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center border-2 border-background ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"} ${isStaff ? "bg-blue-500" : "bg-orange-400"}`}>
+                      {isStaff && msg.senderImageUrl ? (
                         <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
+                      ) : !isStaff && currentCustomerLogo ? (
+                        <img src={currentCustomerLogo} alt={msg.senderName || ""} className="h-full w-full object-cover" />
                       ) : (
-                        <span className={`text-[10px] font-bold leading-none ${isStaff ? "text-primary-foreground" : "text-muted-foreground"}`}>
+                        <span className="text-[10px] font-bold leading-none text-white">
                           {initials}
                         </span>
                       )}
@@ -840,20 +857,20 @@ export default function StaffMessages() {
                         msg.isInternal
                           ? "bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/50 text-foreground rounded-br-sm"
                           : isStaff
-                            ? "bg-primary text-primary-foreground rounded-br-sm"
-                            : "bg-muted rounded-bl-sm"
+                            ? "bg-blue-500 text-white rounded-br-sm"
+                            : "bg-orange-400 text-white rounded-bl-sm"
                       }`}>
                         {msg.message.trim() && (
                           <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
                         )}
                         {msg.imageUrl && (
                           <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
-                            <img src={msg.imageUrl} alt="Sample" className="max-w-full rounded-lg max-h-48 object-contain border border-white/20 hover:opacity-90 transition-opacity" />
+                            <img src={msg.imageUrl} alt="Sample" className="max-w-full rounded-lg max-h-48 object-contain hover:opacity-90 transition-opacity" />
                           </a>
                         )}
                         <div className={`flex items-center gap-1.5 mt-1 ${isStaff ? "justify-end" : ""}`}>
                           {msg.isInternal && <Lock className={`h-2.5 w-2.5 ${msg.isInternal ? "text-amber-600 dark:text-amber-400" : ""}`} />}
-                          <p className={`text-[10px] ${msg.isInternal ? "text-amber-600/70 dark:text-amber-400/70" : isStaff ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                          <p className={`text-[10px] ${msg.isInternal ? "text-amber-600/70 dark:text-amber-400/70" : "text-white/70"}`}>
                             {format(new Date(msg.createdAt), "d MMM, h:mm a")}
                           </p>
                         </div>
@@ -891,23 +908,25 @@ export default function StaffMessages() {
               </div>
             )}
             {/* Image preview */}
-            {chatImagePreview && (
-              <div className="mb-2 flex items-start gap-2">
-                <div className="relative">
-                  <img src={chatImagePreview} alt="Preview" className="h-16 w-16 rounded-md object-cover border border-border" />
-                  <button
-                    type="button"
-                    onClick={() => { setChatImagePreview(null); setChatImageKey(null); }}
-                    className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"
-                    data-testid="button-remove-chat-image"
-                  >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </div>
-                {isUploadingChatImage && <span className="text-xs text-muted-foreground mt-1">Uploading…</span>}
+            {(chatImages.length > 0 || isUploadingChatImage) && (
+              <div className="mb-2 flex items-start gap-2 flex-wrap">
+                {chatImages.map((img, i) => (
+                  <div key={img.key} className="relative">
+                    <img src={img.preview} alt="Preview" className="h-16 w-16 rounded-md object-cover border border-border" />
+                    <button
+                      type="button"
+                      onClick={() => setChatImages(prev => prev.filter((_, j) => j !== i))}
+                      className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"
+                      data-testid={`button-remove-chat-image-${i}`}
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </div>
+                ))}
+                {isUploadingChatImage && <span className="text-xs text-muted-foreground mt-1 self-center">Uploading…</span>}
               </div>
             )}
-            <input ref={chatImageInputRef} type="file" accept="image/*" className="hidden" onChange={handleChatImageSelect} data-testid="input-chat-image-file" />
+            <input ref={chatImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleChatImageSelect} data-testid="input-chat-image-file" />
             <div className={`flex gap-2 items-end ${isInternal ? "opacity-100" : ""}`}>
               <Button
                 variant="outline"
@@ -931,7 +950,7 @@ export default function StaffMessages() {
               />
               <Button
                 onClick={handleSend}
-                disabled={(!newMessage.trim() && !chatImageKey) || isUploadingChatImage || sendJobMessageMutation.isPending || sendDirectMessageMutation.isPending}
+                disabled={(!newMessage.trim() && chatImages.length === 0) || isUploadingChatImage || sendJobMessageMutation.isPending || sendDirectMessageMutation.isPending}
                 size="icon"
                 className={isInternal ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}
                 data-testid="button-staff-send"
