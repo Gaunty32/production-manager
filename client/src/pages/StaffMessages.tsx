@@ -616,8 +616,11 @@ export default function StaffMessages() {
                   data-testid="button-back-to-tiles"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
-                  <div className={`h-5 w-5 rounded-full flex items-center justify-center shrink-0 text-white text-[10px] font-bold ${customerColor(drilledGroup.customerId)}`}>
-                    {getInitials(drilledGroup.customerName)}
+                  <div className={`h-5 w-5 rounded-full overflow-hidden flex items-center justify-center shrink-0 text-white text-[10px] font-bold ${customerColor(drilledGroup.customerId)}`}>
+                    {customers.find(c => c.id === drilledGroup.customerId)?.logoUrl
+                      ? <img src={customers.find(c => c.id === drilledGroup.customerId)!.logoUrl!} alt={drilledGroup.customerName} className="h-full w-full object-cover" />
+                      : getInitials(drilledGroup.customerName)
+                    }
                   </div>
                   <span className="font-semibold text-foreground">{drilledGroup.customerName}</span>
                 </button>
@@ -698,8 +701,11 @@ export default function StaffMessages() {
                                 {groupUnread}
                               </Badge>
                             )}
-                            <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${customerColor(group.customerId)}`}>
-                              {getInitials(group.customerName)}
+                            <div className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-sm shrink-0 ${customerColor(group.customerId)}`}>
+                              {customers.find(c => c.id === group.customerId)?.logoUrl
+                                ? <img src={customers.find(c => c.id === group.customerId)!.logoUrl!} alt={group.customerName} className="h-full w-full object-cover" />
+                                : getInitials(group.customerName)
+                              }
                             </div>
                             <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2">{group.customerName}</p>
                             <div className="flex items-center gap-1">
