@@ -2652,6 +2652,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/customer-users/all", isStaffAuthenticated, async (req, res) => {
+    try {
+      const all = await storage.getAllCustomerUsers();
+      const safeUsers = all.map(({ passwordHash: _, ...user }) => user);
+      res.json(safeUsers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch customer users" });
+    }
+  });
+
   app.get("/api/customers/:customerId/users", isStaffAuthenticated, async (req, res) => {
     try {
       const customerUsers = await storage.getCustomerUsersByCustomerId(req.params.customerId);

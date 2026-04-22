@@ -57,26 +57,9 @@ export default function Customers() {
     queryKey: ["/api/customers"],
   });
 
-  // Fetch all customer users (for all customers)
+  // Fetch all customer users in a single request
   const { data: allCustomerUsers = [] } = useQuery<any[]>({
     queryKey: ["/api/customer-users/all"],
-    queryFn: async () => {
-      // Fetch customer users for each customer
-      const users: any[] = [];
-      for (const customer of customersData) {
-        try {
-          const response = await fetch(`/api/customers/${customer.id}/users`);
-          if (response.ok) {
-            const customerUsers = await response.json();
-            users.push(...customerUsers);
-          }
-        } catch (error) {
-          console.error(`Failed to fetch users for customer ${customer.id}:`, error);
-        }
-      }
-      return users;
-    },
-    enabled: customersData.length > 0,
   });
 
   // Map customer users by customer ID for quick lookup (supports multiple users per customer)

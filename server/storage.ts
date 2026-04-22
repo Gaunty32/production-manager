@@ -165,6 +165,7 @@ export interface IStorage {
   getCustomerUserById(id: string): Promise<CustomerUser | undefined>;
   getCustomerUserByEmail(email: string): Promise<CustomerUser | undefined>;
   getCustomerUsersByCustomerId(customerId: string): Promise<CustomerUser[]>;
+  getAllCustomerUsers(): Promise<CustomerUser[]>;
   updateCustomerLastLogin(id: string): Promise<void>;
   updateCustomerPassword(id: string, passwordHash: string): Promise<void>;
   updateCustomerActive(id: string, active: boolean): Promise<void>;
@@ -1258,6 +1259,10 @@ export class DatabaseStorage implements IStorage {
 
   async getCustomerUsersByCustomerId(customerId: string): Promise<CustomerUser[]> {
     return await db.select().from(customerUsers).where(eq(customerUsers.customerId, customerId));
+  }
+
+  async getAllCustomerUsers(): Promise<CustomerUser[]> {
+    return await db.select().from(customerUsers);
   }
 
   async updateCustomerLastLogin(id: string): Promise<void> {
