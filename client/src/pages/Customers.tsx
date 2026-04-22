@@ -2,7 +2,6 @@ import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -23,14 +22,31 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useState } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
+
+const TILE_COLORS = [
+  "bg-violet-500","bg-blue-500","bg-cyan-500","bg-teal-500","bg-emerald-500",
+  "bg-amber-500","bg-orange-500","bg-pink-500","bg-rose-500","bg-indigo-500",
+];
+function tileColor(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return TILE_COLORS[h % TILE_COLORS.length];
+}
 
 export default function Customers() {
   const { toast } = useToast();
   const { canImpersonateCustomers, canDeactivateCustomers } = usePermissions();
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [portalFilter, setPortalFilter] = useState<'all' | 'has-portal' | 'no-portal'>('all');
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
   const [resetPasswordEmail, setResetPasswordEmail] = useState<string>("");
@@ -441,143 +457,202 @@ export default function Customers() {
           <div className="border rounded-md p-8 text-center text-muted-foreground">
             {searchTerm
               ? `No customers match "${searchTerm}"`
-              : portalFilter === 'all' 
+              : portalFilter === 'all'
                 ? "No customers found. Click 'Add Customer' to create one."
                 : portalFilter === 'has-portal'
                   ? "No customers with portal logins. Click 'Create Portal Login' to add one."
                   : "No customers without portal logins. All customers are set up!"}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {customers.map((customer) => {
               const isInactive = customer.active === false;
               const portalUsers = customerUsersMap.get(customer.id) || [];
               const hasPortalLogin = portalUsers.length > 0;
-              
+              const color = tileColor(customer.name);
+              const initials = customer.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+
               return (
-              <Card 
-                key={customer.id} 
-                className={`hover-elevate ${customer.pricingTable2025 ? 'bg-orange-50 dark:bg-orange-950/20' : ''} ${isInactive ? 'opacity-60' : ''}`}
-                data-testid={`card-customer-${customer.id}`}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-3">
-                      {/* Customer Name and Pricing Table */}
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <h3 className="font-semibold text-base" data-testid={`text-customer-name-${customer.id}`}>
-                          {customer.name}
-                        </h3>
-                        <div className="flex items-center gap-1 flex-wrap" data-testid={`text-pricing-table-${customer.id}`}>
-                          {isInactive && (
-                            <Badge 
-                              variant="outline" 
-                              className="bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300"
-                              data-testid={`badge-inactive-${customer.id}`}
-                            >
-                              Inactive
-                            </Badge>
-                          )}
-                          {customer.pricingTable2025 && (
-                            <Badge 
-                              variant="outline" 
-                              className="bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
-                              data-testid={`badge-pricing-2025-${customer.id}`}
-                            >
-                              2025
-                            </Badge>
-                          )}
-                          {customer.pricingTable2026 && (
-                            <Badge 
-                              variant="outline" 
-                              className="bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
-                              data-testid={`badge-pricing-2026-${customer.id}`}
-                            >
-                              2026
-                            </Badge>
-                          )}
-                          {!customer.pricingTable2025 && !customer.pricingTable2026 && (
-                            <span className="text-muted-foreground text-sm">-</span>
-                          )}
+                <button
+                  key={customer.id}
+                  onClick={() => setSelectedCustomer(customer)}
+                  className={`group flex flex-col items-center gap-3 p-4 rounded-xl border bg-card hover-elevate text-left transition-opacity ${isInactive ? "opacity-50" : ""}`}
+                  data-testid={`card-customer-${customer.id}`}
+                >
+                  {/* Logo / initials */}
+                  <div className={`h-16 w-16 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${customer.logoUrl ? "" : color}`}>
+                    {customer.logoUrl ? (
+                      <img src={customer.logoUrl} alt={customer.name} className="h-full w-full object-contain" />
+                    ) : (
+                      <span className="text-xl font-bold text-white">{initials}</span>
+                    )}
+                  </div>
+
+                  {/* Name */}
+                  <p className="text-sm font-semibold text-center leading-tight line-clamp-2 w-full" data-testid={`text-customer-name-${customer.id}`}>
+                    {customer.name}
+                  </p>
+
+                  {/* Status chips */}
+                  <div className="flex flex-wrap justify-center gap-1">
+                    {isInactive && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">Inactive</Badge>
+                    )}
+                    {hasPortalLogin ? (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-green-700 dark:text-green-400 border-green-300">
+                        <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />Portal
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-orange-600 dark:text-orange-400 border-orange-300">
+                        <AlertCircle className="h-2.5 w-2.5 mr-0.5" />No Portal
+                      </Badge>
+                    )}
+                    {customer.pricingTable2026 && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-blue-700 dark:text-blue-300">2026</Badge>
+                    )}
+                    {customer.pricingTable2025 && !customer.pricingTable2026 && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">2025</Badge>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Customer detail sheet */}
+        <Sheet open={selectedCustomer !== null} onOpenChange={(open) => !open && setSelectedCustomer(null)}>
+          <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+            {selectedCustomer && (() => {
+              const customer = selectedCustomer;
+              const isInactive = customer.active === false;
+              const portalUsers = customerUsersMap.get(customer.id) || [];
+              const hasPortalLogin = portalUsers.length > 0;
+              const color = tileColor(customer.name);
+              const initials = customer.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+              return (
+                <div className="space-y-6 pt-2">
+                  <SheetHeader>
+                    <div className="flex items-center gap-4">
+                      <div className={`h-14 w-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${customer.logoUrl ? "bg-muted" : color}`}>
+                        {customer.logoUrl ? (
+                          <img src={customer.logoUrl} alt={customer.name} className="h-full w-full object-contain" />
+                        ) : (
+                          <span className="text-lg font-bold text-white">{initials}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <SheetTitle className="text-lg leading-tight">{customer.name}</SheetTitle>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {isInactive && <Badge variant="outline" className="text-xs">Inactive</Badge>}
+                          {customer.pricingTable2025 && <Badge variant="outline" className="text-xs">2025</Badge>}
+                          {customer.pricingTable2026 && <Badge variant="outline" className="text-xs text-blue-700 dark:text-blue-300">2026</Badge>}
                         </div>
                       </div>
+                    </div>
+                  </SheetHeader>
 
-                      {/* Contact Details */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Contact: </span>
-                          <span data-testid={`text-contact-name-${customer.id}`}>
-                            {customer.contactFirstName || customer.contactLastName 
-                              ? `${customer.contactFirstName || ''} ${customer.contactLastName || ''}`.trim()
-                              : "-"}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Email: </span>
-                          <span data-testid={`text-email-${customer.id}`}>{customer.email || "-"}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Phone: </span>
-                          <span data-testid={`text-telephone-${customer.id}`}>{customer.telephone || "-"}</span>
-                        </div>
+                  {/* Actions row */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setCustomerToEdit(customer); setSelectedCustomer(null); }}
+                      data-testid={`button-edit-customer-${customer.id}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { handleDelete(customer.id); setSelectedCustomer(null); }}
+                      className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                      data-testid={`button-delete-customer-${customer.id}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      Delete
+                    </Button>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <Label htmlFor={`sheet-active-${customer.id}`} className="text-sm text-muted-foreground cursor-pointer">Active</Label>
+                      <Switch
+                        id={`sheet-active-${customer.id}`}
+                        checked={customer.active !== false}
+                        onCheckedChange={(checked) => toggleActiveMutation.mutate({ id: customer.id, active: checked })}
+                        data-testid={`switch-active-${customer.id}`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Contact details */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Contact Details</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex gap-2">
+                        <span className="text-muted-foreground w-16 shrink-0">Contact</span>
+                        <span data-testid={`text-contact-name-${customer.id}`}>
+                          {customer.contactFirstName || customer.contactLastName
+                            ? `${customer.contactFirstName || ""} ${customer.contactLastName || ""}`.trim()
+                            : "—"}
+                        </span>
                       </div>
-
-                      {/* Address - appears below */}
+                      <div className="flex gap-2">
+                        <span className="text-muted-foreground w-16 shrink-0">Email</span>
+                        <span className="break-all" data-testid={`text-email-${customer.id}`}>{customer.email || "—"}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-muted-foreground w-16 shrink-0">Phone</span>
+                        <span data-testid={`text-telephone-${customer.id}`}>{customer.telephone || "—"}</span>
+                      </div>
                       {customer.address && (
-                        <div className="text-sm">
-                          <span className="text-muted-foreground">Address: </span>
+                        <div className="flex gap-2">
+                          <span className="text-muted-foreground w-16 shrink-0">Address</span>
                           <span data-testid={`text-address-${customer.id}`}>{customer.address}</span>
                         </div>
                       )}
+                    </div>
+                  </div>
 
-                      {/* Portal Login Status */}
-                      {hasPortalLogin ? (
-                        <div className="space-y-2">
-                          <div className="text-sm text-muted-foreground">
-                            Portal Logins ({portalUsers.length}):
-                          </div>
-                          {portalUsers.map((portalUser, userIndex) => {
-                            const userActive = portalUser.active !== false;
-                            return (
-                              <div key={portalUser.id} className="flex items-center gap-2 text-sm flex-wrap pl-2 border-l-2 border-muted">
-                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                  {userActive ? (
-                                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
-                                  ) : (
-                                    <XCircle className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                  )}
-                                  <span className="text-foreground truncate" data-testid={`text-portal-email-${portalUser.id}`}>
-                                    {portalUser.email}
-                                    {portalUser.firstName && ` (${portalUser.firstName}${portalUser.lastName ? ` ${portalUser.lastName}` : ''})`}
-                                    {!userActive && <span className="text-muted-foreground"> - Disabled</span>}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    onClick={() => setEditingPortalUser({
-                                      id: portalUser.id,
-                                      email: portalUser.email || '',
-                                      firstName: portalUser.firstName || '',
-                                      lastName: portalUser.lastName || ''
-                                    })}
-                                    data-testid={`button-edit-portal-user-${portalUser.id}`}
-                                    title="Edit portal user"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7"
-                                    onClick={() => handleResetPassword(portalUser.id, portalUser.email)}
-                                    data-testid={`button-reset-password-${portalUser.id}`}
-                                  >
-                                    <Key className="h-3.5 w-3.5 mr-1" />
-                                    Reset
-                                  </Button>
+                  {/* Portal logins */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Portal Access</h3>
+                    {hasPortalLogin ? (
+                      <div className="space-y-3">
+                        {portalUsers.map((portalUser) => {
+                          const userActive = portalUser.active !== false;
+                          return (
+                            <div key={portalUser.id} className="rounded-lg border p-3 space-y-2">
+                              <div className="flex items-center gap-2">
+                                {userActive
+                                  ? <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                                  : <XCircle className="h-4 w-4 text-gray-400 shrink-0" />}
+                                <span className="text-sm flex-1 min-w-0 break-all" data-testid={`text-portal-email-${portalUser.id}`}>
+                                  {portalUser.email}
+                                  {portalUser.firstName && ` (${portalUser.firstName}${portalUser.lastName ? ` ${portalUser.lastName}` : ""})`}
+                                </span>
+                                {!userActive && <Badge variant="outline" className="text-xs shrink-0">Disabled</Badge>}
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => setEditingPortalUser({ id: portalUser.id, email: portalUser.email || "", firstName: portalUser.firstName || "", lastName: portalUser.lastName || "" })}
+                                  data-testid={`button-edit-portal-user-${portalUser.id}`}
+                                >
+                                  <Pencil className="h-3 w-3 mr-1" />Edit
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => handleResetPassword(portalUser.id, portalUser.email)}
+                                  data-testid={`button-reset-password-${portalUser.id}`}
+                                >
+                                  <Key className="h-3 w-3 mr-1" />Reset Password
+                                </Button>
+                                <div className="flex items-center gap-1.5 ml-auto">
+                                  <span className="text-xs text-muted-foreground">Access</span>
                                   <Switch
                                     checked={userActive}
                                     onCheckedChange={(checked) => togglePortalAccessMutation.mutate({ id: portalUser.id, active: checked })}
@@ -585,77 +660,35 @@ export default function Customers() {
                                   />
                                 </div>
                               </div>
-                            );
-                          })}
-                          {canImpersonateCustomers && portalUsers.some(u => u.active !== false) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 mt-1"
-                              onClick={() => impersonateMutation.mutate(customer.id)}
-                              disabled={impersonateMutation.isPending}
-                              data-testid={`button-view-as-customer-${customer.id}`}
-                            >
-                              <Eye className="h-3.5 w-3.5 mr-1" />
-                              View as Customer
-                            </Button>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Badge 
-                            variant="outline" 
-                            className="bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800"
-                            data-testid={`badge-no-portal-${customer.id}`}
+                            </div>
+                          );
+                        })}
+                        {canImpersonateCustomers && portalUsers.some(u => u.active !== false) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => impersonateMutation.mutate(customer.id)}
+                            disabled={impersonateMutation.isPending}
+                            data-testid={`button-view-as-customer-${customer.id}`}
                           >
-                            <AlertCircle className="h-3 w-3 mr-1" />
-                            No Portal Login
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => setCustomerToEdit(customer)}
-                          data-testid={`button-edit-customer-${customer.id}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleDelete(customer.id)}
-                          data-testid={`button-delete-customer-${customer.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                            <Eye className="h-3.5 w-3.5 mr-1.5" />
+                            View as Customer
+                          </Button>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Label htmlFor={`active-${customer.id}`} className="text-xs text-muted-foreground cursor-pointer">
-                          Active
-                        </Label>
-                        <Switch
-                          id={`active-${customer.id}`}
-                          checked={customer.active !== false}
-                          onCheckedChange={(checked) => toggleActiveMutation.mutate({ id: customer.id, active: checked })}
-                          data-testid={`switch-active-${customer.id}`}
-                        />
+                    ) : (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <AlertCircle className="h-4 w-4 text-orange-500 shrink-0" />
+                        No portal logins configured
                       </div>
-                    </div>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
-            );
-            })}
-          </div>
-        )}
+                </div>
+              );
+            })()}
+          </SheetContent>
+        </Sheet>
 
         <AlertDialog open={customerToDelete !== null} onOpenChange={(open) => !open && setCustomerToDelete(null)}>
           <AlertDialogContent>
