@@ -2098,6 +2098,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer Portal - Archive a job conversation (hide from customer's Order Chats list)
+  app.put("/api/customer-portal/jobs/:jobId/conversation/archive", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session?.customerUserId || req.session?.impersonationCustomerUserId;
+      const customerUser = await storage.getCustomerUserById(userId);
+      if (!customerUser) return res.status(401).json({ error: "Not authenticated" });
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      await storage.updateJob(req.params.jobId, { conversationArchivedByCustomer: true });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error archiving conversation:", error);
+      res.status(500).json({ error: "Failed to archive conversation" });
+    }
+  });
+
+  // Customer Portal - Unarchive a job conversation
+  app.put("/api/customer-portal/jobs/:jobId/conversation/unarchive", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session?.customerUserId || req.session?.impersonationCustomerUserId;
+      const customerUser = await storage.getCustomerUserById(userId);
+      if (!customerUser) return res.status(401).json({ error: "Not authenticated" });
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      await storage.updateJob(req.params.jobId, { conversationArchivedByCustomer: false });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error unarchiving conversation:", error);
+      res.status(500).json({ error: "Failed to unarchive conversation" });
+    }
+  });
+
   // Customer Portal - Get unread message count
   app.get("/api/customer-portal/messages/unread-count", isCustomerAuthenticated, async (req: any, res) => {
     try {

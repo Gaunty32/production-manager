@@ -1342,9 +1342,13 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getConversationsForCustomer(customerId: string): Promise<any[]> {
-    // Get all jobs for this customer that have at least one message
-    const customerJobs = await db.select().from(jobs).where(eq(jobs.customerId, customerId));
+  async getConversationsForCustomer(customerId: string, includeArchived = false): Promise<any[]> {
+    // Get all jobs for this customer (excluding archived unless requested)
+    const customerJobs = await db.select().from(jobs).where(
+      includeArchived
+        ? eq(jobs.customerId, customerId)
+        : and(eq(jobs.customerId, customerId), eq(jobs.conversationArchivedByCustomer, false))
+    );
     const jobIds = customerJobs.map(j => j.id);
     if (jobIds.length === 0) return [];
 
@@ -1373,6 +1377,7 @@ export class DatabaseStorage implements IStorage {
         completed: job.completed,
         messageCount: msgs.length,
         unreadCount: unread,
+        isArchived: !!job.conversationArchivedByCustomer,
         latestMessage: latest ? { message: latest.message, senderType: latest.senderType, createdAt: latest.createdAt } : null,
       });
     }

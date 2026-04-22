@@ -87,6 +87,7 @@ export const jobs = pgTable("jobs", {
   rejectedById: varchar("rejected_by_id").references(() => users.id),
   rejectedAt: timestamp("rejected_at"),
   rejectionReason: text("rejection_reason"),
+  conversationArchivedByCustomer: boolean("conversation_archived_by_customer").notNull().default(false),
 });
 
 export const staffShifts = pgTable("staff_shifts", {
