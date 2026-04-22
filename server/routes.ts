@@ -5459,6 +5459,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── Customer Portal: Team Management ───────────────────────────────────
+
+  // List all team members for this customer
+  app.get("/api/customer-portal/team", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
+      const currentUser = await storage.getCustomerUserById(customerUserId);
+      if (!currentUser) return res.status(404).json({ error: "Not found" });
+      const members = await storage.getCustomerUsersByCustomerId(currentUser.customerId);
+      res.json(members.map(({ passwordHash: _, ...m }) => m));
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch team" });
+    }
+  });
+
+  // Add a new team member
+  app.post("/api/customer-portal/team", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
+      const currentUser = await storage.getCustomerUserById(customerUserId);
+      if (!currentUser) return res.status(404).json({ error: "Not found" });
+      const data = insertCustomerUserSchema.extend({ customerId: z.string() }).parse({
+        ...req.body,
+        customerId: currentUser.customerId,
+      });
+      const newUser = await registerCustomer(data);
+      res.json(newUser);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors.map(e => e.message).join(", ") });
+      } else if (error instanceof Error && error.message.includes("already exists")) {
+        res.status(409).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to add team member" });
+      }
+    }
+  });
+
+  // Toggle active status for a team member
+  app.patch("/api/customer-portal/team/:id/active", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
+      const currentUser = await storage.getCustomerUserById(customerUserId);
+      if (!currentUser) return res.status(404).json({ error: "Not found" });
+      const target = await storage.getCustomerUserById(req.params.id);
+      if (!target || target.customerId !== currentUser.customerId) return res.status(403).json({ error: "Forbidden" });
+      if (target.id === currentUser.id) return res.status(400).json({ error: "You cannot deactivate your own account" });
+      const { active } = z.object({ active: z.boolean() }).parse(req.body);
+      await storage.updateCustomerActive(req.params.id, active);
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to update team member" });
+    }
+  });
+
+  // Reset password for a team member
+  app.post("/api/customer-portal/team/:id/reset-password", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
+      const currentUser = await storage.getCustomerUserById(customerUserId);
+      if (!currentUser) return res.status(404).json({ error: "Not found" });
+      const target = await storage.getCustomerUserById(req.params.id);
+      if (!target || target.customerId !== currentUser.customerId) return res.status(403).json({ error: "Forbidden" });
+      const { password } = z.object({ password: z.string().min(8, "Password must be at least 8 characters") }).parse(req.body);
+      const bcrypt = await import("bcrypt");
+      const passwordHash = await bcrypt.hash(password, 10);
+      await storage.updateCustomerPassword(req.params.id, passwordHash);
+      await storage.updateCustomerMustResetPassword(req.params.id, true);
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors.map(e => e.message).join(", ") });
+      res.status(500).json({ error: "Failed to reset password" });
+    }
+  });
+
+  // ─── Customer Portal: Invoice History ────────────────────────────────────
+
+  app.get("/api/customer-portal/invoices", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
+      const currentUser = await storage.getCustomerUserById(customerUserId);
+      if (!currentUser) return res.status(404).json({ error: "Not found" });
+      const allJobs = await storage.getJobsByCustomerId(currentUser.customerId);
+      const invoiced = allJobs
+        .filter(j => j.invoiceStatus === "invoiced" && j.invoicedAt)
+        .sort((a, b) => new Date(b.invoicedAt!).getTime() - new Date(a.invoicedAt!).getTime());
+      // Fetch line items for each job
+      const result = await Promise.all(
+        invoiced.map(async (job) => {
+          const lineItems = await storage.getJobLineItems(job.id);
+          return {
+            id: job.id,
+            jobNumber: job.jobNumber,
+            description: job.description,
+            invoicedAt: job.invoicedAt,
+            dispatchDate: job.requiredDispatchDate,
+            lineItems: lineItems.map(li => ({
+              jobType: li.jobType,
+              description: li.description,
+              quantity: li.quantity,
+              stitchCount: li.stitchCount,
+            })),
+            totalQuantity: lineItems.reduce((s, li) => s + li.quantity, 0),
+          };
+        })
+      );
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch invoice history" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

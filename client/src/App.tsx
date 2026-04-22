@@ -34,6 +34,8 @@ import CustomerJobDetail from "@/pages/CustomerJobDetail";
 import CustomerDocuments from "@/pages/CustomerDocuments";
 import CustomerPasswordReset from "@/pages/CustomerPasswordReset";
 import CustomerInbox from "@/pages/CustomerInbox";
+import CustomerTeam from "@/pages/CustomerTeam";
+import CustomerInvoices from "@/pages/CustomerInvoices";
 import StaffMessages from "@/pages/StaffMessages";
 import StaffSamples from "@/pages/StaffSamples";
 import CustomerSamples from "@/pages/CustomerSamples";
@@ -136,6 +138,8 @@ function CustomerPortalApp() {
       <Route path="/customer/job/:id" component={CustomerJobDetail} />
       <Route path="/customer/documents" component={CustomerDocuments} />
       <Route path="/customer/messages" component={CustomerInbox} />
+      <Route path="/customer/team" component={CustomerTeam} />
+      <Route path="/customer/invoices" component={CustomerInvoices} />
       <Route path="/customer/samples" component={CustomerSamples} />
       <Route path="/customer/dashboard" component={CustomerDashboard} />
       <Route path="/customer" component={CustomerDashboard} />

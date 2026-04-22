@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, PoundSterling, Key, MessageSquare } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, PoundSterling, Key, MessageSquare, Users, Receipt } from "lucide-react";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
@@ -522,6 +522,22 @@ export default function CustomerDashboard() {
                   {unreadMessageCount}
                 </Badge>
               )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/customer/team")}
+              data-testid="button-view-team"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              My Team
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/customer/invoices")}
+              data-testid="button-view-invoices"
+            >
+              <Receipt className="h-4 w-4 mr-2" />
+              Invoices
             </Button>
           </div>
 
