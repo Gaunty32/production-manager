@@ -5544,8 +5544,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!currentUser) return res.status(404).json({ error: "Not found" });
       const allJobs = await storage.getJobsByCustomerId(currentUser.customerId);
       const invoiced = allJobs
-        .filter(j => j.invoiceStatus === "invoiced" && j.invoicedAt)
-        .sort((a, b) => new Date(b.invoicedAt!).getTime() - new Date(a.invoicedAt!).getTime());
+        .filter(j => j.invoiceStatus === "invoiced" || j.invoiceStatus === "ready")
+        .sort((a, b) => {
+          // invoiced jobs with dates first (newest first), then ready jobs
+          if (a.invoicedAt && b.invoicedAt) return new Date(b.invoicedAt).getTime() - new Date(a.invoicedAt).getTime();
+          if (a.invoicedAt) return -1;
+          if (b.invoicedAt) return 1;
+          return (b.jobNumber ?? 0) - (a.jobNumber ?? 0);
+        });
       // Fetch line items for each job
       const result = await Promise.all(
         invoiced.map(async (job) => {
@@ -5554,6 +5560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             id: job.id,
             jobNumber: job.jobNumber,
             description: job.description,
+            invoiceStatus: job.invoiceStatus,
             invoicedAt: job.invoicedAt,
             dispatchDate: job.requiredDispatchDate,
             lineItems: lineItems.map(li => ({
