@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt } from "lucide-react";
+import { PricingTableDialog } from "@/components/PricingTableDialog";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
 import { useState } from "react";
@@ -454,6 +455,7 @@ export default function CustomerDashboard() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <PricingTableDialog />
               <Button
                 variant="outline"
                 onClick={() => setChangePasswordOpen(true)}
