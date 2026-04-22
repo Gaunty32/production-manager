@@ -50,35 +50,35 @@ const CATEGORY_META: Record<
 
 const DEFAULT_META = CATEGORY_META.general;
 
-function DocumentCard({ doc }: { doc: CustomerDocument }) {
+function DocumentTile({ doc }: { doc: CustomerDocument }) {
   return (
     <Card
-      className="hover-elevate group cursor-pointer border"
+      className="hover-elevate group cursor-pointer border flex flex-col"
       onClick={() => window.open(doc.driveUrl, "_blank", "noopener,noreferrer")}
       data-testid={`document-card-${doc.id}`}
     >
-      <CardContent className="p-5">
-        <div className="flex items-start gap-4">
-          <div className="h-11 w-11 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <FileText className="h-5 w-5 text-primary" />
+      <CardContent className="p-5 flex flex-col flex-1">
+        {/* Icon */}
+        <div className="flex items-start justify-between mb-4">
+          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <FileText className="h-6 w-6 text-primary" />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <h4 className="font-semibold text-sm leading-snug group-hover:text-primary transition-colors">
-                {doc.title}
-              </h4>
-              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
-            </div>
-            {doc.description && (
-              <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-                {doc.description}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground/70 mt-3 font-medium">
-              Added {format(new Date(doc.createdAt), "d MMM yyyy")}
-            </p>
-          </div>
+          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
         </div>
+        {/* Title */}
+        <h4 className="font-semibold text-sm leading-snug group-hover:text-primary transition-colors mb-2">
+          {doc.title}
+        </h4>
+        {/* Description */}
+        {doc.description && (
+          <p className="text-xs text-muted-foreground leading-relaxed flex-1 line-clamp-3">
+            {doc.description}
+          </p>
+        )}
+        {/* Footer */}
+        <p className="text-[11px] text-muted-foreground/60 mt-4 font-medium">
+          Added {format(new Date(doc.createdAt), "d MMM yyyy")}
+        </p>
       </CardContent>
     </Card>
   );
@@ -193,9 +193,9 @@ export default function CustomerDocuments() {
                       {docs.length} {docs.length === 1 ? "document" : "documents"}
                     </Badge>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                     {docs.map((doc) => (
-                      <DocumentCard key={doc.id} doc={doc} />
+                      <DocumentTile key={doc.id} doc={doc} />
                     ))}
                   </div>
                 </section>
