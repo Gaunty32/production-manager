@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ImageCropDialog } from "@/components/ImageCropDialog";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +27,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, UserPlus, KeyRound, UserCheck, UserX, Users } from "lucide-react";
+import { ArrowLeft, UserPlus, KeyRound, UserCheck, UserX, Users, Camera } from "lucide-react";
 import { format } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -74,6 +75,9 @@ export default function CustomerTeam() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);
+  const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
+  const [isUploadingPic, setIsUploadingPic] = useState(false);
+  const picInputRef = useRef<HTMLInputElement>(null);
 
   const { data: me } = useQuery<{ id: string }>({ queryKey: ["/api/customer-portal/me"] });
 
@@ -130,9 +134,50 @@ export default function CustomerTeam() {
     },
   });
 
+  const handlePicFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPendingCropFile(file);
+    if (picInputRef.current) picInputRef.current.value = "";
+  };
+
+  const handleCropConfirm = async (blob: Blob) => {
+    setPendingCropFile(null);
+    setIsUploadingPic(true);
+    try {
+      const uploadRes = await apiRequest("POST", "/api/customer-portal/objects/upload", {});
+      const { url, key } = await uploadRes.json();
+      await fetch(url, { method: "PUT", body: blob, headers: { "Content-Type": "image/jpeg" } });
+      const normalizedKey = `/api/img${key.replace("/objects", "")}`;
+      await apiRequest("PUT", "/api/customer-portal/me/profile-picture", { profileImageUrl: normalizedKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/team"] });
+      toast({ title: "Profile picture updated" });
+    } catch {
+      toast({ title: "Failed to upload profile picture", variant: "destructive" });
+    } finally {
+      setIsUploadingPic(false);
+    }
+  };
+
   return (
     <div style={{ minHeight: "100dvh" }} className="bg-background flex flex-col">
       <ImpersonationBanner />
+
+      {/* Hidden file input */}
+      <input
+        ref={picInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePicFileSelect}
+        data-testid="input-profile-pic"
+      />
+      <ImageCropDialog
+        file={pendingCropFile}
+        onConfirm={handleCropConfirm}
+        onCancel={() => setPendingCropFile(null)}
+      />
 
       <div className="container mx-auto px-4 py-6 max-w-2xl flex flex-col gap-6">
         {/* Header */}
@@ -169,10 +214,29 @@ export default function CustomerTeam() {
               return (
                 <Card key={member.id} data-testid={`card-member-${member.id}`}>
                   <CardContent className="flex items-center gap-4 p-4">
-                    <Avatar className="h-11 w-11 flex-shrink-0">
-                      {member.profileImageUrl && <AvatarImage src={member.profileImageUrl} />}
-                      <AvatarFallback className="text-sm font-semibold">{getInitials(member)}</AvatarFallback>
-                    </Avatar>
+                    {isMe ? (
+                      <button
+                        type="button"
+                        className="relative h-11 w-11 flex-shrink-0 rounded-full group focus:outline-none"
+                        onClick={() => picInputRef.current?.click()}
+                        disabled={isUploadingPic}
+                        title="Change profile picture"
+                        data-testid="button-change-avatar"
+                      >
+                        <Avatar className="h-11 w-11">
+                          {member.profileImageUrl && <AvatarImage src={member.profileImageUrl} />}
+                          <AvatarFallback className="text-sm font-semibold">{getInitials(member)}</AvatarFallback>
+                        </Avatar>
+                        <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Camera className="h-4 w-4 text-white" />
+                        </div>
+                      </button>
+                    ) : (
+                      <Avatar className="h-11 w-11 flex-shrink-0">
+                        {member.profileImageUrl && <AvatarImage src={member.profileImageUrl} />}
+                        <AvatarFallback className="text-sm font-semibold">{getInitials(member)}</AvatarFallback>
+                      </Avatar>
+                    )}
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
