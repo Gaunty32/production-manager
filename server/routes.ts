@@ -35,6 +35,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { xeroService } from "./xero";
+import { dpdService } from "./dpd";
 import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
@@ -5591,6 +5592,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (e) {
       console.error("Failed to fetch invoice history:", e);
       res.status(500).json({ error: "Failed to fetch invoice history" });
+    }
+  });
+
+  // ─── DPD Shipping API ─────────────────────────────────────────────────────
+
+  app.get("/api/dpd/status", isStaffAuthenticated, async (req, res) => {
+    res.json({ configured: dpdService.isConfigured() });
+  });
+
+  app.post("/api/dpd/book-shipment", isStaffAuthenticated, async (req, res) => {
+    try {
+      if (!dpdService.isConfigured()) {
+        return res.status(503).json({ error: "DPD API credentials are not configured" });
+      }
+
+      const {
+        jobId,
+        jobIds, // array for consolidated shipments
+        recipientName,
+        recipientStreet,
+        recipientHouseNo,
+        recipientCity,
+        recipientPostcode,
+        recipientCountry,
+        recipientPhone,
+        recipientEmail,
+        packageCount,
+        packageWeightGrams,
+        reference,
+      } = req.body;
+
+      if (!recipientName || !recipientStreet || !recipientCity || !recipientPostcode) {
+        return res.status(400).json({ error: "Recipient name, street, city and postcode are required" });
+      }
+
+      const allJobIds: string[] = jobIds?.length ? jobIds : [jobId].filter(Boolean);
+      if (!allJobIds.length) {
+        return res.status(400).json({ error: "At least one job ID is required" });
+      }
+
+      // Verify all jobs exist
+      const jobs = await Promise.all(allJobIds.map(id => storage.getJob(id)));
+      const validJobs = jobs.filter(Boolean);
+      if (!validJobs.length) {
+        return res.status(404).json({ error: "Jobs not found" });
+      }
+
+      // Build parcel list
+      const count = Math.max(1, parseInt(packageCount) || 1);
+      const weightGrams = Math.max(100, parseInt(packageWeightGrams) || 1000);
+      const parcels = Array.from({ length: count }, (_, i) => ({
+        weight: weightGrams,
+        customerReference: reference || `JOB-${allJobIds[0].slice(0, 8)}${count > 1 ? `-${i + 1}` : ""}`,
+      }));
+
+      const result = await dpdService.createShipment({
+        recipient: {
+          name: recipientName,
+          street: recipientStreet,
+          houseNo: recipientHouseNo || "",
+          city: recipientCity,
+          zipCode: recipientPostcode,
+          country: recipientCountry || "GB",
+          phone: recipientPhone || "",
+          email: recipientEmail || "",
+        },
+        parcels,
+        reference: reference || `JOB-${allJobIds[0].slice(0, 8)}`,
+        notifyEmail: recipientEmail || undefined,
+      });
+
+      // Save the tracking number to all jobs
+      await Promise.all(
+        allJobIds.map(id =>
+          storage.updateJob(id, { dhlTrackingNumber: result.trackingNumber })
+        )
+      );
+
+      res.json({
+        trackingNumber: result.trackingNumber,
+        labelPdfBase64: result.labelPdfBase64,
+        parcelNumbers: result.parcelNumbers,
+      });
+    } catch (e: any) {
+      console.error("[DPD] Book shipment error:", e);
+      res.status(500).json({ error: e.message || "Failed to book DPD shipment" });
     }
   });
 

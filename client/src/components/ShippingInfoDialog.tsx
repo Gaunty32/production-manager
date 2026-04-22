@@ -34,6 +34,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Truck, Package, Coins, PackageCheck } from "lucide-react";
 import { calculateShippingCost, formatPrice } from "@shared/pricing";
 import type { Job } from "@shared/schema";
+import { DpdBookingDialog } from "@/components/DpdBookingDialog";
 
 const shippingSchema = z.object({
   shippingMethod: z.enum(["customer_collection", "consolidated", "direct_delivery"], {
@@ -87,6 +88,10 @@ interface ShippingInfoDialogProps {
   isPending?: boolean;
   currentJobId: string;
   customerId: string;
+  customerName?: string;
+  customerAddress?: string;
+  customerPhone?: string;
+  customerEmail?: string;
 }
 
 export function ShippingInfoDialog({
@@ -96,10 +101,15 @@ export function ShippingInfoDialog({
   isPending = false,
   currentJobId,
   customerId,
+  customerName,
+  customerAddress,
+  customerPhone,
+  customerEmail,
 }: ShippingInfoDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedConsolidatedJobs, setSelectedConsolidatedJobs] = useState<string[]>([]);
   const [selectedExistingShipment, setSelectedExistingShipment] = useState<string | null>(null);
+  const [showDpdDialog, setShowDpdDialog] = useState(false);
 
   const form = useForm<ShippingFormData>({
     resolver: zodResolver(shippingSchema),
@@ -207,6 +217,7 @@ export function ShippingInfoDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]" data-testid="dialog-shipping-info">
         <DialogHeader>
@@ -311,11 +322,25 @@ export function ShippingInfoDialog({
                   name="dhlTrackingNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>DPD Local Tracking Number</FormLabel>
+                      <div className="flex items-center justify-between gap-2">
+                        <FormLabel>DPD Local Tracking Number</FormLabel>
+                        {!selectedExistingShipment && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setShowDpdDialog(true)}
+                            data-testid="button-book-dpd"
+                          >
+                            <Truck className="h-3.5 w-3.5 mr-1.5" />
+                            Book with DPD
+                          </Button>
+                        )}
+                      </div>
                       <FormControl>
                         <Input
                           {...field}
-                          placeholder="Enter DPD Local tracking number"
+                          placeholder="Enter manually or use 'Book with DPD'"
                           disabled={isPending || isSubmitting || !!selectedExistingShipment}
                           data-testid="input-dpdlocal-tracking"
                           readOnly={!!selectedExistingShipment}
@@ -485,5 +510,21 @@ export function ShippingInfoDialog({
         </Form>
       </DialogContent>
     </Dialog>
+
+    <DpdBookingDialog
+      open={showDpdDialog}
+      onOpenChange={setShowDpdDialog}
+      jobId={currentJobId}
+      jobIds={selectedConsolidatedJobs.length > 0 ? [currentJobId, ...selectedConsolidatedJobs] : undefined}
+      prefillName={customerName}
+      prefillAddress={customerAddress}
+      prefillPhone={customerPhone}
+      prefillEmail={customerEmail}
+      onSuccess={(trackingNumber) => {
+        form.setValue("dhlTrackingNumber", trackingNumber);
+        setShowDpdDialog(false);
+      }}
+    />
+    </>
   );
 }

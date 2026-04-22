@@ -1234,6 +1234,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       isPending={isSubmitting}
       currentJobId={job.id}
       customerId={job.customerId}
+      customerName={customers.find(c => c.id === job.customerId)?.name}
+      customerAddress={customers.find(c => c.id === job.customerId)?.address ?? undefined}
       onSubmit={async (shippingData) => {
         const currentData = form.getValues();
         await handleSubmit({
