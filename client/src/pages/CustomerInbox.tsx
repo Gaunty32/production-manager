@@ -266,31 +266,60 @@ export default function CustomerInbox() {
   const totalUnread = jobUnread + directUnread;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="bg-background flex flex-col" style={{ height: "100dvh" }}>
       {isImpersonating && currentUser && (
         <ImpersonationBanner customerEmail={currentUser.email} />
       )}
 
-      <header className="border-b bg-card/60 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-3 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setLocation("/customer/dashboard")} data-testid="button-back-to-portal">
-            <ArrowLeft className="h-4 w-4 mr-1.5" />
-            Back
-          </Button>
-          <div className="h-5 w-px bg-border" />
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm">Messages</span>
-            {totalUnread > 0 && (
-              <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-xs">{totalUnread}</Badge>
-            )}
-          </div>
+      {/* Header — adapts on mobile: shows back-to-list when in chat */}
+      <header className="border-b bg-card/60 backdrop-blur-sm shrink-0 z-50">
+        <div className="px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
+          {/* On mobile in chat view: show back-to-list button + conversation title */}
+          {selected ? (
+            <>
+              <Button variant="ghost" size="sm" className="sm:hidden -ml-1" onClick={() => setSelected(null)} data-testid="button-back-to-list">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <span className="font-semibold text-sm sm:hidden truncate flex-1">
+                {selected.type === "job" ? selectedJobConvo?.jobName : selectedDirectConvo?.subject}
+              </span>
+              {/* Desktop: normal header */}
+              <Button variant="ghost" size="sm" className="hidden sm:flex" onClick={() => setLocation("/customer/dashboard")} data-testid="button-back-to-portal">
+                <ArrowLeft className="h-4 w-4 mr-1.5" />
+                Back
+              </Button>
+              <div className="hidden sm:block h-5 w-px bg-border" />
+              <div className="hidden sm:flex items-center gap-2">
+                <span className="font-semibold text-sm">Messages</span>
+                {totalUnread > 0 && (
+                  <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-xs">{totalUnread}</Badge>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setLocation("/customer/dashboard")} data-testid="button-back-to-portal">
+                <ArrowLeft className="h-4 w-4 mr-1.5" />
+                Back
+              </Button>
+              <div className="h-5 w-px bg-border" />
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-sm">Messages</span>
+                {totalUnread > 0 && (
+                  <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-xs">{totalUnread}</Badge>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden container mx-auto" style={{ maxHeight: "calc(100vh - 57px)" }}>
+      <div className="flex flex-1 overflow-hidden">
 
-        {/* Left panel */}
-        <div className={`w-full sm:w-80 flex-shrink-0 border-r flex flex-col overflow-hidden ${selected ? "hidden sm:flex" : "flex"}`}>
+        {/* Left panel — full screen on mobile, fixed sidebar on desktop */}
+        <div className={`flex-shrink-0 border-r flex flex-col overflow-hidden
+          w-full sm:w-80
+          ${selected ? "hidden sm:flex" : "flex"}`}>
           {/* Tabs */}
           <div className="border-b">
             <div className="flex">
@@ -408,13 +437,12 @@ export default function CustomerInbox() {
           </div>
         </div>
 
-        {/* Chat panel */}
+        {/* Chat panel — full screen on mobile, flex-1 on desktop */}
         {selected ? (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-4 py-3 border-b bg-card/40 flex items-center gap-3">
-              <Button variant="ghost" size="sm" className="sm:hidden" onClick={() => setSelected(null)}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
+          <div className={`flex-col overflow-hidden flex-1
+            ${selected ? "flex" : "hidden sm:flex"}`}>
+            {/* Chat sub-header (desktop only — mobile uses the main header) */}
+            <div className="hidden sm:flex px-4 py-3 border-b bg-card/40 items-center gap-3">
               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
                 {selected.type === "job" ? <Package className="h-4 w-4 text-primary" /> : <MessageCircle className="h-4 w-4 text-primary" />}
               </div>
@@ -492,7 +520,7 @@ export default function CustomerInbox() {
                           <span className="text-[10px] font-bold text-white">{initials}</span>
                         )}
                       </div>
-                      <div className={`max-w-[72%] flex flex-col gap-0.5 ${isCustomer ? "items-end" : "items-start"}`}>
+                      <div className={`max-w-[82%] sm:max-w-[72%] flex flex-col gap-0.5 ${isCustomer ? "items-end" : "items-start"}`}>
                         {showAvatar && msg.senderName && (
                           <p className={`text-[10px] font-semibold text-muted-foreground px-1 ${isCustomer ? "text-right" : ""}`}>{msg.senderName}</p>
                         )}
@@ -517,21 +545,23 @@ export default function CustomerInbox() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t p-3 bg-card/40">
+            <div className="border-t px-3 py-3 bg-card/40 shrink-0">
               <div className="flex gap-2 items-end">
                 <Textarea
-                  placeholder="Type a message… (Enter to send, Shift+Enter for new line)"
+                  placeholder="Message… (Enter to send)"
                   value={newMessage}
                   onChange={e => setNewMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  rows={2}
-                  className="resize-none text-sm"
+                  rows={1}
+                  className="resize-none text-sm min-h-[42px] max-h-32"
+                  style={{ fieldSizing: "content" } as React.CSSProperties}
                   data-testid="input-message"
                 />
                 <Button
                   onClick={handleSend}
                   disabled={!newMessage.trim() || sendJobMutation.isPending || sendDirectMutation.isPending}
                   size="icon"
+                  className="shrink-0 h-[42px] w-[42px]"
                   data-testid="button-send"
                 >
                   <Send className="h-4 w-4" />
@@ -561,12 +591,13 @@ export default function CustomerInbox() {
             {/* Send to */}
             <div>
               <label className="text-sm font-medium mb-3 block">Send to</label>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1"
+                style={{ scrollbarWidth: "none" }}>
                 {/* Everyone tile */}
                 <button
                   type="button"
                   onClick={() => setSelectedRecipientId(null)}
-                  className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-colors w-16 ${selectedRecipientId === null ? "border-primary bg-primary/8" : "border-border hover:border-muted-foreground/40"}`}
+                  className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-colors w-16 shrink-0 ${selectedRecipientId === null ? "border-primary bg-primary/8" : "border-border hover:border-muted-foreground/40"}`}
                   data-testid="recipient-everyone"
                 >
                   <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
@@ -584,7 +615,7 @@ export default function CustomerInbox() {
                       key={member.id}
                       type="button"
                       onClick={() => setSelectedRecipientId(member.id)}
-                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-colors w-16 ${isSelected ? "border-primary bg-primary/8" : "border-border hover:border-muted-foreground/40"}`}
+                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-colors w-16 shrink-0 ${isSelected ? "border-primary bg-primary/8" : "border-border hover:border-muted-foreground/40"}`}
                       data-testid={`recipient-staff-${member.id}`}
                     >
                       <div className="h-10 w-10 rounded-full overflow-hidden flex items-center justify-center bg-orange-400 flex-shrink-0">
