@@ -49,6 +49,7 @@ type JobConversation = {
   jobName: string;
   customerId: string;
   customerName: string;
+  customerLogoUrl: string | null;
   status: string;
   completed: boolean;
   messageCount: number;
@@ -484,10 +485,10 @@ export default function StaffMessages() {
   // Build customer groups for tile grid
   const visibleConvos = showHidden ? jobConversations : jobConversations.filter(c => !hiddenJobIds.has(c.jobId));
   const hiddenCount = jobConversations.filter(c => hiddenJobIds.has(c.jobId)).length;
-  const customerGroups = new Map<string, { customerId: string; customerName: string; jobs: JobConversation[] }>();
+  const customerGroups = new Map<string, { customerId: string; customerName: string; customerLogoUrl: string | null; jobs: JobConversation[] }>();
   visibleConvos.forEach(c => {
     if (!customerGroups.has(c.customerId)) {
-      customerGroups.set(c.customerId, { customerId: c.customerId, customerName: c.customerName, jobs: [] });
+      customerGroups.set(c.customerId, { customerId: c.customerId, customerName: c.customerName, customerLogoUrl: c.customerLogoUrl, jobs: [] });
     }
     customerGroups.get(c.customerId)!.jobs.push(c);
   });
@@ -495,7 +496,7 @@ export default function StaffMessages() {
 
   const drilledGroup = drillCustomerId ? customerGroups.get(drillCustomerId) : null;
 
-  const handleCustomerTileClick = (group: { customerId: string; customerName: string; jobs: JobConversation[] }) => {
+  const handleCustomerTileClick = (group: { customerId: string; customerName: string; customerLogoUrl: string | null; jobs: JobConversation[] }) => {
     if (group.jobs.length === 1) {
       setSelected({ type: "job", jobId: group.jobs[0].jobId });
     } else {
@@ -621,8 +622,8 @@ export default function StaffMessages() {
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                   <div className={`h-5 w-5 rounded-full overflow-hidden flex items-center justify-center shrink-0 text-white text-[10px] font-bold ${customerColor(drilledGroup.customerId)}`}>
-                    {customers.find(c => c.id === drilledGroup.customerId)?.logoUrl
-                      ? <img src={customers.find(c => c.id === drilledGroup.customerId)!.logoUrl!} alt={drilledGroup.customerName} className="h-full w-full object-cover" />
+                    {drilledGroup.customerLogoUrl
+                      ? <img src={drilledGroup.customerLogoUrl} alt={drilledGroup.customerName} className="h-full w-full object-cover" />
                       : getInitials(drilledGroup.customerName)
                     }
                   </div>
@@ -706,8 +707,8 @@ export default function StaffMessages() {
                               </Badge>
                             )}
                             <div className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-sm shrink-0 ${customerColor(group.customerId)}`}>
-                              {customers.find(c => c.id === group.customerId)?.logoUrl
-                                ? <img src={customers.find(c => c.id === group.customerId)!.logoUrl!} alt={group.customerName} className="h-full w-full object-cover" />
+                              {group.customerLogoUrl
+                                ? <img src={group.customerLogoUrl} alt={group.customerName} className="h-full w-full object-cover" />
                                 : getInitials(group.customerName)
                               }
                             </div>

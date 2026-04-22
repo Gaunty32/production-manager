@@ -1441,6 +1441,7 @@ export class DatabaseStorage implements IStorage {
         jobName: job.jobName,
         customerId: job.customerId,
         customerName: customer?.name || 'Unknown',
+        customerLogoUrl: customer?.logoUrl || null,
         status: job.status,
         completed: job.completed,
         messageCount: msgs.length,
