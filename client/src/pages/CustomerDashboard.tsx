@@ -5,8 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling } from "lucide-react";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
 import { format, isPast, isToday } from "date-fns";
 import { getMachineName } from "@shared/machines";
 import { useState } from "react";
@@ -434,27 +442,25 @@ export default function CustomerDashboard() {
       )}
       
       {/* Header */}
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
-          {/* Customer Logo - Top Center */}
-          {customerUser?.customerLogoUrl && (
-            <div className="flex justify-center mb-4">
-              <img 
-                src={customerUser.customerLogoUrl} 
-                alt={customerUser.customerName || "Customer logo"}
-                className="max-h-16 max-w-[200px] object-contain"
-                data-testid="img-customer-logo"
-              />
+      <header className="border-b bg-card sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            {/* Left: logo or title */}
+            <div className="flex items-center gap-3 min-w-0">
+              {customerUser?.customerLogoUrl ? (
+                <img
+                  src={customerUser.customerLogoUrl}
+                  alt={customerUser.customerName || "Customer logo"}
+                  className="h-8 max-w-[120px] object-contain"
+                  data-testid="img-customer-logo"
+                />
+              ) : (
+                <span className="font-bold text-base truncate">Customer Portal</span>
+              )}
             </div>
-          )}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Customer Portal</h1>
-              <p className="text-sm text-muted-foreground max-w-lg">
-                {getWelcomeMessage(customerUser?.firstName)}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
+
+            {/* Desktop nav buttons — hidden on mobile */}
+            <div className="hidden md:flex items-center gap-2">
               <PricingTableDialog />
               <Button
                 variant="outline"
@@ -474,14 +480,74 @@ export default function CustomerDashboard() {
                 Logout
               </Button>
             </div>
+
+            {/* Mobile hamburger menu */}
+            <div className="flex md:hidden items-center gap-2">
+              {unreadMessageCount > 0 && (
+                <Button variant="ghost" size="icon" onClick={() => setLocation("/customer/messages")} className="relative" data-testid="button-messages-mobile">
+                  <MessageSquare className="h-5 w-5" />
+                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-destructive text-destructive-foreground rounded-full text-[10px] flex items-center justify-center font-medium">
+                    {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
+                  </span>
+                </Button>
+              )}
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="button-menu-mobile">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-72">
+                  <SheetHeader className="mb-4">
+                    <SheetTitle>Menu</SheetTitle>
+                  </SheetHeader>
+                  <div className="flex flex-col gap-1">
+                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/messages")} data-testid="menu-messages">
+                      <MessageSquare className="h-4 w-4" />
+                      Messages
+                      {unreadMessageCount > 0 && (
+                        <Badge variant="destructive" className="ml-auto h-5 min-w-5 px-1 text-xs">{unreadMessageCount}</Badge>
+                      )}
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/pending")} data-testid="menu-pending">
+                      <FileText className="h-4 w-4" />
+                      Pending Submissions
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/documents")} data-testid="menu-documents">
+                      <FileText className="h-4 w-4" />
+                      Documents
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/invoices")} data-testid="menu-invoices">
+                      <Receipt className="h-4 w-4" />
+                      Invoices
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/team")} data-testid="menu-team">
+                      <Users className="h-4 w-4" />
+                      My Team
+                    </Button>
+                    <Separator className="my-2" />
+                    <PricingTableDialog />
+                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setChangePasswordOpen(true)} data-testid="menu-change-password">
+                      <Key className="h-4 w-4" />
+                      Change Password
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-3 h-11 text-destructive" onClick={handleLogout} disabled={logoutMutation.isPending} data-testid="menu-logout">
+                      <LogOut className="h-4 w-4" />
+                      Logout
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-6 pb-24 md:pb-8">
         <div className="mb-6 flex flex-col gap-4">
-          <div className="flex items-center gap-3">
+          {/* Desktop action buttons — hidden on mobile (bottom nav handles it) */}
+          <div className="hidden md:flex items-center gap-3 flex-wrap">
             <Button
               onClick={() => setLocation("/customer/submit")}
               data-testid="button-submit-job"
@@ -538,6 +604,19 @@ export default function CustomerDashboard() {
             >
               <Receipt className="h-4 w-4 mr-2" />
               Invoices
+            </Button>
+          </div>
+
+          {/* Mobile: welcome text + submit button */}
+          <div className="md:hidden">
+            <p className="text-sm text-muted-foreground mb-3">{getWelcomeMessage(customerUser?.firstName)}</p>
+            <Button
+              className="w-full"
+              onClick={() => setLocation("/customer/submit")}
+              data-testid="button-submit-job-mobile"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Submit New Job
             </Button>
           </div>
 
@@ -988,6 +1067,57 @@ export default function CustomerDashboard() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Mobile bottom nav bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t bg-card flex items-stretch h-16" data-testid="nav-bottom-mobile">
+        <button
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground hover-elevate"
+          onClick={() => setLocation("/customer/dashboard")}
+          data-testid="nav-orders"
+        >
+          <Package className="h-5 w-5" />
+          <span>Orders</span>
+        </button>
+        <button
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground hover-elevate relative"
+          onClick={() => setLocation("/customer/messages")}
+          data-testid="nav-messages"
+        >
+          <span className="relative">
+            <MessageSquare className="h-5 w-5" />
+            {unreadMessageCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 bg-destructive text-destructive-foreground rounded-full text-[10px] flex items-center justify-center font-medium">
+                {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
+              </span>
+            )}
+          </span>
+          <span>Messages</span>
+        </button>
+        <button
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground hover-elevate"
+          onClick={() => setLocation("/customer/invoices")}
+          data-testid="nav-invoices"
+        >
+          <Receipt className="h-5 w-5" />
+          <span>Invoices</span>
+        </button>
+        <button
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground hover-elevate"
+          onClick={() => setLocation("/customer/submit")}
+          data-testid="nav-submit"
+        >
+          <Plus className="h-5 w-5" />
+          <span>New Job</span>
+        </button>
+        <button
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground hover-elevate"
+          onClick={() => setLocation("/customer/team")}
+          data-testid="nav-team"
+        >
+          <Users className="h-5 w-5" />
+          <span>My Team</span>
+        </button>
+      </nav>
     </div>
   );
 }
