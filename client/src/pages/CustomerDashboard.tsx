@@ -523,14 +523,6 @@ export default function CustomerDashboard() {
                 </Badge>
               )}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => setLocation("/customer/samples")}
-              data-testid="button-view-samples"
-            >
-              <Package className="h-4 w-4 mr-2" />
-              Sample Approvals
-            </Button>
           </div>
 
           <div>
