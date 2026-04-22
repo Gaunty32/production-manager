@@ -36,6 +36,10 @@ import {
   Lock,
   Camera,
   User,
+  Upload,
+  FileText,
+  Image,
+  Film,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
@@ -1085,15 +1089,17 @@ export default function StaffMessages() {
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Attachments</label>
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => { const picked = Array.from(e.target.files || []); setNewOrderFiles(prev => [...prev, ...picked]); e.target.value = ""; }} data-testid="input-order-chat-files" />
-                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} data-testid="button-attach-files">
-                  <Paperclip className="h-3.5 w-3.5 mr-1.5" />Attach Files
-                </Button>
+                <DropZone onFiles={files => setNewOrderFiles(prev => [...prev, ...files])} onBrowse={() => fileInputRef.current?.click()} />
                 {newOrderFiles.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {newOrderFiles.map((f, i) => (
                       <div key={i} className="flex items-center justify-between text-xs bg-muted rounded px-2 py-1.5">
-                        <span className="truncate mr-2">{f.name}</span>
-                        <button type="button" onClick={() => setNewOrderFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-foreground shrink-0" data-testid={`button-remove-file-${i}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileIcon name={f.name} />
+                          <span className="truncate">{f.name}</span>
+                          <span className="text-muted-foreground/70 shrink-0">({(f.size / 1024).toFixed(0)} KB)</span>
+                        </div>
+                        <button type="button" onClick={() => setNewOrderFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-foreground shrink-0 ml-2" data-testid={`button-remove-file-${i}`}>
                           <X className="h-3 w-3" />
                         </button>
                       </div>
@@ -1232,4 +1238,61 @@ function EmptyState({ label, sublabel }: { label: string; sublabel?: string }) {
       {sublabel && <p className="text-xs text-muted-foreground/70 mt-1">{sublabel}</p>}
     </div>
   );
+}
+
+function DropZone({ onFiles, onBrowse }: { onFiles: (files: File[]) => void; onBrowse: () => void }) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) onFiles(files);
+  };
+
+  return (
+    <div
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      onClick={onBrowse}
+      data-testid="dropzone-attachments"
+      className={`border-2 border-dashed rounded-lg px-4 py-5 flex flex-col items-center gap-2 cursor-pointer transition-colors select-none
+        ${isDragging
+          ? "border-primary bg-primary/5 text-primary"
+          : "border-border hover:border-primary/50 hover:bg-muted/40 text-muted-foreground"
+        }`}
+    >
+      <Upload className={`h-6 w-6 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground/60"}`} />
+      <div className="text-center">
+        <p className="text-sm font-medium">
+          {isDragging ? "Drop files here" : "Drag & drop files here"}
+        </p>
+        <p className="text-xs mt-0.5">or <span className="text-primary underline underline-offset-2">click to browse</span></p>
+      </div>
+    </div>
+  );
+}
+
+function FileIcon({ name }: { name: string }) {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg", "avif"].includes(ext)) {
+    return <Image className="h-3.5 w-3.5 text-blue-500 shrink-0" />;
+  }
+  if (["mp4", "mov", "avi", "webm", "mkv"].includes(ext)) {
+    return <Film className="h-3.5 w-3.5 text-purple-500 shrink-0" />;
+  }
+  return <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />;
 }
