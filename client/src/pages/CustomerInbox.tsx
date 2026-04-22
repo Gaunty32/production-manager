@@ -24,6 +24,10 @@ import {
   Plus,
   Pin,
   CheckCircle,
+  Search,
+  Trash2,
+  Archive,
+  X,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
@@ -93,6 +97,9 @@ export default function CustomerInbox() {
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
   const [newFirstMessage, setNewFirstMessage] = useState("");
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: currentUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
@@ -212,6 +219,32 @@ export default function CustomerInbox() {
     onError: () => toast({ title: "Failed to start conversation", variant: "destructive" }),
   });
 
+  const archiveConvoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("PUT", `/api/customer-portal/direct-conversations/${id}/archive`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/direct-conversations"] });
+      if (selected?.type === "direct") setSelected(null);
+      toast({ title: "Conversation archived" });
+    },
+    onError: () => toast({ title: "Failed to archive conversation", variant: "destructive" }),
+  });
+
+  const deleteConvoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/customer-portal/direct-conversations/${id}`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/direct-conversations"] });
+      if (selected?.type === "direct") setSelected(null);
+      toast({ title: "Conversation deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete conversation", variant: "destructive" }),
+  });
+
   const handleSend = () => {
     if (!newMessage.trim() || !selected) return;
     if (selected.type === "job") sendJobMutation.mutate(newMessage.trim());
@@ -291,6 +324,29 @@ export default function CustomerInbox() {
             </div>
           )}
 
+          {/* Search bar */}
+          <div className="px-3 py-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search conversations…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="pl-8 h-8 text-xs"
+                data-testid="input-search-conversations"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  data-testid="button-clear-search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="flex-1 overflow-y-auto">
             {tab === "job" ? (
               isLoadingJobConvos ? (
@@ -298,21 +354,23 @@ export default function CustomerInbox() {
               ) : jobConversations.length === 0 ? (
                 <EmptyState label="No conversations yet" sublabel="Messages about your jobs will appear here" />
               ) : (
-                jobConversations.map(convo => (
-                  <ConvoRow
-                    key={convo.jobId}
-                    isActive={selected?.type === "job" && selected.jobId === convo.jobId}
-                    icon={<Package className="h-4 w-4 text-primary" />}
-                    title={convo.jobName}
-                    subtitle={convo.completed ? "Completed" : "In Production"}
-                    unread={convo.unreadCount}
-                    latest={convo.latestMessage}
-                    myLabel="You"
-                    theirLabel="Select"
-                    onClick={() => setSelected({ type: "job", jobId: convo.jobId })}
-                    testId={`conversation-${convo.jobId}`}
-                  />
-                ))
+                jobConversations
+                  .filter(c => !searchQuery || c.jobName.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map(convo => (
+                    <ConvoRow
+                      key={convo.jobId}
+                      isActive={selected?.type === "job" && selected.jobId === convo.jobId}
+                      icon={<Package className="h-4 w-4 text-primary" />}
+                      title={convo.jobName}
+                      subtitle={convo.completed ? "Completed" : "In Production"}
+                      unread={convo.unreadCount}
+                      latest={convo.latestMessage}
+                      myLabel="You"
+                      theirLabel="Select"
+                      onClick={() => setSelected({ type: "job", jobId: convo.jobId })}
+                      testId={`conversation-${convo.jobId}`}
+                    />
+                  ))
               )
             ) : (
               isLoadingDirectConvos ? (
@@ -320,21 +378,25 @@ export default function CustomerInbox() {
               ) : directConversations.filter(c => c.status === "open").length === 0 ? (
                 <EmptyState label="No direct messages" sublabel="Start a conversation with Select Branding" />
               ) : (
-                directConversations.filter(c => c.status === "open").map(convo => (
-                  <ConvoRow
-                    key={convo.id}
-                    isActive={selected?.type === "direct" && selected.conversationId === convo.id}
-                    icon={<MessageCircle className="h-4 w-4 text-primary" />}
-                    title={convo.subject}
-                    subtitle="Select Branding Solutions"
-                    unread={convo.unreadCount}
-                    latest={convo.latestMessage}
-                    myLabel="You"
-                    theirLabel="Select"
-                    onClick={() => setSelected({ type: "direct", conversationId: convo.id })}
-                    testId={`direct-conversation-${convo.id}`}
-                  />
-                ))
+                directConversations
+                  .filter(c => c.status === "open" && (!searchQuery || c.subject.toLowerCase().includes(searchQuery.toLowerCase())))
+                  .map(convo => (
+                    <ConvoRow
+                      key={convo.id}
+                      isActive={selected?.type === "direct" && selected.conversationId === convo.id}
+                      icon={<MessageCircle className="h-4 w-4 text-primary" />}
+                      title={convo.subject}
+                      subtitle="Select Branding Solutions"
+                      unread={convo.unreadCount}
+                      latest={convo.latestMessage}
+                      myLabel="You"
+                      theirLabel="Select"
+                      onClick={() => setSelected({ type: "direct", conversationId: convo.id })}
+                      testId={`direct-conversation-${convo.id}`}
+                      onArchive={() => archiveConvoMutation.mutate(convo.id)}
+                      onDelete={() => deleteConvoMutation.mutate(convo.id)}
+                    />
+                  ))
               )
             )}
           </div>
@@ -407,39 +469,37 @@ export default function CustomerInbox() {
                 <EmptyState label="No messages yet" sublabel="Start the conversation below" />
               ) : (
                 messages.map((msg, idx) => {
-                  const isStaff = msg.senderType === "staff";
+                  const isCustomer = msg.senderType === "customer";
                   const prevMsg = idx > 0 ? messages[idx - 1] : null;
                   const sameGroup = prevMsg && prevMsg.senderType === msg.senderType && prevMsg.senderName === msg.senderName;
                   const showAvatar = !sameGroup;
-                  const staffInitials = msg.senderName
+                  const initials = msg.senderName
                     ? msg.senderName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-                    : "SB";
+                    : isCustomer ? "ME" : "SB";
                   return (
-                    <div key={msg.id} className={`flex items-end gap-2.5 ${msg.senderType === "customer" ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
-                      {/* Staff avatar */}
-                      {isStaff && (
-                        <div className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center border-2 border-background shrink-0 bg-primary/15 ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-                          {msg.senderImageUrl ? (
-                            <img src={msg.senderImageUrl} alt={msg.senderName || "Staff"} className="h-full w-full object-cover" />
-                          ) : (
-                            <span className="text-[10px] font-bold text-primary">{staffInitials}</span>
-                          )}
-                        </div>
-                      )}
-                      <div className="max-w-[72%] flex flex-col gap-0.5">
-                        {showAvatar && isStaff && msg.senderName && (
-                          <p className="text-[10px] font-semibold text-muted-foreground px-1">{msg.senderName}</p>
+                    <div key={msg.id} className={`flex items-end gap-2.5 ${isCustomer ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
+                      {/* Avatar */}
+                      <div className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center border-2 border-background shrink-0 ${isCustomer ? "bg-blue-500" : "bg-orange-400"} ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+                        {msg.senderImageUrl ? (
+                          <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] font-bold text-white">{initials}</span>
                         )}
-                        <div className={`rounded-2xl px-4 py-2.5 ${msg.senderType === "customer" ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted rounded-bl-sm"}`}>
+                      </div>
+                      <div className={`max-w-[72%] flex flex-col gap-0.5 ${isCustomer ? "items-end" : "items-start"}`}>
+                        {showAvatar && msg.senderName && (
+                          <p className={`text-[10px] font-semibold text-muted-foreground px-1 ${isCustomer ? "text-right" : ""}`}>{msg.senderName}</p>
+                        )}
+                        <div className={`rounded-2xl px-4 py-2.5 ${isCustomer ? "bg-blue-500 text-white rounded-br-sm" : "bg-orange-400 text-white rounded-bl-sm"}`}>
                           {msg.message.trim() && (
                             <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
                           )}
                           {msg.imageUrl && (
                             <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
-                              <img src={msg.imageUrl} alt="Sample" className="max-w-full rounded-lg max-h-48 object-contain border border-white/20 hover:opacity-90 transition-opacity" />
+                              <img src={msg.imageUrl} alt="Sample" className="max-w-full rounded-lg max-h-48 object-contain hover:opacity-90 transition-opacity" />
                             </a>
                           )}
-                          <p className={`text-[10px] mt-1 ${msg.senderType === "customer" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                          <p className="text-[10px] mt-1 text-white/70">
                             {format(new Date(msg.createdAt), "d MMM, h:mm a")}
                           </p>
                         </div>
@@ -527,7 +587,7 @@ export default function CustomerInbox() {
   );
 }
 
-function ConvoRow({ isActive, icon, title, subtitle, unread, latest, myLabel, theirLabel, onClick, testId }: {
+function ConvoRow({ isActive, icon, title, subtitle, unread, latest, myLabel, theirLabel, onClick, testId, onArchive, onDelete }: {
   isActive: boolean;
   icon: React.ReactNode;
   title: string;
@@ -538,33 +598,60 @@ function ConvoRow({ isActive, icon, title, subtitle, unread, latest, myLabel, th
   theirLabel: string;
   onClick: () => void;
   testId: string;
+  onArchive?: () => void;
+  onDelete?: () => void;
 }) {
   return (
-    <button
-      className={`w-full text-left px-4 py-3.5 border-b transition-colors flex items-start gap-3 ${isActive ? "bg-primary/8" : "hover:bg-muted/50"}`}
-      onClick={onClick}
+    <div
+      className={`group/row w-full border-b transition-colors flex items-start gap-3 ${isActive ? "bg-primary/8" : "hover:bg-muted/50"}`}
       data-testid={testId}
     >
-      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-1">
-          <span className={`text-sm font-semibold truncate ${unread > 0 ? "text-foreground" : "text-foreground/80"}`}>{title}</span>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {unread > 0 && <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">{unread}</Badge>}
-            {latest && <span className="text-[10px] text-muted-foreground">{formatConvoTime(latest.createdAt)}</span>}
-          </div>
+      <button className="flex items-start gap-3 flex-1 min-w-0 px-4 py-3.5 text-left" onClick={onClick}>
+        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          {icon}
         </div>
-        <p className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</p>
-        {latest && (
-          <p className={`text-xs mt-0.5 truncate ${unread > 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-            {latest.senderType === "customer" ? `${myLabel}: ` : `${theirLabel}: `}{latest.message}
-          </p>
-        )}
-      </div>
-      {isActive && <ChevronRight className="h-4 w-4 text-primary/50 flex-shrink-0 mt-2.5" />}
-    </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-1">
+            <span className={`text-sm font-semibold truncate ${unread > 0 ? "text-foreground" : "text-foreground/80"}`}>{title}</span>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {unread > 0 && <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">{unread}</Badge>}
+              {latest && <span className="text-[10px] text-muted-foreground">{formatConvoTime(latest.createdAt)}</span>}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</p>
+          {latest && (
+            <p className={`text-xs mt-0.5 truncate ${unread > 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+              {latest.senderType === "customer" ? `${myLabel}: ` : `${theirLabel}: `}{latest.message}
+            </p>
+          )}
+        </div>
+        {isActive && <ChevronRight className="h-4 w-4 text-primary/50 flex-shrink-0 mt-2.5" />}
+      </button>
+      {(onArchive || onDelete) && (
+        <div className="flex flex-col justify-center gap-1 pr-2 py-3 opacity-0 group-hover/row:opacity-100 transition-opacity">
+          {onArchive && (
+            <button
+              onClick={e => { e.stopPropagation(); onArchive(); }}
+              className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Archive"
+              data-testid={`button-archive-${testId}`}
+            >
+              <Archive className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(); }}
+              className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Delete"
+              data-testid={`button-delete-${testId}`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

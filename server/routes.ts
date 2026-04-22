@@ -5107,7 +5107,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
       if (!customerUser) return res.status(404).json({ error: "Not found" });
       const convos = await storage.getConversationsByCustomer(customerUser.customerId);
-      const enriched = await Promise.all(convos.map(async (c) => {
+      const visible = convos.filter((c: any) => c.status !== "deleted");
+      const enriched = await Promise.all(visible.map(async (c) => {
         const msgs = await storage.getConversationMessages(c.id);
         const unread = msgs.filter(m => m.senderType === "staff" && !m.readByCustomer).length;
         const latest = msgs[msgs.length - 1] ?? null;
@@ -5140,7 +5141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Customer: get messages for a conversation (marks as read)
+  // Customer: get messages for a conversation (marks as read, enriched with sender info)
   app.get("/api/customer-portal/direct-conversations/:id/messages", isCustomerAuthenticated, async (req: any, res) => {
     try {
       const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
@@ -5149,9 +5150,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!convo || convo.customerId !== customerUser.customerId) return res.status(404).json({ error: "Not found" });
       const msgs = await storage.getConversationMessages(req.params.id);
       await storage.markConversationMessagesReadByCustomer(req.params.id);
-      res.json(msgs.map((m: any) => ({ ...m, imageUrl: normalizeImgUrl(m.imageUrl) })));
+      const allStaff = await storage.getStaffMembers();
+      const allUsers = await storage.getAllUsers();
+      const enriched = await Promise.all(msgs.map(async (m: any) => {
+        if (m.senderType === "staff" && m.senderId) {
+          const staffMember = allStaff.find((s: any) => s.id === m.senderId);
+          const linkedUser = staffMember?.userId
+            ? allUsers.find((u: any) => u.id === staffMember.userId)
+            : allUsers.find((u: any) => String(u.id) === String(m.senderId));
+          return {
+            ...m,
+            imageUrl: normalizeImgUrl(m.imageUrl),
+            senderName: staffMember?.name || [linkedUser?.firstName, linkedUser?.lastName].filter(Boolean).join(" ") || null,
+            senderImageUrl: normalizeImgUrl(linkedUser?.profileImageUrl),
+          };
+        }
+        if (m.senderType === "customer" && m.senderId) {
+          const cu = await storage.getCustomerUserById(m.senderId);
+          return {
+            ...m,
+            imageUrl: normalizeImgUrl(m.imageUrl),
+            senderName: [cu?.firstName, cu?.lastName].filter(Boolean).join(" ") || null,
+            senderImageUrl: normalizeImgUrl(cu?.profileImageUrl),
+          };
+        }
+        return { ...m, imageUrl: normalizeImgUrl(m.imageUrl), senderName: null, senderImageUrl: null };
+      }));
+      res.json(enriched);
     } catch (e) {
       res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Customer: archive a direct conversation
+  app.put("/api/customer-portal/direct-conversations/:id/archive", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const convo = await storage.getConversation(req.params.id);
+      if (!convo || convo.customerId !== customerUser.customerId) return res.status(403).json({ error: "Forbidden" });
+      await storage.updateConversation(req.params.id, { status: "archived" });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to archive conversation" });
+    }
+  });
+
+  // Customer: delete a direct conversation (soft-delete via status)
+  app.delete("/api/customer-portal/direct-conversations/:id", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Not found" });
+      const convo = await storage.getConversation(req.params.id);
+      if (!convo || convo.customerId !== customerUser.customerId) return res.status(403).json({ error: "Forbidden" });
+      await storage.updateConversation(req.params.id, { status: "deleted" });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to delete conversation" });
     }
   });
 
