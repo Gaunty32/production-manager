@@ -480,7 +480,7 @@ export default function Customers() {
                   data-testid={`card-customer-${customer.id}`}
                 >
                   {/* Logo / initials */}
-                  <div className={`h-16 w-16 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${customer.logoUrl ? "" : color}`}>
+                  <div className={`h-16 w-16 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${customer.logoUrl ? "bg-gray-900" : color}`}>
                     {customer.logoUrl ? (
                       <img src={customer.logoUrl} alt={customer.name} className="h-full w-full object-contain" />
                     ) : (
@@ -534,7 +534,7 @@ export default function Customers() {
                 <div className="space-y-6 pt-2">
                   <SheetHeader>
                     <div className="flex items-center gap-4">
-                      <div className={`h-14 w-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${customer.logoUrl ? "bg-muted" : color}`}>
+                      <div className={`h-14 w-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${customer.logoUrl ? "bg-gray-900" : color}`}>
                         {customer.logoUrl ? (
                           <img src={customer.logoUrl} alt={customer.name} className="h-full w-full object-contain" />
                         ) : (
