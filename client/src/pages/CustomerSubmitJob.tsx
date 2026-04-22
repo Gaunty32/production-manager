@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -102,7 +102,9 @@ export default function CustomerSubmitJob() {
   const [showExpressDialog, setShowExpressDialog] = useState(false);
   const [pendingDispatchDate, setPendingDispatchDate] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
   const dragCounter = useRef(0);
+  const uploadFilesRef = useRef<(files: FileList | File[]) => Promise<void>>(async () => {});
 
   const { data: customerUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
@@ -189,30 +191,55 @@ export default function CustomerSubmitJob() {
     }
   };
 
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current += 1;
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) setIsDragOver(true);
-  };
+  // Keep ref in sync so the drop handler always calls the latest uploadFiles
+  uploadFilesRef.current = uploadFiles;
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current -= 1;
-    if (dragCounter.current === 0) setIsDragOver(false);
-  };
+  // Native event listeners for drag-and-drop (bypasses React synthetic event layer)
+  useEffect(() => {
+    const zone = dropZoneRef.current;
+    if (!zone) return;
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current = 0;
-    setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      uploadFiles(e.dataTransfer.files);
-      e.dataTransfer.clearData();
-    }
-  };
+    const onDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter.current += 1;
+      setIsDragOver(true);
+    };
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const onDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter.current -= 1;
+      if (dragCounter.current <= 0) {
+        dragCounter.current = 0;
+        setIsDragOver(false);
+      }
+    };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter.current = 0;
+      setIsDragOver(false);
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        uploadFilesRef.current(e.dataTransfer.files);
+      }
+    };
+
+    zone.addEventListener("dragenter", onDragEnter);
+    zone.addEventListener("dragover", onDragOver);
+    zone.addEventListener("dragleave", onDragLeave);
+    zone.addEventListener("drop", onDrop);
+
+    return () => {
+      zone.removeEventListener("dragenter", onDragEnter);
+      zone.removeEventListener("dragover", onDragOver);
+      zone.removeEventListener("dragleave", onDragLeave);
+      zone.removeEventListener("drop", onDrop);
+    };
+  }, []);
 
   const submitJobMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -461,16 +488,13 @@ export default function CustomerSubmitJob() {
                   )}
 
                   <div
+                    ref={dropZoneRef}
                     className={`border-2 border-dashed rounded-md p-8 text-center cursor-pointer transition-colors ${
                       isDragOver
                         ? "border-primary bg-primary/5"
                         : "border-border hover:border-primary/50 hover:bg-muted/40"
                     }`}
                     onClick={() => fileInputRef.current?.click()}
-                    onDragEnter={handleDragEnter}
-                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
                     data-testid="dropzone-files"
                   >
                     {isUploading ? (
