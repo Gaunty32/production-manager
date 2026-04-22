@@ -507,12 +507,6 @@ export default function Customers() {
                         <AlertCircle className="h-2.5 w-2.5 mr-0.5" />No Portal
                       </Badge>
                     )}
-                    {customer.pricingTable2026 && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-blue-700 dark:text-blue-300">2026</Badge>
-                    )}
-                    {customer.pricingTable2025 && !customer.pricingTable2026 && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">2025</Badge>
-                    )}
                   </div>
                 </button>
               );
@@ -545,8 +539,6 @@ export default function Customers() {
                         <SheetTitle className="text-lg leading-tight">{customer.name}</SheetTitle>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {isInactive && <Badge variant="outline" className="text-xs">Inactive</Badge>}
-                          {customer.pricingTable2025 && <Badge variant="outline" className="text-xs">2025</Badge>}
-                          {customer.pricingTable2026 && <Badge variant="outline" className="text-xs text-blue-700 dark:text-blue-300">2026</Badge>}
                         </div>
                       </div>
                     </div>
