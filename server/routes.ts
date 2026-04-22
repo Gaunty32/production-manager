@@ -5542,26 +5542,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
       const currentUser = await storage.getCustomerUserById(customerUserId);
       if (!currentUser) return res.status(404).json({ error: "Not found" });
+
+      const customer = await storage.getCustomer(currentUser.customerId);
+      if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+      // Fetch "ready" jobs (completed, awaiting Xero invoicing)
       const allJobs = await storage.getJobsByCustomerId(currentUser.customerId);
-      const invoiced = allJobs
-        .filter(j => j.invoiceStatus === "invoiced" || j.invoiceStatus === "ready")
-        .sort((a, b) => {
-          // invoiced jobs with dates first (newest first), then ready jobs
-          if (a.invoicedAt && b.invoicedAt) return new Date(b.invoicedAt).getTime() - new Date(a.invoicedAt).getTime();
-          if (a.invoicedAt) return -1;
-          if (b.invoicedAt) return 1;
-          return (b.jobNumber ?? 0) - (a.jobNumber ?? 0);
-        });
-      // Fetch line items for each job
-      const result = await Promise.all(
-        invoiced.map(async (job) => {
+      const readyJobs = allJobs.filter(j => j.invoiceStatus === "ready");
+      const awaitingInvoice = await Promise.all(
+        readyJobs.map(async (job) => {
           const lineItems = await storage.getJobLineItems(job.id);
           return {
             id: job.id,
             jobNumber: job.jobNumber,
             description: job.description,
-            invoiceStatus: job.invoiceStatus,
-            invoicedAt: job.invoicedAt,
             dispatchDate: job.requiredDispatchDate,
             lineItems: lineItems.map(li => ({
               jobType: li.jobType,
@@ -5573,9 +5567,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         })
       );
-      res.json(result);
+
+      // Fetch actual Xero invoices for this contact
+      let xeroInvoices: any[] = [];
+      if (xeroService.isConfigured() && xeroService.isConnected()) {
+        const contact = await xeroService.findContact(customer);
+        if (contact) {
+          xeroInvoices = await xeroService.getInvoicesForContact(contact.contactID);
+        }
+      }
+
+      res.json({ awaitingInvoice, xeroInvoices });
     } catch (e) {
+      console.error("Failed to fetch invoice history:", e);
       res.status(500).json({ error: "Failed to fetch invoice history" });
+    }
+  });
+
+  app.get("/api/customer-portal/invoices/:invoiceId/pdf", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
+      const currentUser = await storage.getCustomerUserById(customerUserId);
+      if (!currentUser) return res.status(404).json({ error: "Not found" });
+
+      const { invoiceId } = req.params;
+      const pdfResponse = await xeroService.streamInvoicePdf(invoiceId);
+
+      if (!pdfResponse.ok) {
+        return res.status(502).json({ error: "Could not retrieve PDF from Xero" });
+      }
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="invoice-${invoiceId}.pdf"`);
+      const buffer = await pdfResponse.arrayBuffer();
+      res.send(Buffer.from(buffer));
+    } catch (e) {
+      console.error("Failed to fetch invoice PDF:", e);
+      res.status(500).json({ error: "Failed to fetch invoice PDF" });
     }
   });
 

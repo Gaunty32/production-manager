@@ -631,6 +631,67 @@ export class XeroService {
     return response.json();
   }
 
+  async getInvoicesForContact(contactId: string): Promise<Array<{
+    InvoiceID: string;
+    InvoiceNumber: string;
+    Date: string;
+    DueDate: string;
+    Status: string;
+    SubTotal: number;
+    TotalTax: number;
+    Total: number;
+    AmountDue: number;
+    AmountPaid: number;
+    Reference: string;
+    CurrencyCode: string;
+  }>> {
+    if (!this.isConfigured() || !this.isConnected()) return [];
+
+    const token = await this.getAccessToken();
+    const tenantId = this.getTenantId();
+
+    const params = new URLSearchParams({
+      ContactIDs: contactId,
+      order: "Date DESC",
+      Statuses: "DRAFT,SUBMITTED,AUTHORISED,PAID,VOIDED",
+    });
+
+    const response = await fetch(`${this.apiUrl}/Invoices?${params}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "xero-tenant-id": tenantId,
+        "Accept": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      console.error("Failed to fetch Xero invoices for contact", contactId);
+      return [];
+    }
+
+    const data = await response.json();
+    return (data.Invoices || []).filter((inv: any) => inv.Type === "ACCREC");
+  }
+
+  async streamInvoicePdf(invoiceId: string): Promise<Response> {
+    if (!this.isConfigured() || !this.isConnected()) {
+      throw new Error("Xero not connected");
+    }
+
+    const token = await this.getAccessToken();
+    const tenantId = this.getTenantId();
+
+    return fetch(`${this.apiUrl}/Invoices/${invoiceId}/pdf`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "xero-tenant-id": tenantId,
+        "Accept": "application/pdf",
+      },
+    });
+  }
+
   async getInvoices(): Promise<any> {
     if (!this.isConfigured()) {
       throw new Error("Xero is not configured");
