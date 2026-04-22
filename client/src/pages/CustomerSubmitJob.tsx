@@ -441,8 +441,15 @@ export default function CustomerSubmitJob() {
                         ? "border-primary bg-primary/5"
                         : "border-border hover:border-primary/50 hover:bg-muted/40"
                     }`}
-                    onDragEnter={() => setIsDragOver(true)}
-                    onDragLeave={() => setIsDragOver(false)}
+                    onDragEnter={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDragLeave={(e) => { e.preventDefault(); setIsDragOver(false); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(false);
+                      const files = e.dataTransfer?.files;
+                      if (files && files.length > 0) uploadFiles(files);
+                    }}
                     data-testid="dropzone-files"
                   >
                     {isUploading ? (
