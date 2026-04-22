@@ -5120,6 +5120,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer: list active staff members (for "Send to" picker)
+  app.get("/api/customer-portal/staff-members", isCustomerAuthenticated, async (_req, res) => {
+    try {
+      const allStaff = await storage.getStaff();
+      const allUsers = await storage.getAllUsers();
+      const active = allStaff.filter((s: any) => s.isActive !== false);
+      const result = active.map((s: any) => {
+        const user = s.userId ? allUsers.find((u: any) => u.id === s.userId) : null;
+        const firstName = s.name ? s.name.split(" ")[0] : (user?.firstName || "Staff");
+        return {
+          id: s.id,
+          firstName,
+          fullName: s.name || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Staff",
+          profileImageUrl: normalizeImgUrl(user?.profileImageUrl),
+        };
+      });
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch staff members" });
+    }
+  });
+
   // Customer: start a new direct conversation
   app.post("/api/customer-portal/direct-conversations", isCustomerAuthenticated, async (req: any, res) => {
     try {

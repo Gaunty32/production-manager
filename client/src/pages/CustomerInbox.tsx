@@ -97,12 +97,17 @@ export default function CustomerInbox() {
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
   const [newFirstMessage, setNewFirstMessage] = useState("");
+  const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null); // null = Everyone
 
   // Search
   const [searchQuery, setSearchQuery] = useState("");
 
   const { data: currentUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
+  });
+
+  const { data: staffMembers = [] } = useQuery<{ id: string; firstName: string; fullName: string; profileImageUrl: string | null }[]>({
+    queryKey: ["/api/customer-portal/staff-members"],
   });
 
   const { data: jobConversations = [], isLoading: isLoadingJobConvos } = useQuery<JobConversation[]>({
@@ -207,13 +212,14 @@ export default function CustomerInbox() {
       const res = await apiRequest("POST", "/api/customer-portal/direct-conversations", {
         subject: newSubject,
         message: newFirstMessage || undefined,
+        staffRecipientId: selectedRecipientId || undefined,
       });
       return res.json();
     },
     onSuccess: (convo) => {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/direct-conversations"] });
       setShowNewConvo(false);
-      setNewSubject(""); setNewFirstMessage("");
+      setNewSubject(""); setNewFirstMessage(""); setSelectedRecipientId(null);
       setSelected({ type: "direct", conversationId: convo.id });
     },
     onError: () => toast({ title: "Failed to start conversation", variant: "destructive" }),
@@ -545,12 +551,57 @@ export default function CustomerInbox() {
       </div>
 
       {/* New direct conversation dialog */}
-      <Dialog open={showNewConvo} onOpenChange={setShowNewConvo}>
-        <DialogContent data-testid="dialog-new-conversation">
+      <Dialog open={showNewConvo} onOpenChange={(open) => { setShowNewConvo(open); if (!open) { setNewSubject(""); setNewFirstMessage(""); setSelectedRecipientId(null); } }}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-new-conversation">
           <DialogHeader>
             <DialogTitle>New Message to Select Branding</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-5 py-2">
+
+            {/* Send to */}
+            <div>
+              <label className="text-sm font-medium mb-3 block">Send to</label>
+              <div className="flex flex-wrap gap-3">
+                {/* Everyone tile */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedRecipientId(null)}
+                  className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-colors w-16 ${selectedRecipientId === null ? "border-primary bg-primary/8" : "border-border hover:border-muted-foreground/40"}`}
+                  data-testid="recipient-everyone"
+                >
+                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                    <MessageCircle className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <span className="text-[11px] font-medium text-center leading-tight">Everyone</span>
+                </button>
+
+                {/* Staff tiles */}
+                {staffMembers.map(member => {
+                  const initials = member.firstName.slice(0, 2).toUpperCase();
+                  const isSelected = selectedRecipientId === member.id;
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => setSelectedRecipientId(member.id)}
+                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-colors w-16 ${isSelected ? "border-primary bg-primary/8" : "border-border hover:border-muted-foreground/40"}`}
+                      data-testid={`recipient-staff-${member.id}`}
+                    >
+                      <div className="h-10 w-10 rounded-full overflow-hidden flex items-center justify-center bg-orange-400 flex-shrink-0">
+                        {member.profileImageUrl ? (
+                          <img src={member.profileImageUrl} alt={member.firstName} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-sm font-bold text-white">{initials}</span>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-medium text-center leading-tight truncate w-full">{member.firstName}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Subject */}
             <div>
               <label className="text-sm font-medium mb-1.5 block">Subject *</label>
               <Input
@@ -560,11 +611,13 @@ export default function CustomerInbox() {
                 data-testid="input-convo-subject"
               />
             </div>
+
+            {/* Message */}
             <div>
               <label className="text-sm font-medium mb-1.5 block">Message (optional)</label>
               <Textarea
                 placeholder="Type your message…"
-                rows={4}
+                rows={3}
                 value={newFirstMessage}
                 onChange={e => setNewFirstMessage(e.target.value)}
                 data-testid="input-convo-message"
