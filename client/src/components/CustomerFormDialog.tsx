@@ -13,6 +13,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -35,6 +36,7 @@ const formSchema = insertCustomerSchema
     address: z.string().optional(),
     logoUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
     active: z.boolean().default(true),
+    xeroContactId: z.string().optional(),
   });
 
 interface CustomerFormDialogProps {
@@ -77,6 +79,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         address: customer.address || "",
         logoUrl: customer.logoUrl || "",
         active: customer.active !== false,
+        xeroContactId: customer.xeroContactId || "",
       });
     } else if (!open) {
       form.reset({
@@ -88,6 +91,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         address: "",
         logoUrl: "",
         active: true,
+        xeroContactId: "",
       });
     }
   }, [customer, open, form]);
@@ -220,6 +224,25 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                 </FormItem>
               )}
             />
+
+            {isEditMode && (
+              <FormField
+                control={form.control}
+                name="xeroContactId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Xero Contact ID <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g. abc12345-..." data-testid="input-xero-contact-id" />
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      Paste the Xero Contact ID to link this customer directly. Invoices will appear in their portal automatically.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {isEditMode && canDeactivateCustomers && (
               <div className="space-y-3 pt-2 border-t">

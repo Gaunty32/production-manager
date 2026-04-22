@@ -4374,6 +4374,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const invoice = await xeroService.createInvoice(job, customer, lineItemsWithPricing);
 
+      // Persist the Xero contact ID so future portal lookups are instant
+      const xeroContactId = invoice.Invoices?.[0]?.Contact?.ContactID;
+      if (xeroContactId && customer.xeroContactId !== xeroContactId) {
+        await storage.updateCustomer(customer.id, { xeroContactId });
+      }
+
       // Calculate and save the invoice total and mark job as invoiced
       const invoiceTotal = lineItemsWithPricing.reduce((sum, item) => sum + (item.quantity || 0) * item.unitPrice, 0);
       const invoiceId = invoice.Invoices?.[0]?.InvoiceID || "unknown";
@@ -4739,6 +4745,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract invoice ID from Xero response
       const invoiceId = invoiceResponse.Invoices?.[0]?.InvoiceID || "unknown";
       const invoiceNumber = invoiceResponse.Invoices?.[0]?.InvoiceNumber || null;
+
+      // Persist the Xero contact ID so portal lookups are instant in future
+      const xeroContactIdFromInvoice = invoiceResponse.Invoices?.[0]?.Contact?.ContactID;
+      if (xeroContactIdFromInvoice && customer.xeroContactId !== xeroContactIdFromInvoice) {
+        await storage.updateCustomer(customer.id, { xeroContactId: xeroContactIdFromInvoice });
+      }
 
       // Mark logo setups as invoiced (keep for history rather than deleting)
       for (const setup of customerLogoSetups) {
@@ -5584,6 +5596,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (xeroService.isConfigured() && xeroService.isConnected()) {
         const contact = await xeroService.findContact(customer);
         if (contact) {
+          // Persist the found Xero contact ID so future lookups skip the search entirely
+          if (!customer.xeroContactId || customer.xeroContactId !== contact.contactID) {
+            await storage.updateCustomer(customer.id, { xeroContactId: contact.contactID });
+          }
           xeroInvoices = await xeroService.getInvoicesForContact(contact.contactID);
         }
       }

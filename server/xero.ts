@@ -254,83 +254,81 @@ export class XeroService {
       const token = await this.getAccessToken();
       const tenantId = this.getTenantId();
 
-      // First try to find by exact name match
-      // Build the where clause with escaped quotes, then encode the entire clause
+      const headers = {
+        "Authorization": `Bearer ${token}`,
+        "xero-tenant-id": tenantId,
+        "Accept": "application/json",
+      };
+
+      // 1. If we have a stored Xero Contact ID, use it directly — most reliable
+      if (customer.xeroContactId) {
+        const response = await fetch(`${this.apiUrl}/Contacts/${customer.xeroContactId}`, {
+          method: "GET",
+          headers,
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const contact = data.Contacts?.[0];
+          if (contact) {
+            console.log(`✓ Matched Xero contact by stored ID: ${customer.xeroContactId} → ${contact.Name}`);
+            return { contactID: contact.ContactID, name: contact.Name };
+          }
+        }
+        // Stored ID didn't work — fall through to search
+        console.log(`! Stored xeroContactId ${customer.xeroContactId} not found in Xero, falling back to search`);
+      }
+
+      // 2. Exact name match
       const nameWhere = `Name=="${customer.name.replace(/"/g, '\\"')}"`;
       let response = await fetch(`${this.apiUrl}/Contacts?where=${encodeURIComponent(nameWhere)}`, {
         method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "xero-tenant-id": tenantId,
-          "Accept": "application/json",
-        },
+        headers,
       });
 
       if (response.ok) {
         const data = await response.json();
         if (data.Contacts && data.Contacts.length > 0) {
           console.log(`✓ Matched Xero contact by name: ${customer.name} → ${data.Contacts[0].Name}`);
-          return {
-            contactID: data.Contacts[0].ContactID,
-            name: data.Contacts[0].Name,
-          };
+          return { contactID: data.Contacts[0].ContactID, name: data.Contacts[0].Name };
         }
       }
 
-      // If no match by name and email exists, try to find by email
+      // 3. Email match
       if (customer.email) {
         const emailWhere = `EmailAddress=="${customer.email.replace(/"/g, '\\"')}"`;
         response = await fetch(`${this.apiUrl}/Contacts?where=${encodeURIComponent(emailWhere)}`, {
           method: "GET",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "xero-tenant-id": tenantId,
-            "Accept": "application/json",
-          },
+          headers,
         });
 
         if (response.ok) {
           const data = await response.json();
           if (data.Contacts && data.Contacts.length > 0) {
             console.log(`✓ Matched Xero contact by email: ${customer.email} → ${data.Contacts[0].Name}`);
-            return {
-              contactID: data.Contacts[0].ContactID,
-              name: data.Contacts[0].Name,
-            };
+            return { contactID: data.Contacts[0].ContactID, name: data.Contacts[0].Name };
           }
         }
       }
 
-      // If still no match and phone exists, try to find by phone
-      if (customer.telephone) {
-        const phoneSearch = customer.telephone.replace(/\s/g, ''); // Remove spaces for comparison
-        response = await fetch(`${this.apiUrl}/Contacts`, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "xero-tenant-id": tenantId,
-            "Accept": "application/json",
-          },
-        });
+      // 4. searchTerm fallback — Xero's own fuzzy search (handles spelling/case differences)
+      const searchTerm = customer.name.split(/\s+/).slice(0, 2).join(" "); // first two words
+      if (searchTerm.length >= 3) {
+        response = await fetch(
+          `${this.apiUrl}/Contacts?searchTerm=${encodeURIComponent(searchTerm)}&includeArchived=false`,
+          { method: "GET", headers }
+        );
 
         if (response.ok) {
           const data = await response.json();
-          if (data.Contacts && data.Contacts.length > 0) {
-            // Search through contacts for matching phone
-            const match = data.Contacts.find((contact: any) => {
-              const contactPhone = contact.Phones?.find((p: any) => 
-                p.PhoneNumber?.replace(/\s/g, '') === phoneSearch
-              );
-              return !!contactPhone;
-            });
-
-            if (match) {
-              console.log(`✓ Matched Xero contact by phone: ${customer.telephone} → ${match.Name}`);
-              return {
-                contactID: match.ContactID,
-                name: match.Name,
-              };
-            }
+          const contacts: any[] = data.Contacts || [];
+          if (contacts.length > 0) {
+            // Pick the closest match by normalising both names
+            const normalise = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const customerNorm = normalise(customer.name);
+            const match = contacts.find(c => normalise(c.Name).includes(customerNorm) || customerNorm.includes(normalise(c.Name)));
+            const best = match || contacts[0];
+            console.log(`✓ Matched Xero contact by searchTerm "${searchTerm}" → ${best.Name}`);
+            return { contactID: best.ContactID, name: best.Name };
           }
         }
       }
