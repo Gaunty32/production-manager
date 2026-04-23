@@ -681,7 +681,17 @@ export default function StaffMessages() {
             isLoadingJobConvos ? (
               <LoadingSpinner />
             ) : jobConversations.length === 0 ? (
-              <EmptyState label="No job conversations yet" sublabel="Customer messages will appear here" />
+              <div className="flex flex-col h-full">
+                <EmptyState label="No active job conversations" sublabel="Customer messages will appear here" />
+                {archivedConversations.length > 0 && (
+                  <ArchivedSection
+                    conversations={archivedConversations}
+                    selected={selected}
+                    onSelect={(jId) => setSelected({ type: "job", jobId: jId })}
+                    onUnarchive={(jId) => archiveConvoJobMutation.mutate({ jobId: jId, archive: false })}
+                  />
+                )}
+              </div>
             ) : leftView === "jobs" && drilledGroup ? (
               // ── Job picker for a specific customer ─────────────────────────
               <div className="flex flex-col h-full">
