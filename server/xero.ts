@@ -697,7 +697,7 @@ export class XeroService {
     const token = await this.getAccessToken();
     const tenantId = this.getTenantId();
 
-    return fetch(`${this.apiUrl}/Invoices/${invoiceId}/pdf`, {
+    return fetch(`${this.apiUrl}/Invoices/${invoiceId}`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,

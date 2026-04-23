@@ -5855,6 +5855,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pdfResponse = await xeroService.streamInvoicePdf(invoiceId);
 
       if (!pdfResponse.ok) {
+        const errorBody = await pdfResponse.text().catch(() => "(unreadable)");
+        console.error(`Xero PDF fetch failed: status=${pdfResponse.status}, body=${errorBody}`);
         return res.status(502).json({ error: "Could not retrieve PDF from Xero" });
       }
 
