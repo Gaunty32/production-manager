@@ -2261,6 +2261,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               jobName: job.jobName,
               customerName: customer?.name || 'Customer',
               jobId: job.id,
+              jobNumber: job.jobNumber,
+              quantity: job.quantity,
+              poNumber: job.poNumber,
+              notes: job.notes,
+              requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
+              customerAddress: customer?.address || null,
+              deliveryAddress: job.deliveryAddress || null,
+              orderDate: job.submittedAt ? new Date(job.submittedAt) : new Date(),
             });
           }
         }

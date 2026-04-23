@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { generateOrderAcknowledgementPdf, type OrderAcknowledgementData } from './orderAcknowledgementPdf';
 
 let connectionSettings: any;
 
@@ -188,47 +189,77 @@ export async function sendJobApprovedEmail(
     jobName: string;
     customerName: string;
     jobId: string;
+    jobNumber?: number | null;
+    quantity?: number;
+    poNumber?: string | null;
+    notes?: string | null;
+    requiredDispatchDate?: Date | null;
+    customerAddress?: string | null;
+    deliveryAddress?: string | null;
+    orderDate?: Date;
   }
 ) {
   const { client, fromEmail } = await getUncachableResendClient();
-  
-  const viewUrl = `${getBaseUrl()}/customer/job/${jobDetails.jobId}`;
-  
-  // Sanitize all customer-controlled fields
-  const safeJobName = sanitizeHtml(jobDetails.jobName);
-  
+
+  const orderRef = jobDetails.jobNumber || jobDetails.jobId.slice(0, 8).toUpperCase();
+
+  // Generate PDF attachment
+  let pdfAttachment: { filename: string; content: string } | undefined;
+  try {
+    const pdfData: OrderAcknowledgementData = {
+      orderRef,
+      orderDate: jobDetails.orderDate || new Date(),
+      requiredDispatchDate: jobDetails.requiredDispatchDate || null,
+      jobName: jobDetails.jobName,
+      quantity: jobDetails.quantity || 0,
+      poNumber: jobDetails.poNumber || null,
+      notes: jobDetails.notes || null,
+      customerName: jobDetails.customerName,
+      customerAddress: jobDetails.customerAddress || null,
+      deliveryAddress: jobDetails.deliveryAddress || null,
+    };
+    const pdfBuffer = await generateOrderAcknowledgementPdf(pdfData);
+    pdfAttachment = {
+      filename: `Order-Acknowledgement-${orderRef}.pdf`,
+      content: pdfBuffer.toString('base64'),
+    };
+  } catch (pdfError) {
+    console.error('Failed to generate order acknowledgement PDF:', pdfError);
+  }
+
   const { data, error } = await client.emails.send({
     from: fromEmail || 'onboarding@resend.dev',
     to: customerEmail,
-    subject: `Job Approved: ${safeJobName}`,
+    subject: `Select Branding Solutions Ltd Order Acknowledgement - New Bank Details - Ref : ${orderRef}`,
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #10b981;">✓ Job Approved</h2>
-        <p>Great news! Your job <strong>${safeJobName}</strong> has been approved and is now in production.</p>
-        
-        <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin: 20px 0;">
-          <p style="margin: 0; color: #333;">
-            Your order is now being processed and will be dispatched according to the requested schedule.
-          </p>
-        </div>
-
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${viewUrl}" 
-             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            View Job Details
-          </a>
-        </div>
-        
-        <p style="color: #666; font-size: 14px;">
-          If you have any questions, please contact us or use the chat feature in the job details page.
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+        <p>Thank you for your order.</p>
+        <p>Please find attached your order acknowledgement. Please check this meets your requirements.
+           It is important you check the garments, colours, sizes and quantities as well as the
+           finishes to be applied.</p>
+        <p>You can make payment by BACS or by card using the details below.
+           Our bank details have recently been updated.</p>
+        <p>
+          <a href="https://buy.stripe.com/bIY16peJJ5j99Us144"
+             style="color: #4F46E5;">https://buy.stripe.com/bIY16peJJ5j99Us144</a>
+        </p>
+        <p style="margin: 4px 0;">Select Branding Solutions Ltd</p>
+        <p style="margin: 4px 0;">04-06-05</p>
+        <p style="margin: 4px 0;">30422879</p>
+        <br/>
+        <p style="margin: 4px 0;">Regards</p>
+        <br/>
+        <p style="margin: 4px 0;">Select Uniforms</p>
+        <p style="margin: 4px 0;">
+          <a href="mailto:sales@selectuniforms.co.uk" style="color: #4F46E5;">sales@selectuniforms.co.uk</a>
         </p>
       </div>
     `,
+    ...(pdfAttachment ? { attachments: [pdfAttachment] } : {}),
   });
 
   if (error) {
     console.error('Failed to send job approved email:', error);
-    // Don't throw - email failures shouldn't block approval
   }
 
   return data;
