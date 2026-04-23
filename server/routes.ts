@@ -1858,6 +1858,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       console.log('[JOB SUBMISSION] Job created successfully:', job.id);
 
+      // Create automatic welcome message to open the chat thread
+      try {
+        await storage.createJobMessage({
+          jobId: job.id,
+          senderType: 'staff',
+          senderId: 'system',
+          message: 'Thank you for submitting your files. They are being reviewed by our team.',
+          readByStaff: true,
+          readByCustomer: false,
+        } as any);
+      } catch (msgError) {
+        console.error('[JOB SUBMISSION] Failed to create opening chat message:', msgError);
+      }
+
       // Send email notification to Chris only for now
       try {
         const allStaff = await storage.getStaff();
