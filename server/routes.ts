@@ -2250,6 +2250,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       console.log('[JOB APPROVE] Job updated. New status:', updatedJob.status, 'Job ID:', updatedJob.id);
 
+      // Create an automatic first message to open the chat thread for this order
+      try {
+        await storage.createJobMessage({
+          jobId: req.params.jobId,
+          senderType: 'staff',
+          senderId: staff?.id || 'system',
+          message: `Your order has been approved and is now in production. An order acknowledgement has been sent to your email. Please check the details and let us know if you have any questions.`,
+          readByStaff: true,
+          readByCustomer: false,
+        } as any);
+      } catch (msgError) {
+        console.error('[JOB APPROVE] Failed to create opening chat message:', msgError);
+      }
+
       // Send email notification to customer
       try {
         if (job.submittedById) {
