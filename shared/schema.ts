@@ -244,7 +244,7 @@ export const impersonationSessions = pgTable("impersonation_sessions", {
 // Customer portal: job messages (chat)
 export const jobMessages = pgTable("job_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
   senderType: varchar("sender_type").notNull(), // 'customer' or 'staff'
   senderId: varchar("sender_id").notNull(), // customerUserId or userId
   message: text("message").notNull(),

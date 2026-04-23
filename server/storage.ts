@@ -1371,6 +1371,7 @@ export class DatabaseStorage implements IStorage {
     // Group by jobId
     const byJob = new Map<string, typeof allMessages>();
     for (const msg of allMessages) {
+      if (!msg.jobId) continue;
       if (!byJob.has(msg.jobId)) byJob.set(msg.jobId, []);
       byJob.get(msg.jobId)!.push(msg);
     }
@@ -1424,11 +1425,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllConversationsForStaff(includeArchived = false): Promise<any[]> {
-    // Get all jobs that have at least one message (including soft-deleted ones)
-    const allMsgs = await db.select().from(jobMessages).orderBy(jobMessages.createdAt);
+    // Get all messages that are still linked to a job (jobId not null = job not deleted)
+    const allMsgs = await db.select().from(jobMessages)
+      .where(isNotNull(jobMessages.jobId))
+      .orderBy(jobMessages.createdAt);
     if (allMsgs.length === 0) return [];
 
-    const jobIdSet = new Set(allMsgs.map(m => m.jobId));
+    const jobIdSet = new Set(allMsgs.map(m => m.jobId).filter(Boolean) as string[]);
     const jobIdArr = Array.from(jobIdSet);
     const allJobs = await db.select().from(jobs).where(inArray(jobs.id, jobIdArr));
     const allCustomers = await db.select().from(customers);
@@ -1436,6 +1439,7 @@ export class DatabaseStorage implements IStorage {
 
     const byJob = new Map<string, typeof allMsgs>();
     for (const msg of allMsgs) {
+      if (!msg.jobId) continue;
       if (!byJob.has(msg.jobId)) byJob.set(msg.jobId, []);
       byJob.get(msg.jobId)!.push(msg);
     }
