@@ -353,6 +353,9 @@ export default function StaffMessages() {
         customerId: newOrderCustomerId,
         jobName: newOrderJobName.trim(),
         quantity: 1,
+        goodsReceived: null,
+        requiredDispatchDate: null,
+        machineId: null,
       });
       const newJob = await jobRes.json();
       const createdJobId = newJob.id;
