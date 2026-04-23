@@ -2868,11 +2868,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/jobs", isStaffAuthenticated, async (req, res) => {
     try {
-      const { machineId } = req.query;
+      const { machineId, customerId } = req.query;
       
       let jobs;
       if (machineId) {
         jobs = await storage.getJobsByMachine(parseInt(machineId as string));
+      } else if (customerId) {
+        jobs = await storage.getJobsByCustomerId(customerId as string);
       } else {
         jobs = await storage.getJobs();
       }

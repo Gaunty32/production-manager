@@ -185,6 +185,14 @@ export default function StaffMessages() {
     if (selected?.type === "job" && selected.jobId === jobId) setSelected(null);
   };
 
+  // Message existing order dialog
+  const [showMsgExisting, setShowMsgExisting] = useState(false);
+  const [msgExistingCustomerId, setMsgExistingCustomerId] = useState("");
+  const [msgExistingCustomerSearch, setMsgExistingCustomerSearch] = useState("");
+  const [msgExistingJobId, setMsgExistingJobId] = useState("");
+  const [msgExistingText, setMsgExistingText] = useState("");
+  const [isSendingMsgExisting, setIsSendingMsgExisting] = useState(false);
+
   // New order chat dialog
   const [showNewOrderChat, setShowNewOrderChat] = useState(false);
   const [newOrderCustomerId, setNewOrderCustomerId] = useState("");
@@ -235,6 +243,36 @@ export default function StaffMessages() {
   const { data: messagingUsers = [] } = useQuery<MessagingUser[]>({
     queryKey: ["/api/staff/messaging-users"],
   });
+
+  const { data: customerJobs = [] } = useQuery<{ id: string; jobName: string; status: string; jobNumber?: number }[]>({
+    queryKey: ["/api/jobs", { customerId: msgExistingCustomerId }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/jobs?customerId=${msgExistingCustomerId}`);
+      return res.json();
+    },
+    enabled: !!msgExistingCustomerId && showMsgExisting,
+  });
+
+  const handleSendMsgExisting = async () => {
+    if (!msgExistingJobId || !msgExistingText.trim()) return;
+    setIsSendingMsgExisting(true);
+    try {
+      await apiRequest("POST", `/api/staff/jobs/${msgExistingJobId}/messages`, { message: msgExistingText.trim() });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations/all"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${msgExistingJobId}/messages`] });
+      setShowMsgExisting(false);
+      setMsgExistingCustomerId("");
+      setMsgExistingCustomerSearch("");
+      setMsgExistingJobId("");
+      setMsgExistingText("");
+      setSelected({ type: "job", jobId: msgExistingJobId });
+      toast({ title: "Message sent" });
+    } catch {
+      toast({ title: "Failed to send message", variant: "destructive" });
+    } finally {
+      setIsSendingMsgExisting(false);
+    }
+  };
 
   const jobId = selected?.type === "job" ? selected.jobId : null;
   const directId = selected?.type === "direct" ? selected.conversationId : null;
@@ -661,12 +699,18 @@ export default function StaffMessages() {
         </div>
 
         {/* New chat button */}
-        <div className="px-3 py-2 border-b">
+        <div className="px-3 py-2 border-b space-y-1.5">
           {tab === "job" ? (
-            <Button size="sm" className="w-full" onClick={() => setShowNewOrderChat(true)} data-testid="button-new-order-chat">
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              Create New Job
-            </Button>
+            <>
+              <Button size="sm" className="w-full" onClick={() => setShowMsgExisting(true)} data-testid="button-msg-existing-order">
+                <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                Message Existing Order
+              </Button>
+              <Button size="sm" variant="outline" className="w-full" onClick={() => setShowNewOrderChat(true)} data-testid="button-new-order-chat">
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                Create New Job
+              </Button>
+            </>
           ) : (
             <Button size="sm" className="w-full" onClick={() => setShowNewConvo(true)} data-testid="button-new-conversation">
               <Plus className="h-3.5 w-3.5 mr-1.5" />
@@ -1209,6 +1253,102 @@ export default function StaffMessages() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Message Existing Order dialog ──────────────────────────────────── */}
+      <Dialog open={showMsgExisting} onOpenChange={(open) => {
+        setShowMsgExisting(open);
+        if (!open) { setMsgExistingCustomerId(""); setMsgExistingCustomerSearch(""); setMsgExistingJobId(""); setMsgExistingText(""); }
+      }}>
+        <DialogContent className="max-w-lg" data-testid="dialog-msg-existing">
+          <DialogHeader>
+            <DialogTitle>Message Existing Order</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Customer *</label>
+              <div className="border rounded-md overflow-hidden">
+                <div className="flex items-center px-3 py-2 border-b bg-muted/30">
+                  <Search className="h-3.5 w-3.5 text-muted-foreground mr-2 shrink-0" />
+                  <input
+                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    placeholder="Search customers…"
+                    value={msgExistingCustomerSearch}
+                    onChange={e => { setMsgExistingCustomerSearch(e.target.value); setMsgExistingCustomerId(""); setMsgExistingJobId(""); }}
+                    data-testid="input-msg-existing-customer-search"
+                  />
+                </div>
+                <div className="max-h-36 overflow-y-auto">
+                  {customers
+                    .filter(c => c.name.toLowerCase().includes(msgExistingCustomerSearch.toLowerCase()))
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => { setMsgExistingCustomerId(c.id); setMsgExistingCustomerSearch(c.name); setMsgExistingJobId(""); }}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${msgExistingCustomerId === c.id ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"}`}
+                        data-testid={`option-msg-existing-customer-${c.id}`}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                </div>
+              </div>
+            </div>
+
+            {msgExistingCustomerId && (
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Order *</label>
+                {customerJobs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No orders found for this customer.</p>
+                ) : (
+                  <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                    {customerJobs
+                      .filter(j => j.status !== "invoiced")
+                      .map(j => (
+                        <button
+                          key={j.id}
+                          type="button"
+                          onClick={() => setMsgExistingJobId(j.id)}
+                          className={`w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center justify-between gap-2 ${msgExistingJobId === j.id ? "bg-primary text-primary-foreground" : "hover:bg-muted/60"}`}
+                          data-testid={`option-msg-existing-job-${j.id}`}
+                        >
+                          <span className="font-medium truncate">{j.jobName || "Untitled job"}</span>
+                          <span className={`text-xs shrink-0 ${msgExistingJobId === j.id ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                            {j.jobNumber ? `#${j.jobNumber}` : ""} · {j.status}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {msgExistingJobId && (
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Message *</label>
+                <Textarea
+                  placeholder="Type your message…"
+                  rows={3}
+                  value={msgExistingText}
+                  onChange={e => setMsgExistingText(e.target.value)}
+                  data-testid="input-msg-existing-text"
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMsgExisting(false)} disabled={isSendingMsgExisting}>Cancel</Button>
+            <Button
+              onClick={handleSendMsgExisting}
+              disabled={!msgExistingJobId || !msgExistingText.trim() || isSendingMsgExisting}
+              data-testid="button-send-msg-existing"
+            >
+              {isSendingMsgExisting ? "Sending…" : "Send Message"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── New order chat dialog ──────────────────────────────────────────── */}
       <Dialog open={showNewOrderChat} onOpenChange={(open) => { setShowNewOrderChat(open); if (!open) resetOrderChatForm(); }}>
