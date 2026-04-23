@@ -18,6 +18,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   MessageSquare,
   Send,
   ChevronRight,
@@ -162,6 +172,7 @@ export default function StaffMessages() {
     } catch { return new Set(); }
   });
   const [showHidden, setShowHidden] = useState(false);
+  const [confirmArchiveJobId, setConfirmArchiveJobId] = useState<string | null>(null);
 
   const toggleHideJob = (jobId: string) => {
     setHiddenJobIds(prev => {
@@ -857,7 +868,13 @@ export default function StaffMessages() {
                   variant="ghost"
                   size="icon"
                   title={selectedJobConvo?.isArchivedByStaff ? "Unarchive conversation" : "Archive conversation"}
-                  onClick={() => archiveConvoJobMutation.mutate({ jobId: selectedJobConvo!.jobId, archive: !selectedJobConvo?.isArchivedByStaff })}
+                  onClick={() => {
+                    if (selectedJobConvo?.isArchivedByStaff) {
+                      archiveConvoJobMutation.mutate({ jobId: selectedJobConvo!.jobId, archive: false });
+                    } else {
+                      setConfirmArchiveJobId(selectedJobConvo!.jobId);
+                    }
+                  }}
                   disabled={archiveConvoJobMutation.isPending}
                   data-testid="button-archive-job-convo"
                 >
@@ -1152,6 +1169,32 @@ export default function StaffMessages() {
         onConfirm={handleProfileCropConfirm}
         onCancel={() => setPendingProfileCropFile(null)}
       />
+
+      {/* ── Archive confirmation dialog ─────────────────────────────────────── */}
+      <AlertDialog open={!!confirmArchiveJobId} onOpenChange={open => { if (!open) setConfirmArchiveJobId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this conversation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The chat thread will be hidden from the main messages list and moved to the archived section. You can unarchive it at any time. The job itself is not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmArchiveJobId) {
+                  archiveConvoJobMutation.mutate({ jobId: confirmArchiveJobId, archive: true });
+                  setConfirmArchiveJobId(null);
+                }
+              }}
+              data-testid="button-confirm-archive"
+            >
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── New order chat dialog ──────────────────────────────────────────── */}
       <Dialog open={showNewOrderChat} onOpenChange={(open) => { setShowNewOrderChat(open); if (!open) resetOrderChatForm(); }}>
