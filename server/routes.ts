@@ -5712,7 +5712,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentUser = await storage.getCustomerUserById(customerUserId);
       if (!currentUser) return res.status(404).json({ error: "Not found" });
 
-      const customer = await storage.getCustomer(currentUser.customerId);
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === currentUser.customerId);
       if (!customer) return res.status(404).json({ error: "Customer not found" });
 
       // Fetch "ready" jobs (completed, awaiting Xero invoicing)
