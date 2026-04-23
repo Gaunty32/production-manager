@@ -31,7 +31,6 @@ import {
   X,
   EyeOff,
   Eye,
-  ImagePlus,
   Pin,
   Lock,
   Camera,
@@ -184,7 +183,7 @@ export default function StaffMessages() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatImageInputRef = useRef<HTMLInputElement>(null);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
-  const [chatImages, setChatImages] = useState<{ key: string; preview: string }[]>([]);
+  const [chatImages, setChatImages] = useState<{ key: string; preview: string | null; fileName: string; isImage: boolean }[]>([]);
   const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
@@ -407,19 +406,28 @@ export default function StaffMessages() {
   });
 
   const handleSend = async () => {
-    const images = [...chatImages];
+    const allAttachments = [...chatImages];
     const text = newMessage.trim();
-    if ((!text && images.length === 0) || !selected) return;
+    if ((!text && allAttachments.length === 0) || !selected) return;
     setNewMessage("");
     setChatImages([]);
-    images.forEach(img => URL.revokeObjectURL(img.preview));
-    if (images.length === 0) {
-      const payload = { message: text, isInternal };
+    allAttachments.forEach(att => { if (att.preview) URL.revokeObjectURL(att.preview); });
+
+    const imageAttachments = allAttachments.filter(a => a.isImage);
+    const fileAttachments = allAttachments.filter(a => !a.isImage);
+
+    // Build file markers for non-image attachments, appended to the text
+    const fileMarkers = fileAttachments.map(f => `[FILE:${f.fileName}:${f.key}]`).join("\n");
+    const baseText = [text, fileMarkers].filter(Boolean).join("\n");
+
+    if (imageAttachments.length === 0) {
+      const payload = { message: baseText || " ", isInternal };
       if (selected.type === "job") sendJobMessageMutation.mutate(payload);
       else sendDirectMessageMutation.mutate(payload);
     } else {
-      for (let i = 0; i < images.length; i++) {
-        const payload = { message: i === 0 ? (text || " ") : " ", imageUrl: images[i].key, isInternal };
+      for (let i = 0; i < imageAttachments.length; i++) {
+        const msgText = i === 0 ? (baseText || " ") : " ";
+        const payload = { message: msgText, imageUrl: imageAttachments[i].key, isInternal };
         try {
           if (selected.type === "job") await sendJobMessageMutation.mutateAsync(payload);
           else await sendDirectMessageMutation.mutateAsync(payload);
@@ -428,26 +436,42 @@ export default function StaffMessages() {
     }
   };
 
-  const handleChatImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+  const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/svg+xml", "image/avif"]);
+
+  const uploadFiles = async (files: File[]) => {
     if (!files.length) return;
     setIsUploadingChatImage(true);
     try {
       const uploaded = await Promise.all(files.map(async (file) => {
-        const previewUrl = URL.createObjectURL(file);
+        const isImage = IMAGE_MIME_TYPES.has(file.type);
+        const previewUrl = isImage ? URL.createObjectURL(file) : null;
         const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
         const { url, key } = await uploadRes.json();
-        await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
+        await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
         const normalizedKey = `/api/img${key.replace("/objects", "")}`;
-        return { key: normalizedKey, preview: previewUrl };
+        return { key: normalizedKey, preview: previewUrl, fileName: file.name, isImage };
       }));
       setChatImages(prev => [...prev, ...uploaded]);
     } catch {
-      toast({ title: "Failed to upload image(s)", variant: "destructive" });
+      toast({ title: "Failed to upload file(s)", variant: "destructive" });
     } finally {
       setIsUploadingChatImage(false);
-      if (chatImageInputRef.current) chatImageInputRef.current.value = "";
     }
+  };
+
+  const handleChatImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (chatImageInputRef.current) chatImageInputRef.current.value = "";
+    await uploadFiles(files);
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter(item => item.kind === "file" && item.type.startsWith("image/"));
+    if (imageItems.length === 0) return; // let normal text paste through
+    e.preventDefault();
+    const files = imageItems.map(item => item.getAsFile()).filter((f): f is File => f !== null);
+    if (files.length > 0) await uploadFiles(files);
   };
 
   // File selected → open crop dialog
@@ -874,9 +898,37 @@ export default function StaffMessages() {
                             ? "bg-blue-500 text-white rounded-br-sm"
                             : "bg-orange-400 text-white rounded-bl-sm"
                       }`}>
-                        {msg.message.trim() && (
-                          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
-                        )}
+                        {(() => {
+                          const fileRegex = /\[FILE:([^:]+):([^\]]+)\]/g;
+                          const rawText = msg.message || "";
+                          const fileMatches: { name: string; url: string }[] = [];
+                          let m: RegExpExecArray | null;
+                          while ((m = fileRegex.exec(rawText)) !== null) {
+                            fileMatches.push({ name: m[1], url: m[2] });
+                          }
+                          const displayText = rawText.replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim();
+                          return (
+                            <>
+                              {displayText && (
+                                <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{displayText}</p>
+                              )}
+                              {fileMatches.map((f, fi) => (
+                                <a
+                                  key={fi}
+                                  href={f.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`flex items-center gap-2 mt-2 px-3 py-2 rounded-lg text-sm font-medium no-underline transition-opacity hover:opacity-80 ${
+                                    msg.isInternal ? "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-700" : "bg-white/20 text-white"
+                                  }`}
+                                >
+                                  <FileText className="h-4 w-4 shrink-0" />
+                                  <span className="truncate max-w-[180px]">{f.name}</span>
+                                </a>
+                              ))}
+                            </>
+                          );
+                        })()}
                         {msg.imageUrl && (
                           <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
                             <img src={msg.imageUrl} alt="Sample" className="max-w-full rounded-lg max-h-48 object-contain hover:opacity-90 transition-opacity" />
@@ -921,12 +973,19 @@ export default function StaffMessages() {
                 )}
               </div>
             )}
-            {/* Image preview */}
+            {/* Attachment preview */}
             {(chatImages.length > 0 || isUploadingChatImage) && (
               <div className="mb-2 flex items-start gap-2 flex-wrap">
-                {chatImages.map((img, i) => (
-                  <div key={img.key} className="relative">
-                    <img src={img.preview} alt="Preview" className="h-16 w-16 rounded-md object-cover border border-border" />
+                {chatImages.map((att, i) => (
+                  <div key={att.key} className="relative">
+                    {att.isImage && att.preview ? (
+                      <img src={att.preview} alt="Preview" className="h-16 w-16 rounded-md object-cover border border-border" />
+                    ) : (
+                      <div className="h-16 w-28 rounded-md border border-border bg-muted flex flex-col items-center justify-center gap-1 px-2">
+                        <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                        <span className="text-[10px] text-muted-foreground text-center leading-tight line-clamp-2 break-all">{att.fileName}</span>
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={() => setChatImages(prev => prev.filter((_, j) => j !== i))}
@@ -940,7 +999,7 @@ export default function StaffMessages() {
                 {isUploadingChatImage && <span className="text-xs text-muted-foreground mt-1 self-center">Uploading…</span>}
               </div>
             )}
-            <input ref={chatImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleChatImageSelect} data-testid="input-chat-image-file" />
+            <input ref={chatImageInputRef} type="file" multiple className="hidden" onChange={handleChatImageSelect} data-testid="input-chat-image-file" />
             <div className={`flex gap-2 items-end ${isInternal ? "opacity-100" : ""}`}>
               <Button
                 variant="outline"
@@ -949,15 +1008,16 @@ export default function StaffMessages() {
                 onClick={() => chatImageInputRef.current?.click()}
                 disabled={isUploadingChatImage}
                 data-testid="button-attach-chat-image"
-                title="Attach image"
+                title="Attach file or image"
               >
-                <ImagePlus className="h-4 w-4" />
+                <Paperclip className="h-4 w-4" />
               </Button>
               <Textarea
                 placeholder={isInternal ? "Internal note (staff only)…" : "Reply… (Enter to send, Shift+Enter for new line)"}
                 value={newMessage}
                 onChange={e => setNewMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 rows={2}
                 className={`resize-none text-sm ${isInternal ? "border-amber-300 focus-visible:ring-amber-400 dark:border-amber-700" : ""}`}
                 data-testid="input-staff-message"
