@@ -654,7 +654,7 @@ export default function StaffMessages() {
           {tab === "job" ? (
             <Button size="sm" className="w-full" onClick={() => setShowNewOrderChat(true)} data-testid="button-new-order-chat">
               <Plus className="h-3.5 w-3.5 mr-1.5" />
-              New Order Chat
+              Create New Job
             </Button>
           ) : (
             <Button size="sm" className="w-full" onClick={() => setShowNewConvo(true)} data-testid="button-new-conversation">
@@ -1157,8 +1157,11 @@ export default function StaffMessages() {
       <Dialog open={showNewOrderChat} onOpenChange={(open) => { setShowNewOrderChat(open); if (!open) resetOrderChatForm(); }}>
         <DialogContent className="max-w-lg" data-testid="dialog-new-order-chat">
           <DialogHeader>
-            <DialogTitle>New Order Chat</DialogTitle>
+            <DialogTitle>Create New Job</DialogTitle>
           </DialogHeader>
+          <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+            This creates a <strong>brand new blank job</strong> in the production queue and opens its chat thread. To chat about an existing job or portal submission, click on it in the list on the left instead.
+          </div>
           <ScrollArea className="max-h-[70vh] pr-1">
             <div className="space-y-4 py-1 pr-3">
               <div>
@@ -1239,7 +1242,7 @@ export default function StaffMessages() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewOrderChat(false)} disabled={isCreatingOrderChat}>Cancel</Button>
             <Button onClick={handleCreateOrderChat} disabled={!newOrderCustomerId || !newOrderJobName.trim() || !newOrderMessage.trim() || isCreatingOrderChat} data-testid="button-start-order-chat">
-              {isCreatingOrderChat ? "Creating…" : "Start Chat"}
+              {isCreatingOrderChat ? "Creating…" : "Create Job"}
             </Button>
           </DialogFooter>
         </DialogContent>
