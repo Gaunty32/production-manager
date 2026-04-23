@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { getSession } from "./replitAuth";
 import { storage } from "./storage";
+import { xeroService } from "./xero";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -42,6 +43,7 @@ app.use((req, res, next) => {
 
 (async () => {
   await storage.seedMachines();
+  await xeroService.loadTokensFromDb();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

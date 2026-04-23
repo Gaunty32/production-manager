@@ -25,6 +25,7 @@ import {
   samples,
   sampleFiles,
   machines,
+  appSettings,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -263,6 +264,10 @@ export interface IStorage {
   getMachine(id: number): Promise<Machine | undefined>;
   updateMachine(id: number, data: Partial<Machine>): Promise<Machine>;
   seedMachines(): Promise<void>;
+
+  // App settings (key/value)
+  getAppSetting(key: string): Promise<string | null>;
+  setAppSetting(key: string, value: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2747,6 +2752,18 @@ export class DatabaseStorage implements IStorage {
     }
     // Reset the serial sequence so next auto-insert starts after 5
     await db.execute(sql`SELECT setval('machines_id_seq', 5, true)`);
+  }
+
+  async getAppSetting(key: string): Promise<string | null> {
+    const [row] = await db.select().from(appSettings).where(eq(appSettings.key, key));
+    return row?.value ?? null;
+  }
+
+  async setAppSetting(key: string, value: string): Promise<void> {
+    await db
+      .insert(appSettings)
+      .values({ key, value, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
   }
 }
 

@@ -5705,7 +5705,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fetch actual Xero invoices for this contact
       let xeroInvoices: any[] = [];
-      if (xeroService.isConfigured() && xeroService.isConnected()) {
+      const xeroConnected = xeroService.isConfigured() && xeroService.isConnected();
+      if (xeroConnected) {
         const contact = await xeroService.findContact(customer);
         if (contact) {
           // Persist the found Xero contact ID so future lookups skip the search entirely
@@ -5716,7 +5717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({ awaitingInvoice, xeroInvoices });
+      res.json({ awaitingInvoice, xeroInvoices, xeroConnected });
     } catch (e) {
       console.error("Failed to fetch invoice history:", e);
       res.status(500).json({ error: "Failed to fetch invoice history" });

@@ -1105,6 +1105,15 @@ export interface ProductionDisplayLeaderboard {
   leaders: ProductionDisplayLeader[];
 }
 
+// App settings — key/value store for persisting server-side config (e.g. Xero tokens)
+export const appSettings = pgTable("app_settings", {
+  key: varchar("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type AppSetting = typeof appSettings.$inferSelect;
+
 // Machines table — stores each embroidery machine with capacity and status
 export const machines = pgTable("machines", {
   id: serial("id").primaryKey(),

@@ -1,4 +1,5 @@
 import type { Job, Customer } from "@shared/schema";
+import { storage } from "./storage";
 
 export interface XeroInvoiceLineItem {
   description: string;
@@ -54,6 +55,30 @@ export class XeroService {
 
   isConnected(): boolean {
     return !!(this.tokens?.access_token && this.tokens?.tenant_id);
+  }
+
+  private async saveTokens(): Promise<void> {
+    if (!this.tokens) return;
+    try {
+      await storage.setAppSetting("xero_tokens", JSON.stringify(this.tokens));
+    } catch (e) {
+      console.error("Failed to persist Xero tokens:", e);
+    }
+  }
+
+  async loadTokensFromDb(): Promise<void> {
+    try {
+      const raw = await storage.getAppSetting("xero_tokens");
+      if (raw) {
+        const parsed = JSON.parse(raw) as XeroTokens;
+        if (parsed.access_token && parsed.refresh_token && parsed.tenant_id) {
+          this.tokens = parsed;
+          console.log("Xero tokens restored from database");
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load Xero tokens from database:", e);
+    }
   }
 
   disconnect(): void {
@@ -179,6 +204,7 @@ export class XeroService {
         tenant_id: tenantId,
       };
       
+      await this.saveTokens();
       console.log("Token exchange complete!");
       console.log("=========================");
     } catch (error) {
@@ -219,6 +245,7 @@ export class XeroService {
       expires_at: Date.now() + (data.expires_in * 1000),
       tenant_id: this.tokens.tenant_id, // Preserve tenant ID
     };
+    await this.saveTokens();
   }
 
   async getAccessToken(): Promise<string> {

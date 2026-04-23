@@ -40,6 +40,7 @@ type XeroInvoice = {
 type InvoicesResponse = {
   awaitingInvoice: AwaitingJob[];
   xeroInvoices: XeroInvoice[];
+  xeroConnected: boolean;
 };
 
 function parseXeroDate(raw: string): Date | null {
@@ -233,6 +234,7 @@ export default function CustomerInvoices() {
 
   const awaitingInvoice = data?.awaitingInvoice ?? [];
   const xeroInvoices = data?.xeroInvoices ?? [];
+  const xeroConnected = data?.xeroConnected ?? true; // default true to avoid false warning while loading
   const groups = groupXeroByMonth(xeroInvoices);
   const hasAny = awaitingInvoice.length > 0 || xeroInvoices.length > 0;
 
@@ -259,9 +261,16 @@ export default function CustomerInvoices() {
             ))}
           </div>
         ) : !hasAny ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground text-center">
             <Receipt className="h-10 w-10 opacity-30" />
-            <p className="text-sm">No invoices yet</p>
+            {!xeroConnected ? (
+              <>
+                <p className="text-sm font-medium">Invoice history temporarily unavailable</p>
+                <p className="text-xs max-w-xs">Our invoicing system is reconnecting. Please check back shortly, or contact us if this persists.</p>
+              </>
+            ) : (
+              <p className="text-sm">No invoices yet</p>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
