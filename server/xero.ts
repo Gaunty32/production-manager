@@ -572,22 +572,12 @@ export class XeroService {
       return new Date(lastFriday.getFullYear(), lastFriday.getMonth(), lastFriday.getDate());
     };
 
-    // Helper function: Get the 5th of the following month
-    const getFifthOfNextMonth = (date: Date): Date => {
-      const year = date.getFullYear();
-      const month = date.getMonth();
-      // If we're in December, go to January of next year
-      if (month === 11) {
-        return new Date(year + 1, 0, 5);
-      }
-      return new Date(year, month + 1, 5);
-    };
-
     // Calculate invoice date as the last Friday (end of week invoicing)
     const invoiceDate = getLastFriday();
     
-    // Calculate due date as 5th of following month
-    const dueDate = getFifthOfNextMonth(invoiceDate);
+    // Calculate due date as 14 days from invoice date
+    const dueDate = new Date(invoiceDate);
+    dueDate.setDate(dueDate.getDate() + 14);
 
     // Combine all PO numbers for reference
     const poNumbers = jobs
