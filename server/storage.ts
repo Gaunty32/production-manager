@@ -173,10 +173,11 @@ export interface IStorage {
   updateCustomerUserDetails(id: string, data: { email?: string; firstName?: string; lastName?: string }): Promise<CustomerUser>;
   getJobMessages(jobId: string): Promise<JobMessage[]>;
   createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
+  deleteJobMessage(messageId: string): Promise<void>;
   markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void>;
   getConversationsForCustomer(customerId: string): Promise<any[]>;
   getUnreadCountForCustomer(customerId: string): Promise<number>;
-  getAllConversationsForStaff(): Promise<any[]>;
+  getAllConversationsForStaff(includeArchived?: boolean): Promise<any[]>;
   getUnreadCountForStaff(): Promise<number>;
   getJobFiles(jobId: string): Promise<JobFile[]>;
   createJobFile(file: InsertJobFile): Promise<JobFile>;
@@ -1328,6 +1329,10 @@ export class DatabaseStorage implements IStorage {
     return newMessage;
   }
 
+  async deleteJobMessage(messageId: string): Promise<void> {
+    await db.delete(jobMessages).where(eq(jobMessages.id, messageId));
+  }
+
   async markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void> {
     if (readerType === 'staff') {
       await db
@@ -1413,7 +1418,7 @@ export class DatabaseStorage implements IStorage {
     return unread.length;
   }
 
-  async getAllConversationsForStaff(): Promise<any[]> {
+  async getAllConversationsForStaff(includeArchived = false): Promise<any[]> {
     // Get all jobs that have at least one message
     const allMsgs = await db.select().from(jobMessages).orderBy(jobMessages.createdAt);
     if (allMsgs.length === 0) return [];
@@ -1432,6 +1437,7 @@ export class DatabaseStorage implements IStorage {
 
     const result = [];
     for (const job of allJobs) {
+      if (!includeArchived && job.conversationArchivedByStaff) continue;
       const msgs = byJob.get(job.id) || [];
       const unread = msgs.filter(m => m.senderType === 'customer' && !m.readByStaff).length;
       const latest = msgs.length > 0 ? msgs[msgs.length - 1] : null;
@@ -1446,6 +1452,7 @@ export class DatabaseStorage implements IStorage {
         completed: job.completed,
         messageCount: msgs.length,
         unreadCount: unread,
+        isArchivedByStaff: !!job.conversationArchivedByStaff,
         latestMessage: latest ? { message: latest.message, senderType: latest.senderType, createdAt: latest.createdAt } : null,
       });
     }

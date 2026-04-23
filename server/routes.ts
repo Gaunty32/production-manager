@@ -2193,11 +2193,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Staff - Get all conversations with unread indicators
   app.get("/api/staff/conversations", isStaffAuthenticated, async (req, res) => {
     try {
-      const conversations = await storage.getAllConversationsForStaff();
+      const includeArchived = req.query.includeArchived === "true";
+      const conversations = await storage.getAllConversationsForStaff(includeArchived);
       res.json(conversations);
     } catch (error) {
       console.error("Error fetching staff conversations:", error);
       res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  // Staff - Delete (unsend) a job message
+  app.delete("/api/staff/jobs/:jobId/messages/:messageId", isStaffAuthenticated, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+      await storage.deleteJobMessage(req.params.messageId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      res.status(500).json({ error: "Failed to delete message" });
+    }
+  });
+
+  // Staff - Archive a job conversation
+  app.put("/api/staff/jobs/:jobId/conversation/archive", isStaffAuthenticated, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+      await storage.updateJob(req.params.jobId, { conversationArchivedByStaff: true } as any);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error archiving conversation:", error);
+      res.status(500).json({ error: "Failed to archive conversation" });
+    }
+  });
+
+  // Staff - Unarchive a job conversation
+  app.put("/api/staff/jobs/:jobId/conversation/unarchive", isStaffAuthenticated, async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+      await storage.updateJob(req.params.jobId, { conversationArchivedByStaff: false } as any);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error unarchiving conversation:", error);
+      res.status(500).json({ error: "Failed to unarchive conversation" });
     }
   });
 

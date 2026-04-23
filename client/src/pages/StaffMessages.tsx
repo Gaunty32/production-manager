@@ -26,6 +26,8 @@ import {
   Plus,
   MessageCircle,
   Archive,
+  ArchiveX,
+  Trash2,
   Search,
   Paperclip,
   X,
@@ -53,6 +55,7 @@ type JobConversation = {
   completed: boolean;
   messageCount: number;
   unreadCount: number;
+  isArchivedByStaff?: boolean;
   latestMessage: { message: string; senderType: "customer" | "staff"; createdAt: string } | null;
 };
 
@@ -194,10 +197,16 @@ export default function StaffMessages() {
     queryKey: ["/api/staff/me"],
   });
 
-  const { data: jobConversations = [], isLoading: isLoadingJobConvos } = useQuery<JobConversation[]>({
-    queryKey: ["/api/staff/conversations"],
+  const { data: allJobConversations = [], isLoading: isLoadingJobConvos } = useQuery<JobConversation[]>({
+    queryKey: ["/api/staff/conversations/all"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/staff/conversations?includeArchived=true");
+      return res.json();
+    },
     refetchInterval: 15000,
   });
+  const jobConversations = allJobConversations.filter(c => !c.isArchivedByStaff);
+  const archivedConversations = allJobConversations.filter(c => c.isArchivedByStaff);
 
   const { data: directConversations = [], isLoading: isLoadingDirectConvos } = useQuery<DirectConversation[]>({
     queryKey: ["/api/staff/direct-conversations"],
@@ -309,6 +318,29 @@ export default function StaffMessages() {
       setChatImages([]);
     },
     onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
+  });
+
+  const unsendMessageMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      await apiRequest("DELETE", `/api/staff/jobs/${jobId}/messages/${messageId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${jobId}/messages`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations/all"] });
+    },
+    onError: () => toast({ title: "Failed to unsend message", variant: "destructive" }),
+  });
+
+  const archiveConvoJobMutation = useMutation({
+    mutationFn: async ({ jobId: jId, archive }: { jobId: string; archive: boolean }) => {
+      await apiRequest("PUT", `/api/staff/jobs/${jId}/conversation/${archive ? "archive" : "unarchive"}`);
+    },
+    onSuccess: (_data, { archive }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations/all"] });
+      if (archive) { setSelected(null); toast({ title: "Conversation archived" }); }
+      else { toast({ title: "Conversation unarchived" }); }
+    },
+    onError: () => toast({ title: "Failed to archive conversation", variant: "destructive" }),
   });
 
   const createConvoMutation = useMutation({
@@ -763,6 +795,14 @@ export default function StaffMessages() {
                     {showHidden ? "Hide archived" : `Show ${hiddenCount} archived`}
                   </button>
                 )}
+                {archivedConversations.length > 0 && (
+                  <ArchivedSection
+                    conversations={archivedConversations}
+                    selected={selected}
+                    onSelect={(jId) => setSelected({ type: "job", jobId: jId })}
+                    onUnarchive={(jId) => archiveConvoJobMutation.mutate({ jobId: jId, archive: false })}
+                  />
+                )}
               </div>
             )
           ) : (
@@ -812,6 +852,16 @@ export default function StaffMessages() {
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setLocation(`/staff/job/${selectedJobConvo?.jobId}`)} data-testid="button-view-job">
                   View Job
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title={selectedJobConvo?.isArchivedByStaff ? "Unarchive conversation" : "Archive conversation"}
+                  onClick={() => archiveConvoJobMutation.mutate({ jobId: selectedJobConvo!.jobId, archive: !selectedJobConvo?.isArchivedByStaff })}
+                  disabled={archiveConvoJobMutation.isPending}
+                  data-testid="button-archive-job-convo"
+                >
+                  {selectedJobConvo?.isArchivedByStaff ? <ArchiveX className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
                 </Button>
               </>
             ) : (
@@ -866,7 +916,20 @@ export default function StaffMessages() {
                 const showAvatar = !sameGroup;
                 const initials = getInitials(msg.senderName, isStaff ? "S" : "C");
                 return (
-                  <div key={msg.id} className={`flex items-end gap-2.5 ${isStaff ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
+                  <div key={msg.id} className={`group/msg flex items-end gap-2.5 ${isStaff ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
+                    {/* Unsend button — staff messages only, visible on hover */}
+                    {isStaff && selected?.type === "job" && (
+                      <button
+                        type="button"
+                        title="Unsend"
+                        onClick={() => unsendMessageMutation.mutate(msg.id)}
+                        disabled={unsendMessageMutation.isPending}
+                        className="invisible group-hover/msg:visible shrink-0 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        data-testid={`button-unsend-${msg.id}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     {/* Avatar */}
                     <div className={`h-8 w-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center border-2 border-background ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"} ${isStaff ? "bg-blue-500" : "bg-orange-400"}`}>
                       {isStaff && msg.senderImageUrl ? (
@@ -1300,6 +1363,58 @@ function EmptyState({ label, sublabel }: { label: string; sublabel?: string }) {
       <MessageSquare className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
       <p className="text-sm text-muted-foreground font-medium">{label}</p>
       {sublabel && <p className="text-xs text-muted-foreground/70 mt-1">{sublabel}</p>}
+    </div>
+  );
+}
+
+type ArchivedSectionProps = {
+  conversations: Array<{ jobId: string; jobName: string; customerName: string; unreadCount: number; latestMessage: { message: string; senderType: "customer" | "staff"; createdAt: string } | null }>;
+  selected: { type: string; jobId?: string } | null;
+  onSelect: (jobId: string) => void;
+  onUnarchive: (jobId: string) => void;
+};
+
+function ArchivedSection({ conversations, selected, onSelect, onUnarchive }: ArchivedSectionProps) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border-t">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground hover-elevate"
+        data-testid="button-toggle-archived"
+      >
+        <Archive className="h-3 w-3" />
+        {expanded ? "Hide archived" : `Show ${conversations.length} archived`}
+      </button>
+      {expanded && (
+        <div className="border-t divide-y">
+          {conversations.map(c => (
+            <div
+              key={c.jobId}
+              className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover-elevate ${selected?.type === "job" && selected.jobId === c.jobId ? "bg-accent" : ""}`}
+              onClick={() => onSelect(c.jobId)}
+              data-testid={`archived-convo-${c.jobId}`}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate text-muted-foreground">{c.jobName}</p>
+                <p className="text-[10px] text-muted-foreground/60 truncate">{c.customerName}</p>
+              </div>
+              {c.unreadCount > 0 && (
+                <span className="text-[10px] font-bold text-blue-500">{c.unreadCount}</span>
+              )}
+              <button
+                type="button"
+                title="Unarchive"
+                onClick={e => { e.stopPropagation(); onUnarchive(c.jobId); }}
+                className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+                data-testid={`button-unarchive-${c.jobId}`}
+              >
+                <ArchiveX className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
