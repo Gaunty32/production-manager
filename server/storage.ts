@@ -1335,7 +1335,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteJobMessage(messageId: string): Promise<void> {
-    await db.delete(jobMessages).where(eq(jobMessages.id, messageId));
+    await db.update(jobMessages).set({ deleted: true, message: "" }).where(eq(jobMessages.id, messageId));
   }
 
   async markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void> {
@@ -1424,7 +1424,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllConversationsForStaff(includeArchived = false): Promise<any[]> {
-    // Get all jobs that have at least one message
+    // Get all jobs that have at least one message (including soft-deleted ones)
     const allMsgs = await db.select().from(jobMessages).orderBy(jobMessages.createdAt);
     if (allMsgs.length === 0) return [];
 
@@ -1444,8 +1444,10 @@ export class DatabaseStorage implements IStorage {
     for (const job of allJobs) {
       if (!includeArchived && job.conversationArchivedByStaff) continue;
       const msgs = byJob.get(job.id) || [];
-      const unread = msgs.filter(m => m.senderType === 'customer' && !m.readByStaff).length;
-      const latest = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+      // Exclude soft-deleted messages from unread count and latest message preview
+      const activeMsgs = msgs.filter(m => !m.deleted);
+      const unread = activeMsgs.filter(m => m.senderType === 'customer' && !m.readByStaff).length;
+      const latest = activeMsgs.length > 0 ? activeMsgs[activeMsgs.length - 1] : null;
       const customer = customerMap.get(job.customerId);
       result.push({
         jobId: job.id,
@@ -1455,7 +1457,7 @@ export class DatabaseStorage implements IStorage {
         customerLogoUrl: customer?.logoUrl || null,
         status: job.status,
         completed: job.completed,
-        messageCount: msgs.length,
+        messageCount: activeMsgs.length,
         unreadCount: unread,
         isArchivedByStaff: !!job.conversationArchivedByStaff,
         latestMessage: latest ? { message: latest.message, senderType: latest.senderType, createdAt: latest.createdAt } : null,

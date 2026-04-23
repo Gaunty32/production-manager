@@ -944,8 +944,8 @@ export default function StaffMessages() {
                 const initials = getInitials(msg.senderName, isStaff ? "S" : "C");
                 return (
                   <div key={msg.id} className={`group/msg flex items-end gap-2.5 ${isStaff ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
-                    {/* Unsend button — staff messages only, visible on hover */}
-                    {isStaff && selected?.type === "job" && (
+                    {/* Unsend button — staff messages only, visible on hover, hidden for already-deleted */}
+                    {isStaff && selected?.type === "job" && !(msg as any).deleted && (
                       <button
                         type="button"
                         title="Unsend"
@@ -982,13 +982,17 @@ export default function StaffMessages() {
                         </p>
                       )}
                       <div className={`rounded-2xl px-4 py-2.5 ${
-                        msg.isInternal
-                          ? "bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/50 text-foreground rounded-br-sm"
-                          : isStaff
-                            ? "bg-blue-500 text-white rounded-br-sm"
-                            : "bg-orange-400 text-white rounded-bl-sm"
+                        (msg as any).deleted
+                          ? "bg-muted border border-border rounded-br-sm"
+                          : msg.isInternal
+                            ? "bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/50 text-foreground rounded-br-sm"
+                            : isStaff
+                              ? "bg-blue-500 text-white rounded-br-sm"
+                              : "bg-orange-400 text-white rounded-bl-sm"
                       }`}>
-                        {(() => {
+                        {(msg as any).deleted ? (
+                          <p className="text-xs text-muted-foreground italic">Message deleted</p>
+                        ) : (() => {
                           const fileRegex = /\[FILE:([^:]+):([^\]]+)\]/g;
                           const rawText = msg.message || "";
                           const fileMatches: { name: string; url: string }[] = [];
@@ -1019,14 +1023,14 @@ export default function StaffMessages() {
                             </>
                           );
                         })()}
-                        {msg.imageUrl && (
+                        {!((msg as any).deleted) && msg.imageUrl && (
                           <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
                             <img src={msg.imageUrl} alt="Sample" className="max-w-full rounded-lg max-h-48 object-contain hover:opacity-90 transition-opacity" />
                           </a>
                         )}
                         <div className={`flex items-center gap-1.5 mt-1 ${isStaff ? "justify-end" : ""}`}>
-                          {msg.isInternal && <Lock className={`h-2.5 w-2.5 ${msg.isInternal ? "text-amber-600 dark:text-amber-400" : ""}`} />}
-                          <p className={`text-[10px] ${msg.isInternal ? "text-amber-600/70 dark:text-amber-400/70" : "text-white/70"}`}>
+                          {msg.isInternal && !((msg as any).deleted) && <Lock className={`h-2.5 w-2.5 ${msg.isInternal ? "text-amber-600 dark:text-amber-400" : ""}`} />}
+                          <p className={`text-[10px] ${(msg as any).deleted ? "text-muted-foreground" : msg.isInternal ? "text-amber-600/70 dark:text-amber-400/70" : "text-white/70"}`}>
                             {format(new Date(msg.createdAt), "d MMM, h:mm a")}
                           </p>
                         </div>

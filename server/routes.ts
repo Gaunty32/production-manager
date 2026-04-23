@@ -2066,8 +2066,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const allMessages = await storage.getJobMessages(req.params.jobId);
-      // Filter out internal (staff-only) messages from customer view
-      const messages = allMessages.filter((m: any) => !m.isInternal);
+      // Filter out internal (staff-only) and soft-deleted messages from customer view
+      const messages = allMessages.filter((m: any) => !m.isInternal && !m.deleted);
       
       // Mark messages as read by customer (only non-internal ones)
       await storage.markMessagesAsRead(req.params.jobId, 'customer');
