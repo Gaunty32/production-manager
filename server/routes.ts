@@ -1541,6 +1541,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate a welcome invite for a customer portal user (creates temp password, returns email template data)
+  app.post("/api/customer-users/:id/generate-invite", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = await storage.getCustomerUserById(id);
+      if (!user) return res.status(404).json({ error: "Customer user not found" });
+
+      // Generate a readable temporary password
+      const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+      const tempPassword = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+
+      const bcrypt = await import("bcrypt");
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
+      await storage.updateCustomerPassword(id, passwordHash);
+      await storage.updateCustomerMustResetPassword(id, true);
+
+      // Determine portal base URL from request
+      const protocol = req.headers["x-forwarded-proto"] || "https";
+      const host = req.headers.host;
+      const portalUrl = `${protocol}://${host}/customer/login`;
+
+      res.json({
+        email: user.email,
+        tempPassword,
+        portalUrl,
+      });
+    } catch (error) {
+      console.error("Error generating invite:", error);
+      res.status(500).json({ error: "Failed to generate invite" });
+    }
+  });
+
   // Update customer user details (email, name)
   app.patch("/api/customer-users/:id", isStaffAuthenticated, async (req, res) => {
     try {
