@@ -2319,7 +2319,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? (await storage.getCustomerUserById(req.session.impersonationCustomerUserId))?.customerId
         : null;
       if (!customerId) return res.status(401).json({ error: "Not authenticated" });
-      const conversations = await storage.getConversationsForCustomer(customerId);
+      // Always include archived so they appear in the archived section (not completely hidden)
+      const conversations = await storage.getConversationsForCustomer(customerId, true);
       res.json(conversations);
     } catch (error) {
       console.error("Error fetching conversations:", error);

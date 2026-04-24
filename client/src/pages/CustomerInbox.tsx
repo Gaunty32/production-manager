@@ -149,7 +149,14 @@ export default function CustomerInbox() {
   // Auto-select first conversation per tab
   useEffect(() => {
     if (tab === "job" && jobConversations.length > 0 && !jobId) {
-      setSelected({ type: "job", jobId: jobConversations[0].jobId });
+      const active = jobConversations.find(c => !c.isArchived);
+      if (active) {
+        setSelected({ type: "job", jobId: active.jobId });
+      } else {
+        // All archived — auto-expand the archived section and select the first one
+        setShowArchivedJobs(true);
+        setSelected({ type: "job", jobId: jobConversations[0].jobId });
+      }
     }
     if (tab === "direct" && directConversations.length > 0 && !directId) {
       setSelected({ type: "direct", conversationId: directConversations[0].id });
@@ -416,6 +423,41 @@ export default function CustomerInbox() {
                 <LoadingSpinner />
               ) : jobConversations.length === 0 ? (
                 <EmptyState label="No conversations yet" sublabel="Messages about your jobs will appear here" />
+              ) : jobConversations.every(c => c.isArchived) ? (
+                <>
+                  <EmptyState label="No active conversations" sublabel="Your conversations have been archived — expand the section below to view them" />
+                  <div>
+                    <button
+                      onClick={() => setShowArchivedJobs(v => !v)}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground border-t transition-colors"
+                      data-testid="button-toggle-archived-jobs"
+                    >
+                      <Archive className="h-3 w-3" />
+                      Archived ({jobConversations.filter(c => c.isArchived).length})
+                      <ChevronRight className={`h-3 w-3 ml-auto transition-transform ${showArchivedJobs ? "rotate-90" : ""}`} />
+                    </button>
+                    {showArchivedJobs && jobConversations
+                      .filter(c => c.isArchived && (!searchQuery || c.jobName.toLowerCase().includes(searchQuery.toLowerCase())))
+                      .map(convo => (
+                        <ConvoRow
+                          key={convo.jobId}
+                          isActive={selected?.type === "job" && selected.jobId === convo.jobId}
+                          icon={<Package className="h-4 w-4 text-muted-foreground" />}
+                          title={convo.jobName}
+                          subtitle={convo.completed ? "Completed" : "In Production"}
+                          unread={0}
+                          latest={convo.latestMessage}
+                          myLabel="You"
+                          theirLabel="Select"
+                          onClick={() => setSelected({ type: "job", jobId: convo.jobId })}
+                          testId={`conversation-archived-${convo.jobId}`}
+                          onUnarchive={() => unarchiveJobConvoMutation.mutate(convo.jobId)}
+                          dimmed
+                        />
+                      ))
+                    }
+                  </div>
+                </>
               ) : (
                 <>
                   {jobConversations
