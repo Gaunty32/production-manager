@@ -245,7 +245,7 @@ export default function StaffMessages() {
     queryKey: ["/api/staff/messaging-users"],
   });
 
-  const { data: customerJobs = [] } = useQuery<{ id: string; jobName: string; status: string; jobNumber?: number }[]>({
+  const { data: customerJobs = [] } = useQuery<{ id: string; jobName: string; status: string; invoiceStatus: string; jobNumber?: number }[]>({
     queryKey: ["/api/jobs", { customerId: msgExistingCustomerId }],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/jobs?customerId=${msgExistingCustomerId}`);
@@ -1341,8 +1341,16 @@ export default function StaffMessages() {
                 ) : (
                   <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
                     {customerJobs
-                      .filter(j => j.status !== "invoiced")
-                      .map(j => (
+                      .filter(j => j.invoiceStatus !== "invoiced")
+                      .sort((a, b) => (b.jobNumber ?? 0) - (a.jobNumber ?? 0))
+                      .map(j => {
+                        const statusLabel = (() => {
+                          if (j.status === "pending_customer_approval" || j.status === "pending") return "Pending approval";
+                          if (j.status === "production") return "In production";
+                          if (j.status === "completed") return "Completed";
+                          return j.status;
+                        })();
+                        return (
                         <button
                           key={j.id}
                           type="button"
@@ -1352,10 +1360,11 @@ export default function StaffMessages() {
                         >
                           <span className="font-medium truncate">{j.jobName || "Untitled job"}</span>
                           <span className={`text-xs shrink-0 ${msgExistingJobId === j.id ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                            {j.jobNumber ? `#${j.jobNumber}` : ""} · {j.status}
+                            {j.jobNumber ? `#${j.jobNumber}` : ""} · {statusLabel}
                           </span>
                         </button>
-                      ))}
+                        );
+                      })}
                   </div>
                 )}
               </div>
