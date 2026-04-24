@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { HelpCircle, Package, Clock, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { useLocation } from "wouter";
+import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -306,6 +307,8 @@ export default function CustomerLogin() {
           </p>
         </div>
       </div>
+
+      <MobileInstallBanner />
 
       <AlertDialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
         <AlertDialogContent>

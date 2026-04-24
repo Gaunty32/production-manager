@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Input } from "@/components/ui/input";
 import {
@@ -608,8 +609,8 @@ export default function CustomerDashboard() {
           </div>
 
           {/* Mobile: welcome text + submit button */}
-          <div className="md:hidden">
-            <p className="text-sm text-muted-foreground mb-3">{getWelcomeMessage(customerUser?.firstName)}</p>
+          <div className="md:hidden space-y-3">
+            <p className="text-sm text-muted-foreground">{getWelcomeMessage(customerUser?.firstName)}</p>
             <Button
               className="w-full"
               onClick={() => setLocation("/customer/submit")}
@@ -618,6 +619,7 @@ export default function CustomerDashboard() {
               <Plus className="h-4 w-4 mr-2" />
               Submit New Job
             </Button>
+            {!isImpersonating && <MobileInstallBanner variant="card" />}
           </div>
 
           <div>
