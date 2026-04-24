@@ -43,7 +43,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail } from "./emailService";
 
 // Helper function to auto-schedule a line item when it has a machine assigned
 async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
@@ -1477,6 +1477,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(500).json({ error: error instanceof Error ? error.message : "Password reset failed" });
       }
+    }
+  });
+
+  // Public: validate an invite token (returns user email/name so page can greet them)
+  app.get("/api/customer-invite", async (req, res) => {
+    try {
+      const token = String(req.query.token || "");
+      if (!token) return res.status(400).json({ error: "Token required" });
+      const row = await storage.getCustomerInviteToken(token);
+      if (!row || row.used) return res.status(400).json({ error: "Invalid or already used link" });
+      if (new Date() > new Date(row.expiresAt)) return res.status(400).json({ error: "This link has expired" });
+      const user = await storage.getCustomerUserById(row.customerUserId);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      res.json({ email: user.email, firstName: user.firstName });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to validate link" });
+    }
+  });
+
+  // Public: accept invite token — set password and activate account
+  app.post("/api/customer-invite", async (req: any, res) => {
+    try {
+      const { token, newPassword } = z.object({
+        token: z.string().min(1),
+        newPassword: z.string().min(8, "Password must be at least 8 characters"),
+      }).parse(req.body);
+
+      const row = await storage.getCustomerInviteToken(token);
+      if (!row || row.used) return res.status(400).json({ error: "Invalid or already used link" });
+      if (new Date() > new Date(row.expiresAt)) return res.status(400).json({ error: "This link has expired" });
+
+      const bcrypt = await import("bcrypt");
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await storage.updateCustomerPassword(row.customerUserId, passwordHash);
+      await storage.updateCustomerMustResetPassword(row.customerUserId, false);
+      await storage.markCustomerInviteTokenUsed(row.id);
+
+      res.json({ success: true });
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors.map(err => err.message).join(", ") });
+      console.error("Failed to accept invite:", e);
+      res.status(500).json({ error: "Failed to set password" });
     }
   });
 
@@ -5790,11 +5832,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
       const currentUser = await storage.getCustomerUserById(customerUserId);
       if (!currentUser) return res.status(404).json({ error: "Not found" });
-      const data = insertCustomerUserSchema.extend({ customerId: z.string() }).parse({
-        ...req.body,
-        customerId: currentUser.customerId,
+
+      const bodySchema = z.object({
+        firstName: z.string().min(1, "First name is required"),
+        lastName: z.string().optional(),
+        email: z.string().email("Valid email required"),
       });
-      const newUser = await registerCustomer(data);
+      const { firstName, lastName, email } = bodySchema.parse(req.body);
+
+      // Check for duplicate email
+      const existing = await storage.getCustomerUserByEmail(email);
+      if (existing) return res.status(409).json({ error: "A portal login with this email already exists" });
+
+      // Generate a random placeholder password (user will set via invite link)
+      const crypto = await import("crypto");
+      const placeholderPassword = crypto.randomBytes(32).toString("hex");
+      const bcrypt = await import("bcrypt");
+      const passwordHash = await bcrypt.hash(placeholderPassword, 10);
+
+      const newUser = await storage.createCustomerUser({
+        customerId: currentUser.customerId,
+        email,
+        passwordHash,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        mustResetPassword: true,
+        active: true,
+      });
+
+      // Generate invite token (48 hours expiry)
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      await storage.createCustomerInviteToken({ customerUserId: newUser.id, token, expiresAt });
+
+      // Send invite email
+      try {
+        const customers = await storage.getCustomers();
+        const customer = customers.find(c => c.id === currentUser.customerId);
+        const companyName = customer?.name || "Select Branding";
+        const inviterName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ") || currentUser.email;
+        const baseUrl = process.env.REPLIT_DOMAINS
+          ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+          : 'http://localhost:5000';
+        await sendTeamInviteEmail(email, {
+          firstName: firstName || null,
+          inviterName,
+          companyName,
+          inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
+          isReset: false,
+        });
+      } catch (emailErr) {
+        console.error("Failed to send invite email:", emailErr);
+      }
+
       res.json(newUser);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -5804,6 +5894,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(500).json({ error: error instanceof Error ? error.message : "Failed to add team member" });
       }
+    }
+  });
+
+  // Send / resend a password-reset invite link to a team member
+  app.post("/api/customer-portal/team/:id/send-invite", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
+      const currentUser = await storage.getCustomerUserById(customerUserId);
+      if (!currentUser) return res.status(404).json({ error: "Not found" });
+      const target = await storage.getCustomerUserById(req.params.id);
+      if (!target || target.customerId !== currentUser.customerId) return res.status(403).json({ error: "Forbidden" });
+
+      const crypto = await import("crypto");
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      await storage.createCustomerInviteToken({ customerUserId: target.id, token, expiresAt });
+
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === currentUser.customerId);
+      const companyName = customer?.name || "Select Branding";
+      const inviterName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ") || currentUser.email;
+      const baseUrl = process.env.REPLIT_DOMAINS
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+        : 'http://localhost:5000';
+      await sendTeamInviteEmail(target.email, {
+        firstName: target.firstName || null,
+        inviterName,
+        companyName,
+        inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
+        isReset: true,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to send invite:", error);
+      res.status(500).json({ error: "Failed to send reset link" });
     }
   });
 

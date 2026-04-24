@@ -17,6 +17,7 @@ import {
   jobMessages,
   jobFiles,
   passwordResetTokens,
+  customerInviteTokens,
   impersonationSessions,
   jobErrors,
   customerDocuments,
@@ -186,6 +187,9 @@ export interface IStorage {
   deleteJobFile(id: string): Promise<void>;
   
   // Password reset methods
+  createCustomerInviteToken(data: { customerUserId: string; token: string; expiresAt: Date }): Promise<any>;
+  getCustomerInviteToken(token: string): Promise<any | undefined>;
+  markCustomerInviteTokenUsed(id: string): Promise<void>;
   createPasswordResetToken(data: { userId: string; token: string; expiresAt: Date }): Promise<any>;
   getPasswordResetToken(token: string): Promise<any | undefined>;
   updateUserPassword(userId: string, passwordHash: string): Promise<void>;
@@ -1543,6 +1547,29 @@ export class DatabaseStorage implements IStorage {
       .update(passwordResetTokens)
       .set({ used: true })
       .where(eq(passwordResetTokens.id, tokenId));
+  }
+
+  async createCustomerInviteToken(data: { customerUserId: string; token: string; expiresAt: Date }): Promise<any> {
+    const [token] = await db
+      .insert(customerInviteTokens)
+      .values(data)
+      .returning();
+    return token;
+  }
+
+  async getCustomerInviteToken(token: string): Promise<any | undefined> {
+    const [row] = await db
+      .select()
+      .from(customerInviteTokens)
+      .where(eq(customerInviteTokens.token, token));
+    return row;
+  }
+
+  async markCustomerInviteTokenUsed(id: string): Promise<void> {
+    await db
+      .update(customerInviteTokens)
+      .set({ used: true })
+      .where(eq(customerInviteTokens.id, id));
   }
 
   async getProductionDisplayQueue(days: number = 3): Promise<any[]> {

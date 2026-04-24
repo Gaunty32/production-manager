@@ -227,6 +227,16 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
   used: boolean("used").notNull().default(false),
 });
 
+// One-time invite/reset tokens for customer portal users
+export const customerInviteTokens = pgTable("customer_invite_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerUserId: varchar("customer_user_id").notNull().references(() => customerUsers.id, { onDelete: "cascade" }),
+  token: varchar("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  used: boolean("used").notNull().default(false),
+});
+
 // Customer impersonation sessions for staff "view as customer" feature
 export const impersonationSessions = pgTable("impersonation_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

@@ -370,6 +370,63 @@ export async function sendStaffMessageToCustomerEmail(
   }
 }
 
+export async function sendTeamInviteEmail(
+  email: string,
+  details: {
+    firstName: string | null;
+    inviterName: string;
+    companyName: string;
+    inviteUrl: string;
+    isReset: boolean;
+  }
+) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const safeName = sanitizeHtml(details.firstName);
+  const safeInviter = sanitizeHtml(details.inviterName);
+  const safeCompany = sanitizeHtml(details.companyName);
+
+  const greeting = safeName ? `Hi ${safeName},` : 'Hello,';
+  const action = details.isReset ? 'reset your password' : 'set up your password';
+  const subject = details.isReset
+    ? `Reset your ${safeCompany} portal password`
+    : `You've been invited to the ${safeCompany} customer portal`;
+
+  const { error } = await client.emails.send({
+    from: fromEmail || 'onboarding@resend.dev',
+    to: email,
+    subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+        <h2 style="color: #333;">${details.isReset ? 'Password Reset' : 'Welcome to the Customer Portal'}</h2>
+        <p>${greeting}</p>
+        ${details.isReset
+          ? `<p><strong>${safeInviter}</strong> has requested a password reset for your <strong>${safeCompany}</strong> customer portal account.</p>`
+          : `<p><strong>${safeInviter}</strong> has invited you to access the <strong>${safeCompany}</strong> customer portal.</p>`
+        }
+        <p>Click the button below to ${action}. This link will expire in 48 hours.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${details.inviteUrl}"
+             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            ${details.isReset ? 'Reset Password' : 'Accept Invitation'}
+          </a>
+        </div>
+        <p style="color: #666; font-size: 13px;">
+          If you weren't expecting this email, you can safely ignore it.
+        </p>
+        <p style="margin: 4px 0; color: #666; font-size: 13px;">Regards,</p>
+        <p style="margin: 4px 0; color: #666; font-size: 13px;">Select Uniforms</p>
+        <p style="margin: 4px 0;">
+          <a href="mailto:sales@selectuniforms.co.uk" style="color: #4F46E5; font-size: 13px;">sales@selectuniforms.co.uk</a>
+        </p>
+      </div>
+    `,
+  });
+
+  if (error) {
+    console.error('Failed to send team invite email:', error);
+  }
+}
+
 export async function sendNewChatEmail(
   customerEmails: string[],
   details: {

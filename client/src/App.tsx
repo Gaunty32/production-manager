@@ -36,6 +36,7 @@ import CustomerDocuments from "@/pages/CustomerDocuments";
 import CustomerPasswordReset from "@/pages/CustomerPasswordReset";
 import CustomerInbox from "@/pages/CustomerInbox";
 import CustomerTeam from "@/pages/CustomerTeam";
+import CustomerInviteAccept from "@/pages/CustomerInviteAccept";
 import CustomerInvoices from "@/pages/CustomerInvoices";
 import StaffMessages from "@/pages/StaffMessages";
 import StaffSamples from "@/pages/StaffSamples";
@@ -100,6 +101,7 @@ function AppRouter() {
       <Route path="/production-display" component={ProductionDisplay} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/customer/invite" component={CustomerInviteAccept} />
       
       {/* Customer Portal Routes */}
       <Route path="/customer/:rest*">

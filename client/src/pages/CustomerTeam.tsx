@@ -27,7 +27,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, UserPlus, KeyRound, UserCheck, UserX, Users, Camera } from "lucide-react";
+import { ArrowLeft, UserPlus, Mail, UserCheck, UserX, Users, Camera } from "lucide-react";
 import { format } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -47,15 +47,6 @@ const addMemberSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().optional(),
   email: z.string().email("Valid email required"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
-
-const resetPasswordSchema = z.object({
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string(),
-}).refine(d => d.password === d.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"],
 });
 
 function getInitials(member: TeamMember) {
@@ -74,7 +65,6 @@ export default function CustomerTeam() {
   const { isImpersonating } = usePermissions();
 
   const [showAdd, setShowAdd] = useState(false);
-  const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const [isUploadingPic, setIsUploadingPic] = useState(false);
   const picInputRef = useRef<HTMLInputElement>(null);
@@ -87,12 +77,7 @@ export default function CustomerTeam() {
 
   const addForm = useForm<z.infer<typeof addMemberSchema>>({
     resolver: zodResolver(addMemberSchema),
-    defaultValues: { firstName: "", lastName: "", email: "", password: "" },
-  });
-
-  const resetForm = useForm<z.infer<typeof resetPasswordSchema>>({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: { password: "", confirmPassword: "" },
+    defaultValues: { firstName: "", lastName: "", email: "" },
   });
 
   const addMutation = useMutation({
@@ -100,7 +85,7 @@ export default function CustomerTeam() {
       apiRequest("POST", "/api/customer-portal/team", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/team"] });
-      toast({ title: "Team member added", description: "They can now log in to the portal." });
+      toast({ title: "Invitation sent", description: "They'll receive an email to set their password and access the portal." });
       setShowAdd(false);
       addForm.reset();
     },
@@ -120,17 +105,14 @@ export default function CustomerTeam() {
     },
   });
 
-  const resetMutation = useMutation({
-    mutationFn: ({ id, password }: { id: string; password: string }) =>
-      apiRequest("POST", `/api/customer-portal/team/${id}/reset-password`, { password }),
+  const sendInviteMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest("POST", `/api/customer-portal/team/${id}/send-invite`, {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/team"] });
-      toast({ title: "Password reset", description: "They will be asked to set a new password on next login." });
-      setResetTarget(null);
-      resetForm.reset();
+      toast({ title: "Reset link sent", description: "They'll receive an email with a link to set a new password." });
     },
     onError: (e: any) => {
-      toast({ title: "Error", description: e.message || "Failed to reset password", variant: "destructive" });
+      toast({ title: "Error", description: e.message || "Failed to send reset link", variant: "destructive" });
     },
   });
 
@@ -269,11 +251,12 @@ export default function CustomerTeam() {
                         <Button
                           variant="outline"
                           size="icon"
-                          title="Reset password"
+                          title="Send password reset link"
                           data-testid={`button-reset-${member.id}`}
-                          onClick={() => { setResetTarget(member); resetForm.reset(); }}
+                          onClick={() => sendInviteMutation.mutate(member.id)}
+                          disabled={sendInviteMutation.isPending}
                         >
-                          <KeyRound className="h-4 w-4" />
+                          <Mail className="h-4 w-4" />
                         </Button>
                       </div>
                     )}
@@ -291,6 +274,9 @@ export default function CustomerTeam() {
           <DialogHeader>
             <DialogTitle>Add Team Member</DialogTitle>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            They'll receive an email with a link to set their own password and access the portal.
+          </p>
           <Form {...addForm}>
             <form onSubmit={addForm.handleSubmit(d => addMutation.mutate(d))} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -316,51 +302,10 @@ export default function CustomerTeam() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={addForm.control} name="password" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Temporary Password</FormLabel>
-                  <FormControl><Input type="password" {...field} data-testid="input-password" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
                 <Button type="submit" disabled={addMutation.isPending} data-testid="button-save-member">
-                  {addMutation.isPending ? "Adding..." : "Add Member"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Reset Password Dialog */}
-      <Dialog open={!!resetTarget} onOpenChange={v => { if (!v) setResetTarget(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reset Password — {resetTarget ? getFullName(resetTarget) : ""}</DialogTitle>
-          </DialogHeader>
-          <Form {...resetForm}>
-            <form onSubmit={resetForm.handleSubmit(d => resetMutation.mutate({ id: resetTarget!.id, password: d.password }))} className="space-y-4">
-              <FormField control={resetForm.control} name="password" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>New Password</FormLabel>
-                  <FormControl><Input type="password" {...field} data-testid="input-new-password" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={resetForm.control} name="confirmPassword" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
-                  <FormControl><Input type="password" {...field} data-testid="input-confirm-password" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <p className="text-xs text-muted-foreground">They will be prompted to change this on their next login.</p>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setResetTarget(null)}>Cancel</Button>
-                <Button type="submit" disabled={resetMutation.isPending} data-testid="button-confirm-reset">
-                  {resetMutation.isPending ? "Saving..." : "Reset Password"}
+                  {addMutation.isPending ? "Sending invite…" : "Send Invitation"}
                 </Button>
               </DialogFooter>
             </form>
