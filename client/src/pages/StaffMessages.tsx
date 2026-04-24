@@ -207,6 +207,7 @@ export default function StaffMessages() {
   const profileImageInputRef = useRef<HTMLInputElement>(null);
   const [chatImages, setChatImages] = useState<{ key: string; preview: string | null; fileName: string; isImage: boolean }[]>([]);
   const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
+  const [isDraggingOverCompose, setIsDraggingOverCompose] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [pendingProfileCropFile, setPendingProfileCropFile] = useState<File | null>(null);
@@ -548,10 +549,32 @@ export default function StaffMessages() {
 
   const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = Array.from(e.clipboardData.items);
-    const imageItems = items.filter(item => item.kind === "file" && item.type.startsWith("image/"));
-    if (imageItems.length === 0) return; // let normal text paste through
+    const fileItems = items.filter(item => item.kind === "file");
+    if (fileItems.length === 0) return; // let normal text paste through
     e.preventDefault();
-    const files = imageItems.map(item => item.getAsFile()).filter((f): f is File => f !== null);
+    const files = fileItems.map(item => item.getAsFile()).filter((f): f is File => f !== null);
+    if (files.length > 0) await uploadFiles(files);
+  };
+
+  const handleComposeDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes("Files")) setIsDraggingOverCompose(true);
+  };
+
+  const handleComposeDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDraggingOverCompose(false);
+    }
+  };
+
+  const handleComposeDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOverCompose(false);
+    const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) await uploadFiles(files);
   };
 
@@ -1088,7 +1111,21 @@ export default function StaffMessages() {
           </div>
 
           {/* Compose area */}
-          <div className="border-t p-3 bg-card/40">
+          <div
+            className={`border-t p-3 bg-card/40 relative transition-colors ${isDraggingOverCompose ? "bg-primary/5 border-primary" : ""}`}
+            onDragOver={handleComposeDragOver}
+            onDragEnter={handleComposeDragOver}
+            onDragLeave={handleComposeDragLeave}
+            onDrop={handleComposeDrop}
+          >
+            {isDraggingOverCompose && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg border-2 border-dashed border-primary bg-primary/10 pointer-events-none">
+                <div className="flex items-center gap-2 text-primary font-medium text-sm">
+                  <Paperclip className="h-4 w-4" />
+                  Drop files to attach
+                </div>
+              </div>
+            )}
             {/* Internal toggle — only for job chats */}
             {selected.type === "job" && (
               <div className="mb-2 flex items-center gap-2">
@@ -1151,7 +1188,7 @@ export default function StaffMessages() {
                 <Paperclip className="h-4 w-4" />
               </Button>
               <Textarea
-                placeholder={isInternal ? "Internal note (staff only)…" : "Reply… (Enter to send, Shift+Enter for new line)"}
+                placeholder={isInternal ? "Internal note (staff only)… (paste or drop images/files)" : "Reply… (Enter to send, Shift+Enter for new line, paste or drop files)"}
                 value={newMessage}
                 onChange={e => setNewMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
