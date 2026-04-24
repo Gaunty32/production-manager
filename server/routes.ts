@@ -43,7 +43,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail } from "./emailService";
 
 // Helper function to auto-schedule a line item when it has a machine assigned
 async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
@@ -2538,14 +2538,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const senderId = staffMember ? staffMember.id : sessionUserId;
       const senderName = staffMember?.name || 'Staff';
 
+      const isInternal = !!req.body.isInternal;
+
+      // Check if this is the first staff message on the job (before creating)
+      let isFirstStaffMessage = false;
+      if (!isInternal) {
+        const existingMessages = await storage.getJobMessages(req.params.jobId);
+        isFirstStaffMessage = !existingMessages.some(
+          (m) => m.senderType === 'staff' && !(m as any).isInternal
+        );
+      }
+
       const message = await storage.createJobMessage({
         jobId: req.params.jobId,
         senderType: 'staff',
         senderId,
         message: req.body.message,
         ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
-        ...(req.body.isInternal ? { isInternal: true } : {}),
+        ...(isInternal ? { isInternal: true } : {}),
       });
+
+      // Send email notification to customer on first staff message
+      if (isFirstStaffMessage && job.customerId) {
+        try {
+          const customerUsers = await storage.getCustomerUsersByCustomerId(job.customerId);
+          const emails = customerUsers.map((u) => u.email).filter(Boolean) as string[];
+          if (emails.length) {
+            const baseUrl = process.env.REPLIT_DOMAINS
+              ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+              : 'http://localhost:5000';
+            const portalUrl = `${baseUrl}/customer/job/${job.id}`;
+            await sendNewChatEmail(emails, {
+              staffName: senderName,
+              subject: job.jobName,
+              firstMessage: req.body.message,
+              portalUrl,
+              isJobChat: true,
+              jobName: job.jobName,
+            });
+          }
+        } catch (emailErr) {
+          console.error('Failed to send new job chat email notification:', emailErr);
+        }
+      }
 
       res.json(message);
     } catch (error) {
@@ -5321,6 +5356,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message,
         });
       }
+
+      // Email notification to customer when staff starts a conversation with them
+      if (message && convo.customerId) {
+        try {
+          const sessionUserId = String(req.session.userId);
+          const allStaff = await storage.getStaff();
+          const staffMember = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
+          const senderName = staffMember?.name || 'Staff';
+
+          const customerUsers = await storage.getCustomerUsersByCustomerId(convo.customerId);
+          const emails = customerUsers.map((u) => u.email).filter(Boolean) as string[];
+          if (emails.length) {
+            const baseUrl = process.env.REPLIT_DOMAINS
+              ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+              : 'http://localhost:5000';
+            await sendNewChatEmail(emails, {
+              staffName: senderName,
+              subject: convo.subject,
+              firstMessage: message,
+              portalUrl: `${baseUrl}/customer/messages`,
+              isJobChat: false,
+            });
+          }
+        } catch (emailErr) {
+          console.error('Failed to send new conversation email notification:', emailErr);
+        }
+      }
+
       res.json(convo);
     } catch (e) {
       console.error(e);

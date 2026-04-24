@@ -370,6 +370,66 @@ export async function sendStaffMessageToCustomerEmail(
   }
 }
 
+export async function sendNewChatEmail(
+  customerEmails: string[],
+  details: {
+    staffName: string;
+    subject: string;
+    firstMessage: string;
+    portalUrl: string;
+    isJobChat: boolean;
+    jobName?: string;
+  }
+) {
+  if (!customerEmails.length) return;
+  const { client, fromEmail } = await getUncachableResendClient();
+  const safeStaffName = sanitizeHtml(details.staffName);
+  const safeSubject = sanitizeHtml(details.subject);
+  const safeMessage = sanitizeHtml(details.firstMessage);
+  const safeJobName = sanitizeHtml(details.jobName ?? null);
+
+  const emailSubject = details.isJobChat
+    ? `New message about your order: ${safeJobName || safeSubject}`
+    : `New message from Select Branding: ${safeSubject}`;
+
+  const contextLine = details.isJobChat
+    ? `<strong>${safeStaffName}</strong> has started a conversation about your order <strong>${safeJobName || safeSubject}</strong>:`
+    : `<strong>${safeStaffName}</strong> has sent you a new message:`;
+
+  const { error } = await client.emails.send({
+    from: fromEmail || 'onboarding@resend.dev',
+    to: customerEmails,
+    subject: emailSubject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+        <h2 style="color: #333;">New Message from Select Branding</h2>
+        <p>${contextLine}</p>
+        <div style="background-color: #f5f5f5; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4F46E5;">
+          <p style="margin: 0; color: #333; white-space: pre-line;">${safeMessage}</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${details.portalUrl}"
+             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            View &amp; Reply
+          </a>
+        </div>
+        <p style="color: #666; font-size: 13px;">
+          You can reply directly from your customer portal. If you have any questions, please don't hesitate to get in touch.
+        </p>
+        <p style="margin: 4px 0; color: #666; font-size: 13px;">Regards,</p>
+        <p style="margin: 4px 0; color: #666; font-size: 13px;">Select Uniforms</p>
+        <p style="margin: 4px 0;">
+          <a href="mailto:sales@selectuniforms.co.uk" style="color: #4F46E5; font-size: 13px;">sales@selectuniforms.co.uk</a>
+        </p>
+      </div>
+    `,
+  });
+
+  if (error) {
+    console.error('Failed to send new chat notification email:', error);
+  }
+}
+
 export async function sendStaffMessageCCEmail(
   ccEmails: string[],
   details: {
