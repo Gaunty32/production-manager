@@ -229,7 +229,14 @@ async function recalculateJobProductionTime(jobId: string): Promise<void> {
   }
 }
 
+const SERVER_START_VERSION = Date.now().toString();
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Version endpoint — used by client to detect deployments and auto-reload
+  app.get("/api/version", (_req, res) => {
+    res.json({ version: SERVER_START_VERSION });
+  });
+
   // Serve object storage files via /api/img/* — distinct path avoids platform CDN interception
   app.get("/api/img/*", async (req, res) => {
     try {
