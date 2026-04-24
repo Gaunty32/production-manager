@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling } from "lucide-react";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
+import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 import {
   Sheet,
   SheetContent,
@@ -1118,6 +1119,8 @@ export default function CustomerDashboard() {
           <span>My Team</span>
         </button>
       </nav>
+      {/* PWA install prompt — shows on mobile when not yet installed */}
+      {!isImpersonating && <MobileInstallBanner />}
     </div>
   );
 }
