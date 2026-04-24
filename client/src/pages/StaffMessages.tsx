@@ -51,6 +51,8 @@ import {
   FileText,
   Image,
   Film,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
@@ -208,6 +210,8 @@ export default function StaffMessages() {
   const [chatImages, setChatImages] = useState<{ key: string; preview: string | null; fileName: string; isImage: boolean }[]>([]);
   const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
   const [isDraggingOverCompose, setIsDraggingOverCompose] = useState(false);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [pendingProfileCropFile, setPendingProfileCropFile] = useState<File | null>(null);
@@ -379,6 +383,18 @@ export default function StaffMessages() {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations/all"] });
     },
     onError: () => toast({ title: "Failed to unsend message", variant: "destructive" }),
+  });
+
+  const editMessageMutation = useMutation({
+    mutationFn: async ({ messageId, message }: { messageId: string; message: string }) => {
+      await apiRequest("PATCH", `/api/staff/jobs/${jobId}/messages/${messageId}`, { message });
+    },
+    onSuccess: () => {
+      setEditingMsgId(null);
+      setEditingText("");
+      queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${jobId}/messages`] });
+    },
+    onError: () => toast({ title: "Failed to edit message", variant: "destructive" }),
   });
 
   const archiveConvoJobMutation = useMutation({
@@ -1011,18 +1027,29 @@ export default function StaffMessages() {
                 const initials = getInitials(msg.senderName, isStaff ? "S" : "C");
                 return (
                   <div key={msg.id} className={`group/msg flex items-end gap-2.5 ${isStaff ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
-                    {/* Unsend button — staff messages only, visible on hover, hidden for already-deleted */}
-                    {isStaff && selected?.type === "job" && !(msg as any).deleted && (
-                      <button
-                        type="button"
-                        title="Unsend"
-                        onClick={() => unsendMessageMutation.mutate(msg.id)}
-                        disabled={unsendMessageMutation.isPending}
-                        className="invisible group-hover/msg:visible shrink-0 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        data-testid={`button-unsend-${msg.id}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                    {/* Action buttons — edit + unsend, staff messages only, visible on hover */}
+                    {isStaff && selected?.type === "job" && !(msg as any).deleted && editingMsgId !== msg.id && (
+                      <div className="invisible group-hover/msg:visible flex flex-col gap-1 shrink-0">
+                        <button
+                          type="button"
+                          title="Edit message"
+                          onClick={() => { setEditingMsgId(msg.id); setEditingText(msg.message || ""); }}
+                          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                          data-testid={`button-edit-msg-${msg.id}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Unsend"
+                          onClick={() => unsendMessageMutation.mutate(msg.id)}
+                          disabled={unsendMessageMutation.isPending}
+                          className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          data-testid={`button-unsend-${msg.id}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     )}
                     {/* Avatar */}
                     <div className={`h-8 w-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center border-2 border-background ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"} ${isStaff ? "bg-blue-500" : "bg-orange-400"}`}>
@@ -1059,6 +1086,43 @@ export default function StaffMessages() {
                       }`}>
                         {(msg as any).deleted ? (
                           <p className="text-xs text-muted-foreground italic">Message deleted</p>
+                        ) : editingMsgId === msg.id ? (
+                          <div className="flex flex-col gap-2 min-w-[200px]">
+                            <textarea
+                              autoFocus
+                              value={editingText}
+                              onChange={e => setEditingText(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                  e.preventDefault();
+                                  if (editingText.trim()) editMessageMutation.mutate({ messageId: msg.id, message: editingText });
+                                }
+                                if (e.key === "Escape") { setEditingMsgId(null); setEditingText(""); }
+                              }}
+                              className={`text-sm w-full rounded-lg px-2 py-1.5 resize-none focus:outline-none leading-relaxed ${msg.isInternal ? "bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-700 focus:border-amber-500" : "bg-white/20 text-white placeholder:text-white/60 border border-white/30 focus:border-white/60"}`}
+                              rows={Math.max(2, editingText.split("\n").length)}
+                              data-testid="input-edit-message"
+                            />
+                            <div className="flex items-center gap-2 justify-end">
+                              <button
+                                type="button"
+                                onClick={() => { setEditingMsgId(null); setEditingText(""); }}
+                                className="text-[11px] text-white/70 hover:text-white transition-colors px-2 py-0.5"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { if (editingText.trim()) editMessageMutation.mutate({ messageId: msg.id, message: editingText }); }}
+                                disabled={editMessageMutation.isPending || !editingText.trim()}
+                                className="flex items-center gap-1 text-[11px] bg-white/20 hover:bg-white/30 text-white rounded px-2 py-0.5 transition-colors disabled:opacity-50"
+                                data-testid="button-save-edit-message"
+                              >
+                                <Check className="h-3 w-3" />
+                                Save
+                              </button>
+                            </div>
+                          </div>
                         ) : (() => {
                           const fileRegex = /\[FILE:([^:]+):([^\]]+)\]/g;
                           const rawText = msg.message || "";
@@ -1090,17 +1154,22 @@ export default function StaffMessages() {
                             </>
                           );
                         })()}
-                        {!((msg as any).deleted) && msg.imageUrl && (
+                        {!((msg as any).deleted) && editingMsgId !== msg.id && msg.imageUrl && (
                           <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
                             <img src={msg.imageUrl} alt="Sample" className="max-w-full rounded-lg max-h-48 object-contain hover:opacity-90 transition-opacity" />
                           </a>
                         )}
-                        <div className={`flex items-center gap-1.5 mt-1 ${isStaff ? "justify-end" : ""}`}>
-                          {msg.isInternal && !((msg as any).deleted) && <Lock className={`h-2.5 w-2.5 ${msg.isInternal ? "text-amber-600 dark:text-amber-400" : ""}`} />}
-                          <p className={`text-[10px] ${(msg as any).deleted ? "text-muted-foreground" : msg.isInternal ? "text-amber-600/70 dark:text-amber-400/70" : "text-white/70"}`}>
-                            {format(new Date(msg.createdAt), "d MMM, h:mm a")}
-                          </p>
-                        </div>
+                        {editingMsgId !== msg.id && (
+                          <div className={`flex items-center gap-1.5 mt-1 ${isStaff ? "justify-end" : ""}`}>
+                            {msg.isInternal && !((msg as any).deleted) && <Lock className={`h-2.5 w-2.5 ${msg.isInternal ? "text-amber-600 dark:text-amber-400" : ""}`} />}
+                            {(msg as any).editedAt && !((msg as any).deleted) && (
+                              <span className={`text-[10px] italic ${msg.isInternal ? "text-amber-600/70 dark:text-amber-400/70" : "text-white/70"}`}>edited</span>
+                            )}
+                            <p className={`text-[10px] ${(msg as any).deleted ? "text-muted-foreground" : msg.isInternal ? "text-amber-600/70 dark:text-amber-400/70" : "text-white/70"}`}>
+                              {format(new Date(msg.createdAt), "d MMM, h:mm a")}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

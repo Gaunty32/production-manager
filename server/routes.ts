@@ -2297,6 +2297,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff - Edit a job message
+  app.patch("/api/staff/jobs/:jobId/messages/:messageId", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { message } = req.body;
+      if (!message?.trim()) return res.status(400).json({ error: "Message cannot be empty" });
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+      await storage.updateJobMessage(req.params.messageId, message.trim());
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error editing message:", error);
+      res.status(500).json({ error: "Failed to edit message" });
+    }
+  });
+
   // Staff - Delete (unsend) a job message
   app.delete("/api/staff/jobs/:jobId/messages/:messageId", isStaffAuthenticated, async (req, res) => {
     try {
