@@ -582,7 +582,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
       const { password: _, ...userWithoutPassword } = user;
-      res.json({ ...userWithoutPassword, profileImageUrl: normalizeImgUrl(userWithoutPassword.profileImageUrl) });
+
+      let realUser = null;
+      if (req.session.realStaffUserId) {
+        const ru = await storage.getUser(req.session.realStaffUserId);
+        if (ru) {
+          const { password: __, ...ruWithoutPassword } = ru;
+          realUser = { ...ruWithoutPassword, profileImageUrl: normalizeImgUrl(ruWithoutPassword.profileImageUrl) };
+        }
+      }
+
+      res.json({
+        ...userWithoutPassword,
+        profileImageUrl: normalizeImgUrl(userWithoutPassword.profileImageUrl),
+        isStaffImpersonating: !!req.session.realStaffUserId,
+        realUser,
+      });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ error: "Failed to fetch user" });
@@ -625,7 +640,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Authentication required" });
       }
       
-      const user = await storage.getUser(req.session.userId);
+      // When impersonating another staff member, check the REAL user's role
+      const checkUserId = req.session.realStaffUserId || req.session.userId;
+      const user = await storage.getUser(checkUserId);
       
       if (!user || user.role !== "super_admin") {
         return res.status(403).json({ error: "Super admin access required" });
@@ -1690,6 +1707,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error("Error exiting impersonation:", error);
+      res.status(500).json({ error: "Failed to exit impersonation" });
+    }
+  });
+
+  // Staff Impersonation - Start (super_admin only)
+  app.post("/api/staff/impersonate/staff/:userId", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      // Determine the real user (in case already impersonating)
+      const realUserId = req.session.realStaffUserId || req.session.userId;
+      const realUser = await storage.getUser(realUserId);
+      if (!realUser || realUser.role !== "super_admin") {
+        return res.status(403).json({ error: "Super admin access required" });
+      }
+
+      const targetUser = await storage.getUser(req.params.userId);
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (targetUser.id === realUserId) {
+        return res.status(400).json({ error: "Cannot impersonate yourself" });
+      }
+
+      // Swap session to target user, preserve real user ID
+      req.session.realStaffUserId = realUserId;
+      req.session.userId = targetUser.id;
+
+      const { password: _, ...targetWithoutPassword } = targetUser;
+      res.json({ success: true, impersonating: targetWithoutPassword });
+    } catch (error) {
+      console.error("Error starting staff impersonation:", error);
+      res.status(500).json({ error: "Failed to start impersonation" });
+    }
+  });
+
+  // Staff Impersonation - Exit
+  app.delete("/api/staff/impersonate/staff", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      if (!req.session.realStaffUserId) {
+        return res.status(400).json({ error: "Not currently impersonating a staff member" });
+      }
+      req.session.userId = req.session.realStaffUserId;
+      delete req.session.realStaffUserId;
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error exiting staff impersonation:", error);
       res.status(500).json({ error: "Failed to exit impersonation" });
     }
   });

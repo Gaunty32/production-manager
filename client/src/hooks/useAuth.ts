@@ -1,8 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
 
+interface AuthUser extends User {
+  isStaffImpersonating?: boolean;
+  realUser?: User | null;
+}
+
 export function useAuth() {
-  const { data: user, isLoading } = useQuery<User | null>({
+  const { data: user, isLoading } = useQuery<AuthUser | null>({
     queryKey: ["/api/staff-auth/user"],
     queryFn: async () => {
       const res = await fetch("/api/staff-auth/user", {
@@ -28,5 +33,7 @@ export function useAuth() {
     user,
     isLoading,
     isAuthenticated: !!user,
+    isStaffImpersonating: user?.isStaffImpersonating ?? false,
+    realUser: user?.realUser ?? null,
   };
 }

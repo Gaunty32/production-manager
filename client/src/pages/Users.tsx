@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera } from "lucide-react";
+import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera, Eye } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +70,24 @@ export default function Users() {
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
+  });
+
+  const impersonateMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("POST", `/api/staff/impersonate/staff/${userId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-auth/user"] });
+      window.location.reload();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Could not switch view",
+        description: error.message || "Failed to start impersonation",
+        variant: "destructive",
+      });
+    },
   });
 
   const handleProfilePhotoClick = (userId: string) => {
@@ -573,6 +591,18 @@ export default function Users() {
                     </Select>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
+                    {currentUser?.role === UserRole.SUPER_ADMIN && user.id !== currentUser?.id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => impersonateMutation.mutate(user.id)}
+                        disabled={impersonateMutation.isPending}
+                        data-testid={`button-view-as-${user.id}`}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        View as
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"

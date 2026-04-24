@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LogOut } from "lucide-react";
+import { StaffImpersonationBanner } from "@/components/StaffImpersonationBanner";
 import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
 import StaffPage from "@/pages/Staff";
@@ -149,7 +150,7 @@ function CustomerPortalApp() {
 }
 
 function AuthenticatedApp({ style }: { style: Record<string, string> }) {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, isStaffImpersonating, realUser } = useAuth();
   const { toast } = useToast();
 
   if (isLoading) {
@@ -182,6 +183,9 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
+          {isStaffImpersonating && user && realUser && (
+            <StaffImpersonationBanner impersonatedUser={user as any} realUser={realUser as any} />
+          )}
           <header className="flex items-center justify-between p-3 md:p-4 border-b sticky top-0 bg-background z-10 gap-2">
             <div className="flex items-center gap-2 md:gap-3">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
