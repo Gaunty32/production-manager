@@ -1323,7 +1323,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getJobMessages(jobId: string): Promise<JobMessage[]> {
-    return await db.select().from(jobMessages).where(eq(jobMessages.jobId, jobId));
+    return await db.select().from(jobMessages).where(eq(jobMessages.jobId, jobId)).orderBy(jobMessages.createdAt);
   }
 
   async createJobMessage(message: InsertJobMessage): Promise<JobMessage> {
