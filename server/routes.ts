@@ -1376,13 +1376,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await seedCustomers();
 
   // Customer Portal Authentication Routes
-  app.post("/api/customer-auth/register", async (req, res) => {
+  app.post("/api/customer-auth/register", isStaffAuthenticated, async (req: any, res) => {
     try {
-      const data = insertCustomerUserSchema.extend({
-        customerId: z.string(),
+      const data = z.object({
+        customerId: z.string().min(1),
+        email: z.string().email(),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
       }).parse(req.body);
-      
-      const customerUser = await registerCustomer(data);
+
+      // Ensure no duplicate
+      const existing = await storage.getCustomerUserByEmail(data.email);
+      if (existing) return res.status(409).json({ error: "A customer portal login with this email already exists" });
+
+      // Random placeholder password — user will set their own via invite link
+      const crypto = await import("crypto");
+      const placeholderPassword = crypto.randomBytes(32).toString("hex");
+      const bcrypt = await import("bcrypt");
+      const passwordHash = await bcrypt.hash(placeholderPassword, 10);
+
+      const customerUser = await storage.createCustomerUser({
+        customerId: data.customerId,
+        email: data.email,
+        passwordHash,
+        firstName: data.firstName ?? null,
+        lastName: data.lastName ?? null,
+        mustResetPassword: true,
+        active: true,
+      });
+
+      // Generate invite token (48 hours)
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      await storage.createCustomerInviteToken({ customerUserId: customerUser.id, token, expiresAt });
+
+      // Resolve staff inviter name
+      const sessionUserId = String(req.session.userId);
+      const allStaff = await storage.getStaff();
+      const staffMember = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
+      const inviterName = staffMember?.name || 'Select Branding';
+
+      // Get company name
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === data.customerId);
+      const companyName = customer?.name || 'Select Branding';
+
+      // Send invite email
+      try {
+        const baseUrl = process.env.REPLIT_DOMAINS
+          ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+          : 'http://localhost:5000';
+        await sendTeamInviteEmail(data.email, {
+          firstName: data.firstName ?? null,
+          inviterName,
+          companyName,
+          inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
+          isReset: false,
+        });
+      } catch (emailErr) {
+        console.error('Failed to send portal invite email:', emailErr);
+      }
+
       res.json(customerUser);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1577,58 +1631,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/customer-users/:id/reset-password", isStaffAuthenticated, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { password } = z.object({
-        password: z.string().min(8, "Password must be at least 8 characters"),
-      }).parse(req.body);
-      
-      const bcrypt = await import("bcrypt");
-      const passwordHash = await bcrypt.hash(password, 10);
-      
-      await storage.updateCustomerPassword(id, passwordHash);
-      await storage.updateCustomerMustResetPassword(id, true);
-      
-      res.json({ success: true });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: error.errors });
-      } else {
-        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to reset customer password" });
-      }
-    }
-  });
-
-  // Generate a welcome invite for a customer portal user (creates temp password, returns email template data)
-  app.post("/api/customer-users/:id/generate-invite", isStaffAuthenticated, async (req, res) => {
+  app.post("/api/customer-users/:id/reset-password", isStaffAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
       const user = await storage.getCustomerUserById(id);
       if (!user) return res.status(404).json({ error: "Customer user not found" });
 
-      // Generate a readable temporary password
-      const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-      const tempPassword = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+      const crypto = await import("crypto");
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      await storage.createCustomerInviteToken({ customerUserId: id, token, expiresAt });
 
-      const bcrypt = await import("bcrypt");
-      const passwordHash = await bcrypt.hash(tempPassword, 10);
-      await storage.updateCustomerPassword(id, passwordHash);
-      await storage.updateCustomerMustResetPassword(id, true);
+      const sessionUserId = String(req.session.userId);
+      const allStaff = await storage.getStaff();
+      const staffMember = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
+      const inviterName = staffMember?.name || 'Select Branding';
 
-      // Determine portal base URL from request
-      const protocol = req.headers["x-forwarded-proto"] || "https";
-      const host = req.headers.host;
-      const portalUrl = `${protocol}://${host}/customer/login`;
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === user.customerId);
+      const companyName = customer?.name || 'Select Branding';
 
-      res.json({
-        email: user.email,
-        tempPassword,
-        portalUrl,
+      const baseUrl = process.env.REPLIT_DOMAINS
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+        : 'http://localhost:5000';
+
+      await sendTeamInviteEmail(user.email, {
+        firstName: user.firstName ?? null,
+        inviterName,
+        companyName,
+        inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
+        isReset: true,
       });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error sending reset invite:", error);
+      res.status(500).json({ error: "Failed to send reset link" });
+    }
+  });
+
+  // Send a welcome invite email for a customer portal user
+  app.post("/api/customer-users/:id/generate-invite", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = await storage.getCustomerUserById(id);
+      if (!user) return res.status(404).json({ error: "Customer user not found" });
+
+      const crypto = await import("crypto");
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      await storage.createCustomerInviteToken({ customerUserId: id, token, expiresAt });
+
+      const sessionUserId = String(req.session.userId);
+      const allStaff = await storage.getStaff();
+      const staffMember = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
+      const inviterName = staffMember?.name || 'Select Branding';
+
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === user.customerId);
+      const companyName = customer?.name || 'Select Branding';
+
+      const baseUrl = process.env.REPLIT_DOMAINS
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+        : 'http://localhost:5000';
+
+      await sendTeamInviteEmail(user.email, {
+        firstName: user.firstName ?? null,
+        inviterName,
+        companyName,
+        inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
+        isReset: false,
+      });
+
+      res.json({ success: true });
     } catch (error) {
       console.error("Error generating invite:", error);
-      res.status(500).json({ error: "Failed to generate invite" });
+      res.status(500).json({ error: "Failed to send invite" });
     }
   });
 

@@ -1,4 +1,4 @@
-import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail, Copy, ExternalLink } from "lucide-react";
+import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
 import { CustomerUserDialog } from "@/components/CustomerUserDialog";
-import { ResetPasswordDialog } from "@/components/ResetPasswordDialog";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Customer } from "@shared/schema";
@@ -28,14 +27,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -56,12 +47,10 @@ export default function Customers() {
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [portalFilter, setPortalFilter] = useState<'all' | 'has-portal' | 'no-portal'>('all');
-  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
-  const [resetPasswordEmail, setResetPasswordEmail] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
   const [editingPortalUser, setEditingPortalUser] = useState<{ id: string; email: string; firstName: string; lastName: string } | null>(null);
-  const [welcomeEmail, setWelcomeEmail] = useState<{ email: string; tempPassword: string; portalUrl: string; customerName: string } | null>(null);
-  const [isGeneratingInvite, setIsGeneratingInvite] = useState<string | null>(null); // userId being generated
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState<string | null>(null); // userId being actioned
+  const [isSendingReset, setIsSendingReset] = useState<string | null>(null); // userId being reset
 
   const { data: customersData = [], isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -130,42 +119,29 @@ export default function Customers() {
     return { total: allCustomers.length, hasPortal, noPortal };
   }, [allCustomers, customerUsersMap]);
 
-  const handleGenerateInvite = async (portalUserId: string, customerName: string) => {
+  const handleGenerateInvite = async (portalUserId: string) => {
     setIsGeneratingInvite(portalUserId);
     try {
-      const res = await apiRequest("POST", `/api/customer-users/${portalUserId}/generate-invite`);
-      const data = await res.json();
-      setWelcomeEmail({ ...data, customerName });
+      await apiRequest("POST", `/api/customer-users/${portalUserId}/generate-invite`);
+      toast({ title: "Invite sent", description: "A welcome email with a secure login link has been sent." });
     } catch {
-      toast({ title: "Failed to generate invite", variant: "destructive" });
+      toast({ title: "Failed to send invite", variant: "destructive" });
     } finally {
       setIsGeneratingInvite(null);
     }
   };
 
-  const buildEmailBody = (d: { email: string; tempPassword: string; portalUrl: string; customerName: string }) =>
-    `Hi,
-
-We're excited to welcome you to The Production Manager — our new online portal that replaces Slack as the central place to manage your orders with us.
-
-With The Production Manager you can:
-• Submit new orders and upload artwork/files
-• Track your orders through every stage of production
-• Communicate directly with our production team
-• Download copy invoices at any time
-
-Getting started is easy:
-
-  Portal address: ${d.portalUrl}
-  Username: ${d.email}
-  Temporary password: ${d.tempPassword}
-
-When you first log in you'll be asked to create your own password.
-
-If you have any questions, just reply to this email or message us through the portal.
-
-Kind regards,
-Select Branding Solutions`;
+  const handleSendResetLink = async (portalUserId: string) => {
+    setIsSendingReset(portalUserId);
+    try {
+      await apiRequest("POST", `/api/customer-users/${portalUserId}/reset-password`);
+      toast({ title: "Reset link sent", description: "A password reset link has been emailed to the customer." });
+    } catch {
+      toast({ title: "Failed to send reset link", variant: "destructive" });
+    } finally {
+      setIsSendingReset(null);
+    }
+  };
 
   const createCustomerMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -262,8 +238,8 @@ Select Branding Solutions`;
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-users/all"] });
       toast({
-        title: "Success",
-        description: `Customer portal login created successfully${variables.email ? ` for ${variables.email}` : ''}`,
+        title: "Portal login created",
+        description: `An invite link has been emailed to ${variables.email || 'the customer'} to set their password.`,
       });
     },
     onError: (error: Error) => {
@@ -318,29 +294,6 @@ Select Branding Solutions`;
     },
   });
 
-  const resetPasswordMutation = useMutation({
-    mutationFn: async ({ id, password }: { id: string; password: string }) => {
-      const res = await apiRequest("POST", `/api/customer-users/${id}/reset-password`, { password });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/customer-users/all"] });
-      toast({
-        title: "Password Reset",
-        description: "Customer portal password has been reset successfully",
-      });
-      setResetPasswordUserId(null);
-      setResetPasswordEmail("");
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to reset password",
-        variant: "destructive",
-      });
-    },
-  });
-
   const impersonateMutation = useMutation({
     mutationFn: async (customerId: string) => {
       const res = await apiRequest("POST", `/api/staff/customers/${customerId}/impersonate`);
@@ -358,11 +311,6 @@ Select Branding Solutions`;
       });
     },
   });
-
-  const handleResetPassword = (userId: string, email: string) => {
-    setResetPasswordUserId(userId);
-    setResetPasswordEmail(email);
-  };
 
   const handleDelete = (id: string) => {
     setCustomerToDelete(id);
@@ -668,21 +616,23 @@ Select Branding Solutions`;
                                   variant="ghost"
                                   size="sm"
                                   className="h-7 text-xs"
-                                  onClick={() => handleResetPassword(portalUser.id, portalUser.email)}
+                                  onClick={() => handleSendResetLink(portalUser.id)}
+                                  disabled={isSendingReset === portalUser.id}
                                   data-testid={`button-reset-password-${portalUser.id}`}
                                 >
-                                  <Key className="h-3 w-3 mr-1" />Reset Password
+                                  <Key className="h-3 w-3 mr-1" />
+                                  {isSendingReset === portalUser.id ? "Sending…" : "Send Reset Link"}
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   className="h-7 text-xs text-blue-600 dark:text-blue-400"
-                                  onClick={() => handleGenerateInvite(portalUser.id, customer.name)}
+                                  onClick={() => handleGenerateInvite(portalUser.id)}
                                   disabled={isGeneratingInvite === portalUser.id}
                                   data-testid={`button-send-welcome-${portalUser.id}`}
                                 >
                                   <Mail className="h-3 w-3 mr-1" />
-                                  {isGeneratingInvite === portalUser.id ? "Generating…" : "Send Welcome Email"}
+                                  {isGeneratingInvite === portalUser.id ? "Sending…" : "Send Invite Email"}
                                 </Button>
                                 <div className="flex items-center gap-1.5 ml-auto">
                                   <span className="text-xs text-muted-foreground">Access</span>
@@ -755,25 +705,6 @@ Select Branding Solutions`;
           />
         )}
 
-        {resetPasswordUserId && (
-          <ResetPasswordDialog
-            open={true}
-            onOpenChange={(open) => {
-              if (!open) {
-                setResetPasswordUserId(null);
-                setResetPasswordEmail("");
-              }
-            }}
-            customerEmail={resetPasswordEmail}
-            onResetPassword={async (password) => {
-              await resetPasswordMutation.mutateAsync({
-                id: resetPasswordUserId,
-                password,
-              });
-            }}
-            isResetting={resetPasswordMutation.isPending}
-          />
-        )}
 
         {/* Edit Portal User Dialog */}
         <AlertDialog open={editingPortalUser !== null} onOpenChange={(open) => !open && setEditingPortalUser(null)}>
@@ -835,84 +766,6 @@ Select Branding Solutions`;
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Welcome Email Dialog */}
-        <Dialog open={welcomeEmail !== null} onOpenChange={(open) => !open && setWelcomeEmail(null)}>
-          <DialogContent className="max-w-xl" data-testid="dialog-welcome-email">
-            <DialogHeader>
-              <DialogTitle>Welcome Email — {welcomeEmail?.customerName}</DialogTitle>
-            </DialogHeader>
-            {welcomeEmail && (() => {
-              const subject = "Welcome to The Production Manager";
-              const body = buildEmailBody(welcomeEmail);
-              return (
-                <div className="space-y-4">
-                  <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 px-3 py-2 text-xs text-blue-800 dark:text-blue-300">
-                    A temporary password has been generated and saved. The customer will be prompted to create their own password on first login.
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">To</span>
-                    </div>
-                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-mono select-all">
-                      {welcomeEmail.email}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subject</span>
-                    </div>
-                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm select-all">
-                      {subject}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Body</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-xs"
-                        onClick={() => {
-                          navigator.clipboard.writeText(body);
-                          toast({ title: "Email body copied to clipboard" });
-                        }}
-                        data-testid="button-copy-email-body"
-                      >
-                        <Copy className="h-3 w-3 mr-1" />Copy
-                      </Button>
-                    </div>
-                    <Textarea
-                      readOnly
-                      value={body}
-                      rows={12}
-                      className="font-mono text-xs resize-none bg-muted/30"
-                      data-testid="text-email-body"
-                    />
-                  </div>
-                </div>
-              );
-            })()}
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setWelcomeEmail(null)}>Close</Button>
-              {welcomeEmail && (
-                <Button
-                  onClick={() => {
-                    const subject = "Welcome to The Production Manager";
-                    const body = buildEmailBody(welcomeEmail);
-                    window.open(`mailto:${welcomeEmail.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_blank");
-                  }}
-                  data-testid="button-open-in-outlook"
-                >
-                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                  Open in Outlook
-                </Button>
-              )}
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );
