@@ -2583,33 +2583,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       console.log('[JOB APPROVE] Job updated. New status:', updatedJob.status, 'Job ID:', updatedJob.id);
 
-      // Send email notification to customer
-      try {
-        if (job.submittedById) {
-          const customerUser = await storage.getCustomerUserById(job.submittedById);
-          if (customerUser && customerUser.email) {
-            const customers = await storage.getCustomers();
-            const customer = customers.find(c => c.id === job.customerId);
-            await sendJobApprovedEmail(customerUser.email, {
-              jobName: job.jobName,
-              customerName: customer?.name || 'Customer',
-              jobId: job.id,
-              jobNumber: job.jobNumber,
-              quantity: job.quantity,
-              poNumber: job.poNumber,
-              notes: job.notes,
-              requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null,
-              customerAddress: customer?.address || null,
-              deliveryAddress: job.deliveryAddress || null,
-              orderDate: job.submittedAt ? new Date(job.submittedAt) : new Date(),
-            });
-          }
-        }
-      } catch (emailError) {
-        console.error('Failed to send job approval notification email:', emailError);
-        // Don't fail the request if email fails
-      }
-
       res.json({ success: true });
     } catch (error) {
       console.error("Error approving job:", error);
