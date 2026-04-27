@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
-import { Upload, Link, X, Loader2 } from "lucide-react";
+import { Upload, X, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const formSchema = insertCustomerSchema
@@ -57,7 +57,6 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
   const isEditMode = !!customer;
   const { toast } = useToast();
 
-  const [logoMode, setLogoMode] = useState<"url" | "upload">("url");
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,7 +102,6 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         xeroContactId: "",
       });
       setPreviewUrl("");
-      setLogoMode("url");
     }
   }, [customer, open, form]);
 
@@ -242,88 +240,57 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
               )}
             />
 
-            {/* Logo field — URL or file upload */}
+            {/* Logo field — URL input with inline upload button */}
             <FormField
               control={form.control}
               name="logoUrl"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center justify-between">
-                    <FormLabel>Logo</FormLabel>
-                    <div className="flex gap-1">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={logoMode === "url" ? "default" : "outline"}
-                        className="h-7 px-2 text-xs gap-1"
-                        onClick={() => setLogoMode("url")}
-                        data-testid="button-logo-mode-url"
-                      >
-                        <Link className="h-3 w-3" /> URL
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={logoMode === "upload" ? "default" : "outline"}
-                        className="h-7 px-2 text-xs gap-1"
-                        onClick={() => setLogoMode("upload")}
-                        data-testid="button-logo-mode-upload"
-                      >
-                        <Upload className="h-3 w-3" /> Upload
-                      </Button>
-                    </div>
-                  </div>
-
-                  {logoMode === "url" ? (
+                  <FormLabel>Logo</FormLabel>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    data-testid="input-logo-file"
+                  />
+                  <div className="flex gap-2">
                     <FormControl>
                       <Input
                         {...field}
-                        type="url"
-                        placeholder="https://example.com/logo.png"
+                        placeholder="https://example.com/logo.png or upload →"
                         data-testid="input-logo-url"
                         onChange={e => { field.onChange(e); setPreviewUrl(e.target.value); }}
                       />
                     </FormControl>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleFileChange}
-                        data-testid="input-logo-file"
-                      />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      title="Upload image file"
+                      data-testid="button-upload-logo"
+                    >
+                      {uploading
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Upload className="h-4 w-4" />}
+                    </Button>
+                    {previewUrl && (
                       <Button
                         type="button"
-                        variant="outline"
-                        className="flex-1 gap-2"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
-                        data-testid="button-upload-logo"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => { form.setValue("logoUrl", ""); setPreviewUrl(""); }}
+                        title="Clear logo"
+                        data-testid="button-clear-logo"
                       >
-                        {uploading ? (
-                          <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</>
-                        ) : (
-                          <><Upload className="h-4 w-4" /> Choose image file</>
-                        )}
+                        <X className="h-4 w-4" />
                       </Button>
-                      {previewUrl && (
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => { form.setValue("logoUrl", ""); setPreviewUrl(""); }}
-                          data-testid="button-clear-logo"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  )}
-
+                    )}
+                  </div>
                   <FormMessage />
-
                   {previewUrl && (
                     <div className="mt-2 p-2 border rounded-md bg-muted">
                       <img
