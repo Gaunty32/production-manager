@@ -47,6 +47,7 @@ export default function Customers() {
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [portalFilter, setPortalFilter] = useState<'all' | 'has-portal' | 'no-portal'>('all');
+  const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active');
   const [searchTerm, setSearchTerm] = useState("");
   const [editingPortalUser, setEditingPortalUser] = useState<{ id: string; email: string; firstName: string; lastName: string } | null>(null);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState<string | null>(null); // userId being actioned
@@ -75,9 +76,23 @@ export default function Customers() {
   // Sort customers alphabetically by name
   const allCustomers = [...customersData].sort((a, b) => a.name.localeCompare(b.name));
   
-  // Filter customers based on portal status and search term
+  // Active/inactive counts (across all customers, unaffected by other filters)
+  const activeStats = useMemo(() => {
+    const active = allCustomers.filter(c => c.active !== false).length;
+    const inactive = allCustomers.length - active;
+    return { active, inactive, all: allCustomers.length };
+  }, [allCustomers]);
+
+  // Base set after applying the active filter (used for portal stats counts too)
+  const activeFilteredBase = useMemo(() => {
+    if (activeFilter === 'active') return allCustomers.filter(c => c.active !== false);
+    if (activeFilter === 'inactive') return allCustomers.filter(c => c.active === false);
+    return allCustomers;
+  }, [allCustomers, activeFilter]);
+
+  // Filter customers based on portal status, active status, and search term
   const customers = useMemo(() => {
-    let filtered = allCustomers;
+    let filtered = activeFilteredBase;
     
     // Apply search filter
     if (searchTerm.trim()) {
@@ -110,14 +125,14 @@ export default function Customers() {
     }
     
     return filtered;
-  }, [allCustomers, customerUsersMap, portalFilter, searchTerm]);
+  }, [activeFilteredBase, customerUsersMap, portalFilter, searchTerm]);
   
-  // Count customers by portal status
+  // Count customers by portal status (within the active filter set)
   const portalStats = useMemo(() => {
-    const hasPortal = allCustomers.filter(c => (customerUsersMap.get(c.id) || []).length > 0).length;
-    const noPortal = allCustomers.length - hasPortal;
-    return { total: allCustomers.length, hasPortal, noPortal };
-  }, [allCustomers, customerUsersMap]);
+    const hasPortal = activeFilteredBase.filter(c => (customerUsersMap.get(c.id) || []).length > 0).length;
+    const noPortal = activeFilteredBase.length - hasPortal;
+    return { total: activeFilteredBase.length, hasPortal, noPortal };
+  }, [activeFilteredBase, customerUsersMap]);
 
   const handleGenerateInvite = async (portalUserId: string) => {
     setIsGeneratingInvite(portalUserId);
@@ -399,34 +414,63 @@ export default function Customers() {
             </div>
             
             {/* Filter buttons */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-muted-foreground">Portal Status:</span>
-              <Button
-                variant={portalFilter === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setPortalFilter('all')}
-                data-testid="button-filter-all"
-              >
-                All ({portalStats.total})
-              </Button>
-              <Button
-                variant={portalFilter === 'has-portal' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setPortalFilter('has-portal')}
-                data-testid="button-filter-has-portal"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                Has Portal ({portalStats.hasPortal})
-              </Button>
-              <Button
-                variant={portalFilter === 'no-portal' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setPortalFilter('no-portal')}
-                data-testid="button-filter-no-portal"
-              >
-                <AlertCircle className="h-3.5 w-3.5 mr-1" />
-                No Portal ({portalStats.noPortal})
-              </Button>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm text-muted-foreground">Status:</span>
+                <Button
+                  variant={activeFilter === 'active' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setActiveFilter('active')}
+                  data-testid="button-filter-active"
+                >
+                  Active ({activeStats.active})
+                </Button>
+                <Button
+                  variant={activeFilter === 'inactive' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setActiveFilter('inactive')}
+                  data-testid="button-filter-inactive"
+                >
+                  Inactive ({activeStats.inactive})
+                </Button>
+                <Button
+                  variant={activeFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setActiveFilter('all')}
+                  data-testid="button-filter-status-all"
+                >
+                  All ({activeStats.all})
+                </Button>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm text-muted-foreground">Portal:</span>
+                <Button
+                  variant={portalFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setPortalFilter('all')}
+                  data-testid="button-filter-all"
+                >
+                  All ({portalStats.total})
+                </Button>
+                <Button
+                  variant={portalFilter === 'has-portal' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setPortalFilter('has-portal')}
+                  data-testid="button-filter-has-portal"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                  Has Portal ({portalStats.hasPortal})
+                </Button>
+                <Button
+                  variant={portalFilter === 'no-portal' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setPortalFilter('no-portal')}
+                  data-testid="button-filter-no-portal"
+                >
+                  <AlertCircle className="h-3.5 w-3.5 mr-1" />
+                  No Portal ({portalStats.noPortal})
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -435,11 +479,13 @@ export default function Customers() {
           <div className="border rounded-md p-8 text-center text-muted-foreground">
             {searchTerm
               ? `No customers match "${searchTerm}"`
-              : portalFilter === 'all'
-                ? "No customers found. Click 'Add Customer' to create one."
+              : activeFilter === 'inactive'
+                ? "No inactive customers."
                 : portalFilter === 'has-portal'
-                  ? "No customers with portal logins. Click 'Create Portal Login' to add one."
-                  : "No customers without portal logins. All customers are set up!"}
+                  ? "No active customers with portal logins."
+                  : portalFilter === 'no-portal'
+                    ? "No active customers without portal logins."
+                    : "No customers found. Click 'Add Customer' to create one."}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
