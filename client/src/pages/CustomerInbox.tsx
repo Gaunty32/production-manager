@@ -639,18 +639,23 @@ export default function CustomerInbox() {
                         </div>
                       )}
                       <div className={`flex items-end gap-2.5 ${isCustomer ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
-                        {/* Avatar */}
-                        <div className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center border-2 border-background shrink-0 ${isCustomer ? "bg-blue-500" : "bg-orange-400"} ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-                          {msg.senderImageUrl ? (
-                            <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
-                          ) : (
-                            <span className="text-[10px] font-bold text-white">{initials}</span>
+                        {/* Avatar + name below */}
+                        <div className={`flex flex-col items-center gap-0.5 shrink-0 ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+                          <div className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center border-2 border-background ${isCustomer ? "bg-blue-500" : "bg-orange-400"}`}>
+                            {msg.senderImageUrl ? (
+                              <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="text-[10px] font-bold text-white">{initials}</span>
+                            )}
+                          </div>
+                          {msg.senderName && (
+                            <span className="text-[9px] font-medium text-muted-foreground text-center leading-tight max-w-[44px] truncate">
+                              {msg.senderName.split(" ")[0]}
+                            </span>
                           )}
                         </div>
                         <div className={`max-w-[82%] sm:max-w-[72%] flex flex-col gap-0.5 ${isCustomer ? "items-end" : "items-start"}`}>
-                          {showAvatar && msg.senderName && (
-                            <p className={`text-[10px] font-semibold text-muted-foreground px-1 ${isCustomer ? "text-right" : ""}`}>{msg.senderName}</p>
-                          )}
+                          {/* name moved under avatar */}
                           <div className={`rounded-2xl px-4 py-2.5 ${isCustomer ? "bg-blue-500 text-white rounded-br-sm" : "bg-orange-400 text-white rounded-bl-sm"}`}>
                             {msg.message.trim() && (
                               <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>

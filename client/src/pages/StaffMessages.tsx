@@ -1051,28 +1051,32 @@ export default function StaffMessages() {
                         </button>
                       </div>
                     )}
-                    {/* Avatar */}
-                    <div className={`h-8 w-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center border-2 border-background ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"} ${isStaff ? "bg-blue-500" : "bg-orange-400"}`}>
-                      {isStaff && msg.senderImageUrl ? (
-                        <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
-                      ) : !isStaff && currentCustomerLogo ? (
-                        <img src={currentCustomerLogo} alt={msg.senderName || ""} className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="text-[10px] font-bold leading-none text-white">
-                          {initials}
+                    {/* Avatar + name below */}
+                    <div className={`flex flex-col items-center gap-0.5 shrink-0 ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+                      <div className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center border-2 border-background ${isStaff ? "bg-blue-500" : "bg-orange-400"}`}>
+                        {isStaff && msg.senderImageUrl ? (
+                          <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
+                        ) : !isStaff && currentCustomerLogo ? (
+                          <img src={currentCustomerLogo} alt={msg.senderName || ""} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] font-bold leading-none text-white">
+                            {initials}
+                          </span>
+                        )}
+                      </div>
+                      {msg.senderName && (
+                        <span className="text-[9px] font-medium text-muted-foreground text-center leading-tight max-w-[44px] truncate">
+                          {msg.senderName.split(" ")[0]}
                         </span>
                       )}
                     </div>
                     {/* Bubble */}
                     <div className={`max-w-[72%] ${isStaff ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
-                      {showAvatar && msg.senderName && (
+                      {msg.isInternal && showAvatar && (
                         <p className={`text-[10px] font-semibold px-1 ${isStaff ? "text-right text-muted-foreground" : "text-muted-foreground"}`}>
-                          {msg.senderName}
-                          {msg.isInternal && (
-                            <span className="ml-1.5 inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
-                              <Lock className="h-2.5 w-2.5" /> Team only
-                            </span>
-                          )}
+                          <span className="ml-1.5 inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
+                            <Lock className="h-2.5 w-2.5" /> Team only
+                          </span>
                         </p>
                       )}
                       <div className={`rounded-2xl px-4 py-2.5 ${
