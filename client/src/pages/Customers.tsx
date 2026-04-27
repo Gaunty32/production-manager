@@ -623,17 +623,24 @@ export default function Customers() {
                                   <Key className="h-3 w-3 mr-1" />
                                   {isSendingReset === portalUser.id ? "Sending…" : "Send Reset Link"}
                                 </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 text-xs text-blue-600 dark:text-blue-400"
-                                  onClick={() => handleGenerateInvite(portalUser.id)}
-                                  disabled={isGeneratingInvite === portalUser.id}
-                                  data-testid={`button-send-welcome-${portalUser.id}`}
-                                >
-                                  <Mail className="h-3 w-3 mr-1" />
-                                  {isGeneratingInvite === portalUser.id ? "Sending…" : "Send Invite Email"}
-                                </Button>
+                                <div className="flex flex-col items-start gap-0.5">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 text-xs text-blue-600 dark:text-blue-400"
+                                    onClick={() => handleGenerateInvite(portalUser.id)}
+                                    disabled={isGeneratingInvite === portalUser.id}
+                                    data-testid={`button-send-welcome-${portalUser.id}`}
+                                  >
+                                    <Mail className="h-3 w-3 mr-1" />
+                                    {isGeneratingInvite === portalUser.id ? "Sending…" : "Send Invite Email"}
+                                  </Button>
+                                  {portalUser.inviteSentAt && (
+                                    <span className="text-[10px] text-muted-foreground pl-1">
+                                      Sent {new Date(portalUser.inviteSentAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="flex items-center gap-1.5 ml-auto">
                                   <span className="text-xs text-muted-foreground">Access</span>
                                   <Switch

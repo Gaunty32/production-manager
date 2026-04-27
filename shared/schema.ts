@@ -215,6 +215,7 @@ export const customerUsers = pgTable("customer_users", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
+  inviteSentAt: timestamp("invite_sent_at"),
 });
 
 // Password reset tokens for staff

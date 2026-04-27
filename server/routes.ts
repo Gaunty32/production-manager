@@ -1750,6 +1750,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isReset: false,
       });
 
+      await storage.updateCustomerUser(id, { inviteSentAt: new Date() } as any);
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error generating invite:", error);
