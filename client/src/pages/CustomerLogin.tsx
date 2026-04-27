@@ -67,6 +67,9 @@ export default function CustomerLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
 
@@ -291,7 +294,11 @@ export default function CustomerLogin() {
               <div className="text-center">
                 <button
                   type="button"
-                  onClick={() => setShowForgotPassword(true)}
+                  onClick={() => {
+                    const email = form.getValues("email");
+                    if (email) setForgotEmail(email);
+                    setShowForgotPassword(true);
+                  }}
                   className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
                   data-testid="link-forgot-password"
                 >
@@ -310,28 +317,79 @@ export default function CustomerLogin() {
 
       <MobileInstallBanner />
 
-      <AlertDialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
+      <AlertDialog open={showForgotPassword} onOpenChange={(open) => {
+        setShowForgotPassword(open);
+        if (!open) { setForgotEmail(""); setForgotSent(false); }
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Forgotten your password?</AlertDialogTitle>
+            <AlertDialogTitle>Reset your password</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
-                <p>
-                  Please contact us and we'll reset your password and send the new
-                  one to your registered email address.
-                </p>
-                <div className="bg-muted rounded-lg p-3 space-y-1">
-                  <p className="font-medium text-foreground">Get in touch:</p>
-                  <p>Email: info@selectuniforms.co.uk</p>
-                  <p>Phone: 01482 211 211</p>
-                </div>
+                {forgotSent ? (
+                  <div className="flex flex-col items-center gap-3 py-2 text-center">
+                    <CheckCircle2 className="h-10 w-10 text-green-500" />
+                    <p className="font-medium text-foreground">Check your inbox</p>
+                    <p className="text-muted-foreground">
+                      If that email is registered, we've sent a password reset link. It expires in 48 hours.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-muted-foreground">
+                      Enter your email address and we'll send you a link to reset your password.
+                    </p>
+                    <Input
+                      type="email"
+                      placeholder="your@email.com"
+                      value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
+                      onKeyDown={async e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (!forgotEmail || forgotSubmitting) return;
+                          setForgotSubmitting(true);
+                          try {
+                            await apiRequest("POST", "/api/customer-auth/forgot-password", { email: forgotEmail });
+                          } catch {}
+                          setForgotSubmitting(false);
+                          setForgotSent(true);
+                        }
+                      }}
+                      data-testid="input-forgot-email"
+                    />
+                  </>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction data-testid="button-close-forgot-password">
-              Got it
-            </AlertDialogAction>
+            {forgotSent ? (
+              <AlertDialogAction data-testid="button-close-forgot-password">
+                Done
+              </AlertDialogAction>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setShowForgotPassword(false)} data-testid="button-cancel-forgot-password">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!forgotEmail || forgotSubmitting) return;
+                    setForgotSubmitting(true);
+                    try {
+                      await apiRequest("POST", "/api/customer-auth/forgot-password", { email: forgotEmail });
+                    } catch {}
+                    setForgotSubmitting(false);
+                    setForgotSent(true);
+                  }}
+                  disabled={!forgotEmail || forgotSubmitting}
+                  data-testid="button-send-reset"
+                >
+                  {forgotSubmitting ? "Sending…" : "Send reset link"}
+                </Button>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

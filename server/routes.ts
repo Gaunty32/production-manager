@@ -1522,6 +1522,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Self-service forgot password — public, no auth required
+  app.post("/api/customer-auth/forgot-password", async (req: any, res) => {
+    try {
+      const { email } = z.object({ email: z.string().email() }).parse(req.body);
+
+      const user = await storage.getCustomerUserByEmail(email);
+      // Always return success to avoid email enumeration
+      if (!user) return res.json({ success: true });
+
+      const crypto = await import("crypto");
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      await storage.createCustomerInviteToken({ customerUserId: user.id, token, expiresAt });
+
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === user.customerId);
+      const companyName = customer?.name || 'Select Branding Solutions';
+
+      const baseUrl = process.env.REPLIT_DOMAINS
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+        : 'http://localhost:5000';
+
+      await sendTeamInviteEmail(user.email, {
+        firstName: user.firstName ?? null,
+        inviterName: 'Select Branding Solutions',
+        companyName,
+        inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
+        isReset: true,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid email address" });
+      }
+      console.error("Forgot password error:", error);
+      res.status(500).json({ error: "Failed to send reset email" });
+    }
+  });
+
   app.post("/api/customer-auth/reset-password", isCustomerAuthenticated, async (req: any, res) => {
     try {
       const { newPassword } = z.object({
