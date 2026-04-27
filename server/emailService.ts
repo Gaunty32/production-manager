@@ -19,7 +19,7 @@ async function getCredentials() {
   if (process.env.RESEND_API_KEY) {
     return {
       apiKey: process.env.RESEND_API_KEY,
-      fromEmail: 'onboarding@resend.dev'
+      fromEmail: 'info@selectbranding.co.uk'
     };
   }
 
@@ -71,7 +71,7 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
   const resetUrl = `${getBaseUrl()}/reset-password?token=${resetToken}`;
   
   const { data, error } = await client.emails.send({
-    from: fromEmail || 'onboarding@resend.dev',
+    from: fromEmail || 'info@selectbranding.co.uk',
     to: email,
     subject: 'Password Reset Request - Production Manager',
     html: `
@@ -125,7 +125,7 @@ export async function sendNewJobSubmissionEmail(
   const safeDispatchDate = sanitizeHtml(jobDetails.requiredDispatchDate);
   
   const { data, error } = await client.emails.send({
-    from: fromEmail || 'onboarding@resend.dev',
+    from: fromEmail || 'info@selectbranding.co.uk',
     to: staffEmails,
     subject: `New Job Submission: ${safeJobName}`,
     html: `
@@ -228,7 +228,7 @@ export async function sendJobApprovedEmail(
   }
 
   const { data, error } = await client.emails.send({
-    from: fromEmail || 'onboarding@resend.dev',
+    from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmail,
     subject: `Select Branding Solutions Ltd Order Acknowledgement - New Bank Details - Ref : ${orderRef}`,
     html: `
@@ -285,7 +285,7 @@ export async function sendJobRejectedEmail(
   const safeRejectionMessage = sanitizeHtml(jobDetails.rejectionMessage);
   
   const { data, error } = await client.emails.send({
-    from: fromEmail || 'onboarding@resend.dev',
+    from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmail,
     subject: `Job Update Required: ${safeJobName}`,
     html: `
@@ -345,7 +345,7 @@ export async function sendStaffMessageToCustomerEmail(
   const safeMessage = sanitizeHtml(details.message);
 
   const { error } = await client.emails.send({
-    from: fromEmail || 'onboarding@resend.dev',
+    from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmail,
     subject: `New message about your job: ${safeJobName}`,
     html: `
@@ -392,7 +392,7 @@ export async function sendTeamInviteEmail(
     : `You've been invited to the ${safeCompany} customer portal`;
 
   const { error } = await client.emails.send({
-    from: fromEmail || 'onboarding@resend.dev',
+    from: fromEmail || 'info@selectbranding.co.uk',
     to: email,
     subject,
     html: `
@@ -454,7 +454,7 @@ export async function sendNewChatEmail(
     : `<strong>${safeStaffName}</strong> has sent you a new message:`;
 
   const { error } = await client.emails.send({
-    from: fromEmail || 'onboarding@resend.dev',
+    from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmails,
     subject: emailSubject,
     html: `
@@ -506,7 +506,7 @@ export async function sendStaffMessageCCEmail(
   const safeMessage = sanitizeHtml(details.message);
 
   const { error } = await client.emails.send({
-    from: fromEmail || 'onboarding@resend.dev',
+    from: fromEmail || 'info@selectbranding.co.uk',
     to: ccEmails,
     subject: `[CC] Message to ${safeCustomerName} re: ${safeJobName}`,
     html: `
