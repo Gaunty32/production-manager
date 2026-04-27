@@ -452,7 +452,7 @@ export default function CustomerDashboard() {
                 <img
                   src={customerUser.customerLogoUrl}
                   alt={customerUser.customerName || "Customer logo"}
-                  className="h-8 max-w-[120px] object-contain"
+                  className="h-24 max-w-[360px] object-contain"
                   data-testid="img-customer-logo"
                 />
               ) : (
