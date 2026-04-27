@@ -1886,7 +1886,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/customer-auth/user", isCustomerAuthenticated, async (req: any, res) => {
     try {
-      const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
+      const effectiveUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(effectiveUserId);
       if (!customerUser) {
         return res.status(404).json({ error: "Customer user not found" });
       }
