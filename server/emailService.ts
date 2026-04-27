@@ -249,9 +249,9 @@ export async function sendJobApprovedEmail(
         <br/>
         <p style="margin: 4px 0;">Regards</p>
         <br/>
-        <p style="margin: 4px 0;">Select Uniforms</p>
+        <p style="margin: 4px 0;">Select Branding Solutions</p>
         <p style="margin: 4px 0;">
-          <a href="mailto:sales@selectuniforms.co.uk" style="color: #4F46E5;">sales@selectuniforms.co.uk</a>
+          <a href="mailto:info@selectbranding.co.uk" style="color: #4F46E5;">info@selectbranding.co.uk</a>
         </p>
       </div>
     `,
@@ -414,9 +414,9 @@ export async function sendTeamInviteEmail(
           If you weren't expecting this email, you can safely ignore it.
         </p>
         <p style="margin: 4px 0; color: #666; font-size: 13px;">Regards,</p>
-        <p style="margin: 4px 0; color: #666; font-size: 13px;">Select Uniforms</p>
+        <p style="margin: 4px 0; color: #666; font-size: 13px;">Select Branding Solutions</p>
         <p style="margin: 4px 0;">
-          <a href="mailto:sales@selectuniforms.co.uk" style="color: #4F46E5; font-size: 13px;">sales@selectuniforms.co.uk</a>
+          <a href="mailto:info@selectbranding.co.uk" style="color: #4F46E5; font-size: 13px;">info@selectbranding.co.uk</a>
         </p>
       </div>
     `,
@@ -474,9 +474,9 @@ export async function sendNewChatEmail(
           You can reply directly from your customer portal. If you have any questions, please don't hesitate to get in touch.
         </p>
         <p style="margin: 4px 0; color: #666; font-size: 13px;">Regards,</p>
-        <p style="margin: 4px 0; color: #666; font-size: 13px;">Select Uniforms</p>
+        <p style="margin: 4px 0; color: #666; font-size: 13px;">Select Branding Solutions</p>
         <p style="margin: 4px 0;">
-          <a href="mailto:sales@selectuniforms.co.uk" style="color: #4F46E5; font-size: 13px;">sales@selectuniforms.co.uk</a>
+          <a href="mailto:info@selectbranding.co.uk" style="color: #4F46E5; font-size: 13px;">info@selectbranding.co.uk</a>
         </p>
       </div>
     `,
