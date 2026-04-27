@@ -2874,7 +2874,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Staff - Get upload URL for file
+  // Staff - Upload a customer logo image directly
+  app.post(
+    "/api/staff/upload-logo",
+    isStaffAuthenticated,
+    express.raw({ type: "*/*", limit: "10mb" }),
+    async (req: any, res) => {
+      try {
+        const { objectStorageClient, ObjectStorageService } = await import("./objectStorage");
+        const { randomUUID } = await import("crypto");
+        const objectStorageService = new ObjectStorageService();
+        const privateObjectDir = objectStorageService.getPrivateObjectDir();
+
+        const fileType = (req.headers["x-file-type"] as string) || "image/png";
+        const objectId = randomUUID();
+        const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+        const parts = fullPath.slice(1).split("/");
+        const bucketName = parts[0];
+        const objectName = parts.slice(1).join("/");
+
+        const bucket = objectStorageClient.bucket(bucketName);
+        const gcsFile = bucket.file(objectName);
+        await gcsFile.save(req.body as Buffer, { contentType: fileType });
+
+        const url = `/api/img/uploads/${objectId}`;
+        res.json({ url });
+      } catch (error: any) {
+        console.error("Error uploading logo:", error);
+        res.status(500).json({ error: error?.message || "Failed to upload logo" });
+      }
+    }
+  );
+
   app.post("/api/staff/objects/upload", isStaffAuthenticated, async (req, res) => {
     try {
       const { ObjectStorageService } = await import("./objectStorage");

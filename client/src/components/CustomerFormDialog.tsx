@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,6 +24,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
+import { Upload, Link, X, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const formSchema = insertCustomerSchema
   .omit({ pricingTable2025: true, pricingTable2026: true })
@@ -34,7 +36,7 @@ const formSchema = insertCustomerSchema
     email: z.string().email("Invalid email address").optional().or(z.literal("")),
     telephone: z.string().optional(),
     address: z.string().optional(),
-    logoUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
+    logoUrl: z.string().optional().or(z.literal("")),
     active: z.boolean().default(true),
     xeroContactId: z.string().optional(),
   });
@@ -53,6 +55,12 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
   const isEditMode = !!customer;
+  const { toast } = useToast();
+
+  const [logoMode, setLogoMode] = useState<"url" | "upload">("url");
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -81,6 +89,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         active: customer.active !== false,
         xeroContactId: customer.xeroContactId || "",
       });
+      setPreviewUrl(customer.logoUrl || "");
     } else if (!open) {
       form.reset({
         name: "",
@@ -93,14 +102,45 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         active: true,
         xeroContactId: "",
       });
+      setPreviewUrl("");
+      setLogoMode("url");
     }
   }, [customer, open, form]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Invalid file", description: "Please select an image file.", variant: "destructive" });
+      return;
+    }
+    setUploading(true);
+    try {
+      const response = await fetch("/api/staff/upload-logo", {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type,
+          "x-file-type": file.type,
+          "x-file-name": encodeURIComponent(file.name),
+        },
+        body: await file.arrayBuffer(),
+      });
+      if (!response.ok) throw new Error("Upload failed");
+      const { url } = await response.json();
+      form.setValue("logoUrl", url);
+      setPreviewUrl(url);
+    } catch {
+      toast({ title: "Upload failed", description: "Could not upload the logo. Please try again.", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
     const { active, ...rest } = data;
     const submitData = {
       ...rest,
-      // New customers always get 2026 pricing; existing customers keep their current setting
       pricingTable2025: isEditMode ? (customer?.pricingTable2025 ?? false) : false,
       pricingTable2026: isEditMode ? (customer?.pricingTable2026 ?? true) : true,
       active: active !== false,
@@ -201,23 +241,96 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                 </FormItem>
               )}
             />
+
+            {/* Logo field — URL or file upload */}
             <FormField
               control={form.control}
               name="logoUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Logo URL</FormLabel>
-                  <FormControl>
-                    <Input {...field} type="url" placeholder="https://example.com/logo.png" data-testid="input-logo-url" />
-                  </FormControl>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Logo</FormLabel>
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={logoMode === "url" ? "default" : "outline"}
+                        className="h-7 px-2 text-xs gap-1"
+                        onClick={() => setLogoMode("url")}
+                        data-testid="button-logo-mode-url"
+                      >
+                        <Link className="h-3 w-3" /> URL
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={logoMode === "upload" ? "default" : "outline"}
+                        className="h-7 px-2 text-xs gap-1"
+                        onClick={() => setLogoMode("upload")}
+                        data-testid="button-logo-mode-upload"
+                      >
+                        <Upload className="h-3 w-3" /> Upload
+                      </Button>
+                    </div>
+                  </div>
+
+                  {logoMode === "url" ? (
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="url"
+                        placeholder="https://example.com/logo.png"
+                        data-testid="input-logo-url"
+                        onChange={e => { field.onChange(e); setPreviewUrl(e.target.value); }}
+                      />
+                    </FormControl>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileChange}
+                        data-testid="input-logo-file"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1 gap-2"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        data-testid="button-upload-logo"
+                      >
+                        {uploading ? (
+                          <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</>
+                        ) : (
+                          <><Upload className="h-4 w-4" /> Choose image file</>
+                        )}
+                      </Button>
+                      {previewUrl && (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => { form.setValue("logoUrl", ""); setPreviewUrl(""); }}
+                          data-testid="button-clear-logo"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
                   <FormMessage />
-                  {field.value && (
+
+                  {previewUrl && (
                     <div className="mt-2 p-2 border rounded-md bg-muted">
-                      <img 
-                        src={field.value} 
-                        alt="Logo preview" 
+                      <img
+                        src={previewUrl}
+                        alt="Logo preview"
                         className="max-h-16 max-w-full object-contain mx-auto"
-                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                        onError={(e) => (e.currentTarget.style.display = "none")}
                       />
                     </div>
                   )}
