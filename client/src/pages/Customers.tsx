@@ -398,6 +398,7 @@ export default function Customers() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9 pr-9"
+                autoComplete="off"
                 data-testid="input-search-customers"
               />
               {searchTerm && (
