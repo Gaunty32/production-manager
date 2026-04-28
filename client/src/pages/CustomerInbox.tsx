@@ -28,6 +28,7 @@ import {
   Trash2,
   Archive,
   X,
+  PenLine,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
@@ -94,11 +95,17 @@ export default function CustomerInbox() {
   const prevStaffMsgCount = useRef(0);
   const isInitialLoad = useRef(true);
 
-  // New conversation dialog
+  // New conversation dialog (direct messages)
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
   const [newFirstMessage, setNewFirstMessage] = useState("");
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null); // null = Everyone
+
+  // New job chat dialog
+  const [showNewJobChat, setShowNewJobChat] = useState(false);
+  const [newJobChatJobId, setNewJobChatJobId] = useState<string>("");
+  const [newJobChatMessage, setNewJobChatMessage] = useState("");
+  const [jobPickerSearch, setJobPickerSearch] = useState("");
 
   // Search
   const [searchQuery, setSearchQuery] = useState("");
@@ -109,6 +116,11 @@ export default function CustomerInbox() {
 
   const { data: staffMembers = [] } = useQuery<{ id: string; firstName: string; fullName: string; profileImageUrl: string | null }[]>({
     queryKey: ["/api/customer-portal/staff-members"],
+  });
+
+  const { data: allCustomerJobs = [] } = useQuery<{ id: string; jobName: string; status: string }[]>({
+    queryKey: ["/api/customer-portal/jobs"],
+    enabled: showNewJobChat,
   });
 
   const { data: jobConversations = [], isLoading: isLoadingJobConvos } = useQuery<JobConversation[]>({
@@ -201,6 +213,29 @@ export default function CustomerInbox() {
     },
     onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
   });
+
+  const startJobChatMutation = useMutation({
+    mutationFn: async ({ targetJobId, message }: { targetJobId: string; message: string }) => {
+      if (!message.trim()) return null;
+      const res = await apiRequest("POST", `/api/customer-portal/jobs/${targetJobId}/messages/send`, { message: message.trim() });
+      return res.json();
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/conversations"] });
+      setShowNewJobChat(false);
+      setNewJobChatJobId("");
+      setNewJobChatMessage("");
+      setJobPickerSearch("");
+      setTab("job");
+      setSelected({ type: "job", jobId: vars.targetJobId });
+    },
+    onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
+  });
+
+  const handleStartJobChat = () => {
+    if (!newJobChatJobId) return;
+    startJobChatMutation.mutate({ targetJobId: newJobChatJobId, message: newJobChatMessage });
+  };
 
   const sendDirectMutation = useMutation({
     mutationFn: async (msg: string) => {
@@ -379,7 +414,20 @@ export default function CustomerInbox() {
             </div>
           </div>
 
-          {/* New conversation button (direct tab only) */}
+          {/* New chat / new conversation buttons */}
+          {tab === "job" && (
+            <div className="px-3 py-2 border-b">
+              <Button
+                size="sm"
+                className="w-full h-8 text-xs"
+                onClick={() => setShowNewJobChat(true)}
+                data-testid="button-new-job-chat"
+              >
+                <PenLine className="h-3.5 w-3.5 mr-1.5" />
+                New Chat
+              </Button>
+            </div>
+          )}
           {tab === "direct" && (
             <div className="px-3 py-2 border-b">
               <Button
@@ -796,6 +844,98 @@ export default function CustomerInbox() {
               data-testid="button-send-new-conversation"
             >
               {createConvoMutation.isPending ? "Sending…" : "Send Message"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Job Chat dialog */}
+      <Dialog open={showNewJobChat} onOpenChange={(o) => {
+        if (!o) { setShowNewJobChat(false); setNewJobChatJobId(""); setNewJobChatMessage(""); setJobPickerSearch(""); }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Chat</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Job search + picker */}
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Which order is this about?</label>
+              <div className="relative mb-2">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Search your orders…"
+                  value={jobPickerSearch}
+                  onChange={e => setJobPickerSearch(e.target.value)}
+                  className="pl-8 text-sm"
+                  data-testid="input-job-picker-search"
+                />
+              </div>
+              <div className="max-h-48 overflow-y-auto rounded-md border divide-y">
+                {allCustomerJobs
+                  .filter(j => !jobPickerSearch || j.jobName.toLowerCase().includes(jobPickerSearch.toLowerCase()))
+                  .map(job => (
+                    <button
+                      key={job.id}
+                      type="button"
+                      onClick={() => setNewJobChatJobId(job.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors text-sm ${newJobChatJobId === job.id ? "bg-primary/10 font-semibold" : "hover:bg-muted/50"}`}
+                      data-testid={`job-picker-${job.id}`}
+                    >
+                      <Package className={`h-4 w-4 flex-shrink-0 ${newJobChatJobId === job.id ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="truncate">{job.jobName}</span>
+                      {job.status === "completed" && (
+                        <span className="ml-auto text-[10px] text-muted-foreground font-normal flex-shrink-0">Completed</span>
+                      )}
+                    </button>
+                  ))}
+                {allCustomerJobs.filter(j => !jobPickerSearch || j.jobName.toLowerCase().includes(jobPickerSearch.toLowerCase())).length === 0 && (
+                  <p className="px-3 py-4 text-sm text-muted-foreground text-center">No orders found</p>
+                )}
+              </div>
+            </div>
+
+            {/* Message */}
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Message (optional)</label>
+              <Textarea
+                placeholder="Type your first message…"
+                rows={3}
+                value={newJobChatMessage}
+                onChange={e => setNewJobChatMessage(e.target.value)}
+                data-testid="input-new-job-chat-message"
+              />
+            </div>
+
+            {/* General enquiry fallback */}
+            <div className="pt-1 border-t">
+              <p className="text-xs text-muted-foreground">
+                Not about an existing order?{" "}
+                <button
+                  type="button"
+                  className="underline text-primary"
+                  onClick={() => {
+                    setShowNewJobChat(false);
+                    setNewJobChatJobId(""); setNewJobChatMessage(""); setJobPickerSearch("");
+                    setTab("direct");
+                    setSelected(null);
+                    setTimeout(() => setShowNewConvo(true), 50);
+                  }}
+                  data-testid="button-switch-to-general-enquiry"
+                >
+                  Start a general enquiry
+                </button>
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewJobChat(false)}>Cancel</Button>
+            <Button
+              onClick={handleStartJobChat}
+              disabled={!newJobChatJobId || startJobChatMutation.isPending}
+              data-testid="button-start-job-chat"
+            >
+              {startJobChatMutation.isPending ? "Opening…" : newJobChatMessage.trim() ? "Send & Open Chat" : "Open Chat"}
             </Button>
           </DialogFooter>
         </DialogContent>
