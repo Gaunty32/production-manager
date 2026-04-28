@@ -394,6 +394,7 @@ export async function sendTeamInviteEmail(
   const { error } = await client.emails.send({
     from: fromEmail || 'info@selectbranding.co.uk',
     to: email,
+    ...(details.isReset ? {} : { cc: ['chris@selectbranding.co.uk', 'james@selectbranding.co.uk'] }),
     subject,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
