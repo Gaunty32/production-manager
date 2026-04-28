@@ -15,7 +15,6 @@ function sanitizeHtml(text: string | null): string {
 }
 
 async function getCredentials() {
-  // Use direct API key if available (most reliable for deployed environments)
   if (process.env.RESEND_API_KEY) {
     return {
       apiKey: process.env.RESEND_API_KEY,
@@ -23,7 +22,6 @@ async function getCredentials() {
     };
   }
 
-  // Fall back to Replit connector
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.WEB_REPL_RENEWAL
     ? 'depl ' + process.env.WEB_REPL_RENEWAL
@@ -60,51 +58,134 @@ async function getUncachableResendClient() {
 }
 
 function getBaseUrl() {
-  return process.env.REPLIT_DOMAINS 
-    ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
+  return process.env.REPLIT_DOMAINS
+    ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
     : 'http://localhost:5000';
 }
 
+// ─── Branded email wrapper ────────────────────────────────────────────────────
+// All emails share this shell so branding updates happen in one place.
+function brandedEmail(bodyHtml: string): string {
+  const logoUrl = `${getBaseUrl()}/logo.png`;
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background-color:#18181b;border-radius:8px 8px 0 0;padding:28px 40px;text-align:center;">
+              <img src="${logoUrl}" alt="Select Branding Solutions" width="220" style="max-width:220px;height:auto;display:block;margin:0 auto;" />
+            </td>
+          </tr>
+
+          <!-- Accent bar -->
+          <tr>
+            <td style="background-color:#4f46e5;height:4px;line-height:4px;font-size:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="background-color:#ffffff;padding:36px 40px;border-radius:0;color:#18181b;line-height:1.65;font-size:15px;">
+              ${bodyHtml}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#f4f4f5;border-top:1px solid #e4e4e7;border-radius:0 0 8px 8px;padding:24px 40px;text-align:center;">
+              <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#3f3f46;">Select Branding Solutions Ltd</p>
+              <p style="margin:0;font-size:12px;color:#71717a;">
+                <a href="mailto:info@selectbranding.co.uk" style="color:#4f46e5;text-decoration:none;">info@selectbranding.co.uk</a>
+              </p>
+              <p style="margin:12px 0 0;font-size:11px;color:#a1a1aa;">
+                This email was sent from an automated system. Please do not reply directly to this message.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+// ─── Button helper ────────────────────────────────────────────────────────────
+function ctaButton(url: string, label: string): string {
+  return `
+    <div style="text-align:center;margin:32px 0;">
+      <a href="${url}"
+         style="display:inline-block;background-color:#4f46e5;color:#ffffff;font-size:15px;font-weight:600;
+                padding:14px 32px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">
+        ${label}
+      </a>
+    </div>`;
+}
+
+// ─── Info table helper ────────────────────────────────────────────────────────
+function infoTable(rows: { label: string; value: string }[]): string {
+  const rowsHtml = rows.map(r => `
+    <tr>
+      <td style="padding:8px 12px;color:#71717a;font-size:13px;white-space:nowrap;width:160px;">${r.label}</td>
+      <td style="padding:8px 12px;color:#18181b;font-size:13px;font-weight:600;">${r.value}</td>
+    </tr>`).join('');
+  return `
+    <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e4e4e7;border-radius:6px;border-collapse:collapse;margin:20px 0;">
+      ${rowsHtml}
+    </table>`;
+}
+
+// ─── Divider ──────────────────────────────────────────────────────────────────
+const divider = `<hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0;" />`;
+
+// ─── Small muted text ─────────────────────────────────────────────────────────
+function muted(text: string): string {
+  return `<p style="color:#71717a;font-size:13px;margin:8px 0;">${text}</p>`;
+}
+
+// =============================================================================
+// Email senders
+// =============================================================================
+
 export async function sendPasswordResetEmail(email: string, resetToken: string) {
   const { client, fromEmail } = await getUncachableResendClient();
-  
   const resetUrl = `${getBaseUrl()}/reset-password?token=${resetToken}`;
-  
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Password Reset Request</h2>
+    <p style="margin:0 0 12px;">You requested to reset your password for the Production Manager.</p>
+    <p style="margin:0 0 4px;">Click the button below to choose a new password. This link expires in <strong>1 hour</strong>.</p>
+    ${ctaButton(resetUrl, 'Reset Password')}
+    ${divider}
+    ${muted("If you didn't request a password reset, you can safely ignore this email.")}
+    ${muted(`Or paste this link into your browser: <a href="${resetUrl}" style="color:#4f46e5;">${resetUrl}</a>`)}
+  `;
+
   const { data, error } = await client.emails.send({
     from: fromEmail || 'info@selectbranding.co.uk',
     to: email,
-    subject: 'Password Reset Request - Production Manager',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Password Reset Request</h2>
-        <p>You requested to reset your password for Production Manager.</p>
-        <p>Click the button below to reset your password. This link will expire in 1 hour.</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${resetUrl}" 
-             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            Reset Password
-          </a>
-        </div>
-        <p style="color: #666; font-size: 14px;">
-          If you didn't request this, you can safely ignore this email.
-        </p>
-        <p style="color: #666; font-size: 14px;">
-          Or copy and paste this link into your browser:<br/>
-          <a href="${resetUrl}" style="color: #4F46E5;">${resetUrl}</a>
-        </p>
-      </div>
-    `,
+    subject: 'Password Reset Request – Production Manager',
+    html: brandedEmail(body),
   });
 
   if (error) {
     throw new Error(`Failed to send email: ${error.message}`);
   }
-
   return data;
 }
 
 export async function sendNewJobSubmissionEmail(
-  staffEmails: string[], 
+  staffEmails: string[],
   jobDetails: {
     jobName: string;
     customerName: string;
@@ -115,71 +196,39 @@ export async function sendNewJobSubmissionEmail(
   }
 ) {
   const { client, fromEmail } = await getUncachableResendClient();
-  
   const viewUrl = `${getBaseUrl()}/dashboard/holding-area`;
-  
-  // Sanitize all customer-controlled fields
+
   const safeJobName = sanitizeHtml(jobDetails.jobName);
   const safeCustomerName = sanitizeHtml(jobDetails.customerName);
   const safePONumber = sanitizeHtml(jobDetails.poNumber);
   const safeDispatchDate = sanitizeHtml(jobDetails.requiredDispatchDate);
-  
+
+  const tableRows = [
+    { label: 'Job Name', value: safeJobName },
+    { label: 'Customer', value: safeCustomerName },
+    { label: 'Quantity', value: `${jobDetails.quantity} garments` },
+    ...(safePONumber ? [{ label: 'PO Number', value: safePONumber }] : []),
+    { label: 'Required Dispatch', value: safeDispatchDate },
+  ];
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">New Job Submission Received</h2>
+    <p style="margin:0 0 12px;">A new job has been submitted by <strong>${safeCustomerName}</strong> and requires your review.</p>
+    ${infoTable(tableRows)}
+    ${ctaButton(viewUrl, 'Review in Holding Area')}
+    ${muted('Please review and approve or reject this job within 24 hours.')}
+  `;
+
   const { data, error } = await client.emails.send({
     from: fromEmail || 'info@selectbranding.co.uk',
     to: staffEmails,
     subject: `New Job Submission: ${safeJobName}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">New Job Submission Received</h2>
-        <p>A new job has been submitted by <strong>${safeCustomerName}</strong> and requires your review.</p>
-        
-        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #333;">Job Details:</h3>
-          <table style="width: 100%; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 8px 0; color: #666;">Job Name:</td>
-              <td style="padding: 8px 0; font-weight: bold;">${safeJobName}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #666;">Customer:</td>
-              <td style="padding: 8px 0; font-weight: bold;">${safeCustomerName}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #666;">Quantity:</td>
-              <td style="padding: 8px 0; font-weight: bold;">${jobDetails.quantity} garments</td>
-            </tr>
-            ${safePONumber ? `
-            <tr>
-              <td style="padding: 8px 0; color: #666;">PO Number:</td>
-              <td style="padding: 8px 0; font-weight: bold;">${safePONumber}</td>
-            </tr>
-            ` : ''}
-            <tr>
-              <td style="padding: 8px 0; color: #666;">Required Dispatch:</td>
-              <td style="padding: 8px 0; font-weight: bold;">${safeDispatchDate}</td>
-            </tr>
-          </table>
-        </div>
-
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${viewUrl}" 
-             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            Review in Holding Area
-          </a>
-        </div>
-        
-        <p style="color: #666; font-size: 14px;">
-          Please review and approve/reject this job within 24 hours.
-        </p>
-      </div>
-    `,
+    html: brandedEmail(body),
   });
 
   if (error) {
     console.error('Failed to send new job submission email:', error);
-    // Don't throw - email failures shouldn't block job submission
   }
-
   return data;
 }
 
@@ -200,10 +249,8 @@ export async function sendJobApprovedEmail(
   }
 ) {
   const { client, fromEmail } = await getUncachableResendClient();
-
   const orderRef = jobDetails.jobNumber || jobDetails.jobId.slice(0, 8).toUpperCase();
 
-  // Generate PDF attachment
   let pdfAttachment: { filename: string; content: string } | undefined;
   try {
     const pdfData: OrderAcknowledgementData = {
@@ -227,41 +274,36 @@ export async function sendJobApprovedEmail(
     console.error('Failed to generate order acknowledgement PDF:', pdfError);
   }
 
+  const body = `
+    <p style="margin:0 0 12px;">Thank you for your order.</p>
+    <p style="margin:0 0 12px;">Please find your order acknowledgement attached. Kindly check it meets your requirements — it's important you verify garments, colours, sizes, quantities, and finishes to be applied.</p>
+    <p style="margin:0 0 12px;">You can make payment by BACS or by card using the details below. <strong>Our bank details have recently been updated.</strong></p>
+    <div style="background-color:#f4f4f5;border-radius:6px;padding:20px 24px;margin:20px 0;">
+      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#18181b;">Payment by card:</p>
+      <p style="margin:0 0 12px;">
+        <a href="https://buy.stripe.com/bIY16peJJ5j99Us144" style="color:#4f46e5;">https://buy.stripe.com/bIY16peJJ5j99Us144</a>
+      </p>
+      <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#18181b;">Payment by BACS:</p>
+      <p style="margin:0 0 2px;font-size:14px;color:#3f3f46;">Select Branding Solutions Ltd</p>
+      <p style="margin:0 0 2px;font-size:14px;color:#3f3f46;">Sort code: 04-06-05</p>
+      <p style="margin:0;font-size:14px;color:#3f3f46;">Account: 30422879</p>
+    </div>
+    ${divider}
+    <p style="margin:0 0 2px;">Regards,</p>
+    <p style="margin:0;font-weight:600;">Select Branding Solutions</p>
+  `;
+
   const { data, error } = await client.emails.send({
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmail,
-    subject: `Select Branding Solutions Ltd Order Acknowledgement - New Bank Details - Ref : ${orderRef}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
-        <p>Thank you for your order.</p>
-        <p>Please find attached your order acknowledgement. Please check this meets your requirements.
-           It is important you check the garments, colours, sizes and quantities as well as the
-           finishes to be applied.</p>
-        <p>You can make payment by BACS or by card using the details below.
-           Our bank details have recently been updated.</p>
-        <p>
-          <a href="https://buy.stripe.com/bIY16peJJ5j99Us144"
-             style="color: #4F46E5;">https://buy.stripe.com/bIY16peJJ5j99Us144</a>
-        </p>
-        <p style="margin: 4px 0;">Select Branding Solutions Ltd</p>
-        <p style="margin: 4px 0;">04-06-05</p>
-        <p style="margin: 4px 0;">30422879</p>
-        <br/>
-        <p style="margin: 4px 0;">Regards</p>
-        <br/>
-        <p style="margin: 4px 0;">Select Branding Solutions</p>
-        <p style="margin: 4px 0;">
-          <a href="mailto:info@selectbranding.co.uk" style="color: #4F46E5;">info@selectbranding.co.uk</a>
-        </p>
-      </div>
-    `,
+    subject: `Order Acknowledgement – New Bank Details – Ref: ${orderRef}`,
+    html: brandedEmail(body),
     ...(pdfAttachment ? { attachments: [pdfAttachment] } : {}),
   });
 
   if (error) {
     console.error('Failed to send job approved email:', error);
   }
-
   return data;
 }
 
@@ -276,56 +318,42 @@ export async function sendJobRejectedEmail(
   }
 ) {
   const { client, fromEmail } = await getUncachableResendClient();
-  
   const viewUrl = `${getBaseUrl()}/customer/job/${jobDetails.jobId}`;
-  
-  // Sanitize all customer-controlled and staff-controlled fields
+
   const safeJobName = sanitizeHtml(jobDetails.jobName);
   const safeRejectionReason = sanitizeHtml(jobDetails.rejectionReason);
   const safeRejectionMessage = sanitizeHtml(jobDetails.rejectionMessage);
-  
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Job Requires Updates</h2>
+    <p style="margin:0 0 12px;">Your job <strong>${safeJobName}</strong> requires some updates before we can proceed.</p>
+
+    ${safeRejectionReason ? `
+    <div style="background-color:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#b91c1c;text-transform:uppercase;letter-spacing:0.5px;">Reason</p>
+      <p style="margin:0;color:#18181b;">${safeRejectionReason}</p>
+    </div>` : ''}
+
+    ${safeRejectionMessage ? `
+    <div style="background-color:#f4f4f5;border-radius:6px;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#3f3f46;text-transform:uppercase;letter-spacing:0.5px;">Message from our team</p>
+      <p style="margin:0;color:#18181b;">${safeRejectionMessage}</p>
+    </div>` : ''}
+
+    ${ctaButton(viewUrl, 'View Job &amp; Respond')}
+    ${muted('Please use the chat feature in the job details page to discuss any questions or submit a revised order.')}
+  `;
+
   const { data, error } = await client.emails.send({
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmail,
     subject: `Job Update Required: ${safeJobName}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #ef4444;">Job Requires Updates</h2>
-        <p>Your job <strong>${safeJobName}</strong> requires some updates before we can proceed.</p>
-        
-        ${safeRejectionReason ? `
-        <div style="background-color: #fef2f2; padding: 20px; border-radius: 8px; border-left: 4px solid #ef4444; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #333;">Reason:</h3>
-          <p style="margin: 0; color: #333;">${safeRejectionReason}</p>
-        </div>
-        ` : ''}
-
-        ${safeRejectionMessage ? `
-        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #333;">Message from our team:</h3>
-          <p style="margin: 0; color: #333;">${safeRejectionMessage}</p>
-        </div>
-        ` : ''}
-
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${viewUrl}" 
-             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            View Job & Respond
-          </a>
-        </div>
-        
-        <p style="color: #666; font-size: 14px;">
-          Please use the chat feature in the job details page to discuss any questions or submit a revised order.
-        </p>
-      </div>
-    `,
+    html: brandedEmail(body),
   });
 
   if (error) {
     console.error('Failed to send job rejected email:', error);
-    // Don't throw - email failures shouldn't block rejection
   }
-
   return data;
 }
 
@@ -344,25 +372,20 @@ export async function sendStaffMessageToCustomerEmail(
   const safeStaffName = sanitizeHtml(details.staffName);
   const safeMessage = sanitizeHtml(details.message);
 
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">New Message from Select Branding</h2>
+    <p style="margin:0 0 12px;"><strong>${safeStaffName}</strong> has sent you a message about your order <strong>${safeJobName}</strong>:</p>
+    <div style="background-color:#f4f4f5;border-left:4px solid #4f46e5;border-radius:0 6px 6px 0;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0;color:#18181b;white-space:pre-line;">${safeMessage}</p>
+    </div>
+    ${ctaButton(viewUrl, 'View &amp; Reply')}
+  `;
+
   const { error } = await client.emails.send({
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmail,
-    subject: `New message about your job: ${safeJobName}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">New Message from Select Branding</h2>
-        <p><strong>${safeStaffName}</strong> has sent you a message about your job <strong>${safeJobName}</strong>:</p>
-        <div style="background-color: #f5f5f5; padding: 16px; border-radius: 8px; margin: 20px 0;">
-          <p style="margin: 0; color: #333; white-space: pre-line;">${safeMessage}</p>
-        </div>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${viewUrl}"
-             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            View & Reply
-          </a>
-        </div>
-      </div>
-    `,
+    subject: `New message about your order: ${safeJobName}`,
+    html: brandedEmail(body),
   });
 
   if (error) {
@@ -391,36 +414,28 @@ export async function sendTeamInviteEmail(
     ? `Reset your ${safeCompany} portal password`
     : `You've been invited to the ${safeCompany} customer portal`;
 
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">
+      ${details.isReset ? 'Password Reset' : 'Welcome to the Customer Portal'}
+    </h2>
+    <p style="margin:0 0 12px;">${greeting}</p>
+    ${details.isReset
+      ? `<p style="margin:0 0 12px;"><strong>Select Branding</strong> has requested a password reset for your <strong>${safeCompany}</strong> customer portal account.</p>`
+      : `<p style="margin:0 0 12px;"><strong>Select Branding</strong> has invited you to access the <strong>${safeCompany}</strong> customer portal.</p>`
+    }
+    <p style="margin:0 0 4px;">Click the button below to ${action}. This link will expire in <strong>48 hours</strong>.</p>
+    ${ctaButton(details.inviteUrl, details.isReset ? 'Reset Password' : 'Accept Invitation')}
+    ${divider}
+    ${muted("If you weren't expecting this email, you can safely ignore it.")}
+    <p style="margin:8px 0 0;">Regards,<br/><strong>Select Branding Solutions</strong></p>
+  `;
+
   const { error } = await client.emails.send({
     from: fromEmail || 'info@selectbranding.co.uk',
     to: email,
     ...(details.isReset ? {} : { cc: ['chris@selectbranding.co.uk', 'james@selectbranding.co.uk'] }),
     subject,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
-        <h2 style="color: #333;">${details.isReset ? 'Password Reset' : 'Welcome to the Customer Portal'}</h2>
-        <p>${greeting}</p>
-        ${details.isReset
-          ? `<p><strong>${safeInviter}</strong> has requested a password reset for your <strong>${safeCompany}</strong> customer portal account.</p>`
-          : `<p><strong>${safeInviter}</strong> has invited you to access the <strong>${safeCompany}</strong> customer portal.</p>`
-        }
-        <p>Click the button below to ${action}. This link will expire in 48 hours.</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${details.inviteUrl}"
-             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            ${details.isReset ? 'Reset Password' : 'Accept Invitation'}
-          </a>
-        </div>
-        <p style="color: #666; font-size: 13px;">
-          If you weren't expecting this email, you can safely ignore it.
-        </p>
-        <p style="margin: 4px 0; color: #666; font-size: 13px;">Regards,</p>
-        <p style="margin: 4px 0; color: #666; font-size: 13px;">Select Branding Solutions</p>
-        <p style="margin: 4px 0;">
-          <a href="mailto:info@selectbranding.co.uk" style="color: #4F46E5; font-size: 13px;">info@selectbranding.co.uk</a>
-        </p>
-      </div>
-    `,
+    html: brandedEmail(body),
   });
 
   if (error) {
@@ -454,33 +469,21 @@ export async function sendNewChatEmail(
     ? `<strong>${safeStaffName}</strong> has started a conversation about your order <strong>${safeJobName || safeSubject}</strong>:`
     : `<strong>${safeStaffName}</strong> has sent you a new message:`;
 
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">New Message from Select Branding</h2>
+    <p style="margin:0 0 12px;">${contextLine}</p>
+    <div style="background-color:#f4f4f5;border-left:4px solid #4f46e5;border-radius:0 6px 6px 0;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0;color:#18181b;white-space:pre-line;">${safeMessage}</p>
+    </div>
+    ${ctaButton(details.portalUrl, 'View &amp; Reply')}
+    ${muted('You can reply directly from your customer portal. If you have any questions, please don\'t hesitate to get in touch.')}
+  `;
+
   const { error } = await client.emails.send({
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmails,
     subject: emailSubject,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
-        <h2 style="color: #333;">New Message from Select Branding</h2>
-        <p>${contextLine}</p>
-        <div style="background-color: #f5f5f5; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4F46E5;">
-          <p style="margin: 0; color: #333; white-space: pre-line;">${safeMessage}</p>
-        </div>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${details.portalUrl}"
-             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            View &amp; Reply
-          </a>
-        </div>
-        <p style="color: #666; font-size: 13px;">
-          You can reply directly from your customer portal. If you have any questions, please don't hesitate to get in touch.
-        </p>
-        <p style="margin: 4px 0; color: #666; font-size: 13px;">Regards,</p>
-        <p style="margin: 4px 0; color: #666; font-size: 13px;">Select Branding Solutions</p>
-        <p style="margin: 4px 0;">
-          <a href="mailto:info@selectbranding.co.uk" style="color: #4F46E5; font-size: 13px;">info@selectbranding.co.uk</a>
-        </p>
-      </div>
-    `,
+    html: brandedEmail(body),
   });
 
   if (error) {
@@ -506,25 +509,20 @@ export async function sendStaffMessageCCEmail(
   const safeCustomerName = sanitizeHtml(details.customerName);
   const safeMessage = sanitizeHtml(details.message);
 
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">You were CC'd on a customer message</h2>
+    <p style="margin:0 0 12px;"><strong>${safeSenderName}</strong> sent the following message to <strong>${safeCustomerName}</strong> about job <strong>${safeJobName}</strong>:</p>
+    <div style="background-color:#f4f4f5;border-left:4px solid #4f46e5;border-radius:0 6px 6px 0;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0;color:#18181b;white-space:pre-line;">${safeMessage}</p>
+    </div>
+    ${ctaButton(viewUrl, 'View Job')}
+  `;
+
   const { error } = await client.emails.send({
     from: fromEmail || 'info@selectbranding.co.uk',
     to: ccEmails,
     subject: `[CC] Message to ${safeCustomerName} re: ${safeJobName}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">You were CC'd on a customer message</h2>
-        <p><strong>${safeSenderName}</strong> sent the following message to <strong>${safeCustomerName}</strong> about job <strong>${safeJobName}</strong>:</p>
-        <div style="background-color: #f5f5f5; padding: 16px; border-radius: 8px; margin: 20px 0;">
-          <p style="margin: 0; color: #333; white-space: pre-line;">${safeMessage}</p>
-        </div>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${viewUrl}"
-             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            View Job
-          </a>
-        </div>
-      </div>
-    `,
+    html: brandedEmail(body),
   });
 
   if (error) {
