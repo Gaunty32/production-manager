@@ -207,6 +207,8 @@ export interface IStorage {
     weekEnd: string;
     invoicedTotal: number;
     completedQuantity: number;
+    newCustomers: number;
+    totalActiveCustomers: number;
   }>>;
   
   // Production Time Analysis
@@ -1872,6 +1874,8 @@ export class DatabaseStorage implements IStorage {
     weekEnd: string;
     invoicedTotal: number;
     completedQuantity: number;
+    newCustomers: number;
+    totalActiveCustomers: number;
   }>> {
     const { weeks = 12, endDate = new Date(), timezone = 'Europe/London' } = params;
     
@@ -1916,15 +1920,30 @@ export class DatabaseStorage implements IStorage {
           AND date_trunc('week', jli.completed_at AT TIME ZONE ${timezone}) <= 
               (SELECT week_end FROM base_week)
         GROUP BY 1
+      ),
+      new_customers_by_week AS (
+        SELECT
+          date_trunc('week', c.created_at AT TIME ZONE ${timezone})::date AS week_start,
+          COUNT(*) AS new_count
+        FROM customers c
+        WHERE c.created_at IS NOT NULL
+          AND date_trunc('week', c.created_at AT TIME ZONE ${timezone}) >=
+              (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval
+          AND date_trunc('week', c.created_at AT TIME ZONE ${timezone}) <=
+              (SELECT week_end FROM base_week)
+        GROUP BY 1
       )
       SELECT
         w.week_start::text,
         w.week_end::text,
         COALESCE(ib.total_invoiced, 0) AS invoiced_total,
-        COALESCE(cb.total_quantity, 0) AS completed_quantity
+        COALESCE(cb.total_quantity, 0) AS completed_quantity,
+        COALESCE(nc.new_count, 0) AS new_customers,
+        (SELECT COUNT(*) FROM customers WHERE active = true AND created_at <= w.week_end + '6 days'::interval) AS total_active_customers
       FROM weeks_with_end w
       LEFT JOIN invoiced_by_week ib ON w.week_start = ib.week_start
       LEFT JOIN completed_by_week cb ON w.week_start = cb.week_start
+      LEFT JOIN new_customers_by_week nc ON w.week_start = nc.week_start
       ORDER BY w.week_start
     `);
 
@@ -1933,6 +1952,8 @@ export class DatabaseStorage implements IStorage {
       weekEnd: row.week_end,
       invoicedTotal: parseFloat(row.invoiced_total) || 0,
       completedQuantity: parseInt(row.completed_quantity) || 0,
+      newCustomers: parseInt(row.new_customers) || 0,
+      totalActiveCustomers: parseInt(row.total_active_customers) || 0,
     }));
   }
 

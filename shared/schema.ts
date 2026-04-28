@@ -42,6 +42,7 @@ export const customers = pgTable("customers", {
   pricingTable2026: boolean("pricing_table_2026").notNull().default(false),
   active: boolean("active").notNull().default(true),
   xeroContactId: text("xero_contact_id"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const staff = pgTable("staff", {

@@ -82,6 +82,8 @@ interface WeeklyTrendData {
   weekEnd: string;
   invoicedTotal: number;
   completedQuantity: number;
+  newCustomers: number;
+  totalActiveCustomers: number;
 }
 
 interface WeeklyProductionData {
@@ -926,25 +928,111 @@ export default function WeeklyReports() {
             </Card>
           ) : (
             <>
-              {/* KPI card */}
-              <Card data-testid="card-active-customers">
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-primary/10 rounded-md">
-                      <Building2 className="h-6 w-6 text-primary" />
+              {/* KPI cards */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card data-testid="card-active-customers">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-primary/10 rounded-md">
+                        <Building2 className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Ordering Customers</p>
+                        <p className="text-3xl font-bold" data-testid="text-active-customer-count">
+                          {customerInsights?.activeCustomerCount ?? 0}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Placed orders in selected period
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Active Customers</p>
-                      <p className="text-3xl font-bold" data-testid="text-active-customer-count">
-                        {customerInsights?.activeCustomerCount ?? 0}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Customers with jobs placed in the selected period
-                      </p>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-total-active-customers">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-blue-500/10 rounded-md">
+                        <Users className="h-6 w-6 text-blue-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Active Customers</p>
+                        <p className="text-3xl font-bold text-blue-600 dark:text-blue-400" data-testid="text-total-active-count">
+                          {weeklyTrendData?.length
+                            ? weeklyTrendData[weeklyTrendData.length - 1].totalActiveCustomers
+                            : 0}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Active on books at end of period
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-new-customers">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-green-500/10 rounded-md">
+                        <TrendingUp className="h-6 w-6 text-green-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">New Customers</p>
+                        <p className="text-3xl font-bold text-green-600 dark:text-green-400" data-testid="text-new-customers">
+                          {weeklyTrendData?.reduce((sum, w) => sum + w.newCustomers, 0) ?? 0}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Added in selected period
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Week-by-week customer breakdown */}
+              {weeklyTrendData && weeklyTrendData.some(w => w.newCustomers > 0 || w.totalActiveCustomers > 0) && (
+                <Card data-testid="card-customer-growth">
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      Customer Growth by Week
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Week</TableHead>
+                          <TableHead className="text-right">New Customers</TableHead>
+                          <TableHead className="text-right">Total Active</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {[...weeklyTrendData].reverse().map((week) => (
+                          <TableRow key={week.weekStart} data-testid={`row-customer-week-${week.weekStart}`}>
+                            <TableCell className="text-muted-foreground">
+                              {format(new Date(week.weekStart), "MMM d")} – {format(new Date(week.weekEnd), "MMM d, yyyy")}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {week.newCustomers > 0 ? (
+                                <Badge variant="secondary" className="text-green-700 dark:text-green-400" data-testid={`badge-new-${week.weekStart}`}>
+                                  +{week.newCustomers}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {week.totalActiveCustomers}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Top 5 by volume */}
               <Card data-testid="card-top-customers">

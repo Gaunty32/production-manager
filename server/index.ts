@@ -4,6 +4,8 @@ import { setupVite, serveStatic, log } from "./vite";
 import { getSession } from "./replitAuth";
 import { storage } from "./storage";
 import { xeroService } from "./xero";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -42,6 +44,32 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Backfill customer created_at from earliest job date (idempotent — only touches null/today rows)
+  try {
+    await db.execute(sql`
+      UPDATE customers
+      SET created_at = sub.earliest_date
+      FROM (
+        SELECT
+          j.customer_id,
+          MIN(COALESCE(j.submitted_at, j.approved_at, j.invoiced_at)) AS earliest_date
+        FROM jobs j
+        WHERE j.customer_id IS NOT NULL
+          AND COALESCE(j.submitted_at, j.approved_at, j.invoiced_at) IS NOT NULL
+        GROUP BY j.customer_id
+      ) sub
+      WHERE customers.id = sub.customer_id
+        AND sub.earliest_date IS NOT NULL
+        AND (
+          customers.created_at IS NULL
+          OR customers.created_at::date = CURRENT_DATE
+        )
+    `);
+    log("Customer created_at backfill complete");
+  } catch (e) {
+    log(`Customer created_at backfill skipped: ${e}`);
+  }
+
   await storage.seedMachines();
   await xeroService.loadTokensFromDb();
   const server = await registerRoutes(app);
