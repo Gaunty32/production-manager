@@ -173,6 +173,7 @@ export interface IStorage {
   updateCustomerActive(id: string, active: boolean): Promise<void>;
   updateCustomerMustResetPassword(id: string, mustResetPassword: boolean): Promise<void>;
   updateCustomerUserDetails(id: string, data: { email?: string; firstName?: string; lastName?: string }): Promise<CustomerUser>;
+  updateCustomerUserInviteSent(id: string): Promise<void>;
   getJobMessages(jobId: string): Promise<JobMessage[]>;
   createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
   deleteJobMessage(messageId: string): Promise<void>;
@@ -1325,6 +1326,13 @@ export class DatabaseStorage implements IStorage {
       .where(eq(customerUsers.id, id))
       .returning();
     return updated;
+  }
+
+  async updateCustomerUserInviteSent(id: string): Promise<void> {
+    await db
+      .update(customerUsers)
+      .set({ inviteSentAt: new Date() })
+      .where(eq(customerUsers.id, id));
   }
 
   async getJobMessages(jobId: string): Promise<JobMessage[]> {
