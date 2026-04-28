@@ -82,7 +82,7 @@ function brandedEmail(bodyHtml: string): string {
 
           <!-- Header -->
           <tr>
-            <td style="background-color:#18181b;border-radius:8px 8px 0 0;padding:28px 40px;text-align:center;">
+            <td style="background-color:#ffffff;border-radius:8px 8px 0 0;padding:28px 40px;text-align:center;border-bottom:1px solid #e4e4e7;">
               <img src="${logoUrl}" alt="Select Branding Solutions" width="220" style="max-width:220px;height:auto;display:block;margin:0 auto;" />
             </td>
           </tr>
