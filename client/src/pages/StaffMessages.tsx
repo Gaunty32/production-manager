@@ -784,9 +784,9 @@ export default function StaffMessages() {
                   data-testid="button-back-to-tiles"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
-                  <div className={`h-5 w-5 rounded-full overflow-hidden flex items-center justify-center shrink-0 text-white text-[10px] font-bold ${customerColor(drilledGroup.customerId)}`}>
+                  <div className={`h-5 w-5 rounded-full overflow-hidden flex items-center justify-center shrink-0 text-white text-[10px] font-bold ${drilledGroup.customerLogoUrl ? "bg-transparent" : customerColor(drilledGroup.customerId)}`}>
                     {drilledGroup.customerLogoUrl
-                      ? <img src={drilledGroup.customerLogoUrl} alt={drilledGroup.customerName} className="h-full w-full object-cover" />
+                      ? <img src={drilledGroup.customerLogoUrl} alt={drilledGroup.customerName} className="h-full w-full object-contain" />
                       : getInitials(drilledGroup.customerName)
                     }
                   </div>
@@ -869,9 +869,9 @@ export default function StaffMessages() {
                                 {groupUnread}
                               </Badge>
                             )}
-                            <div className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-sm shrink-0 ${customerColor(group.customerId)}`}>
+                            <div className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-sm shrink-0 ${group.customerLogoUrl ? "bg-transparent" : customerColor(group.customerId)}`}>
                               {group.customerLogoUrl
-                                ? <img src={group.customerLogoUrl} alt={group.customerName} className="h-full w-full object-cover" />
+                                ? <img src={group.customerLogoUrl} alt={group.customerName} className="h-full w-full object-contain" />
                                 : getInitials(group.customerName)
                               }
                             </div>
