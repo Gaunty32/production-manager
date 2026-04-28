@@ -66,7 +66,7 @@ function getBaseUrl() {
 // ─── Branded email wrapper ────────────────────────────────────────────────────
 // All emails share this shell so branding updates happen in one place.
 function brandedEmail(bodyHtml: string): string {
-  const logoUrl = `${getBaseUrl()}/logo.png`;
+  const logoUrl = `https://production.selectbranding.co.uk/logo.png`;
   return `
 <!DOCTYPE html>
 <html lang="en">
