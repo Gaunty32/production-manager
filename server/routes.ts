@@ -3279,7 +3279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateJob(consolidatedJobId, {
               consolidatedShipmentId,
               shippingMethod: updates.shippingMethod as string,
-              dhlTrackingNumber: updates.dhlTrackingNumber as string | null,
+              dhlTrackingNumber: (updates.dhlTrackingNumber as string | null)?.trim() ?? null,
               packageType: updates.packageType as string,
               packageCount: updates.packageCount as number,
               shippingCost: null, // Don't duplicate shipping cost on consolidated jobs
@@ -6228,7 +6228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Save the tracking number to all jobs
       await Promise.all(
         allJobIds.map(id =>
-          storage.updateJob(id, { dhlTrackingNumber: result.trackingNumber })
+          storage.updateJob(id, { dhlTrackingNumber: result.trackingNumber.trim() })
         )
       );
 

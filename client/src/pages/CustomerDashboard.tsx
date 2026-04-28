@@ -178,8 +178,8 @@ function extractUkPostcode(address: string | null | undefined): string | null {
 }
 
 function dpdLocalUrl(trackingNumber: string, postcode: string | null): string {
-  const base = `https://track.dpd.co.uk/search?reference=${encodeURIComponent(trackingNumber)}`;
-  return postcode ? `${base}&postcode=${encodeURIComponent(postcode)}` : base;
+  const base = `https://track.dpd.co.uk/search?reference=${encodeURIComponent(trackingNumber.trim())}`;
+  return postcode ? `${base}&postcode=${encodeURIComponent(postcode.trim())}` : base;
 }
 
 export default function CustomerDashboard() {

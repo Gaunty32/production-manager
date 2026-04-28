@@ -188,7 +188,7 @@ class DpdService {
     }
 
     const firstParcel = parcels[0];
-    const trackingNumber = firstParcel.parcelNumber || firstParcel.trackId || "";
+    const trackingNumber = (firstParcel.parcelNumber || firstParcel.trackId || "").trim();
     const labelBase64 = firstParcel.label || "";
 
     if (!trackingNumber) {
