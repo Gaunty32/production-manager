@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera, Eye } from "lucide-react";
+import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera, Eye, Copy, Check } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +67,8 @@ export default function Users() {
   const profileInputRef = useRef<HTMLInputElement>(null);
   const [profileTargetUserId, setProfileTargetUserId] = useState<string | null>(null);
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
+  const [resetLinkDialog, setResetLinkDialog] = useState<{ url: string; warning: string } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -255,10 +257,14 @@ export default function Users() {
       return res.json();
     },
     onSuccess: (data) => {
-      toast({
-        title: "Password reset sent",
-        description: data.message || "Password reset email has been sent to the user.",
-      });
+      if (data.warning) {
+        setResetLinkDialog({ url: data.resetUrl, warning: data.warning });
+      } else {
+        toast({
+          title: "Password reset sent",
+          description: data.message || "Password reset email has been sent to the user.",
+        });
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -268,6 +274,14 @@ export default function Users() {
       });
     },
   });
+
+  const copyResetLink = () => {
+    if (resetLinkDialog?.url) {
+      navigator.clipboard.writeText(resetLinkDialog.url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
 
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ userId, active }: { userId: string; active: boolean }) => {
@@ -818,6 +832,26 @@ export default function Users() {
                 </div>
               </form>
             </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset link fallback dialog — shown when email sending fails */}
+        <Dialog open={!!resetLinkDialog} onOpenChange={(o) => { if (!o) { setResetLinkDialog(null); setCopiedLink(false); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Share Reset Link Manually</DialogTitle>
+              <DialogDescription>{resetLinkDialog?.warning}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 pt-1">
+              <p className="text-sm text-muted-foreground">Copy this link and send it directly to the user — it expires in 1 hour:</p>
+              <div className="flex gap-2">
+                <Input readOnly value={resetLinkDialog?.url ?? ""} className="text-xs font-mono" />
+                <Button size="icon" variant="outline" onClick={copyResetLink} title="Copy link">
+                  {copiedLink ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              {copiedLink && <p className="text-xs text-green-600">Copied to clipboard!</p>}
+            </div>
           </DialogContent>
         </Dialog>
       </div>

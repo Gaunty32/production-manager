@@ -804,12 +804,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const token = await requestPasswordReset({ email: user.email });
-      await sendPasswordResetEmail(user.email, token);
-      
-      res.json({ message: `Password reset email sent to ${user.email}` });
+      const baseUrl = process.env.REPLIT_DOMAINS
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+        : 'http://localhost:5000';
+      const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+      try {
+        await sendPasswordResetEmail(user.email, token);
+        res.json({ message: `Password reset email sent to ${user.email}`, resetUrl });
+      } catch (emailError: any) {
+        console.error("Email send failed, returning link instead:", emailError);
+        res.json({ 
+          warning: `Email could not be sent (${emailError?.message || 'email service error'}). Share the link below directly with the user.`,
+          resetUrl 
+        });
+      }
     } catch (error: any) {
-      console.error("Error sending password reset:", error);
-      res.status(500).json({ error: "Failed to send password reset email" });
+      console.error("Error generating password reset:", error);
+      res.status(500).json({ error: "Failed to generate password reset" });
     }
   });
 
