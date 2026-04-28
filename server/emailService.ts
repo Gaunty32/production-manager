@@ -529,3 +529,57 @@ export async function sendStaffMessageCCEmail(
     console.error('Failed to send CC email to staff:', error);
   }
 }
+
+// ─── Re-engagement email ───────────────────────────────────────────────────────
+export async function sendReEngagementEmail(customer: {
+  name: string;
+  email: string;
+  contactFirstName?: string | null;
+}): Promise<void> {
+  const { client, fromEmail } = await getUncachableResendClient();
+
+  const safeName = sanitizeHtml(customer.name);
+  const greeting = customer.contactFirstName
+    ? `Hi ${sanitizeHtml(customer.contactFirstName)},`
+    : `Hi there,`;
+
+  const portalUrl = `https://production.selectbranding.co.uk/customer/login`;
+
+  const body = `
+    <p style="margin:0 0 18px;">${greeting}</p>
+    <p style="margin:0 0 18px;">
+      It's been a little while since we last worked together at <strong>${safeName}</strong>, and we just
+      wanted to check in to say hello and see how things are going.
+    </p>
+    <p style="margin:0 0 18px;">
+      Whether you have new projects in the pipeline, a question about pricing, or just want to
+      catch up — we're here and always happy to help.
+    </p>
+    <p style="margin:0 0 18px;">
+      If there's anything we could have done better last time, we'd genuinely love to hear your
+      thoughts. Your feedback helps us improve and means a lot to the team.
+    </p>
+    <p style="margin:0 0 28px;">
+      You can log in to your customer portal any time to check on existing orders or submit new ones:
+    </p>
+    ${ctaButton(portalUrl, 'Visit Your Portal')}
+    <p style="margin:24px 0 0;">
+      Looking forward to hearing from you.
+    </p>
+    <p style="margin:8px 0 0;">
+      Warm regards,<br />
+      <strong>The Select Branding Solutions Team</strong>
+    </p>
+  `;
+
+  const { error } = await client.emails.send({
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: customer.email,
+    subject: `Checking in from Select Branding Solutions`,
+    html: brandedEmail(body),
+  });
+
+  if (error) {
+    throw new Error(`Failed to send re-engagement email to ${customer.email}: ${JSON.stringify(error)}`);
+  }
+}

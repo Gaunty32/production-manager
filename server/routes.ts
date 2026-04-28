@@ -1368,6 +1368,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Re-engagement email endpoints ──────────────────────────────────────────
+
+  // Preview: which customers would receive a re-engagement email
+  app.get("/api/re-engagement/preview", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const { getDormantCustomers } = await import("./reEngagement");
+      const customers = await getDormantCustomers();
+      res.json({ customers });
+    } catch (error) {
+      console.error("Re-engagement preview error:", error);
+      res.status(500).json({ error: "Failed to fetch dormant customers" });
+    }
+  });
+
+  // Trigger: send re-engagement emails now (or dry-run)
+  app.post("/api/re-engagement/send", isStaffAuthenticated, async (req, res) => {
+    try {
+      const dryRun = req.body?.dryRun === true;
+      const { runReEngagementCheck } = await import("./reEngagement");
+      const result = await runReEngagementCheck({ dryRun });
+      res.json(result);
+    } catch (error) {
+      console.error("Re-engagement send error:", error);
+      res.status(500).json({ error: "Failed to run re-engagement check" });
+    }
+  });
+
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
     try {

@@ -1,4 +1,4 @@
-import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail } from "lucide-react";
+import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail, Send, Clock, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,8 +27,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
+import { format } from "date-fns";
 
 const TILE_COLORS = [
   "bg-violet-500","bg-blue-500","bg-cyan-500","bg-teal-500","bg-emerald-500",
@@ -52,6 +55,37 @@ export default function Customers() {
   const [editingPortalUser, setEditingPortalUser] = useState<{ id: string; email: string; firstName: string; lastName: string } | null>(null);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState<string | null>(null); // userId being actioned
   const [isSendingReset, setIsSendingReset] = useState<string | null>(null); // userId being reset
+  const [showReEngagement, setShowReEngagement] = useState(false);
+
+  const { data: dormantData, isLoading: isLoadingDormant, refetch: refetchDormant } = useQuery<{
+    customers: Array<{
+      id: string;
+      name: string;
+      email: string;
+      contactFirstName: string | null;
+      daysSinceLastJob: number;
+      lastJobDate: string;
+      lastReEngagementEmailAt: string | null;
+    }>;
+  }>({
+    queryKey: ["/api/re-engagement/preview"],
+    enabled: showReEngagement,
+  });
+
+  const sendReEngagementMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/re-engagement/send", { dryRun: false }),
+    onSuccess: async (res) => {
+      const data = await res.json();
+      toast({
+        title: `Re-engagement emails sent`,
+        description: `${data.sent} email${data.sent !== 1 ? "s" : ""} sent successfully.${data.errors?.length ? ` ${data.errors.length} failed.` : ""}`,
+      });
+      refetchDormant();
+    },
+    onError: () => {
+      toast({ title: "Failed to send emails", variant: "destructive" });
+    },
+  });
 
   const { data: customersData = [], isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -538,6 +572,97 @@ export default function Customers() {
             })}
           </div>
         )}
+
+        {/* Re-engagement email panel */}
+        <div className="mt-6">
+          <button
+            className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-3"
+            onClick={() => setShowReEngagement(v => !v)}
+            data-testid="button-toggle-reengagement"
+          >
+            <Mail className="h-4 w-4" />
+            Re-engagement Emails
+            {showReEngagement ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+
+          {showReEngagement && (
+            <Card data-testid="card-reengagement">
+              <CardHeader className="flex flex-row items-start justify-between gap-2 flex-wrap pb-3">
+                <div>
+                  <CardTitle className="text-base">Customers Not Heard From in 90+ Days</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    These customers have an email address but no job activity in over 3 months.
+                    Emails are sent automatically every morning at 9am, or send now manually.
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetchDormant()}
+                    disabled={isLoadingDormant}
+                    data-testid="button-refresh-dormant"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isLoadingDormant ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => sendReEngagementMutation.mutate()}
+                    disabled={sendReEngagementMutation.isPending || !dormantData?.customers?.length}
+                    data-testid="button-send-reengagement"
+                  >
+                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                    {sendReEngagementMutation.isPending ? "Sending…" : `Send Now (${dormantData?.customers?.length ?? 0})`}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoadingDormant ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Loading…</p>
+                ) : !dormantData?.customers?.length ? (
+                  <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    <span className="text-sm">All customers with an email have been contacted in the last 90 days.</span>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead className="text-right">Last Job</TableHead>
+                        <TableHead className="text-right">Days Inactive</TableHead>
+                        <TableHead className="text-right">Last Email Sent</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dormantData.customers.map((c) => (
+                        <TableRow key={c.id} data-testid={`row-dormant-${c.id}`}>
+                          <TableCell className="font-medium">{c.name}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{c.email}</TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {c.lastJobDate ? format(new Date(c.lastJobDate), "dd MMM yyyy") : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant={c.daysSinceLastJob > 180 ? "destructive" : "secondary"} data-testid={`badge-days-${c.id}`}>
+                              {c.daysSinceLastJob}d
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {c.lastReEngagementEmailAt
+                              ? format(new Date(c.lastReEngagementEmailAt), "dd MMM yyyy")
+                              : <span className="text-amber-600 dark:text-amber-400 font-medium">Never</span>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Customer detail sheet */}
         <Sheet open={selectedCustomer !== null} onOpenChange={(open) => !open && setSelectedCustomer(null)}>

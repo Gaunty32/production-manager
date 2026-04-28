@@ -43,6 +43,7 @@ export const customers = pgTable("customers", {
   active: boolean("active").notNull().default(true),
   xeroContactId: text("xero_contact_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  lastReEngagementEmailAt: timestamp("last_re_engagement_email_at"),
 });
 
 export const staff = pgTable("staff", {
