@@ -65,8 +65,28 @@ function getBaseUrl() {
 
 // ─── Branded email wrapper ────────────────────────────────────────────────────
 // All emails share this shell so branding updates happen in one place.
-function brandedEmail(bodyHtml: string): string {
-  const logoUrl = `https://production.selectbranding.co.uk/logo.png`;
+function brandedEmail(bodyHtml: string, opts?: { customerLogoUrl?: string | null; customerName?: string | null }): string {
+  const sbLogoUrl = `https://production.selectbranding.co.uk/logo.png`;
+  const customerLogo = opts?.customerLogoUrl;
+  const customerName = opts?.customerName ?? 'Customer';
+
+  const headerContent = customerLogo
+    ? `<!-- Dual-logo header: SB logo + customer logo side by side -->
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        <tr>
+          <td width="44%" align="right" style="padding-right:12px;vertical-align:middle;">
+            <img src="${sbLogoUrl}" alt="Select Branding Solutions" height="52" style="max-height:52px;max-width:160px;height:auto;display:inline-block;" />
+          </td>
+          <td width="12%" align="center" style="vertical-align:middle;">
+            <span style="font-size:18px;color:#d4d4d8;font-weight:300;">&times;</span>
+          </td>
+          <td width="44%" align="left" style="padding-left:12px;vertical-align:middle;">
+            <img src="${customerLogo}" alt="${customerName}" height="52" style="max-height:52px;max-width:160px;height:auto;display:inline-block;" />
+          </td>
+        </tr>
+      </table>`
+    : `<img src="${sbLogoUrl}" alt="Select Branding Solutions" width="220" style="max-width:220px;height:auto;display:block;margin:0 auto;" />`;
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -83,7 +103,7 @@ function brandedEmail(bodyHtml: string): string {
           <!-- Header -->
           <tr>
             <td style="background-color:#ffffff;border-radius:8px 8px 0 0;padding:28px 40px;text-align:center;border-bottom:1px solid #e4e4e7;">
-              <img src="${logoUrl}" alt="Select Branding Solutions" width="220" style="max-width:220px;height:auto;display:block;margin:0 auto;" />
+              ${headerContent}
             </td>
           </tr>
 
@@ -535,6 +555,7 @@ export async function sendReEngagementEmail(customer: {
   name: string;
   email: string;
   contactFirstName?: string | null;
+  logoUrl?: string | null;
 }): Promise<void> {
   const { client, fromEmail } = await getUncachableResendClient();
 
@@ -576,7 +597,7 @@ export async function sendReEngagementEmail(customer: {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customer.email,
     subject: `Checking in from Select Branding Solutions`,
-    html: brandedEmail(body),
+    html: brandedEmail(body, { customerLogoUrl: customer.logoUrl, customerName: customer.name }),
   });
 
   if (error) {

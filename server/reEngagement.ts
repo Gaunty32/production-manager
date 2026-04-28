@@ -11,6 +11,7 @@ export interface DormantCustomer {
   name: string;
   email: string;
   contactFirstName: string | null;
+  logoUrl: string | null;
   daysSinceLastJob: number;
   lastJobDate: string;
   lastReEngagementEmailAt: string | null;
@@ -37,6 +38,7 @@ export async function getDormantCustomers(): Promise<DormantCustomer[]> {
       c.name,
       c.email,
       c.contact_first_name AS "contactFirstName",
+      c.logo_url AS "logoUrl",
       c.last_re_engagement_email_at AS "lastReEngagementEmailAt",
       lj.last_activity AS last_job_date,
       EXTRACT(DAY FROM NOW() - lj.last_activity)::int AS days_since_last_job
@@ -59,6 +61,7 @@ export async function getDormantCustomers(): Promise<DormantCustomer[]> {
     name: r.name,
     email: r.email,
     contactFirstName: r.contactFirstName,
+    logoUrl: r.logoUrl ?? null,
     daysSinceLastJob: parseInt(r.days_since_last_job) || DORMANT_DAYS,
     lastJobDate: r.last_job_date,
     lastReEngagementEmailAt: r.lastReEngagementEmailAt,
@@ -92,6 +95,7 @@ export async function runReEngagementCheck(options: { dryRun?: boolean } = {}): 
         name: customer.name,
         email: customer.email,
         contactFirstName: customer.contactFirstName,
+        logoUrl: customer.logoUrl,
       });
 
       // Record that we emailed them
