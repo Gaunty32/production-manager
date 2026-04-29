@@ -44,7 +44,7 @@ import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
 import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail } from "./emailService";
-import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod } from "./stripeService";
+import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 
 // Helper function to auto-schedule a line item when it has a machine assigned
 async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
@@ -5091,8 +5091,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const setup of customerLogoSetups) {
         await storage.updateLogoSetup(setup.id, { invoicedAt: new Date(), invoiceReference: invoiceNumber || invoiceId });
       }
+
+      // Auto-charge saved card for non-credit-account customers
+      let stripeCharge = null;
+      if (!customer.creditAccount && customer.stripeCustomerId) {
+        stripeCharge = await chargeCustomerCard(
+          customer.stripeCustomerId,
+          invoiceTotal,
+          `Invoice ${invoiceNumber || invoiceId} — ${customer.name}`,
+          invoiceNumber || invoiceId,
+        );
+      }
       
-      res.json(invoice);
+      res.json({ ...invoice, stripeCharge });
     } catch (error) {
       console.error("Xero invoice creation error:", error);
       res.status(500).json({ 
@@ -5464,12 +5475,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Calculate overall invoice total for Stripe charge
+      const consolidatedTotal = lineItemsWithPricing.reduce(
+        (sum, item) => sum + item.quantity * item.unitPrice,
+        0,
+      );
+
+      // Auto-charge saved card for non-credit-account customers
+      let stripeCharge = null;
+      if (!customer.creditAccount && customer.stripeCustomerId && consolidatedTotal > 0) {
+        stripeCharge = await chargeCustomerCard(
+          customer.stripeCustomerId,
+          consolidatedTotal,
+          `Invoice ${invoiceNumber || invoiceId} — ${customer.name}`,
+          invoiceNumber || invoiceId,
+        );
+      }
+
       res.json({
         success: true,
         invoiceId,
         invoiceNumber,
         jobsInvoiced: selectedJobs.length,
         logoSetupsInvoiced: customerLogoSetups.length,
+        stripeCharge,
       });
     } catch (error) {
       console.error("Consolidated invoice creation error:", error);

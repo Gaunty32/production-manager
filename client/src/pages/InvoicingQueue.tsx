@@ -736,7 +736,7 @@ export default function InvoicingQueue() {
         logoSetupsOnly: invoicingLogoSetupsOnly,
         manualPrices: Object.keys(manualPricesForAPI).length > 0 ? manualPricesForAPI : undefined,
         manualShippingCosts: Object.keys(manualShippingForAPI).length > 0 ? manualShippingForAPI : undefined,
-      }) as unknown as { success: boolean; invoiceId: string; invoiceNumber: string | null; jobsInvoiced: number; logoSetupsInvoiced?: number };
+      }) as unknown as { success: boolean; invoiceId: string; invoiceNumber: string | null; jobsInvoiced: number; logoSetupsInvoiced?: number; stripeCharge?: { success: boolean; amountCharged?: number; paymentIntentId?: string; error?: string } | null };
 
       const invoiceDescription = invoicingLogoSetupsOnly 
         ? `Successfully created invoice for ${customerLogoSetups.length} logo set-up${customerLogoSetups.length > 1 ? 's' : ''}.`
@@ -746,6 +746,22 @@ export default function InvoicingQueue() {
         title: "Invoice Created",
         description: `${invoiceDescription} Reference: ${response.invoiceNumber || response.invoiceId}`,
       });
+
+      // Show Stripe charge result if a card was charged
+      if (response.stripeCharge) {
+        if (response.stripeCharge.success) {
+          toast({
+            title: "Card charged",
+            description: `£${response.stripeCharge.amountCharged?.toFixed(2)} collected from customer's saved card.`,
+          });
+        } else {
+          toast({
+            title: "Card charge failed",
+            description: `Invoice raised successfully but card payment failed: ${response.stripeCharge.error}. Please follow up manually.`,
+            variant: "destructive",
+          });
+        }
+      }
 
       // Clear selected jobs for this customer
       const newSelected = new Set(selectedJobs);
