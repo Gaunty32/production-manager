@@ -151,6 +151,15 @@ export default function CustomerSubmitJob() {
     });
   };
 
+  const handleSessionExpired = () => {
+    toast({
+      title: "Session expired",
+      description: "Your session timed out. Please log in again — your form details will need to be re-entered.",
+      variant: "destructive",
+    });
+    setLocation("/customer/login");
+  };
+
   const uploadFiles = async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
     if (fileArray.length === 0) return;
@@ -168,6 +177,10 @@ export default function CustomerSubmitJob() {
           body: file,
           credentials: "include",
         });
+        if (res.status === 401) {
+          handleSessionExpired();
+          return;
+        }
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err?.error || `Upload failed with status ${res.status}`);
@@ -220,9 +233,14 @@ export default function CustomerSubmitJob() {
       setLocation("/customer/pending");
     },
     onError: (error: any) => {
+      const msg: string = error?.message || "";
+      if (msg.toLowerCase().includes("authentication required") || msg.toLowerCase().includes("unauthorized")) {
+        handleSessionExpired();
+        return;
+      }
       toast({
         title: "Error",
-        description: error.message || "Failed to submit job",
+        description: msg || "Failed to submit job",
         variant: "destructive",
       });
     },
