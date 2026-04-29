@@ -58,3 +58,9 @@ Additional features include:
 -   **State Management**: TanStack React Query
 -   **Routing**: Wouter
 -   **External APIs**: Xero API, Resend (for email notifications), DPD Web Connect REST API
+
+# Recent Enhancements
+
+- **Customer sample approval**: "Approved, please proceed." button in CustomerInbox now auto-sends the message immediately instead of just pre-filling the input.
+- **Customer new-message notifications**: CustomerInbox requests OS browser notification permission on mount, fires a browser push notification, and shows a prominent dismissible primary-color banner in the chat panel when a new staff message arrives.
+- **Staff email notification toggle**: `emailNotificationsMessages` boolean column added to `users` table (default true). Managed via the staff profile dialog in the Messages page. When a customer sends a job message, all staff with the toggle enabled receive an email notification via Resend. Route: `PATCH /api/staff/me/notification-settings`.

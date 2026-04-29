@@ -2488,10 +2488,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: req.body.message,
       });
 
+      // Email staff who have notifications enabled (fire-and-forget)
+      (async () => {
+        try {
+          const allCustomers = await storage.getCustomers();
+          const customer = allCustomers.find(c => c.id === customerUser.customerId);
+          const allStaff = await storage.getAllUsers();
+          const staffEmailsToNotify = allStaff
+            .filter(u => u.role !== 'customer' && u.active && u.emailNotificationsMessages && u.email)
+            .map(u => u.email as string);
+          if (staffEmailsToNotify.length > 0 && customer) {
+            const { sendCustomerMessageNotificationEmail } = await import('./emailService.js');
+            await sendCustomerMessageNotificationEmail(staffEmailsToNotify, {
+              customerName: customer.name,
+              jobName: job.name,
+              jobId: job.id,
+              message: req.body.message,
+            });
+          }
+        } catch (emailErr) {
+          console.error("Failed to send staff message notification email:", emailErr);
+        }
+      })();
+
       res.json(message);
     } catch (error) {
       console.error("Error sending message:", error);
       res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // Staff — update message notification preference
+  app.patch("/api/staff/me/notification-settings", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session?.userId;
+      if (!userId) return res.status(401).json({ error: "Not authenticated" });
+      const { emailNotificationsMessages } = req.body;
+      if (typeof emailNotificationsMessages !== "boolean") {
+        return res.status(400).json({ error: "emailNotificationsMessages must be a boolean" });
+      }
+      await storage.updateUser(userId, { emailNotificationsMessages });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating notification settings:", error);
+      res.status(500).json({ error: "Failed to update notification settings" });
     }
   });
 

@@ -56,6 +56,8 @@ import {
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 type JobConversation = {
   jobId: string;
@@ -107,6 +109,7 @@ type CurrentUser = {
   staffName?: string | null;
   staffId?: string | null;
   role?: string;
+  emailNotificationsMessages?: boolean;
 };
 
 type Customer = { id: string; name: string; logoUrl?: string | null };
@@ -629,6 +632,16 @@ export default function StaffMessages() {
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) await uploadFiles(files);
   };
+
+  const notificationSettingsMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      await apiRequest("PATCH", "/api/staff/me/notification-settings", { emailNotificationsMessages: enabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/me"] });
+    },
+    onError: () => toast({ title: "Failed to update notification setting", variant: "destructive" }),
+  });
 
   // File selected → open crop dialog
   const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1434,6 +1447,26 @@ export default function StaffMessages() {
               <Camera className="h-4 w-4 mr-2" />
               {isUploadingProfile ? "Uploading…" : "Change Profile Picture"}
             </Button>
+
+            <div className="w-full border-t pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <Label htmlFor="toggle-email-notifs" className="text-sm font-medium leading-none">
+                    Email notifications
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Receive an email when a customer sends you a message
+                  </p>
+                </div>
+                <Switch
+                  id="toggle-email-notifs"
+                  checked={currentUser?.emailNotificationsMessages ?? true}
+                  onCheckedChange={(checked) => notificationSettingsMutation.mutate(checked)}
+                  disabled={notificationSettingsMutation.isPending}
+                  data-testid="toggle-email-notifications"
+                />
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

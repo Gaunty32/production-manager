@@ -94,6 +94,14 @@ export default function CustomerInbox() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevStaffMsgCount = useRef(0);
   const isInitialLoad = useRef(true);
+  const [newMessageBanner, setNewMessageBanner] = useState(false);
+
+  // Request browser notification permission once on mount
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   // New conversation dialog (direct messages)
   const [showNewConvo, setShowNewConvo] = useState(false);
@@ -189,12 +197,22 @@ export default function CustomerInbox() {
     }
     if (staffMsgs.length > prevStaffMsgCount.current) {
       toast({ title: "New message from Select Branding Solutions" });
+      setNewMessageBanner(true);
+      if ("Notification" in window && Notification.permission === "granted") {
+        const latest = staffMsgs[staffMsgs.length - 1];
+        new Notification("New message from Select Branding Solutions", {
+          body: latest?.message ? latest.message.slice(0, 120) : "You have a new message",
+          icon: "/favicon.ico",
+        });
+      }
     }
     prevStaffMsgCount.current = staffMsgs.length;
   }, [messages, isLoadingMessages, selected, toast]);
 
   useEffect(() => {
     if (selected) {
+      setNewMessageBanner(false);
+      isInitialLoad.current = true;
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/messages/unread-count"] });
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/conversations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/direct-conversations"] });
@@ -642,7 +660,8 @@ export default function CustomerInbox() {
                     size="sm"
                     variant="outline"
                     className="text-xs h-8 gap-1.5"
-                    onClick={() => setNewMessage("Approved, please proceed.")}
+                    onClick={() => sendJobMutation.mutate("Approved, please proceed.")}
+                    disabled={sendJobMutation.isPending}
                     data-testid="button-approve-sample-quick-reply"
                   >
                     <CheckCircle className="h-3.5 w-3.5 text-green-600" />
@@ -652,7 +671,27 @@ export default function CustomerInbox() {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {newMessageBanner && (
+              <div
+                className="flex items-center gap-3 px-4 py-3 bg-primary text-primary-foreground shrink-0 cursor-pointer"
+                onClick={() => { setNewMessageBanner(false); messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }}
+                data-testid="banner-new-message"
+              >
+                <MessageSquare className="h-4 w-4 shrink-0" />
+                <span className="text-sm font-medium flex-1">New message from Select Branding Solutions</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs text-primary-foreground hover:bg-white/20"
+                  onClick={(e) => { e.stopPropagation(); setNewMessageBanner(false); }}
+                  data-testid="button-dismiss-new-message-banner"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3" onScroll={() => newMessageBanner && setNewMessageBanner(false)}>
               {isLoadingMessages ? (
                 <LoadingSpinner />
               ) : messages.length === 0 ? (

@@ -86,7 +86,7 @@ export interface IStorage {
   createUser(user: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserRole(id: string, role: string): Promise<User>;
-  updateUser(id: string, updates: { username?: string; email?: string; firstName?: string; lastName?: string }): Promise<User>;
+  updateUser(id: string, updates: { username?: string; email?: string; firstName?: string; lastName?: string; emailNotificationsMessages?: boolean }): Promise<User>;
   updateUserProfileImage(id: string, profileImageUrl: string): Promise<void>;
   updateCustomerUserProfileImage(id: string, profileImageUrl: string): Promise<void>;
   updateUserActive(id: string, active: boolean): Promise<void>;
