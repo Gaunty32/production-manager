@@ -2597,7 +2597,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const { sendCustomerMessageNotificationEmail } = await import('./emailService.js');
             await sendCustomerMessageNotificationEmail(staffEmailsToNotify, {
               customerName: customer.name,
-              jobName: job.name,
+              jobName: job.jobName,
               jobId: job.id,
               message: req.body.message,
             });
