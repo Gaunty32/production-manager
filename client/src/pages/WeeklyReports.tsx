@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { DemoText } from "@/components/DemoText";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1061,7 +1062,7 @@ export default function WeeklyReports() {
                                 {idx + 1}
                               </span>
                             </TableCell>
-                            <TableCell className="font-medium">{c.customerName}</TableCell>
+                            <TableCell className="font-medium"><DemoText>{c.customerName}</DemoText></TableCell>
                             <TableCell className="text-right">{c.jobCount}</TableCell>
                             <TableCell className="text-right font-semibold">{c.totalQuantity.toLocaleString()}</TableCell>
                           </TableRow>
@@ -1095,7 +1096,7 @@ export default function WeeklyReports() {
                       <TableBody>
                         {customerInsights.dormantCustomers.map((c) => (
                           <TableRow key={c.customerId} data-testid={`row-dormant-customer-${c.customerId}`}>
-                            <TableCell className="font-medium">{c.customerName}</TableCell>
+                            <TableCell className="font-medium"><DemoText>{c.customerName}</DemoText></TableCell>
                             <TableCell className="text-right text-muted-foreground">
                               {c.lastOrderDate ? format(new Date(c.lastOrderDate), "dd MMM yyyy") : "—"}
                             </TableCell>

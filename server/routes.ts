@@ -855,6 +855,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Demo user management (super_admin only)
+  app.post("/api/admin/ensure-demo-user", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    const DEMO_EMAIL = "demo@selectbranding.co.uk";
+    const DEMO_USERNAME = "demo";
+    const DEMO_PASSWORD = "SBdemo2025!";
+    try {
+      let existing = await storage.getUserByEmail(DEMO_EMAIL);
+      if (!existing) {
+        existing = await registerStaff({
+          username: DEMO_USERNAME,
+          email: DEMO_EMAIL,
+          password: DEMO_PASSWORD,
+          firstName: "Demo",
+          lastName: "User",
+          role: "demo",
+        });
+        // Ensure active
+        await storage.updateUserActive(existing.id, true);
+      } else {
+        // Ensure role is demo and user is active
+        await storage.updateUserRole(existing.id, "demo");
+        await storage.updateUserActive(existing.id, true);
+      }
+      res.json({
+        email: DEMO_EMAIL,
+        password: DEMO_PASSWORD,
+        message: "Demo account is ready",
+      });
+    } catch (error: any) {
+      console.error("Error ensuring demo user:", error);
+      res.status(500).json({ error: error.message || "Failed to ensure demo user" });
+    }
+  });
+
   // Star management routes
   app.post("/api/users/:userId/stars", isStaffAuthenticated, async (req, res) => {
     try {

@@ -48,6 +48,8 @@ import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { DemoModeContext } from "@/lib/demoMode";
+import { FlaskConical } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isLoading } = useAuth();
@@ -170,6 +172,8 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
     return <StaffLogin />;
   }
 
+  const isDemoMode = user?.role === "demo";
+
   const handleLogout = async () => {
     try {
       await apiRequest("POST", "/api/staff-auth/logout", {});
@@ -184,46 +188,56 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   };
 
   return (
-    <SidebarProvider defaultOpen={true} style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
-        <AppSidebar />
-        <div className="flex flex-col flex-1 min-w-0">
-          {isStaffImpersonating && user && realUser && (
-            <StaffImpersonationBanner impersonatedUser={user as any} realUser={realUser as any} />
-          )}
-          <header className="flex items-center justify-between p-3 md:p-4 border-b sticky top-0 bg-background z-10 gap-2">
-            <div className="flex items-center gap-2 md:gap-3">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
-            </div>
-            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-user-menu">
-                    <Avatar className="h-7 w-7 md:h-8 md:w-8">
-                      <AvatarImage src={user?.profileImageUrl || undefined} />
-                      <AvatarFallback>
-                        {user?.email?.[0]?.toUpperCase() || "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem 
-                    onClick={handleLogout}
-                    data-testid="button-logout"
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </header>
-          <main className="flex-1 overflow-hidden">
-            <StaffRouter />
-          </main>
+    <DemoModeContext.Provider value={isDemoMode}>
+      <SidebarProvider defaultOpen={true} style={style as React.CSSProperties}>
+        <div className="flex h-screen w-full">
+          <AppSidebar />
+          <div className="flex flex-col flex-1 min-w-0">
+            {isDemoMode && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/15 border-b border-amber-500/30 shrink-0" data-testid="banner-demo-mode">
+                <FlaskConical className="h-4 w-4 text-amber-600 shrink-0" />
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                  Demo Mode — Customer names and financial figures have been anonymised
+                </p>
+              </div>
+            )}
+            {isStaffImpersonating && user && realUser && (
+              <StaffImpersonationBanner impersonatedUser={user as any} realUser={realUser as any} />
+            )}
+            <header className="flex items-center justify-between p-3 md:p-4 border-b sticky top-0 bg-background z-10 gap-2">
+              <div className="flex items-center gap-2 md:gap-3">
+                <SidebarTrigger data-testid="button-sidebar-toggle" />
+              </div>
+              <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" data-testid="button-user-menu">
+                      <Avatar className="h-7 w-7 md:h-8 md:w-8">
+                        <AvatarImage src={user?.profileImageUrl || undefined} />
+                        <AvatarFallback>
+                          {user?.email?.[0]?.toUpperCase() || "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={handleLogout}
+                      data-testid="button-logout"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </header>
+            <main className="flex-1 overflow-hidden">
+              <StaffRouter />
+            </main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </DemoModeContext.Provider>
   );
 }

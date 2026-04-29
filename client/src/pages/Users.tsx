@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera, Eye, Copy, Check } from "lucide-react";
+import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera, Eye, Copy, Check, FlaskConical } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -306,6 +306,23 @@ export default function Users() {
     },
   });
 
+  const ensureDemoUserMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/ensure-demo-user", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Demo account ready",
+        description: `Login: ${data.email} / ${data.password}`,
+        duration: 10000,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to setup demo account", variant: "destructive" });
+    },
+  });
+
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     editUserForm.reset({
@@ -355,6 +372,16 @@ export default function Users() {
             <p className="text-muted-foreground">Manage user roles and permissions</p>
           </div>
           {currentUser?.role === UserRole.SUPER_ADMIN && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() => ensureDemoUserMutation.mutate()}
+                disabled={ensureDemoUserMutation.isPending}
+                data-testid="button-setup-demo"
+              >
+                <FlaskConical className="h-4 w-4 mr-2" />
+                {ensureDemoUserMutation.isPending ? "Setting up..." : "Setup Demo Account"}
+              </Button>
             <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button data-testid="button-create-user">
@@ -506,6 +533,7 @@ export default function Users() {
                 </Form>
               </DialogContent>
             </Dialog>
+            </div>
           )}
         </div>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { DemoText, DemoAmount } from "@/components/DemoText";
 import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -707,7 +708,7 @@ export default function Dashboard() {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Total Value</p>
                     <h3 className="text-3xl font-bold text-foreground mt-2" data-testid="text-total-value">
-                      £{productionQueueMetrics.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <DemoAmount value={productionQueueMetrics.totalValue} />
                     </h3>
                   </div>
                   <div className="h-12 w-12 bg-green-500/10 rounded-full flex items-center justify-center">
@@ -923,8 +924,8 @@ export default function Dashboard() {
                       <div className="p-4 space-y-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <h3 className="font-semibold text-sm truncate">{job.jobName}</h3>
-                            <p className="text-xs text-muted-foreground truncate">{customer.name}</p>
+                            <h3 className="font-semibold text-sm truncate"><DemoText>{job.jobName}</DemoText></h3>
+                            <p className="text-xs text-muted-foreground truncate"><DemoText>{customer.name}</DemoText></p>
                           </div>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -1133,9 +1134,9 @@ export default function Dashboard() {
                               />
                             </TableCell>
                             <TableCell className="py-2 px-3">
-                              <span className="font-medium">{job.customerName}</span>
+                              <DemoText className="font-medium">{job.customerName}</DemoText>
                             </TableCell>
-                            <TableCell className="py-2 px-3 font-medium">{job.jobName}</TableCell>
+                            <TableCell className="py-2 px-3 font-medium"><DemoText>{job.jobName}</DemoText></TableCell>
                             <TableCell className="py-2 px-3">
                               <span className="text-xs font-mono">
                                 {job.jobNumber || '-'}
@@ -1309,7 +1310,7 @@ export default function Dashboard() {
                       >
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{customer?.name || "Unknown Customer"}</span>
+                            <DemoText className="font-medium">{customer?.name || "Unknown Customer"}</DemoText>
                             <span className="text-muted-foreground">-</span>
                             <span className="text-sm">{setup.jobName}</span>
                           </div>
@@ -1381,7 +1382,7 @@ export default function Dashboard() {
                         >
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium">{customer?.name || "Unknown Customer"}</span>
+                              <DemoText className="font-medium">{customer?.name || "Unknown Customer"}</DemoText>
                               <span className="text-muted-foreground">-</span>
                               <span className="text-sm">{setup.jobName}</span>
                             </div>

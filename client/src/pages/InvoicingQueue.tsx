@@ -1,4 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { DemoText, DemoAmount } from "@/components/DemoText";
+import { useDemoMode } from "@/lib/demoMode";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,6 +67,7 @@ interface EditLineItemsState {
 export default function InvoicingQueue() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const isDemoMode = useDemoMode();
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
   const [connectingXero, setConnectingXero] = useState(false);
@@ -822,7 +825,7 @@ export default function InvoicingQueue() {
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">Total Draft Value (excl. shipping)</p>
                     <p className="text-2xl font-bold text-foreground" data-testid="text-total-draft-value">
-                      £{totalDraftInvoiceValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <DemoAmount value={totalDraftInvoiceValue} />
                     </p>
                   </div>
                 )}
@@ -912,7 +915,7 @@ export default function InvoicingQueue() {
                           />
                         )}
                         <div className="flex-1">
-                          <CardTitle className="text-xl">{customer.name}</CardTitle>
+                          <CardTitle className="text-xl"><DemoText>{customer.name}</DemoText></CardTitle>
                           <CardDescription className="mt-1">
                             {hasOnlyLogoSetups ? (
                               <>{customerLogoSetups.length} approved logo {customerLogoSetups.length === 1 ? 'set-up' : 'set-ups'} ready for invoicing</>
@@ -934,11 +937,13 @@ export default function InvoicingQueue() {
                               {canInvoiceLogoSetupsOnly ? "Logo Set-up Total" : "Selected Total"}
                             </p>
                             <p className="text-2xl font-bold">
-                              {canInvoiceLogoSetupsOnly 
-                                ? formatPrice(logoSetupTotal)
-                                : (selectedCount > 0 && totalPrice !== null 
-                                    ? (typeof totalPrice === 'number' ? formatPrice(totalPrice) : totalPrice)
-                                    : "-")}
+                              {isDemoMode
+                                ? "£**.00"
+                                : canInvoiceLogoSetupsOnly
+                                  ? formatPrice(logoSetupTotal)
+                                  : (selectedCount > 0 && totalPrice !== null
+                                      ? (typeof totalPrice === 'number' ? formatPrice(totalPrice) : totalPrice)
+                                      : "-")}
                             </p>
                           </div>
                         )}
@@ -1302,10 +1307,10 @@ export default function InvoicingQueue() {
                                       <td className="p-2 text-foreground">{line.description}</td>
                                       <td className="p-2 text-right text-muted-foreground">{line.quantity}</td>
                                       <td className="p-2 text-right text-muted-foreground">
-                                        {typeof line.unitPrice === 'number' ? `£${line.unitPrice.toFixed(2)}` : line.unitPrice}
+                                        {isDemoMode ? "£**.00" : (typeof line.unitPrice === 'number' ? `£${line.unitPrice.toFixed(2)}` : line.unitPrice)}
                                       </td>
                                       <td className="p-2 text-right font-medium">
-                                        {typeof line.unitPrice === 'number' ? `£${(line.unitPrice * line.quantity).toFixed(2)}` : line.unitPrice}
+                                        {isDemoMode ? "£**.00" : (typeof line.unitPrice === 'number' ? `£${(line.unitPrice * line.quantity).toFixed(2)}` : line.unitPrice)}
                                       </td>
                                     </tr>
                                   ))}
@@ -1314,7 +1319,7 @@ export default function InvoicingQueue() {
                                   <tr className="border-t bg-muted/30">
                                     <td colSpan={4} className="p-2 text-right font-semibold">Subtotal (excl. VAT)</td>
                                     <td className="p-2 text-right font-bold">
-                                      {hasPOA ? "POA" : `£${previewTotal.toFixed(2)}`}
+                                      {isDemoMode ? "£**.00" : (hasPOA ? "POA" : `£${previewTotal.toFixed(2)}`)}
                                     </td>
                                   </tr>
                                 </tfoot>

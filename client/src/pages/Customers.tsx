@@ -1,4 +1,5 @@
 import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail, Send, Clock, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { DemoText } from "@/components/DemoText";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -549,7 +550,7 @@ export default function Customers() {
 
                   {/* Name */}
                   <p className="text-sm font-semibold text-center leading-tight line-clamp-2 w-full" data-testid={`text-customer-name-${customer.id}`}>
-                    {customer.name}
+                    <DemoText>{customer.name}</DemoText>
                   </p>
 
                   {/* Status chips */}
@@ -686,7 +687,7 @@ export default function Customers() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <SheetTitle className="text-lg leading-tight">{customer.name}</SheetTitle>
+                        <SheetTitle className="text-lg leading-tight"><DemoText>{customer.name}</DemoText></SheetTitle>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {isInactive && <Badge variant="outline" className="text-xs">Inactive</Badge>}
                         </div>
@@ -734,13 +735,15 @@ export default function Customers() {
                         <span className="text-muted-foreground w-16 shrink-0">Contact</span>
                         <span data-testid={`text-contact-name-${customer.id}`}>
                           {customer.contactFirstName || customer.contactLastName
-                            ? `${customer.contactFirstName || ""} ${customer.contactLastName || ""}`.trim()
+                            ? <DemoText>{`${customer.contactFirstName || ""} ${customer.contactLastName || ""}`.trim()}</DemoText>
                             : "—"}
                         </span>
                       </div>
                       <div className="flex gap-2">
                         <span className="text-muted-foreground w-16 shrink-0">Email</span>
-                        <span className="break-all" data-testid={`text-email-${customer.id}`}>{customer.email || "—"}</span>
+                        <span className="break-all" data-testid={`text-email-${customer.id}`}>
+                          {customer.email ? <DemoText>{customer.email}</DemoText> : "—"}
+                        </span>
                       </div>
                       <div className="flex gap-2">
                         <span className="text-muted-foreground w-16 shrink-0">Phone</span>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { DemoText } from "@/components/DemoText";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -883,7 +884,7 @@ export default function StaffMessages() {
                       : getInitials(drilledGroup.customerName)
                     }
                   </div>
-                  <span className="font-semibold text-foreground">{drilledGroup.customerName}</span>
+                  <span className="font-semibold text-foreground"><DemoText>{drilledGroup.customerName}</DemoText></span>
                 </button>
                 <div className="flex-1 overflow-y-auto">
                   {drilledGroup.jobs.map(c => {
@@ -968,7 +969,7 @@ export default function StaffMessages() {
                                 : getInitials(group.customerName)
                               }
                             </div>
-                            <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2">{group.customerName}</p>
+                            <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2"><DemoText>{group.customerName}</DemoText></p>
                             <div className="flex items-center gap-1">
                               <Package className="h-3 w-3 text-muted-foreground" />
                               <span className="text-[10px] text-muted-foreground">{group.jobs.length} job{group.jobs.length !== 1 ? "s" : ""}</span>
@@ -1045,7 +1046,7 @@ export default function StaffMessages() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{selectedJobConvo?.jobName}</p>
-                  <p className="text-xs text-muted-foreground">{selectedJobConvo?.customerName}</p>
+                  <p className="text-xs text-muted-foreground">{selectedJobConvo?.customerName ? <DemoText>{selectedJobConvo.customerName}</DemoText> : null}</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setLocation(`/staff/job/${selectedJobConvo?.jobId}`)} data-testid="button-view-job">
                   View Job
@@ -1074,7 +1075,7 @@ export default function StaffMessages() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{selectedDirectConvo?.subject}</p>
-                  <p className="text-xs text-muted-foreground">{selectedDirectConvo?.customerName}</p>
+                  <p className="text-xs text-muted-foreground">{selectedDirectConvo?.customerName ? <DemoText>{selectedDirectConvo.customerName}</DemoText> : null}</p>
                 </div>
                 <Button
                   variant="ghost"
@@ -1855,7 +1856,7 @@ function ArchivedSection({ conversations, selected, onSelect, onUnarchive }: Arc
             >
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate text-muted-foreground">{c.jobName}</p>
-                <p className="text-[10px] text-muted-foreground/60 truncate">{c.customerName}</p>
+                <p className="text-[10px] text-muted-foreground/60 truncate"><DemoText>{c.customerName}</DemoText></p>
               </div>
               {c.unreadCount > 0 && (
                 <span className="text-[10px] font-bold text-blue-500">{c.unreadCount}</span>
