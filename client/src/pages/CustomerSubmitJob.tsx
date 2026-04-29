@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles, CreditCard, CheckCircle } from "lucide-react";
+import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { customerJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
@@ -44,7 +44,6 @@ type CustomerUser = {
   customerName: string | null;
   customerLogoUrl: string | null;
   customerCreditAccount: boolean;
-  customerStripePaymentLink: string | null;
 };
 
 const formSchema = customerJobSubmissionSchema.extend({
@@ -103,7 +102,7 @@ export default function CustomerSubmitJob() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [showExpressDialog, setShowExpressDialog] = useState(false);
   const [pendingDispatchDate, setPendingDispatchDate] = useState<string>("");
-  const [showPaymentScreen, setShowPaymentScreen] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: customerUser } = useQuery<CustomerUser>({
@@ -230,16 +229,11 @@ export default function CustomerSubmitJob() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/jobs/pending"] });
-      // If this customer has a Stripe payment link and is not a credit account, show payment screen
-      if (customerUser?.customerStripePaymentLink && !customerUser?.customerCreditAccount) {
-        setShowPaymentScreen(true);
-      } else {
-        toast({
-          title: "Job Submitted Successfully",
-          description: "We will review and confirm your order within 24 Hours",
-        });
-        setLocation("/customer/pending");
-      }
+      toast({
+        title: "Job Submitted Successfully",
+        description: "We will review and confirm your order within 24 Hours",
+      });
+      setLocation("/customer/pending");
     },
     onError: (error: any) => {
       const msg: string = error?.message || "";
@@ -258,52 +252,6 @@ export default function CustomerSubmitJob() {
   const onSubmit = (data: FormData) => {
     submitJobMutation.mutate(data);
   };
-
-  // Payment capture screen shown after submission for non-credit customers
-  if (showPaymentScreen && customerUser?.customerStripePaymentLink) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
-        <div className="w-full max-w-md text-center space-y-6">
-          <div className="flex justify-center">
-            <div className="rounded-full bg-green-100 dark:bg-green-900/30 p-4">
-              <CheckCircle className="h-10 w-10 text-green-600 dark:text-green-400" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold">Order submitted!</h1>
-            <p className="text-muted-foreground">
-              Your order has been received. To secure your order, please provide your card details using the secure link below.
-            </p>
-          </div>
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <CreditCard className="h-5 w-5 text-primary flex-shrink-0" />
-                <p>Your card will be saved securely. We will only charge it once your order goes into production.</p>
-              </div>
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={() => window.open(customerUser.customerStripePaymentLink!, "_blank")}
-                data-testid="button-stripe-payment"
-              >
-                <CreditCard className="h-4 w-4 mr-2" />
-                Secure your order
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full text-sm"
-                onClick={() => setLocation("/customer/pending")}
-                data-testid="button-skip-payment"
-              >
-                I'll do this later
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">

@@ -2155,7 +2155,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerLogoUrl: customer?.logoUrl || null,
         customerAddress: customer?.address || null,
         customerCreditAccount: customer?.creditAccount ?? true,
-        customerStripePaymentLink: customer?.stripePaymentLink || null,
       });
     } catch (error) {
       console.error("Error fetching customer user:", error);

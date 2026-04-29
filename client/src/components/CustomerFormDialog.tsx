@@ -40,7 +40,6 @@ const formSchema = insertCustomerSchema
     active: z.boolean().default(true),
     xeroContactId: z.string().optional(),
     creditAccount: z.boolean().default(true),
-    stripePaymentLink: z.string().url("Must be a valid URL").optional().or(z.literal("")).or(z.null()),
   });
 
 interface CustomerFormDialogProps {
@@ -75,7 +74,6 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
       logoUrl: "",
       active: true,
       creditAccount: true,
-      stripePaymentLink: "",
     },
   });
 
@@ -92,7 +90,6 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         active: customer.active !== false,
         xeroContactId: customer.xeroContactId || "",
         creditAccount: customer.creditAccount !== false,
-        stripePaymentLink: customer.stripePaymentLink || "",
       });
       setPreviewUrl(customer.logoUrl || "");
     } else if (!open) {
@@ -107,7 +104,6 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         active: true,
         xeroContactId: "",
         creditAccount: true,
-        stripePaymentLink: "",
       });
       setPreviewUrl("");
     }
@@ -144,14 +140,13 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
   };
 
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
-    const { active, creditAccount, stripePaymentLink, ...rest } = data;
+    const { active, creditAccount, ...rest } = data;
     const submitData = {
       ...rest,
       pricingTable2025: isEditMode ? (customer?.pricingTable2025 ?? false) : false,
       pricingTable2026: isEditMode ? (customer?.pricingTable2026 ?? true) : true,
       active: active !== false,
       creditAccount: creditAccount !== false,
-      stripePaymentLink: stripePaymentLink || null,
     };
     onSubmit(submitData);
     setOpen(false);
@@ -160,7 +155,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md flex flex-col max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>{isEditMode ? "Edit Customer" : "Add Customer"}</DialogTitle>
           <DialogDescription>
@@ -168,7 +163,8 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 min-h-0 gap-4">
+            <div className="overflow-y-auto flex-1 space-y-4 pr-1 -mr-1">
             <FormField
               control={form.control}
               name="name"
@@ -363,27 +359,6 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="stripePaymentLink"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Stripe payment link <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        value={field.value ?? ""}
-                        placeholder="https://buy.stripe.com/..."
-                        data-testid="input-stripe-payment-link"
-                      />
-                    </FormControl>
-                    <FormDescription className="text-xs">
-                      Customer-specific Stripe link included in order acknowledgements and shown after order submission.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
 
             {isEditMode && canDeactivateCustomers && (
@@ -408,8 +383,9 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                 />
               </div>
             )}
+            </div>{/* end scroll area */}
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
