@@ -92,6 +92,7 @@ export const jobs = pgTable("jobs", {
   rejectionReason: text("rejection_reason"),
   conversationArchivedByCustomer: boolean("conversation_archived_by_customer").notNull().default(false),
   conversationArchivedByStaff: boolean("conversation_archived_by_staff").notNull().default(false),
+  staffNotes: text("staff_notes"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {

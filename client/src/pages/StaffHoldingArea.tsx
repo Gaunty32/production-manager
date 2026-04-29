@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Clock, FileText, MessageSquare, CheckCircle, XCircle, Eye, Plus, X } from "lucide-react";
+import { Clock, FileText, MessageSquare, CheckCircle, XCircle, Eye, Plus, X, StickyNote, Pencil, Check } from "lucide-react";
 import { format } from "date-fns";
 import {
   Accordion,
@@ -36,6 +36,7 @@ type Job = {
   quantity: number;
   requiredDispatchDate: string | null;
   notes: string | null;
+  staffNotes: string | null;
   deliveryAddress: string | null;
   submittedAt: string;
   files?: { id: string; fileName: string; fileSize: number }[];
@@ -53,6 +54,8 @@ export default function StaffHoldingArea() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [dialogState, setDialogState] = useState<DialogState>({ type: null, jobId: null, jobName: null, customerId: null });
+  const [editingNoteJobId, setEditingNoteJobId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState<string>("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionMessage, setRejectionMessage] = useState("");
   const [embroiderySetups, setEmbroiderySetups] = useState<string[]>([]);
@@ -216,6 +219,16 @@ export default function StaffHoldingArea() {
     },
   });
 
+  const staffNotesMutation = useMutation({
+    mutationFn: ({ jobId, staffNotes }: { jobId: string; staffNotes: string }) =>
+      apiRequest("PATCH", `/api/staff/jobs/${jobId}/staff-notes`, { staffNotes: staffNotes.trim() || null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/jobs/pending"] });
+      setEditingNoteJobId(null);
+    },
+    onError: () => toast({ title: "Failed to save note", variant: "destructive" }),
+  });
+
   const handleApprove = (jobId: string, jobName: string, customerId: string) => {
     setDialogState({ type: "approve", jobId, jobName, customerId });
   };
@@ -367,6 +380,61 @@ export default function StaffHoldingArea() {
                     </div>
                   )}
 
+                  {/* Staff internal notes */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs text-muted-foreground">Internal Notes</p>
+                      {editingNoteJobId !== job.id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => { setEditingNoteJobId(job.id); setNoteText(job.staffNotes || ""); }}
+                          data-testid={`button-edit-note-${job.id}`}
+                        >
+                          <Pencil className="h-3 w-3 mr-1" />
+                          {job.staffNotes ? "Edit" : "Add note"}
+                        </Button>
+                      )}
+                    </div>
+                    {editingNoteJobId === job.id ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={noteText}
+                          onChange={(e) => setNoteText(e.target.value)}
+                          placeholder="Add an internal note..."
+                          className="text-sm resize-none"
+                          rows={3}
+                          autoFocus
+                          data-testid={`textarea-note-${job.id}`}
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingNoteJobId(null)}
+                            data-testid={`button-cancel-note-${job.id}`}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => staffNotesMutation.mutate({ jobId: job.id, staffNotes: noteText })}
+                            disabled={staffNotesMutation.isPending}
+                            data-testid={`button-save-note-${job.id}`}
+                          >
+                            <Check className="h-3 w-3 mr-1" />
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    ) : job.staffNotes ? (
+                      <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md">
+                        <p className="text-sm whitespace-pre-line text-amber-900 dark:text-amber-100">{job.staffNotes}</p>
+                      </div>
+                    ) : null}
+                  </div>
+
                   <StaffJobFileUpload jobId={job.id} autoMessageOnDownload />
                 </div>
 
@@ -385,6 +453,57 @@ export default function StaffHoldingArea() {
                         </AccordionContent>
                       </AccordionItem>
                     )}
+
+                    <AccordionItem value="internal-notes" className="border rounded-md px-4">
+                      <AccordionTrigger className="text-sm font-medium hover:no-underline">
+                        <span className="flex items-center gap-1.5">
+                          <StickyNote className="h-3.5 w-3.5" />
+                          Internal Notes {job.staffNotes ? "" : "(none)"}
+                        </span>
+                      </AccordionTrigger>
+                      <AccordionContent className="space-y-2 pb-2">
+                        {editingNoteJobId === job.id ? (
+                          <div className="space-y-2">
+                            <Textarea
+                              value={noteText}
+                              onChange={(e) => setNoteText(e.target.value)}
+                              placeholder="Add an internal note..."
+                              className="text-sm resize-none"
+                              rows={3}
+                              data-testid={`textarea-note-mobile-${job.id}`}
+                            />
+                            <div className="flex gap-2 justify-end">
+                              <Button variant="ghost" size="sm" onClick={() => setEditingNoteJobId(null)}>Cancel</Button>
+                              <Button
+                                size="sm"
+                                onClick={() => staffNotesMutation.mutate({ jobId: job.id, staffNotes: noteText })}
+                                disabled={staffNotesMutation.isPending}
+                              >
+                                <Check className="h-3 w-3 mr-1" />Save
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {job.staffNotes && (
+                              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md">
+                                <p className="text-sm whitespace-pre-line text-amber-900 dark:text-amber-100">{job.staffNotes}</p>
+                              </div>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => { setEditingNoteJobId(job.id); setNoteText(job.staffNotes || ""); }}
+                              data-testid={`button-edit-note-mobile-${job.id}`}
+                            >
+                              <Pencil className="h-3 w-3 mr-1.5" />
+                              {job.staffNotes ? "Edit note" : "Add note"}
+                            </Button>
+                          </div>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
 
                     <AccordionItem value="files" className="border rounded-md px-4">
                       <AccordionTrigger className="text-sm font-medium hover:no-underline">

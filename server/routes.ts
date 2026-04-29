@@ -2753,6 +2753,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff - Update staff notes on a pending job
+  app.patch("/api/staff/jobs/:jobId/staff-notes", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { staffNotes } = req.body;
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+      const updated = await storage.updateJob(req.params.jobId, { staffNotes: staffNotes ?? null });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating staff notes:", error);
+      res.status(500).json({ error: "Failed to update staff notes" });
+    }
+  });
+
   // Staff - Approve job
   app.post("/api/staff/jobs/:jobId/approve", isStaffAuthenticated, async (req: any, res) => {
     try {
