@@ -29,7 +29,16 @@ import {
   Archive,
   X,
   PenLine,
+  Bell,
+  BellOff,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { format, isToday, isYesterday } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -69,6 +78,7 @@ type CustomerUser = {
   email: string;
   customerName: string | null;
   customerLogoUrl: string | null;
+  emailNotificationsMessages?: boolean;
 };
 
 function formatConvoTime(iso: string) {
@@ -120,6 +130,17 @@ export default function CustomerInbox() {
 
   const { data: currentUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
+  });
+
+  const notificationSettingsMutation = useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiRequest("PATCH", "/api/customer-auth/me/notification-settings", { emailNotificationsMessages: enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-auth/user"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to update notification settings", variant: "destructive" });
+    },
   });
 
   const { data: staffMembers = [] } = useQuery<{ id: string; firstName: string; fullName: string; profileImageUrl: string | null }[]>({
@@ -399,6 +420,42 @@ export default function CustomerInbox() {
               </div>
             </>
           )}
+          <div className="ml-auto">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  data-testid="button-notification-settings"
+                  title="Notification settings"
+                >
+                  {currentUser?.emailNotificationsMessages
+                    ? <Bell className="h-4 w-4" />
+                    : <BellOff className="h-4 w-4 text-muted-foreground" />}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72">
+                <div className="space-y-3">
+                  <div>
+                    <p className="font-semibold text-sm">Notification settings</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Control how you receive updates from us</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 pt-1">
+                    <Label htmlFor="customer-email-notifs" className="text-sm leading-snug flex-1">
+                      Email me when a new message arrives
+                    </Label>
+                    <Switch
+                      id="customer-email-notifs"
+                      checked={currentUser?.emailNotificationsMessages ?? false}
+                      onCheckedChange={(checked) => notificationSettingsMutation.mutate(checked)}
+                      disabled={notificationSettingsMutation.isPending}
+                      data-testid="toggle-customer-email-notifications"
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
       </header>
 

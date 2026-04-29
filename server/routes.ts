@@ -1609,6 +1609,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ success: true });
   });
 
+  // Customer notification settings
+  app.patch("/api/customer-auth/me/notification-settings", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session?.customerUserId || req.session?.impersonationCustomerUserId;
+      if (!customerUserId) return res.status(401).json({ error: "Not authenticated" });
+      const { emailNotificationsMessages } = req.body;
+      if (typeof emailNotificationsMessages !== "boolean") {
+        return res.status(400).json({ error: "emailNotificationsMessages must be a boolean" });
+      }
+      await storage.updateCustomerNotificationSettings(customerUserId, emailNotificationsMessages);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update notification settings" });
+    }
+  });
+
   // Look up customer info by email for login personalization (public endpoint)
   app.get("/api/customer-auth/lookup", async (req, res) => {
     try {
@@ -2867,7 +2883,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isFirstStaffMessage && job.customerId) {
         try {
           const customerUsers = await storage.getCustomerUsersByCustomerId(job.customerId);
-          const emails = customerUsers.map((u) => u.email).filter(Boolean) as string[];
+          const emails = customerUsers
+            .filter((u) => u.emailNotificationsMessages)
+            .map((u) => u.email).filter(Boolean) as string[];
           if (emails.length) {
             const baseUrl = process.env.REPLIT_DOMAINS
               ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
@@ -5702,7 +5720,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const senderName = staffMember?.name || 'Staff';
 
           const customerUsers = await storage.getCustomerUsersByCustomerId(convo.customerId);
-          const emails = customerUsers.map((u) => u.email).filter(Boolean) as string[];
+          const emails = customerUsers
+            .filter((u) => u.emailNotificationsMessages)
+            .map((u) => u.email).filter(Boolean) as string[];
           if (emails.length) {
             const baseUrl = process.env.REPLIT_DOMAINS
               ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
