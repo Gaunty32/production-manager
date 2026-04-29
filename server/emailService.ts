@@ -591,6 +591,72 @@ export async function sendCustomerMessageNotificationEmail(
 }
 
 // ─── Re-engagement email ───────────────────────────────────────────────────────
+// =============================================================================
+// Demo access request email
+// =============================================================================
+
+export async function sendDemoAccessEmail(params: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  company: string;
+  loginUrl: string;
+  demoEmail: string;
+  demoPassword: string;
+}): Promise<void> {
+  const { client, fromEmail } = await getUncachableResendClient();
+
+  const safeName = sanitizeHtml(`${params.firstName} ${params.lastName}`.trim());
+  const safeFirst = sanitizeHtml(params.firstName);
+  const safeCompany = sanitizeHtml(params.company);
+  const safeEmail = sanitizeHtml(params.demoEmail);
+  const safePassword = sanitizeHtml(params.demoPassword);
+
+  const companyLine = safeCompany
+    ? `<p style="margin:0 0 18px;color:#71717a;font-size:13px;">Requested by: ${safeName}${safeCompany ? ` &mdash; ${safeCompany}` : ''}</p>`
+    : '';
+
+  const body = `
+    <p style="margin:0 0 18px;">Hi ${safeFirst},</p>
+    <p style="margin:0 0 18px;">
+      Thanks for your interest in the <strong>Select Branding Production System</strong>!
+      Your demo account is ready — you can log in right now to explore the platform.
+    </p>
+    <p style="margin:0 0 18px;">
+      You'll be seeing our <em>real system</em> in action, with customer names and financial
+      figures anonymised so everything remains confidential. All the core functionality —
+      the production queue, scheduling, invoicing, messaging, and reports — is live and
+      working as our team uses it every day.
+    </p>
+    ${infoTable([
+      { label: 'Login email', value: safeEmail },
+      { label: 'Password', value: safePassword },
+    ])}
+    ${ctaButton(params.loginUrl, 'Open the Demo')}
+    <p style="margin:0 0 18px;">
+      If you have any questions or would like a guided walkthrough, just reply to this email
+      or reach out directly — we'd love to chat.
+    </p>
+    <p style="margin:0 0 8px;">
+      Best wishes,<br />
+      <strong>The Select Branding Solutions Team</strong>
+    </p>
+    ${companyLine}
+  `;
+
+  const { error } = await client.emails.send({
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: params.email,
+    cc: ['chris@selectbranding.co.uk', 'james@selectuniforms.co.uk'],
+    subject: `Your demo access to the Select Branding Production System`,
+    html: brandedEmail(body),
+  });
+
+  if (error) {
+    throw new Error(`Failed to send demo access email to ${params.email}: ${JSON.stringify(error)}`);
+  }
+}
+
 export async function sendReEngagementEmail(customer: {
   name: string;
   email: string;

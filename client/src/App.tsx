@@ -43,6 +43,7 @@ import StaffMessages from "@/pages/StaffMessages";
 import StaffSamples from "@/pages/StaffSamples";
 import CustomerSamples from "@/pages/CustomerSamples";
 import DemoPortal from "@/pages/DemoPortal";
+import DemoAccess from "@/pages/DemoAccess";
 import MachineManagement from "@/pages/MachineManagement";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
@@ -102,6 +103,7 @@ function AppRouter() {
   return (
     <Switch>
       {/* Public Routes - No Authentication Required */}
+      <Route path="/demo-access" component={DemoAccess} />
       <Route path="/demo" component={DemoPortal} />
       <Route path="/production-display" component={ProductionDisplay} />
       <Route path="/forgot-password" component={ForgotPassword} />

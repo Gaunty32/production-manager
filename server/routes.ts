@@ -43,7 +43,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail } from "./emailService";
 
 // Helper function to auto-schedule a line item when it has a machine assigned
 async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
@@ -483,6 +483,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } : null,
         },
       });
+    }
+  });
+
+  // Public: demo access request (no auth required)
+  app.post("/api/demo/request-access", async (req, res) => {
+    const DEMO_EMAIL = "demo@selectbranding.co.uk";
+    const DEMO_PASSWORD = "SBdemo2025!";
+    const schema = z.object({
+      firstName: z.string().min(1, "First name is required").max(100),
+      lastName: z.string().min(1, "Last name is required").max(100),
+      email: z.string().email("Invalid email address"),
+      company: z.string().max(200).default(""),
+    });
+    try {
+      const data = schema.parse(req.body);
+      // Ensure the demo user exists before sending credentials
+      const existing = await storage.getUserByEmail(DEMO_EMAIL);
+      if (!existing) {
+        const newUser = await registerStaff({
+          username: "demo",
+          email: DEMO_EMAIL,
+          password: DEMO_PASSWORD,
+          firstName: "Demo",
+          lastName: "User",
+          role: "demo",
+        });
+        await storage.updateUserActive(newUser.id, true);
+      } else if (existing.role !== "demo" || !existing.active) {
+        await storage.updateUserRole(existing.id, "demo");
+        await storage.updateUserActive(existing.id, true);
+      }
+      const baseUrl = process.env.REPLIT_DOMAINS
+        ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
+        : "http://localhost:5000";
+      await sendDemoAccessEmail({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        company: data.company,
+        loginUrl: `${baseUrl}/`,
+        demoEmail: DEMO_EMAIL,
+        demoPassword: DEMO_PASSWORD,
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Demo access request error:", error);
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: error.errors[0]?.message || "Invalid input" });
+      }
+      res.status(500).json({ error: error.message || "Failed to send demo access email" });
     }
   });
 
