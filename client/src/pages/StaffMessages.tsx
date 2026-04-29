@@ -1461,7 +1461,7 @@ export default function StaffMessages() {
                 </div>
                 <Switch
                   id="toggle-email-notifs"
-                  checked={currentUser?.emailNotificationsMessages ?? true}
+                  checked={currentUser?.emailNotificationsMessages ?? false}
                   onCheckedChange={(checked) => notificationSettingsMutation.mutate(checked)}
                   disabled={notificationSettingsMutation.isPending}
                   data-testid="toggle-email-notifications"
