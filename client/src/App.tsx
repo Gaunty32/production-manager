@@ -45,6 +45,7 @@ import CustomerSamples from "@/pages/CustomerSamples";
 import DemoPortal from "@/pages/DemoPortal";
 import DemoAccess from "@/pages/DemoAccess";
 import MachineManagement from "@/pages/MachineManagement";
+import CustomerPaymentMethods from "@/pages/CustomerPaymentMethods";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -151,6 +152,7 @@ function CustomerPortalApp() {
       <Route path="/customer/team" component={CustomerTeam} />
       <Route path="/customer/invoices" component={CustomerInvoices} />
       <Route path="/customer/samples" component={CustomerSamples} />
+      <Route path="/customer/payment-methods" component={CustomerPaymentMethods} />
       <Route path="/customer/dashboard" component={CustomerDashboard} />
       <Route path="/customer" component={CustomerDashboard} />
       <Route component={NotFound} />

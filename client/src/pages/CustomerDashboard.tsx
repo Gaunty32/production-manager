@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard } from "lucide-react";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
 import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 import {
@@ -526,6 +526,10 @@ export default function CustomerDashboard() {
                       <Users className="h-4 w-4" />
                       My Team
                     </Button>
+                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/payment-methods")} data-testid="menu-payment-methods">
+                      <CreditCard className="h-4 w-4" />
+                      Payment Cards
+                    </Button>
                     <Separator className="my-2" />
                     <PricingTableDialog />
                     <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setChangePasswordOpen(true)} data-testid="menu-change-password">
@@ -625,6 +629,14 @@ export default function CustomerDashboard() {
             >
               <Receipt className="h-4 w-4 mr-2" />
               Invoices
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/customer/payment-methods")}
+              data-testid="button-view-payment-methods"
+            >
+              <CreditCard className="h-4 w-4 mr-2" />
+              Payment Cards
             </Button>
           </div>
 

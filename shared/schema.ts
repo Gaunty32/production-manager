@@ -45,6 +45,7 @@ export const customers = pgTable("customers", {
   xeroContactId: text("xero_contact_id"),
   creditAccount: boolean("credit_account").notNull().default(true),
   stripePaymentLink: text("stripe_payment_link"),
+  stripeCustomerId: text("stripe_customer_id"),
   createdAt: timestamp("created_at").defaultNow(),
   lastReEngagementEmailAt: timestamp("last_re_engagement_email_at"),
 });
@@ -396,6 +397,7 @@ export const updateCustomerSchema = z.object({
   active: z.boolean().optional(),
   creditAccount: z.boolean().optional(),
   stripePaymentLink: z.string().url().optional().or(z.literal("")).or(z.null()),
+  stripeCustomerId: z.string().optional().or(z.null()),
 });
 
 export const insertStaffSchema = createInsertSchema(staff).omit({

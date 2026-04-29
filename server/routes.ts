@@ -44,6 +44,7 @@ import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
 import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail } from "./emailService";
+import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod } from "./stripeService";
 
 // Helper function to auto-schedule a line item when it has a machine assigned
 async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
@@ -1610,6 +1611,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Customer notification settings
+  // ── Stripe card management routes ──────────────────────────────────────────
+
+  // Create a SetupIntent so the customer can save a card
+  app.post("/api/customer-portal/stripe/setup-intent", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "User not found" });
+
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === customerUser.customerId);
+      if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+      // Get or create a Stripe customer record
+      const stripeCustomerId = await getOrCreateStripeCustomer(
+        customer.id,
+        customer.name,
+        customer.email,
+        customer.stripeCustomerId || null,
+      );
+
+      // Persist the Stripe customer ID if new
+      if (stripeCustomerId !== customer.stripeCustomerId) {
+        await storage.updateCustomer(customer.id, { stripeCustomerId } as any);
+      }
+
+      const { clientSecret, setupIntentId } = await createSetupIntent(stripeCustomerId);
+      res.json({ clientSecret, setupIntentId, publishableKey: process.env.STRIPE_PUBLISHABLE_KEY });
+    } catch (error: any) {
+      console.error("Error creating setup intent:", error);
+      res.status(500).json({ error: error.message || "Failed to create setup intent" });
+    }
+  });
+
+  // List saved cards
+  app.get("/api/customer-portal/stripe/cards", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "User not found" });
+
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === customerUser.customerId);
+      if (!customer?.stripeCustomerId) return res.json([]);
+
+      const cards = await listSavedCards(customer.stripeCustomerId);
+      res.json(cards);
+    } catch (error: any) {
+      console.error("Error listing saved cards:", error);
+      res.status(500).json({ error: error.message || "Failed to list cards" });
+    }
+  });
+
+  // Delete a saved card
+  app.delete("/api/customer-portal/stripe/cards/:paymentMethodId", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      await deletePaymentMethod(req.params.paymentMethodId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting card:", error);
+      res.status(500).json({ error: error.message || "Failed to delete card" });
+    }
+  });
+
+  // ── End Stripe routes ───────────────────────────────────────────────────────
+
   app.patch("/api/customer-auth/me/notification-settings", isCustomerAuthenticated, async (req: any, res) => {
     try {
       const customerUserId = req.session?.customerUserId || req.session?.impersonationCustomerUserId;
