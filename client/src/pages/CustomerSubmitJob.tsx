@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { customerJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
@@ -118,6 +118,7 @@ export default function CustomerSubmitJob() {
       notes: "",
       deliveryAddress: "",
       requiredDispatchDate: defaultDispatchDate,
+      logoType: "repeat_logo" as const,
     },
   });
 
@@ -306,6 +307,53 @@ export default function CustomerSubmitJob() {
                           {...field}
                           data-testid="input-job-name"
                         />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="logoType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Logo Type *</FormLabel>
+                      <FormControl>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => field.onChange("repeat_logo")}
+                            data-testid="button-logo-type-repeat"
+                            className={`flex items-start gap-3 p-4 rounded-md border text-left transition-colors ${
+                              field.value === "repeat_logo"
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/40 hover:bg-muted/40"
+                            }`}
+                          >
+                            <RefreshCw className={`h-5 w-5 mt-0.5 shrink-0 ${field.value === "repeat_logo" ? "text-primary" : "text-muted-foreground"}`} />
+                            <div>
+                              <p className="font-medium text-sm text-foreground">Repeat Logo</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">We already have this logo set up and ready to go</p>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => field.onChange("new_logo")}
+                            data-testid="button-logo-type-new"
+                            className={`flex items-start gap-3 p-4 rounded-md border text-left transition-colors ${
+                              field.value === "new_logo"
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/40 hover:bg-muted/40"
+                            }`}
+                          >
+                            <Sparkles className={`h-5 w-5 mt-0.5 shrink-0 ${field.value === "new_logo" ? "text-primary" : "text-muted-foreground"}`} />
+                            <div>
+                              <p className="font-medium text-sm text-foreground">New Logo</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">This is a new logo that our team will need to set up</p>
+                            </div>
+                          </button>
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>

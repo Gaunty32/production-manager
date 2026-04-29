@@ -937,6 +937,7 @@ export const customerJobSubmissionSchema = z.object({
   notes: z.string().optional(),
   deliveryAddress: z.string().optional(),
   requiredDispatchDate: z.string().min(1, "Dispatch date is required"),
+  logoType: z.enum(["repeat_logo", "new_logo"]).default("repeat_logo"),
 });
 
 export type InsertCustomerUser = z.infer<typeof insertCustomerUserSchema>;

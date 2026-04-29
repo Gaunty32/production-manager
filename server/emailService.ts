@@ -177,6 +177,38 @@ function muted(text: string): string {
 // Email senders
 // =============================================================================
 
+export async function sendNewLogoSetupEmail(params: {
+  customerName: string;
+  jobName: string;
+}) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const safeCustomerName = sanitizeHtml(params.customerName);
+  const safeJobName = sanitizeHtml(params.jobName);
+  const viewUrl = `${getBaseUrl()}/dashboard/holding-area`;
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">New Logo Setup Required</h2>
+    <p style="margin:0 0 12px;">A customer has submitted a new job and indicated that it requires a <strong>new logo setup</strong>.</p>
+    ${infoTable([
+      { label: 'Customer', value: safeCustomerName },
+      { label: 'Job Name', value: safeJobName },
+    ])}
+    ${ctaButton(viewUrl, 'View in Holding Area')}
+    ${muted('Please set up the logo before this job enters production.')}
+  `;
+
+  const { error } = await client.emails.send({
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: ['chris@selectuniforms.co.uk', 'james@selectuniforms.co.uk'],
+    subject: `New Logo Setup Required: ${safeJobName} (${safeCustomerName})`,
+    html: brandedEmail(body),
+  });
+
+  if (error) {
+    console.error('Failed to send new logo setup email:', error);
+  }
+}
+
 export async function sendPasswordResetEmail(email: string, resetToken: string) {
   const { client, fromEmail } = await getUncachableResendClient();
   const resetUrl = `${getBaseUrl()}/reset-password?token=${resetToken}`;
