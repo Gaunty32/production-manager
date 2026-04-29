@@ -16,7 +16,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { format, isPast, isToday } from "date-fns";
+import { format, isPast, isToday, formatDistanceToNow } from "date-fns";
 import { getMachineName } from "@shared/machines";
 import { useState } from "react";
 import {
@@ -58,70 +58,69 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-function getWelcomeMessage(firstName: string | null | undefined): string {
+type WelcomeCard = { emoji: string; greeting: string; fact: string };
+
+function getWelcomeCard(firstName: string | null | undefined): WelcomeCard {
   const name = firstName || "there";
   const now = new Date();
   const hour = now.getHours();
-  const day = now.getDay(); // 0=Sunday, 6=Saturday
+  const day = now.getDay();
   const isWeekend = day === 0 || day === 6;
-
   const startOfYear = new Date(now.getFullYear(), 0, 0);
   const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / 86400000);
 
   if (isWeekend) {
-    const msgs = [
-      `Hi ${name}, working on a weekend? We're pleased to see you, but don't forget weekends are for enjoying yourself!`,
-      `Hey ${name}! Even the best take a breather on weekends — we hope you're getting some rest too!`,
-      `Hi ${name}! Dedication at its finest, but make sure you switch off and recharge this weekend!`,
+    const opts: WelcomeCard[] = [
+      { emoji: "🌿", greeting: `Hi ${name}`, fact: "Working on a weekend? We're pleased to see you — but don't forget weekends are for enjoying yourself!" },
+      { emoji: "☕", greeting: `Hey ${name}`, fact: "Even the best take a breather on weekends. We hope you're getting some rest too!" },
+      { emoji: "🌤️", greeting: `Hi ${name}`, fact: "Dedication at its finest! Just make sure you switch off and recharge this weekend." },
     ];
-    return msgs[dayOfYear % msgs.length];
+    return opts[dayOfYear % opts.length];
   }
 
   if (hour < 8) {
-    const msgs = [
-      `Morning ${name}! The early bird certainly does catch the worm!`,
-      `Up bright and early, ${name}? We admire the dedication!`,
-      `Good morning ${name}! You're ahead of the pack today!`,
+    const opts: WelcomeCard[] = [
+      { emoji: "🌅", greeting: `Morning ${name}`, fact: "The early bird certainly does catch the worm! You're ahead of the pack today." },
+      { emoji: "☀️", greeting: `Up bright and early, ${name}`, fact: "We admire the dedication — the day is yours!" },
+      { emoji: "🐓", greeting: `Good morning ${name}`, fact: "A group of roosters is called a roost. And they wake up even earlier than you!" },
     ];
-    return msgs[dayOfYear % msgs.length];
+    return opts[dayOfYear % opts.length];
   }
 
   if (hour >= 20) {
-    const msgs = [
-      `Hi ${name}, working late? Don't burn the candle at both ends!`,
-      `Evening ${name}! Still at it this late? Make sure you get some rest soon!`,
-      `Hi ${name}! Burning the midnight oil? Don't forget to clock off!`,
+    const opts: WelcomeCard[] = [
+      { emoji: "🌙", greeting: `Hi ${name}`, fact: "Working late? The moon is your colleague tonight — don't burn the candle at both ends!" },
+      { emoji: "🦉", greeting: `Evening ${name}`, fact: "A group of owls is called a parliament. Wise creatures — even they know when to rest!" },
+      { emoji: "⭐", greeting: `Hi ${name}`, fact: "Burning the midnight oil? Make sure you clock off soon — even stars need to rest." },
     ];
-    return msgs[dayOfYear % msgs.length];
+    return opts[dayOfYear % opts.length];
   }
 
-  // Normal working hours — rotating date-related fun facts
-  const facts = [
-    "Did you know? January is named after Janus, the two-faced Roman god who looks back at the old year and forward to the new!",
-    "Fun fact: February is the only month that can pass without a single full moon — rare, but it happens!",
-    "Did you know? March was originally the first month of the Roman calendar — the year used to begin with spring!",
-    "Fun fact: April's name may come from the Latin 'aperire' — meaning 'to open', as in opening buds and flowers!",
-    "Did you know? May is named after Maia, the Greek goddess of fertility, and is one of only two months that never starts on the same day as any other!",
-    "Fun fact: June is named after Juno, the Roman goddess of marriage — no wonder it's the most popular month for weddings!",
-    "Did you know? July was renamed after Julius Caesar. Before him it was simply called 'Quintilis' — the fifth month!",
-    "Fun fact: Emperor Augustus named August after himself and took a day from February to make it 31 days, matching Julius Caesar's July!",
-    "Did you know? September means 'seventh month' in Latin — it was the 7th month before January and February were added to the calendar!",
-    "Fun fact: October means 'eighth month' in Latin. It was the 8th in the original Roman calendar before two months were squeezed in!",
-    "Did you know? November comes from the Latin 'novem' meaning nine — the 9th month in the original Roman calendar!",
-    "Fun fact: December means 'tenth month' but it's our twelfth. After the winter solstice the days start getting longer again!",
-    "Did you know? The word 'fortnight' is uniquely British! It comes from 'fourteen nights' and means exactly two weeks.",
-    "Fun fact: Monday is named after the Moon! From Old English 'Mōnandæg' — Moon's day. No wonder Mondays feel a little out of this world.",
-    "Did you know? The 7-day week was introduced by the ancient Babylonians, based on the four phases of the lunar cycle.",
-    "Fun fact: The Gregorian calendar replaced the Julian calendar in 1582 — the Julian was 11 minutes too long per year, adding up to a 10-day drift!",
-    "Did you know? Bank Holidays in England date back to the Bank Holidays Act of 1871 — that's over 150 years of official days off!",
-    "Fun fact: The longest day in the UK falls around 21st June — London can see over 16 hours of daylight!",
-    "Did you know? The word 'calendar' comes from the Latin 'calendae' — the first day of each Roman month, when debts were traditionally due!",
-    "Fun fact: The UK standardised its time zone in 1880, when the Statutes (Definition of Time) Act made Greenwich Mean Time the legal time across Great Britain!",
-    "Did you know? A 'blue moon' — the second full moon in a calendar month — happens roughly every 2.5 years. That's where 'once in a blue moon' comes from!",
-    "Fun fact: The ancient Egyptians were the first to divide the day into 24 hours — 12 for daylight and 12 for night!",
+  // Normal working hours — rotating fun facts
+  const opts: WelcomeCard[] = [
+    { emoji: "🦩", greeting: `Hi ${name}`, fact: "A group of flamingos is called a flamboyance. A group of owls is a parliament. A group of cats is a clowder. English is wonderful." },
+    { emoji: "🐝", greeting: `Hi ${name}`, fact: "Honey bees can visit up to 2,000 flowers in a single day. That's dedication to quality we can relate to!" },
+    { emoji: "🐬", greeting: `Hi ${name}`, fact: "Dolphins have names for each other — they use unique whistle sounds to call their friends. How polite!" },
+    { emoji: "🦋", greeting: `Hi ${name}`, fact: "A group of butterflies is called a kaleidoscope. A group of jellyfish is a smack. Language is a delight." },
+    { emoji: "🐘", greeting: `Hi ${name}`, fact: "Elephants are one of the few animals that can recognise themselves in a mirror. Quite the self-awareness!" },
+    { emoji: "🦜", greeting: `Hi ${name}`, fact: "African grey parrots can learn over 1,000 words and understand context. Some are more articulate than most emails!" },
+    { emoji: "🦁", greeting: `Hi ${name}`, fact: "A group of lions is called a pride, a group of crows is a murder, and a group of goldfish is a troubling. Quite the vocabulary!" },
+    { emoji: "🐙", greeting: `Hi ${name}`, fact: "Octopuses have three hearts, blue blood, and nine brains (one central, one per arm). Remarkable multitaskers." },
+    { emoji: "🦓", greeting: `Hi ${name}`, fact: "Every zebra's stripe pattern is unique — like a fingerprint. No two are exactly alike, much like every order we make!" },
+    { emoji: "🐧", greeting: `Hi ${name}`, fact: "Penguins propose to their partners with a pebble. If accepted, they stay together for life. Romantic little creatures." },
+    { emoji: "🦊", greeting: `Hi ${name}`, fact: "A group of foxes is called a skulk or an earth. A group of ravens is an unkindness. Whoever named these had opinions." },
+    { emoji: "🌺", greeting: `Hi ${name}`, fact: "January is named after Janus, the Roman god who looks back at the old year and forward to the new. A natural planner!" },
+    { emoji: "🌊", greeting: `Hi ${name}`, fact: "The Pacific Ocean covers more area than all the world's land combined. Puts our to-do list in perspective." },
+    { emoji: "🌿", greeting: `Hi ${name}`, fact: "There are more trees on Earth than stars in the Milky Way. Over 3 trillion, in fact. Quite a forest!" },
+    { emoji: "🐢", greeting: `Hi ${name}`, fact: "A group of tortoises is called a creep. Slow and steady may not win every race, but it does get the job done." },
+    { emoji: "🦒", greeting: `Hi ${name}`, fact: "Giraffes only sleep around 30 minutes a day in short naps. The world's most productive sleepers." },
+    { emoji: "🐺", greeting: `Hi ${name}`, fact: "Wolves howl to communicate with their pack across long distances. Basically the original group messaging." },
+    { emoji: "🦋", greeting: `Hi ${name}`, fact: "The word 'fortnight' is uniquely British — from 'fourteen nights'. Two weeks, beautifully compressed." },
+    { emoji: "🐋", greeting: `Hi ${name}`, fact: "Blue whales have hearts the size of a small car. Each heartbeat can be heard from up to 3km away." },
+    { emoji: "🦅", greeting: `Hi ${name}`, fact: "Bald eagles mate for life and return to the same nest each year, adding to it until it can weigh over a tonne!" },
+    { emoji: "🌸", greeting: `Hi ${name}`, fact: "Cherry blossom season in Japan lasts only about two weeks. Rare and beautiful things are worth paying attention to." },
   ];
-
-  return `Hi ${name}! ${facts[dayOfYear % facts.length]}`;
+  return opts[dayOfYear % opts.length];
 }
 
 const changePasswordSchema = z.object({
@@ -169,6 +168,7 @@ type CustomerUser = {
   customerName: string | null;
   customerLogoUrl: string | null;
   customerAddress: string | null;
+  lastLoginAt: string | null;
 };
 
 function extractUkPostcode(address: string | null | undefined): string | null {
@@ -546,6 +546,26 @@ export default function CustomerDashboard() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6 pb-24 md:pb-8">
+        {/* Greeting card */}
+        {customerUser && (() => {
+          const card = getWelcomeCard(customerUser.firstName);
+          const lastLogin = customerUser.lastLoginAt ? new Date(customerUser.lastLoginAt) : null;
+          return (
+            <div className="flex items-start gap-4 rounded-xl bg-muted/50 border border-border p-4 mb-6" data-testid="card-welcome-greeting">
+              <span className="text-3xl leading-none mt-0.5 shrink-0" role="img" aria-label="greeting icon">{card.emoji}</span>
+              <div className="min-w-0">
+                <p className="font-semibold text-foreground text-base leading-tight">{card.greeting}</p>
+                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{card.fact}</p>
+                {lastLogin && (
+                  <p className="text-xs text-muted-foreground/70 mt-2" data-testid="text-last-login">
+                    Last signed in {formatDistanceToNow(lastLogin, { addSuffix: true })}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="mb-6 flex flex-col gap-4">
           {/* Desktop action buttons — hidden on mobile (bottom nav handles it) */}
           <div className="hidden md:flex items-center gap-3 flex-wrap">
@@ -608,9 +628,8 @@ export default function CustomerDashboard() {
             </Button>
           </div>
 
-          {/* Mobile: welcome text + submit button */}
-          <div className="md:hidden space-y-3">
-            <p className="text-sm text-muted-foreground">{getWelcomeMessage(customerUser?.firstName)}</p>
+          {/* Mobile: submit button */}
+          <div className="md:hidden">
             <Button
               className="w-full"
               onClick={() => setLocation("/customer/submit")}
