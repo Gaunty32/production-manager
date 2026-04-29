@@ -146,6 +146,18 @@ export default function StaffLogin() {
               </div>
             </form>
           </Form>
+          <div className="mt-6 pt-5 border-t text-center">
+            <p className="text-sm text-muted-foreground mb-2">Are you a customer?</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setLocation("/customer/login")}
+              data-testid="link-customer-portal"
+            >
+              Go to Customer Portal
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
