@@ -123,6 +123,19 @@ function getInitials(name: string | null | undefined, fallback = "?") {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
+function renderMessageContent(text: string) {
+  const parts = text.split(/(@\w+)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        /^@\w+$/.test(part)
+          ? <span key={i} className="font-semibold text-blue-300 dark:text-blue-300">{part}</span>
+          : <span key={i}>{part}</span>
+      )}
+    </>
+  );
+}
+
 // Color palette for customer avatars
 const CUSTOMER_COLORS = [
   "bg-violet-500", "bg-blue-500", "bg-emerald-500", "bg-amber-500",
@@ -215,6 +228,12 @@ export default function StaffMessages() {
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [pendingProfileCropFile, setPendingProfileCropFile] = useState<File | null>(null);
+
+  // @mention state
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [mentionHighlightIdx, setMentionHighlightIdx] = useState(0);
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: currentUser, refetch: refetchMe } = useQuery<CurrentUser>({
@@ -327,10 +346,25 @@ export default function StaffMessages() {
       return;
     }
     if (custMsgs.length > prevCustomerMsgCount.current) {
-      toast({ title: "New message from customer" });
+      const latestMsg = custMsgs[custMsgs.length - 1];
+      toast({ title: "New message from customer", description: latestMsg?.message?.slice(0, 80) });
+      if (typeof Notification !== "undefined" && Notification.permission === "granted" && !document.hasFocus()) {
+        const convoName = selected?.type === "job" ? selectedJobConvo?.jobName : "Direct message";
+        new Notification(`New message — ${convoName || "Customer"}`, {
+          body: latestMsg?.message?.slice(0, 100) || "",
+          icon: "/logo.png",
+        });
+      }
     }
     prevCustomerMsgCount.current = custMsgs.length;
   }, [messages, isLoadingMessages, selected, toast]);
+
+  // Request browser notification permission on first visit
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   useEffect(() => {
     if (selected) {
@@ -509,6 +543,8 @@ export default function StaffMessages() {
     if ((!text && allAttachments.length === 0) || !selected) return;
     setNewMessage("");
     setChatImages([]);
+    setShowMentionDropdown(false);
+    setMentionSearch("");
     allAttachments.forEach(att => { if (att.preview) URL.revokeObjectURL(att.preview); });
 
     const imageAttachments = allAttachments.filter(a => a.isImage);
@@ -622,7 +658,54 @@ export default function StaffMessages() {
     }
   };
 
+  const filteredMentions = staffList
+    .filter(s => !mentionSearch || s.name.toLowerCase().includes(mentionSearch))
+    .slice(0, 6);
+
+  const insertMention = (name: string) => {
+    const handle = name.split(" ")[0]; // first word as the @handle
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const cursorPos = textarea.selectionStart ?? newMessage.length;
+    const textBeforeCursor = newMessage.slice(0, cursorPos);
+    const match = textBeforeCursor.match(/@(\w*)$/);
+    if (!match) { setShowMentionDropdown(false); return; }
+    const beforeMention = textBeforeCursor.slice(0, textBeforeCursor.length - match[0].length);
+    const afterCursor = newMessage.slice(cursorPos);
+    const newText = `${beforeMention}@${handle} ${afterCursor}`;
+    setNewMessage(newText);
+    setShowMentionDropdown(false);
+    setMentionSearch("");
+    setTimeout(() => {
+      const newPos = beforeMention.length + handle.length + 2;
+      textarea.focus();
+      textarea.setSelectionRange(newPos, newPos);
+    }, 0);
+  };
+
+  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setNewMessage(val);
+    const cursorPos = e.target.selectionStart ?? val.length;
+    const textBeforeCursor = val.slice(0, cursorPos);
+    const match = textBeforeCursor.match(/@(\w*)$/);
+    if (match) {
+      setMentionSearch(match[1].toLowerCase());
+      setShowMentionDropdown(true);
+      setMentionHighlightIdx(0);
+    } else {
+      setShowMentionDropdown(false);
+      setMentionSearch("");
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showMentionDropdown && filteredMentions.length > 0) {
+      if (e.key === "ArrowDown") { e.preventDefault(); setMentionHighlightIdx(i => Math.min(i + 1, filteredMentions.length - 1)); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setMentionHighlightIdx(i => Math.max(i - 1, 0)); return; }
+      if (e.key === "Enter") { e.preventDefault(); insertMention(filteredMentions[mentionHighlightIdx].name); return; }
+      if (e.key === "Escape") { e.preventDefault(); setShowMentionDropdown(false); return; }
+    }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
@@ -644,12 +727,9 @@ export default function StaffMessages() {
   const drilledGroup = drillCustomerId ? customerGroups.get(drillCustomerId) : null;
 
   const handleCustomerTileClick = (group: { customerId: string; customerName: string; customerLogoUrl: string | null; jobs: JobConversation[] }) => {
-    if (group.jobs.length === 1) {
-      setSelected({ type: "job", jobId: group.jobs[0].jobId });
-    } else {
-      setDrillCustomerId(group.customerId);
-      setLeftView("jobs");
-    }
+    // Always drill into the job list so staff always see which job they're opening
+    setDrillCustomerId(group.customerId);
+    setLeftView("jobs");
   };
 
   const handleBackToTiles = () => {
@@ -1139,7 +1219,7 @@ export default function StaffMessages() {
                           return (
                             <>
                               {displayText && (
-                                <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{displayText}</p>
+                                <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{renderMessageContent(displayText)}</p>
                               )}
                               {fileMatches.map((f, fi) => (
                                 <a
@@ -1260,16 +1340,42 @@ export default function StaffMessages() {
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
-              <Textarea
-                placeholder={isInternal ? "Internal note (staff only)… (paste or drop images/files)" : "Reply… (Enter to send, Shift+Enter for new line, paste or drop files)"}
-                value={newMessage}
-                onChange={e => setNewMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                rows={2}
-                className={`resize-none text-sm ${isInternal ? "border-amber-300 focus-visible:ring-amber-400 dark:border-amber-700" : ""}`}
-                data-testid="input-staff-message"
-              />
+              <div className="relative flex-1">
+                {/* @mention dropdown */}
+                {showMentionDropdown && filteredMentions.length > 0 && (
+                  <div className="absolute bottom-full mb-1 left-0 right-0 z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden" data-testid="mention-dropdown">
+                    {filteredMentions.map((s, idx) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); insertMention(s.name); }}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${idx === mentionHighlightIdx ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"}`}
+                        data-testid={`mention-option-${s.id}`}
+                      >
+                        <div className={`h-6 w-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 ${customerColor(s.id)}`}>
+                          {getInitials(s.name)}
+                        </div>
+                        <span>{s.name}</span>
+                        <span className="text-xs text-muted-foreground ml-auto">@{s.name.split(" ")[0]}</span>
+                      </button>
+                    ))}
+                    <div className="px-3 py-1 border-t bg-muted/30">
+                      <span className="text-[10px] text-muted-foreground">↑↓ navigate · Enter select · Esc dismiss</span>
+                    </div>
+                  </div>
+                )}
+                <Textarea
+                  ref={textareaRef}
+                  placeholder={isInternal ? "Internal note (staff only)… type @ to mention someone" : "Reply… type @ to mention someone (Enter to send, Shift+Enter new line)"}
+                  value={newMessage}
+                  onChange={handleMessageChange}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  rows={2}
+                  className={`resize-none text-sm w-full ${isInternal ? "border-amber-300 focus-visible:ring-amber-400 dark:border-amber-700" : ""}`}
+                  data-testid="input-staff-message"
+                />
+              </div>
               <Button
                 onClick={handleSend}
                 disabled={(!newMessage.trim() && chatImages.length === 0) || isUploadingChatImage || sendJobMessageMutation.isPending || sendDirectMessageMutation.isPending}
