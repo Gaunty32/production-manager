@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
-import { Upload, X, Loader2 } from "lucide-react";
+import { Upload, X, Loader2, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const formSchema = insertCustomerSchema
@@ -39,6 +39,8 @@ const formSchema = insertCustomerSchema
     logoUrl: z.string().optional().or(z.literal("")),
     active: z.boolean().default(true),
     xeroContactId: z.string().optional(),
+    creditAccount: z.boolean().default(true),
+    stripePaymentLink: z.string().url("Must be a valid URL").optional().or(z.literal("")).or(z.null()),
   });
 
 interface CustomerFormDialogProps {
@@ -72,6 +74,8 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
       address: "",
       logoUrl: "",
       active: true,
+      creditAccount: true,
+      stripePaymentLink: "",
     },
   });
 
@@ -87,6 +91,8 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         logoUrl: customer.logoUrl || "",
         active: customer.active !== false,
         xeroContactId: customer.xeroContactId || "",
+        creditAccount: customer.creditAccount !== false,
+        stripePaymentLink: customer.stripePaymentLink || "",
       });
       setPreviewUrl(customer.logoUrl || "");
     } else if (!open) {
@@ -100,6 +106,8 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         logoUrl: "",
         active: true,
         xeroContactId: "",
+        creditAccount: true,
+        stripePaymentLink: "",
       });
       setPreviewUrl("");
     }
@@ -136,12 +144,14 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
   };
 
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
-    const { active, ...rest } = data;
+    const { active, creditAccount, stripePaymentLink, ...rest } = data;
     const submitData = {
       ...rest,
       pricingTable2025: isEditMode ? (customer?.pricingTable2025 ?? false) : false,
       pricingTable2026: isEditMode ? (customer?.pricingTable2026 ?? true) : true,
       active: active !== false,
+      creditAccount: creditAccount !== false,
+      stripePaymentLink: stripePaymentLink || null,
     };
     onSubmit(submitData);
     setOpen(false);
@@ -323,6 +333,58 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                 )}
               />
             )}
+
+            {/* Payment settings */}
+            <div className="space-y-3 pt-2 border-t">
+              <p className="text-sm font-medium flex items-center gap-1.5">
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                Payment settings
+              </p>
+              <FormField
+                control={form.control}
+                name="creditAccount"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start gap-3">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-credit-account"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-sm font-normal cursor-pointer">
+                        Credit account
+                      </FormLabel>
+                      <FormDescription className="text-xs">
+                        Tick if this customer pays by invoice/BACS. Untick for customers who must pay upfront via Stripe.
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="stripePaymentLink"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Stripe payment link <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        placeholder="https://buy.stripe.com/..."
+                        data-testid="input-stripe-payment-link"
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      Customer-specific Stripe link included in order acknowledgements and shown after order submission.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             {isEditMode && canDeactivateCustomers && (
               <div className="space-y-3 pt-2 border-t">

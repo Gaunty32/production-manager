@@ -43,6 +43,8 @@ export const customers = pgTable("customers", {
   pricingTable2026: boolean("pricing_table_2026").notNull().default(false),
   active: boolean("active").notNull().default(true),
   xeroContactId: text("xero_contact_id"),
+  creditAccount: boolean("credit_account").notNull().default(true),
+  stripePaymentLink: text("stripe_payment_link"),
   createdAt: timestamp("created_at").defaultNow(),
   lastReEngagementEmailAt: timestamp("last_re_engagement_email_at"),
 });
@@ -392,6 +394,8 @@ export const updateCustomerSchema = z.object({
   pricingTable2025: z.boolean().optional(),
   pricingTable2026: z.boolean().optional(),
   active: z.boolean().optional(),
+  creditAccount: z.boolean().optional(),
+  stripePaymentLink: z.string().url().optional().or(z.literal("")).or(z.null()),
 });
 
 export const insertStaffSchema = createInsertSchema(staff).omit({

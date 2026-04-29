@@ -298,6 +298,8 @@ export async function sendJobApprovedEmail(
     customerAddress?: string | null;
     deliveryAddress?: string | null;
     orderDate?: Date;
+    stripePaymentLink?: string | null;
+    creditAccount?: boolean;
   }
 ) {
   const { client, fromEmail } = await getUncachableResendClient();
@@ -326,20 +328,34 @@ export async function sendJobApprovedEmail(
     console.error('Failed to generate order acknowledgement PDF:', pdfError);
   }
 
+  const effectiveStripeLink = jobDetails.stripePaymentLink || "https://buy.stripe.com/bIY16peJJ5j99Us144";
+  const isCreditAccount = jobDetails.creditAccount !== false;
+
+  const paymentBlock = isCreditAccount
+    ? `
+      <p style="margin:0 0 12px;">You can make payment by BACS or by card using the details below. <strong>Our bank details have recently been updated.</strong></p>
+      <div style="background-color:#f4f4f5;border-radius:6px;padding:20px 24px;margin:20px 0;">
+        <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#18181b;">Payment by card:</p>
+        <p style="margin:0 0 12px;">
+          <a href="${effectiveStripeLink}" style="color:#4f46e5;">${effectiveStripeLink}</a>
+        </p>
+        <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#18181b;">Payment by BACS:</p>
+        <p style="margin:0 0 2px;font-size:14px;color:#3f3f46;">Select Branding Solutions Ltd</p>
+        <p style="margin:0 0 2px;font-size:14px;color:#3f3f46;">Sort code: 04-06-05</p>
+        <p style="margin:0;font-size:14px;color:#3f3f46;">Account: 30422879</p>
+      </div>`
+    : `
+      <p style="margin:0 0 12px;">To confirm your order, please complete payment using the secure link below.</p>
+      <div style="background-color:#f4f4f5;border-radius:6px;padding:20px 24px;margin:20px 0;text-align:center;">
+        <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#18181b;">Pay securely by card:</p>
+        <a href="${effectiveStripeLink}" style="display:inline-block;background-color:#4f46e5;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:600;font-size:15px;margin-top:4px;">Pay Now</a>
+        <p style="margin:12px 0 0;font-size:12px;color:#71717a;">Or copy this link: <a href="${effectiveStripeLink}" style="color:#4f46e5;">${effectiveStripeLink}</a></p>
+      </div>`;
+
   const body = `
     <p style="margin:0 0 12px;">Thank you for your order.</p>
     <p style="margin:0 0 12px;">Please find your order acknowledgement attached. Kindly check it meets your requirements — it's important you verify garments, colours, sizes, quantities, and finishes to be applied.</p>
-    <p style="margin:0 0 12px;">You can make payment by BACS or by card using the details below. <strong>Our bank details have recently been updated.</strong></p>
-    <div style="background-color:#f4f4f5;border-radius:6px;padding:20px 24px;margin:20px 0;">
-      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#18181b;">Payment by card:</p>
-      <p style="margin:0 0 12px;">
-        <a href="https://buy.stripe.com/bIY16peJJ5j99Us144" style="color:#4f46e5;">https://buy.stripe.com/bIY16peJJ5j99Us144</a>
-      </p>
-      <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#18181b;">Payment by BACS:</p>
-      <p style="margin:0 0 2px;font-size:14px;color:#3f3f46;">Select Branding Solutions Ltd</p>
-      <p style="margin:0 0 2px;font-size:14px;color:#3f3f46;">Sort code: 04-06-05</p>
-      <p style="margin:0;font-size:14px;color:#3f3f46;">Account: 30422879</p>
-    </div>
+    ${paymentBlock}
     ${divider}
     <p style="margin:0 0 2px;">Regards,</p>
     <p style="margin:0;font-weight:600;">Select Branding Solutions</p>
