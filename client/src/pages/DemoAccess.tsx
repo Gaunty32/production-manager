@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/form";
 import { apiRequest } from "@/lib/queryClient";
 import { CheckCircle2, Layers, CalendarDays, BarChart3, MessageSquare, FileText, Zap } from "lucide-react";
-import productionDisplayImg from "@assets/screenshots/production_selectbranding_co_uk_production-display.png";
+import customerDashboardImg from "@assets/screenshots/production_selectbranding_co_uk_demo.png";
 import customerPortalImg from "@assets/screenshots/production_selectbranding_co_uk_customer_login.png";
 
 const schema = z.object({
@@ -251,26 +251,26 @@ export default function DemoAccess() {
           <div className="max-w-6xl mx-auto space-y-10">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold tracking-tight">A glimpse of what you'll see</h2>
-              <p className="text-muted-foreground">These are screenshots from the live system — exactly what you'll access with your demo login.</p>
+              <p className="text-muted-foreground">This is your view — the customer portal you'll use to track orders, approve artwork, and stay in the loop.</p>
             </div>
 
             <div className="grid lg:grid-cols-2 gap-8 items-start">
               <div className="space-y-2">
                 <BrowserFrame
-                  src={productionDisplayImg}
-                  label="production.selectbranding.co.uk — Production Queue"
+                  src={customerDashboardImg}
+                  label="production.selectbranding.co.uk — Your Orders"
                 />
                 <p className="text-sm text-muted-foreground text-center">
-                  Staff view — live production queue with machine assignments and dispatch dates
+                  Track every job in real time — type, quantity, logo status, production date, and dispatch
                 </p>
               </div>
               <div className="space-y-2">
                 <BrowserFrame
                   src={customerPortalImg}
-                  label="production.selectbranding.co.uk — Customer Portal"
+                  label="production.selectbranding.co.uk — Sign In"
                 />
                 <p className="text-sm text-muted-foreground text-center">
-                  Customer portal — your clients log in here to track orders and approve artwork
+                  A clean, branded portal — log in from any device to see exactly where your orders are
                 </p>
               </div>
             </div>
