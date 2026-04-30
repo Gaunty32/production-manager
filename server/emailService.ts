@@ -638,6 +638,45 @@ export async function sendCustomerMessageNotificationEmail(
   }
 }
 
+// ─── Customer direct message → notify staff ───────────────────────────────────
+export async function sendCustomerDirectMessageNotificationEmail(
+  staffEmails: string[],
+  details: {
+    customerName: string;
+    subject: string;
+    message: string;
+  }
+): Promise<void> {
+  if (!staffEmails.length) return;
+  const { client, fromEmail } = await getUncachableResendClient();
+
+  const viewUrl = `${getBaseUrl()}/messages`;
+  const safeName = sanitizeHtml(details.customerName);
+  const safeSubject = sanitizeHtml(details.subject);
+  const safeMsg = sanitizeHtml(details.message);
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">New Direct Message from a Customer</h2>
+    <p style="margin:0 0 12px;"><strong>${safeName}</strong> sent a message in <strong>${safeSubject}</strong>:</p>
+    <div style="background-color:#f4f4f5;border-left:4px solid #4f46e5;border-radius:0 6px 6px 0;padding:16px 20px;margin:16px 0;">
+      <p style="margin:0;color:#18181b;white-space:pre-line;">${safeMsg}</p>
+    </div>
+    ${ctaButton(viewUrl, 'View &amp; Reply')}
+    ${muted('You are receiving this because you have email notifications enabled. You can turn them off in your profile on the Messages page.')}
+  `;
+
+  const { error } = await client.emails.send({
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: staffEmails,
+    subject: `New message from ${safeName} — ${safeSubject}`,
+    html: brandedEmail(body),
+  });
+
+  if (error) {
+    console.error('Failed to send customer direct message notification email:', error);
+  }
+}
+
 // ─── Re-engagement email ───────────────────────────────────────────────────────
 // =============================================================================
 // Demo access request email

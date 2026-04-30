@@ -43,7 +43,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 
 // Helper function to auto-schedule a line item when it has a machine assigned
@@ -5823,6 +5823,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const convo = await storage.getConversation(req.params.id);
       if (!convo) return res.status(404).json({ error: "Conversation not found" });
+      const sessionUserId = String(req.session.userId);
+      const allStaff = await storage.getStaff();
+      const staffMember = allStaff.find((s: any) => s.userId && String(s.userId) === sessionUserId);
+      const senderName = staffMember?.name || 'Staff';
       const msg = await storage.createConversationMessage({
         conversationId: req.params.id,
         senderType: "staff",
@@ -5830,6 +5834,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: req.body.message,
         ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
       });
+      // Email notification to customer (fire-and-forget)
+      if (convo.customerId) {
+        (async () => {
+          try {
+            const customerUsers = await storage.getCustomerUsersByCustomerId(convo.customerId!);
+            const emails = customerUsers
+              .filter((u: any) => u.emailNotificationsMessages)
+              .map((u: any) => u.email).filter(Boolean) as string[];
+            if (emails.length) {
+              const baseUrl = process.env.REPLIT_DOMAINS
+                ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+                : 'http://localhost:5000';
+              await sendNewChatEmail(emails, {
+                staffName: senderName,
+                subject: convo.subject,
+                firstMessage: req.body.message,
+                portalUrl: `${baseUrl}/customer/messages`,
+                isJobChat: false,
+              });
+            }
+          } catch (emailErr) {
+            console.error('Failed to send customer direct reply notification:', emailErr);
+          }
+        })();
+      }
       res.json(msg);
     } catch (e) {
       res.status(500).json({ error: "Failed to send message" });
@@ -5910,7 +5939,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer: list their direct conversations
   app.get("/api/customer-portal/direct-conversations", isCustomerAuthenticated, async (req: any, res) => {
     try {
-      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
       if (!customerUser) return res.status(404).json({ error: "Not found" });
       const convos = await storage.getConversationsByCustomer(customerUser.customerId);
       const visible = convos.filter((c: any) => c.status !== "deleted");
@@ -5951,7 +5981,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer: start a new direct conversation
   app.post("/api/customer-portal/direct-conversations", isCustomerAuthenticated, async (req: any, res) => {
     try {
-      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
       if (!customerUser) return res.status(404).json({ error: "Not found" });
       const data = insertConversationSchema.parse({ ...req.body, customerId: customerUser.customerId });
       const convo = await storage.createConversation(data);
@@ -5959,9 +5990,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createConversationMessage({
           conversationId: convo.id,
           senderType: "customer",
-          senderId: req.session.customerUserId,
+          senderId: customerUserId,
           message: req.body.message,
         });
+        // Notify staff (fire-and-forget)
+        (async () => {
+          try {
+            const allCustomers = await storage.getCustomers();
+            const customer = allCustomers.find(c => c.id === customerUser.customerId);
+            const allUsers = await storage.getAllUsers();
+            const staffEmailsToNotify = allUsers
+              .filter((u: any) => u.role !== 'customer' && u.active && u.emailNotificationsMessages && u.email)
+              .map((u: any) => u.email as string);
+            if (staffEmailsToNotify.length > 0 && customer) {
+              await sendCustomerDirectMessageNotificationEmail(staffEmailsToNotify, {
+                customerName: customer.name,
+                subject: convo.subject,
+                message: req.body.message,
+              });
+            }
+          } catch (emailErr) {
+            console.error("Failed to send staff direct message notification:", emailErr);
+          }
+        })();
       }
       res.json(convo);
     } catch (e) {
@@ -5972,10 +6023,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer: get messages for a conversation (marks as read, enriched with sender info)
   app.get("/api/customer-portal/direct-conversations/:id/messages", isCustomerAuthenticated, async (req: any, res) => {
     try {
-      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
       if (!customerUser) return res.status(404).json({ error: "Not found" });
       const convo = await storage.getConversation(req.params.id);
-      if (!convo || convo.customerId !== customerUser.customerId) return res.status(404).json({ error: "Not found" });
+      if (!convo || convo.customerId !== customerUser.customerId) {
+        console.error(`[DirectMsg] Access denied: convo=${req.params.id} convoCustomerId=${convo?.customerId} userCustomerId=${customerUser.customerId}`);
+        return res.status(404).json({ error: "Not found" });
+      }
       const msgs = await storage.getConversationMessages(req.params.id);
       await storage.markConversationMessagesReadByCustomer(req.params.id);
       const allStaff = await storage.getStaffMembers();
@@ -6013,7 +6068,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer: archive a direct conversation
   app.put("/api/customer-portal/direct-conversations/:id/archive", isCustomerAuthenticated, async (req: any, res) => {
     try {
-      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
       if (!customerUser) return res.status(404).json({ error: "Not found" });
       const convo = await storage.getConversation(req.params.id);
       if (!convo || convo.customerId !== customerUser.customerId) return res.status(403).json({ error: "Forbidden" });
@@ -6027,7 +6083,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer: delete a direct conversation (soft-delete via status)
   app.delete("/api/customer-portal/direct-conversations/:id", isCustomerAuthenticated, async (req: any, res) => {
     try {
-      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
       if (!customerUser) return res.status(404).json({ error: "Not found" });
       const convo = await storage.getConversation(req.params.id);
       if (!convo || convo.customerId !== customerUser.customerId) return res.status(403).json({ error: "Forbidden" });
@@ -6041,16 +6098,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer: send a message in a direct conversation
   app.post("/api/customer-portal/direct-conversations/:id/messages", isCustomerAuthenticated, async (req: any, res) => {
     try {
-      const customerUser = await storage.getCustomerUserById(req.session.customerUserId);
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
       if (!customerUser) return res.status(404).json({ error: "Not found" });
       const convo = await storage.getConversation(req.params.id);
-      if (!convo || convo.customerId !== customerUser.customerId) return res.status(404).json({ error: "Not found" });
+      if (!convo || convo.customerId !== customerUser.customerId) {
+        console.error(`[DirectMsg] Send denied: convo=${req.params.id} convoCustomerId=${convo?.customerId} userCustomerId=${customerUser.customerId}`);
+        return res.status(404).json({ error: "Not found" });
+      }
       const msg = await storage.createConversationMessage({
         conversationId: req.params.id,
         senderType: "customer",
-        senderId: req.session.customerUserId,
+        senderId: customerUserId,
         message: req.body.message,
       });
+      // Notify staff (fire-and-forget)
+      (async () => {
+        try {
+          const allCustomers = await storage.getCustomers();
+          const customer = allCustomers.find(c => c.id === customerUser.customerId);
+          const allUsers = await storage.getAllUsers();
+          const staffEmailsToNotify = allUsers
+            .filter((u: any) => u.role !== 'customer' && u.active && u.emailNotificationsMessages && u.email)
+            .map((u: any) => u.email as string);
+          if (staffEmailsToNotify.length > 0 && customer) {
+            await sendCustomerDirectMessageNotificationEmail(staffEmailsToNotify, {
+              customerName: customer.name,
+              subject: convo.subject,
+              message: req.body.message,
+            });
+          }
+        } catch (emailErr) {
+          console.error("Failed to send staff direct message notification:", emailErr);
+        }
+      })();
       res.json(msg);
     } catch (e) {
       res.status(500).json({ error: "Failed to send message" });
