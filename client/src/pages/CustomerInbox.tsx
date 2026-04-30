@@ -31,6 +31,7 @@ import {
   PenLine,
   Bell,
   BellOff,
+  Paperclip,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -127,6 +128,11 @@ export default function CustomerInbox() {
 
   // Search
   const [searchQuery, setSearchQuery] = useState("");
+
+  // File attachment
+  const [chatImage, setChatImage] = useState<{ key: string; previewUrl: string } | null>(null);
+  const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: currentUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
@@ -234,6 +240,7 @@ export default function CustomerInbox() {
     if (selected) {
       setNewMessageBanner(false);
       isInitialLoad.current = true;
+      setChatImage(null);
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/messages/unread-count"] });
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/conversations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/direct-conversations"] });
@@ -241,14 +248,18 @@ export default function CustomerInbox() {
   }, [selected]);
 
   const sendJobMutation = useMutation({
-    mutationFn: async (msg: string) => {
-      const res = await apiRequest("POST", `/api/customer-portal/jobs/${jobId}/messages/send`, { message: msg });
+    mutationFn: async ({ message, imageUrl }: { message: string; imageUrl?: string }) => {
+      const res = await apiRequest("POST", `/api/customer-portal/jobs/${jobId}/messages/send`, {
+        message,
+        ...(imageUrl ? { imageUrl } : {}),
+      });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/customer-portal/jobs/${jobId}/messages`] });
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/conversations"] });
       setNewMessage("");
+      setChatImage(null);
     },
     onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
   });
@@ -277,14 +288,18 @@ export default function CustomerInbox() {
   };
 
   const sendDirectMutation = useMutation({
-    mutationFn: async (msg: string) => {
-      const res = await apiRequest("POST", `/api/customer-portal/direct-conversations/${directId}/messages`, { message: msg });
+    mutationFn: async ({ message, imageUrl }: { message: string; imageUrl?: string }) => {
+      const res = await apiRequest("POST", `/api/customer-portal/direct-conversations/${directId}/messages`, {
+        message,
+        ...(imageUrl ? { imageUrl } : {}),
+      });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/direct-conversations", directId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/direct-conversations"] });
       setNewMessage("");
+      setChatImage(null);
     },
     onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
   });
@@ -361,13 +376,46 @@ export default function CustomerInbox() {
   });
 
   const handleSend = () => {
-    if (!newMessage.trim() || !selected) return;
-    if (selected.type === "job") sendJobMutation.mutate(newMessage.trim());
-    else sendDirectMutation.mutate(newMessage.trim());
+    if ((!newMessage.trim() && !chatImage) || !selected) return;
+    const payload = { message: newMessage.trim(), imageUrl: chatImage?.key };
+    if (selected.type === "job") sendJobMutation.mutate(payload);
+    else sendDirectMutation.mutate(payload);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    (e.target as HTMLInputElement).value = "";
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Maximum file size is 20 MB", variant: "destructive" });
+      return;
+    }
+    setIsUploadingChatImage(true);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const res = await fetch("/api/customer-portal/upload-file", {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type,
+          "x-file-name": encodeURIComponent(file.name),
+          "x-file-type": file.type,
+        },
+        body: arrayBuffer,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const { key } = await res.json();
+      const previewUrl = URL.createObjectURL(file);
+      setChatImage({ key, previewUrl });
+    } catch {
+      toast({ title: "Upload failed", description: "Could not upload the file. Please try again.", variant: "destructive" });
+    } finally {
+      setIsUploadingChatImage(false);
+    }
   };
 
   const jobUnread = jobConversations.reduce((s, c) => s + c.unreadCount, 0);
@@ -823,7 +871,50 @@ export default function CustomerInbox() {
             </div>
 
             <div className="border-t px-3 py-3 bg-card/40 shrink-0">
+              {/* Attached image preview */}
+              {chatImage && (
+                <div className="mb-2 relative inline-block">
+                  <img
+                    src={chatImage.previewUrl}
+                    alt="Attachment preview"
+                    className="max-h-28 max-w-[200px] rounded-lg border object-contain"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setChatImage(null)}
+                    className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center"
+                    data-testid="button-remove-attachment"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
               <div className="flex gap-2 items-end">
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                  data-testid="input-file-attachment"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="shrink-0 h-[42px] w-[42px] text-muted-foreground"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingChatImage || !!chatImage}
+                  data-testid="button-attach-file"
+                  title="Attach a file"
+                >
+                  {isUploadingChatImage ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <Paperclip className="h-4 w-4" />
+                  )}
+                </Button>
                 <Textarea
                   placeholder="Message… (Enter to send)"
                   value={newMessage}
@@ -836,7 +927,7 @@ export default function CustomerInbox() {
                 />
                 <Button
                   onClick={handleSend}
-                  disabled={!newMessage.trim() || sendJobMutation.isPending || sendDirectMutation.isPending}
+                  disabled={(!newMessage.trim() && !chatImage) || sendJobMutation.isPending || sendDirectMutation.isPending}
                   size="icon"
                   className="shrink-0 h-[42px] w-[42px]"
                   data-testid="button-send"

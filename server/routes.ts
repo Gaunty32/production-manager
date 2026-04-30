@@ -2665,7 +2665,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobId: req.params.jobId,
         senderType: 'customer',
         senderId: userId,
-        message: req.body.message,
+        message: req.body.message || '',
+        ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
       });
 
       // Email staff who have notifications enabled (fire-and-forget)
@@ -6110,7 +6111,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         conversationId: req.params.id,
         senderType: "customer",
         senderId: customerUserId,
-        message: req.body.message,
+        message: req.body.message || '',
+        ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
       });
       // Notify staff (fire-and-forget)
       (async () => {
