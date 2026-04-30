@@ -133,6 +133,8 @@ export default function CustomerInbox() {
   const [chatImage, setChatImage] = useState<{ key: string; previewUrl: string } | null>(null);
   const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const dragCounter = useRef(0);
 
   const { data: currentUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
@@ -386,10 +388,7 @@ export default function CustomerInbox() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    (e.target as HTMLInputElement).value = "";
-    if (!file) return;
+  const processFile = async (file: File) => {
     if (file.size > 20 * 1024 * 1024) {
       toast({ title: "File too large", description: "Maximum file size is 20 MB", variant: "destructive" });
       return;
@@ -416,6 +415,41 @@ export default function CustomerInbox() {
     } finally {
       setIsUploadingChatImage(false);
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    (e.target as HTMLInputElement).value = "";
+    if (file) processFile(file);
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.types.includes("Files")) setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setIsDraggingOver(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDraggingOver(false);
+    if (chatImage || isUploadingChatImage) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
   };
 
   const jobUnread = jobConversations.reduce((s, c) => s + c.unreadCount, 0);
@@ -718,8 +752,21 @@ export default function CustomerInbox() {
 
         {/* Chat panel — full screen on mobile, flex-1 on desktop */}
         {selected ? (
-          <div className={`flex-col overflow-hidden flex-1
-            ${selected ? "flex" : "hidden sm:flex"}`}>
+          <div
+            className={`flex-col overflow-hidden flex-1 relative
+              ${selected ? "flex" : "hidden sm:flex"}`}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            {/* Drag-and-drop overlay */}
+            {isDraggingOver && (
+              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 rounded-none bg-primary/10 border-2 border-dashed border-primary pointer-events-none">
+                <Paperclip className="h-10 w-10 text-primary" />
+                <p className="text-base font-semibold text-primary">Drop file to attach</p>
+              </div>
+            )}
             {/* Chat sub-header (desktop only — mobile uses the main header) */}
             <div className="hidden sm:flex px-4 py-3 border-b bg-card/40 items-center gap-3">
               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
