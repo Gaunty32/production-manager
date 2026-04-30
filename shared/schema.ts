@@ -274,6 +274,7 @@ export const jobMessages = pgTable("job_messages", {
   readByCustomer: boolean("read_by_customer").notNull().default(false),
   deleted: boolean("deleted").notNull().default(false),
   editedAt: timestamp("edited_at"),
+  thumbsUpBy: text("thumbs_up_by").array().notNull().default([]),
 });
 
 // Customer portal: job file uploads

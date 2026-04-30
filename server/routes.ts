@@ -2758,6 +2758,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff - Thumbs up a job message (toggle)
+  app.post("/api/staff/jobs/:jobId/messages/:messageId/thumbs-up", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session?.userId;
+      if (!userId) return res.status(401).json({ error: "Not authenticated" });
+      await storage.toggleJobMessageThumbsUp(req.params.messageId, userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error toggling thumbs up:", error);
+      res.status(500).json({ error: "Failed to toggle thumbs up" });
+    }
+  });
+
   // Staff - Delete (unsend) a job message
   app.delete("/api/staff/jobs/:jobId/messages/:messageId", isStaffAuthenticated, async (req, res) => {
     try {

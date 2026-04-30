@@ -179,6 +179,7 @@ export interface IStorage {
   createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
   deleteJobMessage(messageId: string): Promise<void>;
   updateJobMessage(messageId: string, content: string): Promise<void>;
+  toggleJobMessageThumbsUp(messageId: string, userId: string): Promise<void>;
   markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void>;
   getConversationsForCustomer(customerId: string): Promise<any[]>;
   getUnreadCountForCustomer(customerId: string): Promise<number>;
@@ -1363,6 +1364,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateJobMessage(messageId: string, content: string): Promise<void> {
     await db.update(jobMessages).set({ message: content, editedAt: new Date() }).where(eq(jobMessages.id, messageId));
+  }
+
+  async toggleJobMessageThumbsUp(messageId: string, userId: string): Promise<void> {
+    const [msg] = await db.select({ thumbsUpBy: jobMessages.thumbsUpBy }).from(jobMessages).where(eq(jobMessages.id, messageId));
+    if (!msg) return;
+    const current = msg.thumbsUpBy || [];
+    const updated = current.includes(userId) ? current.filter(id => id !== userId) : [...current, userId];
+    await db.update(jobMessages).set({ thumbsUpBy: updated }).where(eq(jobMessages.id, messageId));
   }
 
   async markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void> {

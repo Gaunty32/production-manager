@@ -54,6 +54,7 @@ import {
   Film,
   Pencil,
   Check,
+  ThumbsUp,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
@@ -433,6 +434,16 @@ export default function StaffMessages() {
       queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${jobId}/messages`] });
     },
     onError: () => toast({ title: "Failed to edit message", variant: "destructive" }),
+  });
+
+  const thumbsUpMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      await apiRequest("POST", `/api/staff/jobs/${jobId}/messages/${messageId}/thumbs-up`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/staff/jobs/${jobId}/messages`] });
+    },
+    onError: () => toast({ title: "Failed to react to message", variant: "destructive" }),
   });
 
   const archiveConvoJobMutation = useMutation({
@@ -1165,7 +1176,7 @@ export default function StaffMessages() {
                       )}
                     </div>
                     {/* Bubble */}
-                    <div className={`max-w-[72%] ${isStaff ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
+                    <div className={`max-w-[72%] ${editingMsgId === msg.id ? "min-w-[300px]" : ""} ${isStaff ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
                       {msg.isInternal && showAvatar && (
                         <p className={`text-[10px] font-semibold px-1 ${isStaff ? "text-right text-muted-foreground" : "text-muted-foreground"}`}>
                           <span className="ml-1.5 inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
@@ -1185,7 +1196,7 @@ export default function StaffMessages() {
                         {(msg as any).deleted ? (
                           <p className="text-xs text-muted-foreground italic">Message deleted</p>
                         ) : editingMsgId === msg.id ? (
-                          <div className="flex flex-col gap-2 min-w-[200px]">
+                          <div className="flex flex-col gap-2 w-full min-w-[260px]">
                             <textarea
                               autoFocus
                               value={editingText}
@@ -1269,6 +1280,27 @@ export default function StaffMessages() {
                           </div>
                         )}
                       </div>
+                      {/* Thumbs up reaction */}
+                      {!((msg as any).deleted) && editingMsgId !== msg.id && selected?.type === "job" && (() => {
+                        const thumbsUpBy: string[] = (msg as any).thumbsUpBy || [];
+                        const hasReacted = currentUser?.id ? thumbsUpBy.includes(currentUser.id) : false;
+                        const count = thumbsUpBy.length;
+                        return (count > 0 || true) ? (
+                          <button
+                            type="button"
+                            onClick={() => thumbsUpMutation.mutate(msg.id)}
+                            className={`self-${isStaff ? "end" : "start"} mt-0.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all ${
+                              hasReacted
+                                ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-700"
+                                : "invisible group-hover/msg:visible bg-muted/60 text-muted-foreground border border-transparent hover:border-border"
+                            }`}
+                            data-testid={`button-thumbs-up-${msg.id}`}
+                          >
+                            <ThumbsUp className={`h-3 w-3 ${hasReacted ? "fill-current" : ""}`} />
+                            {count > 0 && <span>{count}</span>}
+                          </button>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 );
