@@ -377,6 +377,8 @@ export class XeroService {
       const tenantId = this.getTenantId();
 
       const contactPayload: any = { Name: customer.name };
+      if (customer.contactFirstName) contactPayload.FirstName = customer.contactFirstName;
+      if (customer.contactLastName) contactPayload.LastName = customer.contactLastName;
       if (customer.email) contactPayload.EmailAddress = customer.email;
       if (customer.telephone) {
         contactPayload.Phones = [{ PhoneType: "DEFAULT", PhoneNumber: customer.telephone }];
@@ -412,10 +414,49 @@ export class XeroService {
     }
   }
 
+  // Update an existing Xero contact with current details (name, phone, address)
+  async updateContact(contactID: string, customer: Customer): Promise<void> {
+    if (!this.isConfigured() || !this.isConnected()) return;
+    try {
+      const token = await this.getAccessToken();
+      const tenantId = this.getTenantId();
+      const updatePayload: any = { ContactID: contactID, Name: customer.name };
+      if (customer.contactFirstName) updatePayload.FirstName = customer.contactFirstName;
+      if (customer.contactLastName) updatePayload.LastName = customer.contactLastName;
+      if (customer.email) updatePayload.EmailAddress = customer.email;
+      const response = await fetch(`${this.apiUrl}/Contacts/${contactID}`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "xero-tenant-id": tenantId,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({ Contacts: [updatePayload] }),
+      });
+      if (!response.ok) {
+        console.error("Failed to update Xero contact:", await response.text());
+      } else {
+        console.log(`✓ Updated Xero contact details for: ${customer.name} (${contactID})`);
+      }
+    } catch (error) {
+      console.error("Error updating Xero contact:", error);
+    }
+  }
+
   // Find an existing Xero contact or create one if not found
+  // Also syncs first/last name to existing contacts when available
   async findOrCreateContact(customer: Customer): Promise<{ contactID: string; name: string } | null> {
     const existing = await this.findContact(customer);
-    if (existing) return existing;
+    if (existing) {
+      // Sync name details if we have them — fire-and-forget
+      if (customer.contactFirstName || customer.contactLastName) {
+        this.updateContact(existing.contactID, customer).catch((e) =>
+          console.error("Non-fatal: failed to sync Xero contact name:", e)
+        );
+      }
+      return existing;
+    }
     console.log(`Creating new Xero contact for: ${customer.name}`);
     return this.createContact(customer);
   }
