@@ -77,9 +77,14 @@ export default function Customers() {
     mutationFn: () => apiRequest("POST", "/api/re-engagement/send", { dryRun: false }),
     onSuccess: async (res) => {
       const data = await res.json();
+      const deferred = data.budgetSkipped ?? 0;
       toast({
         title: `Re-engagement emails sent`,
-        description: `${data.sent} email${data.sent !== 1 ? "s" : ""} sent successfully.${data.errors?.length ? ` ${data.errors.length} failed.` : ""}`,
+        description: [
+          `${data.sent} email${data.sent !== 1 ? "s" : ""} sent.`,
+          deferred > 0 ? `${deferred} deferred — daily quota nearly full, they'll be picked up tomorrow.` : "",
+          data.errors?.length ? `${data.errors.length} failed.` : "",
+        ].filter(Boolean).join(" "),
       });
       refetchDormant();
     },

@@ -2,9 +2,14 @@ import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { storage } from "./storage";
 import { sendReEngagementEmail } from "./emailService";
+import { getEmailBudget } from "./emailBudget";
 
 const DORMANT_DAYS = 90;
 const RE_EMAIL_COOLDOWN_DAYS = 90;
+
+// How much of the daily budget to reserve for transactional emails
+// (order acks, chat notifications, password resets, etc.)
+const TRANSACTIONAL_RESERVE = 20;
 
 export interface DormantCustomer {
   id: string;
@@ -69,23 +74,57 @@ export async function getDormantCustomers(): Promise<DormantCustomer[]> {
 }
 
 /**
- * Sends re-engagement emails to all eligible dormant customers and
- * records the timestamp so they won't be contacted again for 90 days.
+ * Sends re-engagement emails to eligible dormant customers up to the
+ * given limit. Passing limit=0 means "send as many as budget allows".
+ * Each sent customer has their lastReEngagementEmailAt timestamp updated
+ * so they won't be contacted again for 90 days.
  */
-export async function runReEngagementCheck(options: { dryRun?: boolean } = {}): Promise<{
+export async function runReEngagementCheck(options: {
+  dryRun?: boolean;
+  limit?: number;
+} = {}): Promise<{
   sent: number;
   skipped: number;
+  budgetSkipped: number;
   errors: string[];
   customers: Array<{ name: string; email: string; sent: boolean; error?: string }>;
 }> {
   const dormant = await getDormantCustomers();
 
+  // Work out how many we're allowed to send right now
+  const budget = getEmailBudget();
+  const budgetAvailable = Math.max(0, budget.remaining - TRANSACTIONAL_RESERVE);
+  const hardLimit = options.limit !== undefined ? options.limit : budgetAvailable;
+  const sendLimit = Math.min(hardLimit, budgetAvailable);
+
+  console.log(
+    `[ReEngagement] Eligible: ${dormant.length} | Budget: ${budget.sent}/${budget.limit} sent today | Available for re-engagement: ${sendLimit}`
+  );
+
+  if (sendLimit <= 0 && !options.dryRun) {
+    console.log("[ReEngagement] No budget available — skipping this run");
+    return {
+      sent: 0,
+      skipped: 0,
+      budgetSkipped: dormant.length,
+      errors: [],
+      customers: dormant.map(c => ({ name: c.name, email: c.email, sent: false })),
+    };
+  }
+
   let sent = 0;
+  let budgetSkipped = 0;
   const errors: string[] = [];
   const results: Array<{ name: string; email: string; sent: boolean; error?: string }> = [];
 
   for (const customer of dormant) {
     if (options.dryRun) {
+      results.push({ name: customer.name, email: customer.email, sent: false });
+      continue;
+    }
+
+    if (sent >= sendLimit) {
+      budgetSkipped++;
       results.push({ name: customer.name, email: customer.email, sent: false });
       continue;
     }
@@ -98,14 +137,14 @@ export async function runReEngagementCheck(options: { dryRun?: boolean } = {}): 
         logoUrl: customer.logoUrl,
       });
 
-      // Record that we emailed them
+      // Record that we emailed them — won't be eligible again for 90 days
       await storage.updateCustomer(customer.id, {
         lastReEngagementEmailAt: new Date(),
       } as any);
 
       sent++;
       results.push({ name: customer.name, email: customer.email, sent: true });
-      console.log(`[ReEngagement] Sent email to ${customer.name} <${customer.email}>`);
+      console.log(`[ReEngagement] Sent to ${customer.name} <${customer.email}>`);
     } catch (err: any) {
       const msg = err?.message || String(err);
       errors.push(`${customer.name}: ${msg}`);
@@ -114,40 +153,74 @@ export async function runReEngagementCheck(options: { dryRun?: boolean } = {}): 
     }
   }
 
-  return { sent, skipped: dormant.length - sent - errors.length, errors, customers: results };
+  if (budgetSkipped > 0) {
+    console.log(
+      `[ReEngagement] ${budgetSkipped} customers deferred — will be picked up in a future run when budget allows`
+    );
+  }
+
+  return {
+    sent,
+    skipped: dormant.length - sent - budgetSkipped - errors.length,
+    budgetSkipped,
+    errors,
+    customers: results,
+  };
 }
 
 /**
- * Schedules a daily check at 09:00 Europe/London.
- * Uses a simple interval that fires every hour and checks wall-clock time.
+ * Schedules budget-aware re-engagement checks throughout the working day.
+ *
+ * Runs every 2 hours from 09:00 to 17:00 (Europe/London). Each run:
+ *  1. Checks how many emails have already been sent today.
+ *  2. Reserves TRANSACTIONAL_RESERVE slots for time-sensitive emails.
+ *  3. Sends re-engagement emails only up to the remaining allowance.
+ *
+ * This means a large backlog of dormant customers is spread across
+ * multiple days rather than exhausting the daily quota in one go.
  */
 export function scheduleDailyReEngagementCheck() {
-  const CHECK_HOUR = 9; // 9am
+  // Hours (London time) at which we attempt a send
+  const CHECK_HOURS = [9, 11, 13, 15, 17];
 
-  let lastRunDate: string | null = null;
+  const lastRunByHour = new Map<string, boolean>();
 
   const tick = async () => {
     const now = new Date();
-    const londonHour = new Date(
-      now.toLocaleString("en-US", { timeZone: "Europe/London" })
-    ).getHours();
-    const todayStr = new Date(
-      now.toLocaleString("en-US", { timeZone: "Europe/London" })
-    ).toDateString();
+    const londonStr = now.toLocaleString("en-US", { timeZone: "Europe/London" });
+    const londonDate = new Date(londonStr);
+    const londonHour = londonDate.getHours();
+    const todayStr = londonDate.toDateString();
+    const slotKey = `${todayStr}_${londonHour}`;
 
-    if (londonHour === CHECK_HOUR && lastRunDate !== todayStr) {
-      lastRunDate = todayStr;
-      console.log("[ReEngagement] Running daily check…");
-      try {
-        const result = await runReEngagementCheck();
-        console.log(`[ReEngagement] Done — sent: ${result.sent}, errors: ${result.errors.length}`);
-      } catch (err) {
-        console.error("[ReEngagement] Scheduler error:", err);
-      }
+    if (!CHECK_HOURS.includes(londonHour)) return;
+    if (lastRunByHour.get(slotKey)) return;
+
+    lastRunByHour.set(slotKey, true);
+
+    const budget = getEmailBudget();
+    const available = Math.max(0, budget.remaining - TRANSACTIONAL_RESERVE);
+
+    console.log(
+      `[ReEngagement] ${londonHour}:00 check — budget ${budget.sent}/${budget.limit} used, ${available} available for re-engagement`
+    );
+
+    if (available <= 0) {
+      console.log("[ReEngagement] No budget available — skipping");
+      return;
+    }
+
+    try {
+      const result = await runReEngagementCheck();
+      console.log(
+        `[ReEngagement] Done — sent: ${result.sent}, deferred (budget): ${result.budgetSkipped}, errors: ${result.errors.length}`
+      );
+    } catch (err) {
+      console.error("[ReEngagement] Scheduler error:", err);
     }
   };
 
-  // Check every 30 minutes
+  // Check every 30 minutes (fine-grained enough to hit each hour window)
   setInterval(tick, 30 * 60 * 1000);
-  console.log("[ReEngagement] Daily check scheduled for 09:00 Europe/London");
+  console.log("[ReEngagement] Smart send scheduled — checks at 09:00, 11:00, 13:00, 15:00, 17:00 Europe/London");
 }

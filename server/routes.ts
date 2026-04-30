@@ -1480,6 +1480,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Email budget status (today's send count + remaining quota)
+  app.get("/api/re-engagement/budget", isStaffAuthenticated, (_req, res) => {
+    const { getEmailBudget } = require("./emailBudget");
+    res.json(getEmailBudget());
+  });
+
   // Seed initial customers if database is empty
   const seedCustomers = async () => {
     try {
