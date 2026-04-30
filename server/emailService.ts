@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { generateOrderAcknowledgementPdf, type OrderAcknowledgementData } from './orderAcknowledgementPdf';
+import { recordEmailSent } from './emailBudget';
 
 let connectionSettings: any;
 
@@ -55,6 +56,16 @@ async function getUncachableResendClient() {
     client: new Resend(apiKey),
     fromEmail: fromEmail
   };
+}
+
+/** Sends an email via Resend and records it in the daily budget tracker. */
+async function sendEmail(
+  client: Resend,
+  params: Parameters<Resend['emails']['send']>[0],
+): ReturnType<Resend['emails']['send']> {
+  const result = await client.emails.send(params);
+  if (!result.error) recordEmailSent();
+  return result;
 }
 
 function getBaseUrl() {
@@ -197,7 +208,7 @@ export async function sendNewLogoSetupEmail(params: {
     ${muted('Please set up the logo before this job enters production.')}
   `;
 
-  const { error } = await client.emails.send({
+  const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: ['chris@selectuniforms.co.uk', 'james@selectuniforms.co.uk'],
     subject: `New Logo Setup Required: ${safeJobName} (${safeCustomerName})`,
@@ -223,7 +234,7 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
     ${muted(`Or paste this link into your browser: <a href="${resetUrl}" style="color:#4f46e5;">${resetUrl}</a>`)}
   `;
 
-  const { data, error } = await client.emails.send({
+  const { data, error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: email,
     subject: 'Password Reset Request – Production Manager',
@@ -271,7 +282,7 @@ export async function sendNewJobSubmissionEmail(
     ${muted('Please review and approve or reject this job within 24 hours.')}
   `;
 
-  const { data, error } = await client.emails.send({
+  const { data, error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: staffEmails,
     subject: `New Job Submission: ${safeJobName}`,
@@ -361,7 +372,7 @@ export async function sendJobApprovedEmail(
     <p style="margin:0;font-weight:600;">Select Branding Solutions</p>
   `;
 
-  const { data, error } = await client.emails.send({
+  const { data, error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmail,
     subject: `Order Acknowledgement – New Bank Details – Ref: ${orderRef}`,
@@ -412,7 +423,7 @@ export async function sendJobRejectedEmail(
     ${muted('Please use the chat feature in the job details page to discuss any questions or submit a revised order.')}
   `;
 
-  const { data, error } = await client.emails.send({
+  const { data, error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmail,
     subject: `Job Update Required: ${safeJobName}`,
@@ -449,7 +460,7 @@ export async function sendStaffMessageToCustomerEmail(
     ${ctaButton(viewUrl, 'View &amp; Reply')}
   `;
 
-  const { error } = await client.emails.send({
+  const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmail,
     subject: `New message about your order: ${safeJobName}`,
@@ -498,7 +509,7 @@ export async function sendTeamInviteEmail(
     <p style="margin:8px 0 0;">Regards,<br/><strong>Select Branding Solutions</strong></p>
   `;
 
-  const { error } = await client.emails.send({
+  const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: email,
     ...(details.isReset ? {} : { cc: ['chris@selectbranding.co.uk', 'james@selectbranding.co.uk'] }),
@@ -547,7 +558,7 @@ export async function sendNewChatEmail(
     ${muted('You can reply directly from your customer portal. If you have any questions, please don\'t hesitate to get in touch.')}
   `;
 
-  const { error } = await client.emails.send({
+  const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmails,
     subject: emailSubject,
@@ -586,7 +597,7 @@ export async function sendStaffMessageCCEmail(
     ${ctaButton(viewUrl, 'View Job')}
   `;
 
-  const { error } = await client.emails.send({
+  const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: ccEmails,
     subject: `[CC] Message to ${safeCustomerName} re: ${safeJobName}`,
@@ -626,7 +637,7 @@ export async function sendCustomerMessageNotificationEmail(
     ${muted('You are receiving this because you have email notifications enabled. You can turn them off in your profile on the Messages page.')}
   `;
 
-  const { error } = await client.emails.send({
+  const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: staffEmails,
     subject: `New customer message — ${details.jobName}`,
@@ -665,7 +676,7 @@ export async function sendCustomerDirectMessageNotificationEmail(
     ${muted('You are receiving this because you have email notifications enabled. You can turn them off in your profile on the Messages page.')}
   `;
 
-  const { error } = await client.emails.send({
+  const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: staffEmails,
     subject: `New message from ${safeName} — ${safeSubject}`,
@@ -731,7 +742,7 @@ export async function sendDemoAccessEmail(params: {
     ${companyLine}
   `;
 
-  const { error } = await client.emails.send({
+  const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: params.email,
     cc: ['chris@selectbranding.co.uk', 'james@selectuniforms.co.uk'],
@@ -786,7 +797,7 @@ export async function sendReEngagementEmail(customer: {
     </p>
   `;
 
-  const { error } = await client.emails.send({
+  const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customer.email,
     subject: `Checking in from Select Branding Solutions`,
