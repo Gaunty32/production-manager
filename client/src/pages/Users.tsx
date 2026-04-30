@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera, Eye, Copy, Check, FlaskConical } from "lucide-react";
+import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera, Eye, Copy, Check, FlaskConical, BellOff, Bell } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -303,6 +303,19 @@ export default function Users() {
         description: error.message || "Failed to update user status",
         variant: "destructive",
       });
+    },
+  });
+
+  const toggleEmailNotificationsMutation = useMutation({
+    mutationFn: async ({ userId, enabled }: { userId: string; enabled: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/users/${userId}/notification-settings`, { emailNotificationsMessages: enabled });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to update notification setting", variant: "destructive" });
     },
   });
 
@@ -677,20 +690,42 @@ export default function Users() {
                       <KeyRound className="h-4 w-4 mr-2" />
                       Set Password
                     </Button>
-                    <div className="flex items-center gap-2 ml-auto">
-                      <Label 
-                        htmlFor={`active-toggle-${user.id}`}
-                        className="text-sm cursor-pointer"
-                      >
-                        {user.active === false ? 'Activate' : 'Deactivate'}
-                      </Label>
-                      <Switch
-                        id={`active-toggle-${user.id}`}
-                        checked={user.active !== false}
-                        onCheckedChange={() => handleToggleActive(user.id, user.active !== false)}
-                        disabled={user.id === currentUser?.id || toggleActiveMutation.isPending}
-                        data-testid={`switch-active-${user.id}`}
-                      />
+                    <div className="flex items-center gap-4 ml-auto flex-wrap">
+                      <div className="flex items-center gap-2">
+                        {user.emailNotificationsMessages ? (
+                          <Bell className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <BellOff className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <Label
+                          htmlFor={`email-notif-toggle-${user.id}`}
+                          className="text-sm cursor-pointer"
+                        >
+                          Message emails
+                        </Label>
+                        <Switch
+                          id={`email-notif-toggle-${user.id}`}
+                          checked={user.emailNotificationsMessages ?? false}
+                          onCheckedChange={(enabled) => toggleEmailNotificationsMutation.mutate({ userId: user.id, enabled })}
+                          disabled={toggleEmailNotificationsMutation.isPending}
+                          data-testid={`switch-email-notif-${user.id}`}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label 
+                          htmlFor={`active-toggle-${user.id}`}
+                          className="text-sm cursor-pointer"
+                        >
+                          {user.active === false ? 'Activate' : 'Deactivate'}
+                        </Label>
+                        <Switch
+                          id={`active-toggle-${user.id}`}
+                          checked={user.active !== false}
+                          onCheckedChange={() => handleToggleActive(user.id, user.active !== false)}
+                          disabled={user.id === currentUser?.id || toggleActiveMutation.isPending}
+                          data-testid={`switch-active-${user.id}`}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

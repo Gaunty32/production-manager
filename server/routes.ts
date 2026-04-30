@@ -2715,6 +2715,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin - Update any user's email notification setting
+  app.patch("/api/users/:userId/notification-settings", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const { emailNotificationsMessages } = req.body;
+      if (typeof emailNotificationsMessages !== "boolean") {
+        return res.status(400).json({ error: "emailNotificationsMessages must be a boolean" });
+      }
+      await storage.updateUser(userId, { emailNotificationsMessages });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating user notification settings:", error);
+      res.status(500).json({ error: "Failed to update notification settings" });
+    }
+  });
+
   // Staff - Get all conversations with unread indicators
   app.get("/api/staff/conversations", isStaffAuthenticated, async (req, res) => {
     try {
