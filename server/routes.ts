@@ -45,6 +45,7 @@ import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
 import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
+import { shouldSendStaffNotification } from "./notificationThrottle";
 
 // Helper function to auto-schedule a line item when it has a machine assigned
 async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
@@ -2684,7 +2685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const staffEmailsToNotify = allStaff
             .filter(u => u.role !== 'customer' && u.active && u.emailNotificationsMessages && u.email)
             .map(u => u.email as string);
-          if (staffEmailsToNotify.length > 0 && customer) {
+          if (staffEmailsToNotify.length > 0 && customer && shouldSendStaffNotification(`job:${job.id}`)) {
             const { sendCustomerMessageNotificationEmail } = await import('./emailService.js');
             await sendCustomerMessageNotificationEmail(staffEmailsToNotify, {
               customerName: customer.name,
@@ -6009,7 +6010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const staffEmailsToNotify = allUsers
               .filter((u: any) => u.role !== 'customer' && u.active && u.emailNotificationsMessages && u.email)
               .map((u: any) => u.email as string);
-            if (staffEmailsToNotify.length > 0 && customer) {
+            if (staffEmailsToNotify.length > 0 && customer && shouldSendStaffNotification(`convo:${convo.id}`)) {
               await sendCustomerDirectMessageNotificationEmail(staffEmailsToNotify, {
                 customerName: customer.name,
                 subject: convo.subject,
@@ -6129,7 +6130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const staffEmailsToNotify = allUsers
             .filter((u: any) => u.role !== 'customer' && u.active && u.emailNotificationsMessages && u.email)
             .map((u: any) => u.email as string);
-          if (staffEmailsToNotify.length > 0 && customer) {
+          if (staffEmailsToNotify.length > 0 && customer && shouldSendStaffNotification(`convo:${req.params.id}`)) {
             await sendCustomerDirectMessageNotificationEmail(staffEmailsToNotify, {
               customerName: customer.name,
               subject: convo.subject,
