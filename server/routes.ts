@@ -43,7 +43,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 
@@ -1969,6 +1969,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating invite:", error);
       res.status(500).json({ error: "Failed to send invite" });
+    }
+  });
+
+  // Send mobile app guide email to a customer portal user
+  app.post("/api/customer-users/:id/send-mobile-guide", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const user = await storage.getCustomerUserById(id);
+      if (!user) return res.status(404).json({ error: "Customer user not found" });
+
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === user.customerId);
+
+      await sendMobileGuideEmail({
+        to: user.email,
+        firstName: user.firstName ?? null,
+        companyName: customer?.name ?? null,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error sending mobile guide:", error);
+      res.status(500).json({ error: "Failed to send mobile guide email" });
     }
   });
 

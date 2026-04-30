@@ -1,4 +1,4 @@
-import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail, Send, Clock, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail, Send, Clock, ChevronDown, ChevronUp, RefreshCw, Smartphone } from "lucide-react";
 import { DemoText } from "@/components/DemoText";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,7 @@ export default function Customers() {
   const [editingPortalUser, setEditingPortalUser] = useState<{ id: string; email: string; firstName: string; lastName: string } | null>(null);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState<string | null>(null); // userId being actioned
   const [isSendingReset, setIsSendingReset] = useState<string | null>(null); // userId being reset
+  const [isSendingMobileGuide, setIsSendingMobileGuide] = useState<string | null>(null); // userId being actioned
   const [showReEngagement, setShowReEngagement] = useState(false);
 
   const { data: dormantData, isLoading: isLoadingDormant, refetch: refetchDormant } = useQuery<{
@@ -195,6 +196,18 @@ export default function Customers() {
       toast({ title: "Failed to send reset link", variant: "destructive" });
     } finally {
       setIsSendingReset(null);
+    }
+  };
+
+  const handleSendMobileGuide = async (portalUserId: string) => {
+    setIsSendingMobileGuide(portalUserId);
+    try {
+      await apiRequest("POST", `/api/customer-users/${portalUserId}/send-mobile-guide`);
+      toast({ title: "Mobile guide sent", description: "Instructions for saving the app to their home screen have been emailed." });
+    } catch {
+      toast({ title: "Failed to send mobile guide", variant: "destructive" });
+    } finally {
+      setIsSendingMobileGuide(null);
     }
   };
 
@@ -821,6 +834,17 @@ export default function Customers() {
                                     </span>
                                   )}
                                 </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-xs text-violet-600 dark:text-violet-400"
+                                  onClick={() => handleSendMobileGuide(portalUser.id)}
+                                  disabled={isSendingMobileGuide === portalUser.id}
+                                  data-testid={`button-send-mobile-guide-${portalUser.id}`}
+                                >
+                                  <Smartphone className="h-3 w-3 mr-1" />
+                                  {isSendingMobileGuide === portalUser.id ? "Sending…" : "Send App Guide"}
+                                </Button>
                                 <div className="flex items-center gap-1.5 ml-auto">
                                   <span className="text-xs text-muted-foreground">Access</span>
                                   <Switch

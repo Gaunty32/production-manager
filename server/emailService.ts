@@ -808,3 +808,79 @@ export async function sendReEngagementEmail(customer: {
     throw new Error(`Failed to send re-engagement email to ${customer.email}: ${JSON.stringify(error)}`);
   }
 }
+
+export async function sendMobileGuideEmail(params: {
+  to: string;
+  firstName: string | null;
+  companyName: string | null;
+}) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const safeName = sanitizeHtml(params.firstName);
+  const safeCompany = sanitizeHtml(params.companyName);
+  const portalUrl = `${getBaseUrl()}/customer/login`;
+  const greeting = safeName ? `Hi ${safeName},` : 'Hello,';
+
+  const stepStyle = `padding:10px 14px;margin:0;border-bottom:1px solid #e4e4e7;`;
+  const stepNumStyle = `display:inline-block;background:#4f46e5;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:10px;flex-shrink:0;`;
+  const platformHeading = `font-size:15px;font-weight:700;color:#18181b;margin:20px 0 4px;`;
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">
+      Use Production Planner on your phone
+    </h2>
+    <p style="margin:0 0 12px;">${greeting}</p>
+    <p style="margin:0 0 20px;">
+      The <strong>${safeCompany ? safeCompany + ' ' : ''}Production Planner</strong> portal works as a fully-featured app on your phone — no app store download required. You can check your order status, send messages, and submit new jobs right from your home screen.
+    </p>
+
+    ${divider}
+
+    <p style="${platformHeading}">iPhone &amp; iPad (Safari)</p>
+    <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e4e4e7;border-radius:6px;border-collapse:collapse;margin:12px 0 20px;">
+      <tr><td style="${stepStyle}"><span style="${stepNumStyle}">1</span>Open <strong>Safari</strong> and go to the portal link below</td></tr>
+      <tr><td style="${stepStyle}"><span style="${stepNumStyle}">2</span>Tap the <strong>Share</strong> button at the bottom of the screen (the square with an arrow pointing up)</td></tr>
+      <tr><td style="${stepStyle}"><span style="${stepNumStyle}">3</span>Scroll down the share sheet and tap <strong>"Add to Home Screen"</strong></td></tr>
+      <tr><td style="padding:10px 14px;margin:0;"><span style="${stepNumStyle}">4</span>Tap <strong>"Add"</strong> in the top-right corner — the app icon will appear on your home screen</td></tr>
+    </table>
+    <p style="color:#71717a;font-size:13px;margin:0 0 8px;">
+      Note: This must be done in <strong>Safari</strong> — it will not work from Chrome or other browsers on iOS. Requires iOS 16.4 or later for push notifications.
+    </p>
+
+    ${divider}
+
+    <p style="${platformHeading}">Android (Chrome)</p>
+    <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e4e4e7;border-radius:6px;border-collapse:collapse;margin:12px 0 20px;">
+      <tr><td style="${stepStyle}"><span style="${stepNumStyle}">1</span>Open <strong>Chrome</strong> and go to the portal link below</td></tr>
+      <tr><td style="${stepStyle}"><span style="${stepNumStyle}">2</span>Tap the <strong>three-dot menu</strong> (&#8942;) in the top-right corner</td></tr>
+      <tr><td style="${stepStyle}"><span style="${stepNumStyle}">3</span>Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></td></tr>
+      <tr><td style="padding:10px 14px;margin:0;"><span style="${stepNumStyle}">4</span>Tap <strong>"Add"</strong> to confirm — the app icon will appear on your home screen</td></tr>
+    </table>
+
+    ${divider}
+
+    <p style="margin:0 0 8px;font-weight:600;color:#18181b;">What you can do in the app:</p>
+    <ul style="margin:0 0 20px;padding-left:20px;color:#3f3f46;line-height:2;">
+      <li>Track the live status of all your orders in production</li>
+      <li>Send and receive messages directly with the team</li>
+      <li>Submit new job requests</li>
+      <li>View invoices and documents</li>
+    </ul>
+
+    ${ctaButton(portalUrl, 'Open the Portal')}
+
+    ${divider}
+    <p style="margin:8px 0 0;">If you have any trouble getting set up, just reply to this email or send us a message through the portal and we will help.</p>
+    <p style="margin:12px 0 0;">Best regards,<br/><strong>Select Branding Solutions</strong></p>
+  `;
+
+  const { error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: params.to,
+    subject: 'How to use Production Planner on your phone',
+    html: brandedEmail(body),
+  });
+
+  if (error) {
+    throw new Error(`Failed to send mobile guide email to ${params.to}: ${JSON.stringify(error)}`);
+  }
+}
