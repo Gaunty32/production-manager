@@ -47,6 +47,14 @@ import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 
+
+// ─── Base URL helper ──────────────────────────────────────────────────────────
+function getBaseUrl() {
+  if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
+  if (process.env.REPLIT_DOMAINS) return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
+  return 'http://localhost:5000';
+}
+
 // Helper function to auto-schedule a line item when it has a machine assigned
 async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -516,9 +524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserRole(existing.id, "demo");
         await storage.updateUserActive(existing.id, true);
       }
-      const baseUrl = process.env.REPLIT_DOMAINS
-        ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-        : "http://localhost:5000";
+      const baseUrl = getBaseUrl();
       await sendDemoAccessEmail({
         firstName: data.firstName,
         lastName: data.lastName,
@@ -856,9 +862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const token = await requestPasswordReset({ email: user.email });
-      const baseUrl = process.env.REPLIT_DOMAINS
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-        : 'http://localhost:5000';
+      const baseUrl = getBaseUrl();
       const resetUrl = `${baseUrl}/reset-password?token=${token}`;
 
       try {
@@ -1561,9 +1565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Send invite email
       try {
-        const baseUrl = process.env.REPLIT_DOMAINS
-          ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-          : 'http://localhost:5000';
+        const baseUrl = getBaseUrl();
         await sendTeamInviteEmail(data.email, {
           firstName: data.firstName ?? null,
           inviterName,
@@ -1753,9 +1755,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customer = customers.find(c => c.id === user.customerId);
       const companyName = customer?.name || 'Select Branding Solutions';
 
-      const baseUrl = process.env.REPLIT_DOMAINS
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-        : 'http://localhost:5000';
+      const baseUrl = getBaseUrl();
 
       await sendTeamInviteEmail(user.email, {
         firstName: user.firstName ?? null,
@@ -1911,9 +1911,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customer = customers.find(c => c.id === user.customerId);
       const companyName = customer?.name || 'Select Branding';
 
-      const baseUrl = process.env.REPLIT_DOMAINS
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-        : 'http://localhost:5000';
+      const baseUrl = getBaseUrl();
 
       await sendTeamInviteEmail(user.email, {
         firstName: user.firstName ?? null,
@@ -1951,9 +1949,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customer = customers.find(c => c.id === user.customerId);
       const companyName = customer?.name || 'Select Branding';
 
-      const baseUrl = process.env.REPLIT_DOMAINS
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-        : 'http://localhost:5000';
+      const baseUrl = getBaseUrl();
 
       await sendTeamInviteEmail(user.email, {
         firstName: user.firstName ?? null,
@@ -3029,9 +3025,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .filter((u) => u.emailNotificationsMessages)
             .map((u) => u.email).filter(Boolean) as string[];
           if (emails.length) {
-            const baseUrl = process.env.REPLIT_DOMAINS
-              ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-              : 'http://localhost:5000';
+            const baseUrl = getBaseUrl();
             const portalUrl = `${baseUrl}/customer/job/${job.id}`;
             await sendNewChatEmail(emails, {
               staffName: senderName,
@@ -5874,9 +5868,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               .filter((u: any) => u.emailNotificationsMessages)
               .map((u: any) => u.email).filter(Boolean) as string[];
             if (emails.length) {
-              const baseUrl = process.env.REPLIT_DOMAINS
-                ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-                : 'http://localhost:5000';
+              const baseUrl = getBaseUrl();
               await sendNewChatEmail(emails, {
                 staffName: senderName,
                 subject: convo.subject,
@@ -5924,9 +5916,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .filter((u) => u.emailNotificationsMessages)
             .map((u) => u.email).filter(Boolean) as string[];
           if (emails.length) {
-            const baseUrl = process.env.REPLIT_DOMAINS
-              ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-              : 'http://localhost:5000';
+            const baseUrl = getBaseUrl();
             await sendNewChatEmail(emails, {
               staffName: senderName,
               subject: convo.subject,
@@ -6438,9 +6428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const customer = customers.find(c => c.id === currentUser.customerId);
         const companyName = customer?.name || "Select Branding";
         const inviterName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ") || currentUser.email;
-        const baseUrl = process.env.REPLIT_DOMAINS
-          ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-          : 'http://localhost:5000';
+        const baseUrl = getBaseUrl();
         await sendTeamInviteEmail(email, {
           firstName: firstName || null,
           inviterName,
@@ -6482,9 +6470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customer = customers.find(c => c.id === currentUser.customerId);
       const companyName = customer?.name || "Select Branding";
       const inviterName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ") || currentUser.email;
-      const baseUrl = process.env.REPLIT_DOMAINS
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-        : 'http://localhost:5000';
+      const baseUrl = getBaseUrl();
       await sendTeamInviteEmail(target.email, {
         firstName: target.firstName || null,
         inviterName,

@@ -69,9 +69,9 @@ async function sendEmail(
 }
 
 function getBaseUrl() {
-  return process.env.REPLIT_DOMAINS
-    ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-    : 'http://localhost:5000';
+  if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
+  if (process.env.REPLIT_DOMAINS) return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
+  return 'http://localhost:5000';
 }
 
 // ─── Branded email wrapper ────────────────────────────────────────────────────
