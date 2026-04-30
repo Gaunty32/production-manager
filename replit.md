@@ -1,6 +1,6 @@
 # Overview
 
-This application is a comprehensive production management system for manufacturing, featuring both staff and customer portals. It is designed to streamline operations, improve efficiency, and enhance customer satisfaction by tracking customer orders, scheduling machines, and managing dispatch deadlines. The system provides operational transparency and includes capabilities for multi-line item job tracking, robust scheduling integrated with machine and staff availability, and detailed production metrics. Its ambition is to offer a complete solution for the entire production lifecycle, from order submission to invoicing and customer communication, aiming for significant market potential in the manufacturing sector.
+**Production Planner** — a comprehensive production management system for manufacturing by Select Branding Solutions, featuring both staff and customer portals. It is designed to streamline operations, improve efficiency, and enhance customer satisfaction by tracking customer orders, scheduling machines, and managing dispatch deadlines. The system provides operational transparency and includes capabilities for multi-line item job tracking, robust scheduling integrated with machine and staff availability, and detailed production metrics. Its ambition is to offer a complete solution for the entire production lifecycle, from order submission to invoicing and customer communication, aiming for significant market potential in the manufacturing sector.
 
 # User Preferences
 

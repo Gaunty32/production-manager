@@ -1,7 +1,7 @@
 {
-  "name": "Select Branding Solutions",
-  "short_name": "Select",
-  "description": "Track your orders and manage your account with Select Branding Solutions.",
+  "name": "Production Planner",
+  "short_name": "Planner",
+  "description": "Track your orders and manage your account with Select Branding Solutions — Production Planner.",
   "start_url": "/customer/dashboard",
   "scope": "/",
   "display": "standalone",
@@ -9,6 +9,16 @@
   "theme_color": "#4f46e5",
   "orientation": "any",
   "icons": [
+    {
+      "src": "/icons/icon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-apple.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
     {
       "src": "/icons/icon-192.png",
       "sizes": "192x192",
