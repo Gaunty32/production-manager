@@ -1417,8 +1417,8 @@ export default function StaffMessages() {
                   onChange={handleMessageChange}
                   onKeyDown={handleKeyDown}
                   onPaste={handlePaste}
-                  rows={2}
-                  className={`resize-none text-sm w-full ${isInternal ? "border-amber-300 focus-visible:ring-amber-400 dark:border-amber-700" : ""}`}
+                  autoResize
+                  className={`text-sm w-full ${isInternal ? "border-amber-300 focus-visible:ring-amber-400 dark:border-amber-700" : ""}`}
                   data-testid="input-staff-message"
                 />
               </div>
@@ -1620,7 +1620,7 @@ export default function StaffMessages() {
                 <label className="text-sm font-medium mb-1.5 block">Message *</label>
                 <Textarea
                   placeholder="Type your message…"
-                  rows={3}
+                  autoResize
                   value={msgExistingText}
                   onChange={e => setMsgExistingText(e.target.value)}
                   data-testid="input-msg-existing-text"
@@ -1702,7 +1702,7 @@ export default function StaffMessages() {
               </div>
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Message *</label>
-                <Textarea placeholder="Type your opening message…" rows={3} value={newOrderMessage} onChange={e => setNewOrderMessage(e.target.value)} data-testid="input-order-chat-message" />
+                <Textarea placeholder="Type your opening message…" autoResize value={newOrderMessage} onChange={e => setNewOrderMessage(e.target.value)} data-testid="input-order-chat-message" />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Attachments</label>
@@ -1782,7 +1782,7 @@ export default function StaffMessages() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">First message (optional)</label>
-              <Textarea placeholder="Type your opening message…" rows={3} value={newFirstMessage} onChange={e => setNewFirstMessage(e.target.value)} data-testid="input-convo-first-message" />
+              <Textarea placeholder="Type your opening message…" autoResize value={newFirstMessage} onChange={e => setNewFirstMessage(e.target.value)} data-testid="input-convo-first-message" />
             </div>
           </div>
           <DialogFooter>

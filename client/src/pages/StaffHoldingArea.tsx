@@ -403,8 +403,8 @@ export default function StaffHoldingArea() {
                           value={noteText}
                           onChange={(e) => setNoteText(e.target.value)}
                           placeholder="Add an internal note..."
-                          className="text-sm resize-none"
-                          rows={3}
+                          className="text-sm"
+                          autoResize
                           autoFocus
                           data-testid={`textarea-note-${job.id}`}
                         />
@@ -468,8 +468,8 @@ export default function StaffHoldingArea() {
                               value={noteText}
                               onChange={(e) => setNoteText(e.target.value)}
                               placeholder="Add an internal note..."
-                              className="text-sm resize-none"
-                              rows={3}
+                              className="text-sm"
+                              autoResize
                               data-testid={`textarea-note-mobile-${job.id}`}
                             />
                             <div className="flex gap-2 justify-end">
@@ -763,7 +763,7 @@ export default function StaffHoldingArea() {
                 placeholder="e.g., Incomplete information, out of scope, etc."
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
-                rows={3}
+                autoResize
                 data-testid="input-rejection-reason"
               />
             </div>
@@ -773,7 +773,7 @@ export default function StaffHoldingArea() {
                 placeholder="Add any additional context or instructions..."
                 value={rejectionMessage}
                 onChange={(e) => setRejectionMessage(e.target.value)}
-                rows={3}
+                autoResize
                 data-testid="input-rejection-message"
               />
             </div>

@@ -463,7 +463,7 @@ export default function StaffJobDetail() {
                       <Textarea
                         value={editedJob.deliveryAddress}
                         onChange={(e) => setEditedJob({ ...editedJob, deliveryAddress: e.target.value })}
-                        rows={3}
+                        autoResize
                         placeholder="Delivery address"
                         data-testid="input-edit-delivery-address"
                       />
@@ -850,7 +850,7 @@ export default function StaffJobDetail() {
                 placeholder="Add any additional details for the customer..."
                 value={rejectionMessage}
                 onChange={(e) => setRejectionMessage(e.target.value)}
-                rows={4}
+                autoResize
                 data-testid="input-rejection-message"
               />
             </div>

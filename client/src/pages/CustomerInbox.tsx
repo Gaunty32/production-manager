@@ -1063,7 +1063,7 @@ export default function CustomerInbox() {
               <label className="text-sm font-medium mb-1.5 block">Message (optional)</label>
               <Textarea
                 placeholder="Type your message…"
-                rows={3}
+                autoResize
                 value={newFirstMessage}
                 onChange={e => setNewFirstMessage(e.target.value)}
                 data-testid="input-convo-message"
@@ -1134,7 +1134,7 @@ export default function CustomerInbox() {
               <label className="text-sm font-medium mb-1.5 block">Message (optional)</label>
               <Textarea
                 placeholder="Type your first message…"
-                rows={3}
+                autoResize
                 value={newJobChatMessage}
                 onChange={e => setNewJobChatMessage(e.target.value)}
                 data-testid="input-new-job-chat-message"

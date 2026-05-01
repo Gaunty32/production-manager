@@ -437,7 +437,7 @@ export default function CustomerSubmitJob() {
                       <FormControl>
                         <Textarea
                           placeholder="Leave blank to use your default address"
-                          rows={3}
+                          autoResize
                           {...field}
                           data-testid="input-delivery-address"
                         />
