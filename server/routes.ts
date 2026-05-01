@@ -43,7 +43,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 
@@ -1757,6 +1757,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description,
         reference
       );
+
+      // Send receipt email if charge succeeded
+      if (chargeResult.success) {
+        try {
+          await sendPaymentReceiptEmail({
+            customerEmail: customerUser.email,
+            customerName: customer.name || customerUser.email,
+            reference,
+            subtotal,
+            vatAmount,
+            totalIncVat,
+            lineItems: lineItemDetails,
+            paymentIntentId: chargeResult.paymentIntentId,
+          });
+        } catch (emailErr) {
+          console.error("Failed to send payment receipt email:", emailErr);
+        }
+      }
 
       res.json({ chargeResult, subtotal, vatAmount, totalIncVat, lineItemDetails, reference });
     } catch (error: any) {

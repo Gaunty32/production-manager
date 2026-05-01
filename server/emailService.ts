@@ -886,3 +886,81 @@ export async function sendMobileGuideEmail(params: {
     throw new Error(`Failed to send mobile guide email to ${params.to}: ${JSON.stringify(error)}`);
   }
 }
+
+export async function sendPaymentReceiptEmail(params: {
+  customerEmail: string;
+  customerName: string;
+  reference: string;
+  subtotal: number;
+  vatAmount: number;
+  totalIncVat: number;
+  lineItems: { jobName: string; jobType: string; quantity: number; price: number }[];
+  paymentIntentId?: string;
+}) {
+  const { client, fromEmail } = await getUncachableResendClient();
+
+  const itemRows = params.lineItems.map(li => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e7;font-size:14px;color:#18181b;">${sanitizeHtml(li.jobName)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e7;font-size:14px;color:#3f3f46;">${sanitizeHtml(li.jobType)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e7;font-size:14px;color:#3f3f46;text-align:center;">${li.quantity}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e7;font-size:14px;color:#18181b;text-align:right;">£${li.price.toFixed(2)}</td>
+    </tr>
+  `).join('');
+
+  const body = `
+    <p style="margin:0 0 12px;">Hi ${sanitizeHtml(params.customerName)},</p>
+    <p style="margin:0 0 20px;">Thank you — your payment has been received. Please find your receipt below.</p>
+
+    <div style="background-color:#f4f4f5;border-radius:6px;padding:16px 20px;margin:0 0 20px;">
+      <p style="margin:0 0 4px;font-size:13px;color:#71717a;">Payment reference</p>
+      <p style="margin:0;font-size:15px;font-weight:700;color:#18181b;font-family:monospace;">${sanitizeHtml(params.reference)}</p>
+      ${params.paymentIntentId ? `<p style="margin:4px 0 0;font-size:12px;color:#a1a1aa;">Stripe: ${sanitizeHtml(params.paymentIntentId)}</p>` : ''}
+    </div>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+      <thead>
+        <tr style="background-color:#f4f4f5;">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:0.05em;">Job</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:0.05em;">Type</th>
+          <th style="padding:8px 12px;text-align:center;font-size:12px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:0.05em;">Qty</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:0.05em;">Price ex. VAT</th>
+        </tr>
+      </thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;max-width:320px;margin-left:auto;">
+      <tr>
+        <td style="padding:4px 0;font-size:14px;color:#71717a;">Subtotal ex. VAT</td>
+        <td style="padding:4px 0;font-size:14px;color:#18181b;text-align:right;">£${params.subtotal.toFixed(2)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 0;font-size:14px;color:#71717a;">VAT (20%)</td>
+        <td style="padding:4px 0;font-size:14px;color:#18181b;text-align:right;">£${params.vatAmount.toFixed(2)}</td>
+      </tr>
+      <tr style="border-top:2px solid #e4e4e7;">
+        <td style="padding:8px 0 4px;font-size:15px;font-weight:700;color:#18181b;">Total paid</td>
+        <td style="padding:8px 0 4px;font-size:15px;font-weight:700;color:#18181b;text-align:right;">£${params.totalIncVat.toFixed(2)}</td>
+      </tr>
+    </table>
+
+    ${divider}
+    <p style="margin:0 0 4px;font-size:13px;color:#71717a;">Note: carriage charges are invoiced separately.</p>
+    ${divider}
+    <p style="margin:0 0 2px;">Regards,</p>
+    <p style="margin:0;font-weight:600;">Select Branding Solutions</p>
+  `;
+
+  const { error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: params.customerEmail,
+    cc: 'accounts@selectuniforms.co.uk',
+    subject: `Payment Receipt — ${params.reference}`,
+    html: brandedEmail(body),
+  });
+
+  if (error) {
+    console.error('Failed to send payment receipt email:', error);
+  }
+}
