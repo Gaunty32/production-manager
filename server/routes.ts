@@ -2255,19 +2255,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!customerUser) {
         return res.status(404).json({ error: "Customer user not found" });
       }
+
+      // Determine customer's pricing table
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === customerUser.customerId);
+      const pricingTable = customer?.pricingTable2026 ? "2026" : customer?.pricingTable2025 ? "2025" : null;
       
       // Get all jobs for this customer except those pending approval
       // pending_customer_approval jobs are shown in a separate "Pending Submissions" page
       const jobs = await storage.getJobsByCustomerId(customerUser.customerId);
       const visibleJobs = jobs.filter(j => j.status !== 'pending_customer_approval');
       
-      // Get line items for each job
+      // Get line items for each job and calculate estimated prices
       const jobsWithLineItems = await Promise.all(
         visibleJobs.map(async (job) => {
           const lineItems = await storage.getJobLineItems(job.id);
+
+          // Calculate estimated price per line item (based on submitted qty/stitch count)
+          let lineItemPrices: (number | "POA")[] = lineItems.map(() => "POA");
+          if (pricingTable) {
+            try {
+              const priceResult = calculateJobPrice(
+                lineItems.map(li => ({ quantity: li.quantity, stitchCount: li.stitchCount || 0, jobType: li.jobType || undefined })),
+                pricingTable
+              );
+              lineItemPrices = priceResult.lineItemPrices.map(p => p.totalPrice);
+            } catch {}
+          }
+
           return {
             ...job,
-            lineItems,
+            lineItems: lineItems.map((li, i) => ({
+              ...li,
+              estimatedPrice: lineItemPrices[i] ?? null,
+            })),
+            pricingTable,
           };
         })
       );

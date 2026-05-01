@@ -141,6 +141,7 @@ type LineItem = {
   machineId: number | null;
   completed: boolean;
   logoApproved: boolean;
+  estimatedPrice: number | "POA" | null;
 };
 
 type Job = {
@@ -381,6 +382,14 @@ export default function CustomerDashboard() {
 
   const handleLogout = () => {
     logoutMutation.mutate();
+  };
+
+  const VAT_RATE = 1.2;
+  const formatEstimatedCost = (price: number | "POA" | null): string => {
+    if (price === null) return "—";
+    if (price === "POA") return "POA";
+    const incVat = price * VAT_RATE;
+    return `£${incVat.toFixed(2)}`;
   };
 
   const getStatusBadge = (job: Job) => {
@@ -803,7 +812,7 @@ export default function CustomerDashboard() {
                           <p className="text-sm font-semibold">Line Items:</p>
                           {lineItems.map((lineItem, index) => (
                             <div key={lineItem.id} className="bg-muted/50 rounded-lg p-3">
-                              <div className="flex items-start justify-between">
+                              <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1">
                                   <p className="font-medium text-sm">{lineItem.jobType}</p>
                                   {lineItem.description && (
@@ -812,10 +821,20 @@ export default function CustomerDashboard() {
                                     </p>
                                   )}
                                 </div>
-                                <p className="text-sm font-semibold ml-2">Qty: {lineItem.quantity}</p>
+                                <div className="text-right shrink-0">
+                                  <p className="text-sm font-semibold">Qty: {lineItem.quantity}</p>
+                                  {lineItem.estimatedPrice !== null && lineItem.estimatedPrice !== undefined && (
+                                    <p className="text-sm font-semibold text-primary">
+                                      {formatEstimatedCost(lineItem.estimatedPrice)}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           ))}
+                          <p className="text-[11px] text-muted-foreground">
+                            Estimated costs include VAT and are based on the quantity and stitch count provided. Final invoice may differ if these change. Carriage is charged separately.
+                          </p>
                         </div>
                       ) : (
                         <div className="text-sm text-muted-foreground">
@@ -862,6 +881,12 @@ export default function CustomerDashboard() {
                       <div className="flex items-center justify-end">
                         Quantity
                         <SortIndicator column="quantity" />
+                      </div>
+                    </TableHead>
+                    <TableHead className="text-right" data-testid="header-cost">
+                      <div className="flex flex-col items-end leading-tight">
+                        <span>Est. Cost</span>
+                        <span className="text-[10px] font-normal text-muted-foreground">(inc. VAT, exc. carriage)</span>
                       </div>
                     </TableHead>
                     <TableHead 
@@ -919,6 +944,7 @@ export default function CustomerDashboard() {
                           </TableCell>
                           <TableCell className="text-muted-foreground">—</TableCell>
                           <TableCell className="text-right">{job.quantity}</TableCell>
+                          <TableCell className="text-right text-muted-foreground text-sm">—</TableCell>
                           <TableCell data-testid={`text-dispatch-${job.id}`}>
                             {job.requiredDispatchDate
                               ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
@@ -975,6 +1001,15 @@ export default function CustomerDashboard() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">{lineItem.quantity}</TableCell>
+                        <TableCell className="text-right" data-testid={`text-cost-${lineItem.id}`}>
+                          {lineItem.estimatedPrice !== null && lineItem.estimatedPrice !== undefined ? (
+                            <span className={lineItem.estimatedPrice === "POA" ? "text-muted-foreground text-sm" : "font-medium"}>
+                              {formatEstimatedCost(lineItem.estimatedPrice)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </TableCell>
                         <TableCell data-testid={`text-dispatch-${job.id}-${index}`}>
                           {job.requiredDispatchDate
                             ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
@@ -1006,6 +1041,9 @@ export default function CustomerDashboard() {
               </Table>
             </div>
           </Card>
+          <p className="hidden md:block text-xs text-muted-foreground mt-2 px-1">
+            Estimated costs include VAT (20%) and are based on the quantity and stitch count provided at submission. The final invoice may differ if quantities or stitch counts change after production. Carriage is charged separately based on number of boxes.
+          </p>
           </>
         )}
       </main>
