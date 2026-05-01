@@ -195,7 +195,7 @@ export async function sendNewLogoSetupEmail(params: {
   const { client, fromEmail } = await getUncachableResendClient();
   const safeCustomerName = sanitizeHtml(params.customerName);
   const safeJobName = sanitizeHtml(params.jobName);
-  const viewUrl = `${getBaseUrl()}/dashboard/holding-area`;
+  const viewUrl = `${getBaseUrl()}/holding-area`;
 
   const body = `
     <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Digitising Required</h2>
@@ -261,7 +261,7 @@ export async function sendNewJobSubmissionEmail(
   }
 ) {
   const { client, fromEmail } = await getUncachableResendClient();
-  const viewUrl = `${getBaseUrl()}/dashboard/holding-area`;
+  const viewUrl = `${getBaseUrl()}/holding-area`;
 
   const safeJobName = sanitizeHtml(jobDetails.jobName);
   const safeCustomerName = sanitizeHtml(jobDetails.customerName);
