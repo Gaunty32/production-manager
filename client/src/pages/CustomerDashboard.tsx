@@ -829,12 +829,8 @@ export default function CustomerDashboard() {
                                   )}
                                 </div>
                                 <div className="text-right shrink-0">
-                                  <p className="text-sm font-semibold">Qty: {lineItem.quantity}</p>
-                                  {lineItem.estimatedPrice !== null && lineItem.estimatedPrice !== undefined && (
-                                    <p className="text-sm font-semibold text-primary">
-                                      {formatEstimatedCost(lineItem.estimatedPrice)}
-                                    </p>
-                                  )}
+                                  <p className="text-sm font-semibold mb-1">Qty: {lineItem.quantity}</p>
+                                  <EstimatedCostCell price={lineItem.estimatedPrice} />
                                 </div>
                               </div>
                             </div>
@@ -1009,13 +1005,7 @@ export default function CustomerDashboard() {
                         </TableCell>
                         <TableCell className="text-right">{lineItem.quantity}</TableCell>
                         <TableCell className="text-right" data-testid={`text-cost-${lineItem.id}`}>
-                          {lineItem.estimatedPrice !== null && lineItem.estimatedPrice !== undefined ? (
-                            <span className={lineItem.estimatedPrice === "POA" ? "text-muted-foreground text-sm" : "font-medium"}>
-                              {formatEstimatedCost(lineItem.estimatedPrice)}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">—</span>
-                          )}
+                          <EstimatedCostCell price={lineItem.estimatedPrice} />
                         </TableCell>
                         <TableCell data-testid={`text-dispatch-${job.id}-${index}`}>
                           {job.requiredDispatchDate
