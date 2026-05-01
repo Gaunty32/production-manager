@@ -384,12 +384,19 @@ export default function CustomerDashboard() {
     logoutMutation.mutate();
   };
 
-  const VAT_RATE = 1.2;
-  const formatEstimatedCost = (price: number | "POA" | null): string => {
-    if (price === null) return "—";
-    if (price === "POA") return "POA";
-    const incVat = price * VAT_RATE;
-    return `£${incVat.toFixed(2)}`;
+  const VAT_RATE = 0.2;
+  const EstimatedCostCell = ({ price }: { price: number | "POA" | null | undefined }) => {
+    if (price === null || price === undefined) return <span className="text-muted-foreground text-sm">—</span>;
+    if (price === "POA") return <span className="text-muted-foreground text-sm">POA</span>;
+    const vatAmount = price * VAT_RATE;
+    const total = price + vatAmount;
+    return (
+      <div className="text-right leading-snug">
+        <div className="text-xs text-muted-foreground">£{price.toFixed(2)} ex. VAT</div>
+        <div className="text-xs text-muted-foreground">+ £{vatAmount.toFixed(2)} VAT</div>
+        <div className="font-semibold text-sm">£{total.toFixed(2)}</div>
+      </div>
+    );
   };
 
   const getStatusBadge = (job: Job) => {
@@ -944,7 +951,7 @@ export default function CustomerDashboard() {
                           </TableCell>
                           <TableCell className="text-muted-foreground">—</TableCell>
                           <TableCell className="text-right">{job.quantity}</TableCell>
-                          <TableCell className="text-right text-muted-foreground text-sm">—</TableCell>
+                          <TableCell className="text-right"><EstimatedCostCell price={null} /></TableCell>
                           <TableCell data-testid={`text-dispatch-${job.id}`}>
                             {job.requiredDispatchDate
                               ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
