@@ -198,20 +198,22 @@ export async function sendNewLogoSetupEmail(params: {
   const viewUrl = `${getBaseUrl()}/dashboard/holding-area`;
 
   const body = `
-    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">New Logo Setup Required</h2>
-    <p style="margin:0 0 12px;">A customer has submitted a new job and indicated that it requires a <strong>new logo setup</strong>.</p>
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Digitising Required</h2>
+    <p style="margin:0 0 12px;">A customer has submitted a new job and indicated that it requires <strong>digitising</strong> (new logo setup).</p>
     ${infoTable([
       { label: 'Customer', value: safeCustomerName },
       { label: 'Job Name', value: safeJobName },
+      { label: 'Charge', value: '£12.00' },
+      { label: 'Lead Time', value: '48 hours for sample' },
     ])}
     ${ctaButton(viewUrl, 'View in Holding Area')}
-    ${muted('Please set up the logo before this job enters production.')}
+    ${muted('Please set up the logo and send a sample to the customer before this job enters production.')}
   `;
 
   const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: ['chris@selectuniforms.co.uk', 'james@selectuniforms.co.uk'],
-    subject: `New Logo Setup Required: ${safeJobName} (${safeCustomerName})`,
+    subject: `Digitising Required: ${safeJobName} (${safeCustomerName})`,
     html: brandedEmail(body),
   });
 

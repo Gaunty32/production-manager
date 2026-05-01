@@ -351,8 +351,8 @@ export default function CustomerSubmitJob() {
                           >
                             <Sparkles className={`h-5 w-5 mt-0.5 shrink-0 ${field.value === "new_logo" ? "text-primary" : "text-muted-foreground"}`} />
                             <div>
-                              <p className="font-medium text-sm text-foreground">New Logo</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">This is a new logo that our team will need to set up</p>
+                              <p className="font-medium text-sm text-foreground">Digitising Required</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">New logo setup — £12 charge, allow 48 hours for a sample</p>
                             </div>
                           </button>
                         </div>
