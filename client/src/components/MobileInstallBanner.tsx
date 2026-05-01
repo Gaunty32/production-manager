@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 
 interface MobileInstallBannerProps {
   variant?: "banner" | "card";
+  description?: string;
 }
 
-export function MobileInstallBanner({ variant = "banner" }: MobileInstallBannerProps) {
+export function MobileInstallBanner({ variant = "banner", description }: MobileInstallBannerProps) {
   const { state, install, dismiss } = usePwaInstall();
 
   // Don't show if already installed, unsupported, or dismissed
@@ -14,18 +15,20 @@ export function MobileInstallBanner({ variant = "banner" }: MobileInstallBannerP
 
   const isIos = state === "ios";
 
+  const defaultDescription = description ?? "Get quick access to your orders and messages — no App Store needed.";
+
   const content = isIos ? {
     title: "Add to Home Screen",
     body: (
       <>
         Tap <Share className="inline h-3.5 w-3.5 mx-0.5 text-blue-500" /> then{" "}
-        <span className="font-medium">Add to Home Screen</span> for quick access to your orders.
+        <span className="font-medium">Add to Home Screen</span> for quick access.
       </>
     ),
     action: null,
   } : {
     title: "Install the app",
-    body: "Get quick access to your orders and messages — no App Store needed.",
+    body: defaultDescription,
     action: (
       <Button size="sm" onClick={install} data-testid="button-pwa-install">
         <Download className="h-3.5 w-3.5 mr-1.5" />

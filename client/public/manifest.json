@@ -2,7 +2,7 @@
   "name": "Production Planner",
   "short_name": "Planner",
   "description": "Track your orders and manage your account with Select Branding Solutions — Production Planner.",
-  "start_url": "/customer/dashboard",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",

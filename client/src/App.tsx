@@ -52,6 +52,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { DemoModeContext } from "@/lib/demoMode";
 import { FlaskConical } from "lucide-react";
+import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isLoading } = useAuth();
@@ -241,6 +242,9 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
             </main>
           </div>
         </div>
+        {!isDemoMode && !isStaffImpersonating && (
+          <MobileInstallBanner description="Pin the production dashboard to your taskbar for instant access — no App Store needed." />
+        )}
       </SidebarProvider>
     </DemoModeContext.Provider>
   );
