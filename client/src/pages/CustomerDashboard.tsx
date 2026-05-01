@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
 import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 import {
@@ -192,6 +193,9 @@ export default function CustomerDashboard() {
   const [sortBy, setSortBy] = useState<"date" | "jobName" | "description" | "quantity" | "status" | "tracking">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc"); // asc = today's orders first
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [selectedLineItemIds, setSelectedLineItemIds] = useState<Set<string>>(new Set());
+  const [payDialogOpen, setPayDialogOpen] = useState(false);
+  const [paymentResult, setPaymentResult] = useState<{ success: boolean; message: string; reference?: string } | null>(null);
 
   // Helper to toggle sort on column click
   const handleColumnSort = (column: typeof sortBy) => {
@@ -382,6 +386,55 @@ export default function CustomerDashboard() {
 
   const handleLogout = () => {
     logoutMutation.mutate();
+  };
+
+  const payMutation = useMutation({
+    mutationFn: async (lineItemIds: string[]) => {
+      const res = await apiRequest("POST", "/api/customer-portal/stripe/pay-jobs", { lineItemIds });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.chargeResult?.success) {
+        setPaymentResult({ success: true, message: `Payment of £${data.totalIncVat.toFixed(2)} was successful.`, reference: data.reference });
+        setSelectedLineItemIds(new Set());
+      } else {
+        setPaymentResult({ success: false, message: data.chargeResult?.error || "Payment failed. Please try again." });
+      }
+    },
+    onError: (error: any) => {
+      setPaymentResult({ success: false, message: error.message || "Payment failed. Please try again." });
+    },
+  });
+
+  // Helpers for multi-select payment
+  const toggleLineItem = (id: string) => {
+    setSelectedLineItemIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const allJobs: Job[] = jobs || [];
+  const payableLineItems = allJobs.flatMap(j =>
+    (j.lineItems || []).filter(li => typeof li.estimatedPrice === "number")
+  );
+
+  const selectedSubtotal = payableLineItems
+    .filter(li => selectedLineItemIds.has(li.id))
+    .reduce((sum, li) => sum + (li.estimatedPrice as number), 0);
+  const selectedVat = selectedSubtotal * 0.2;
+  const selectedTotal = selectedSubtotal + selectedVat;
+
+  const allPayableSelected = payableLineItems.length > 0 && payableLineItems.every(li => selectedLineItemIds.has(li.id));
+  const somePayableSelected = payableLineItems.some(li => selectedLineItemIds.has(li.id));
+
+  const toggleAllPayable = () => {
+    if (allPayableSelected) {
+      setSelectedLineItemIds(new Set());
+    } else {
+      setSelectedLineItemIds(new Set(payableLineItems.map(li => li.id)));
+    }
   };
 
   const VAT_RATE = 0.2;
@@ -819,18 +872,28 @@ export default function CustomerDashboard() {
                           <p className="text-sm font-semibold">Line Items:</p>
                           {lineItems.map((lineItem, index) => (
                             <div key={lineItem.id} className="bg-muted/50 rounded-lg p-3">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                  <p className="font-medium text-sm">{lineItem.jobType}</p>
-                                  {lineItem.description && (
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      {lineItem.description}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <p className="text-sm font-semibold mb-1">Qty: {lineItem.quantity}</p>
-                                  <EstimatedCostCell price={lineItem.estimatedPrice} />
+                              <div className="flex items-start gap-3">
+                                {typeof lineItem.estimatedPrice === "number" && (
+                                  <Checkbox
+                                    checked={selectedLineItemIds.has(lineItem.id)}
+                                    onCheckedChange={() => toggleLineItem(lineItem.id)}
+                                    data-testid={`checkbox-mobile-lineitem-${lineItem.id}`}
+                                    className="mt-0.5 shrink-0"
+                                  />
+                                )}
+                                <div className="flex items-start justify-between gap-2 flex-1">
+                                  <div className="flex-1">
+                                    <p className="font-medium text-sm">{lineItem.jobType}</p>
+                                    {lineItem.description && (
+                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                        {lineItem.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <p className="text-sm font-semibold mb-1">Qty: {lineItem.quantity}</p>
+                                    <EstimatedCostCell price={lineItem.estimatedPrice} />
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -856,6 +919,17 @@ export default function CustomerDashboard() {
                 <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10" data-testid="header-select">
+                      {payableLineItems.length > 0 && (
+                        <Checkbox
+                          checked={allPayableSelected}
+                          onCheckedChange={toggleAllPayable}
+                          data-testid="checkbox-select-all"
+                          aria-label="Select all payable items"
+                          className={somePayableSelected && !allPayableSelected ? "opacity-50" : ""}
+                        />
+                      )}
+                    </TableHead>
                     <TableHead 
                       className="cursor-pointer hover:bg-muted/50 select-none"
                       onClick={() => handleColumnSort("jobName")}
@@ -932,6 +1006,7 @@ export default function CustomerDashboard() {
                       // Show job even if no line items
                       return (
                         <TableRow key={job.id} data-testid={`row-job-${job.id}`}>
+                          <TableCell className="w-10" />
                           <TableCell className="font-medium" data-testid={`text-jobname-${job.id}`}>
                             {job.jobName}
                             {job.poNumber && (
@@ -980,6 +1055,16 @@ export default function CustomerDashboard() {
                         data-testid={`row-lineitem-${lineItem.id}`}
                         className={index > 0 ? "border-t-0" : ""}
                       >
+                        <TableCell className="w-10">
+                          {typeof lineItem.estimatedPrice === "number" && (
+                            <Checkbox
+                              checked={selectedLineItemIds.has(lineItem.id)}
+                              onCheckedChange={() => toggleLineItem(lineItem.id)}
+                              data-testid={`checkbox-lineitem-${lineItem.id}`}
+                              aria-label={`Select ${lineItem.jobType} line item`}
+                            />
+                          )}
+                        </TableCell>
                         <TableCell className="font-medium">
                           <span data-testid={`text-jobname-${job.id}-${index}`}>{job.jobName}</span>
                           {index === 0 && job.poNumber && (
@@ -1044,6 +1129,118 @@ export default function CustomerDashboard() {
           </>
         )}
       </main>
+
+      {/* Sticky Pay Now bar */}
+      {selectedLineItemIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t shadow-lg px-4 py-3">
+          <div className="max-w-screen-xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <ShoppingCart className="w-5 h-5 text-primary" />
+              <span className="font-medium text-sm">
+                {selectedLineItemIds.size} item{selectedLineItemIds.size !== 1 ? "s" : ""} selected
+              </span>
+              <span className="text-muted-foreground text-sm hidden sm:inline">·</span>
+              <div className="hidden sm:block text-sm">
+                <span className="text-muted-foreground">£{selectedSubtotal.toFixed(2)} ex. VAT + £{selectedVat.toFixed(2)} VAT = </span>
+                <span className="font-semibold">£{selectedTotal.toFixed(2)} total</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setSelectedLineItemIds(new Set())} data-testid="button-clear-selection">
+                Clear
+              </Button>
+              <Button size="sm" onClick={() => { setPaymentResult(null); setPayDialogOpen(true); }} data-testid="button-pay-now">
+                <CreditCard className="w-4 h-4 mr-2" />
+                Pay Now — £{selectedTotal.toFixed(2)}
+              </Button>
+            </div>
+          </div>
+          {/* Mobile total breakdown */}
+          <div className="sm:hidden text-xs text-muted-foreground mt-1 max-w-screen-xl mx-auto">
+            £{selectedSubtotal.toFixed(2)} ex. VAT + £{selectedVat.toFixed(2)} VAT = £{selectedTotal.toFixed(2)} inc. VAT
+          </div>
+        </div>
+      )}
+
+      {/* Pay Now Confirmation Dialog */}
+      <Dialog open={payDialogOpen} onOpenChange={(open) => { setPayDialogOpen(open); if (!open) setPaymentResult(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {paymentResult ? (paymentResult.success ? "Payment Successful" : "Payment Failed") : "Confirm Payment"}
+            </DialogTitle>
+            <DialogDescription>
+              {paymentResult
+                ? paymentResult.success
+                  ? "Your card has been charged successfully."
+                  : "There was a problem processing your payment."
+                : "Your saved card on file will be charged for the following items."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {!paymentResult ? (
+            <>
+              {/* Items breakdown */}
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {allJobs.flatMap(j => (j.lineItems || []).filter(li => selectedLineItemIds.has(li.id))).map(li => {
+                  const job = allJobs.find(j => j.lineItems?.some(l => l.id === li.id));
+                  const price = li.estimatedPrice as number;
+                  return (
+                    <div key={li.id} className="flex items-start justify-between gap-2 text-sm">
+                      <div>
+                        <div className="font-medium">{job?.jobName}</div>
+                        <div className="text-muted-foreground text-xs">{li.jobType} · Qty {li.quantity}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs text-muted-foreground">£{price.toFixed(2)} ex. VAT</div>
+                        <div className="font-medium">£{(price * 1.2).toFixed(2)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Total */}
+              <div className="border-t pt-3 space-y-1">
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Subtotal ex. VAT</span><span>£{selectedSubtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>VAT (20%)</span><span>£{selectedVat.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <span>Total</span><span>£{selectedTotal.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">Carriage is not included and will be invoiced separately.</p>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPayDialogOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={() => payMutation.mutate(Array.from(selectedLineItemIds))}
+                  disabled={payMutation.isPending}
+                  data-testid="button-confirm-pay"
+                >
+                  {payMutation.isPending ? "Processing…" : `Pay £${selectedTotal.toFixed(2)}`}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <div className={`rounded-md p-4 text-sm ${paymentResult.success ? "bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200" : "bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200"}`}>
+                {paymentResult.message}
+                {paymentResult.reference && (
+                  <div className="text-xs mt-1 opacity-75">Reference: {paymentResult.reference}</div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setPayDialogOpen(false)}>Close</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Change Password Dialog */}
       <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>

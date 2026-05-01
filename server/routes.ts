@@ -1684,6 +1684,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Pay selected line items using saved card
+  app.post("/api/customer-portal/stripe/pay-jobs", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session?.customerUserId || req.session?.impersonationCustomerUserId;
+      if (!customerUserId) return res.status(401).json({ error: "Unauthorized" });
+
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) return res.status(401).json({ error: "User not found" });
+
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === customerUser.customerId);
+      if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+      if (!customer.stripeCustomerId) {
+        return res.status(400).json({ error: "No saved payment card on file. Please add a card first." });
+      }
+
+      const { lineItemIds } = req.body as { lineItemIds: string[] };
+      if (!Array.isArray(lineItemIds) || lineItemIds.length === 0) {
+        return res.status(400).json({ error: "No line items selected" });
+      }
+
+      const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
+      if (!pricingTable) {
+        return res.status(400).json({ error: "No pricing table assigned to your account" });
+      }
+
+      // Look up each line item and calculate its price
+      let subtotal = 0;
+      const lineItemDetails: { id: string; jobName: string; jobType: string; quantity: number; price: number }[] = [];
+
+      for (const lineItemId of lineItemIds) {
+        const lineItem = await storage.getJobLineItem(lineItemId);
+        if (!lineItem) continue;
+
+        const job = await storage.getJob(lineItem.jobId);
+        if (!job || job.customerId !== customerUser.customerId) continue;
+
+        try {
+          const priceResult = calculateJobPrice(
+            [{ quantity: lineItem.quantity, stitchCount: lineItem.stitchCount || 0, jobType: lineItem.jobType || undefined }],
+            pricingTable
+          );
+          const itemPrice = priceResult.lineItemPrices[0]?.totalPrice ?? 0;
+          subtotal += itemPrice;
+          lineItemDetails.push({
+            id: lineItemId,
+            jobName: job.jobName,
+            jobType: lineItem.jobType || "Unknown",
+            quantity: lineItem.quantity,
+            price: itemPrice,
+          });
+        } catch {
+          // skip unpriceable items
+        }
+      }
+
+      if (subtotal === 0 || lineItemDetails.length === 0) {
+        return res.status(400).json({ error: "Could not calculate prices for selected items" });
+      }
+
+      const vatAmount = subtotal * 0.2;
+      const totalIncVat = subtotal + vatAmount;
+
+      const description = `Customer payment — ${lineItemDetails.length} line item(s): ${lineItemDetails.map(l => l.jobName).join(", ")}`;
+      const reference = `PORTAL-${Date.now()}`;
+
+      const chargeResult = await chargeCustomerCard(
+        customer.stripeCustomerId,
+        totalIncVat,
+        description,
+        reference
+      );
+
+      res.json({ chargeResult, subtotal, vatAmount, totalIncVat, lineItemDetails, reference });
+    } catch (error: any) {
+      console.error("Error charging customer card:", error);
+      res.status(500).json({ error: error.message || "Payment failed" });
+    }
+  });
+
   // ── End Stripe routes ───────────────────────────────────────────────────────
 
   app.patch("/api/customer-auth/me/notification-settings", isCustomerAuthenticated, async (req: any, res) => {
