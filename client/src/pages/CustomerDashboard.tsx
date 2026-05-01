@@ -416,11 +416,14 @@ export default function CustomerDashboard() {
   };
 
   const allJobs: Job[] = jobs || [];
-  const payableLineItems = allJobs.flatMap(j =>
+  const payableLineItems = filteredJobs.flatMap(j =>
     (j.lineItems || []).filter(li => typeof li.estimatedPrice === "number")
   );
 
-  const selectedSubtotal = payableLineItems
+  const allPayableLineItems = allJobs.flatMap(j =>
+    (j.lineItems || []).filter(li => typeof li.estimatedPrice === "number")
+  );
+  const selectedSubtotal = allPayableLineItems
     .filter(li => selectedLineItemIds.has(li.id))
     .reduce((sum, li) => sum + (li.estimatedPrice as number), 0);
   const selectedVat = selectedSubtotal * 0.2;
@@ -775,7 +778,7 @@ export default function CustomerDashboard() {
             </div>
             
             {/* Status Tabs */}
-            <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
+            <Tabs value={statusFilter} onValueChange={(value) => { setStatusFilter(value as any); setSelectedLineItemIds(new Set()); }}>
               <TabsList data-testid="tabs-status-filter">
                 <TabsTrigger value="in_progress" data-testid="tab-in-progress">
                   In Progress
