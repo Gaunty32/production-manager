@@ -5937,6 +5937,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff: delete a direct conversation message (unsend)
+  app.delete("/api/staff/direct-conversations/:id/messages/:messageId", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteConversationMessage(req.params.messageId);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to delete message" });
+    }
+  });
+
   // Staff: archive / update a conversation
   app.patch("/api/staff/direct-conversations/:id", isStaffAuthenticated, async (req, res) => {
     try {

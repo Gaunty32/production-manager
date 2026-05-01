@@ -424,6 +424,18 @@ export default function StaffMessages() {
     onError: () => toast({ title: "Failed to unsend message", variant: "destructive" }),
   });
 
+  const unsendDirectMessageMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      await apiRequest("DELETE", `/api/staff/direct-conversations/${directId}/messages/${messageId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/direct-conversations", directId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/conversations/all"] });
+      toast({ title: "Message unsent" });
+    },
+    onError: () => toast({ title: "Failed to unsend message", variant: "destructive" }),
+  });
+
   const editMessageMutation = useMutation({
     mutationFn: async ({ messageId, message }: { messageId: string; message: string }) => {
       await apiRequest("PATCH", `/api/staff/jobs/${jobId}/messages/${messageId}`, { message });
@@ -1133,22 +1145,27 @@ export default function StaffMessages() {
                 return (
                   <div key={msg.id} className={`group/msg flex items-end gap-2.5 ${isStaff ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
                     {/* Action buttons — edit + unsend, staff messages only, visible on hover */}
-                    {isStaff && selected?.type === "job" && !(msg as any).deleted && editingMsgId !== msg.id && (
+                    {isStaff && !(msg as any).deleted && editingMsgId !== msg.id && (
                       <div className="invisible group-hover/msg:visible flex flex-col gap-1 shrink-0">
-                        <button
-                          type="button"
-                          title="Edit message"
-                          onClick={() => { setEditingMsgId(msg.id); setEditingText(msg.message || ""); }}
-                          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-                          data-testid={`button-edit-msg-${msg.id}`}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
+                        {selected?.type === "job" && (
+                          <button
+                            type="button"
+                            title="Edit message"
+                            onClick={() => { setEditingMsgId(msg.id); setEditingText(msg.message || ""); }}
+                            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                            data-testid={`button-edit-msg-${msg.id}`}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           title="Unsend"
-                          onClick={() => unsendMessageMutation.mutate(msg.id)}
-                          disabled={unsendMessageMutation.isPending}
+                          onClick={() => selected?.type === "direct"
+                            ? unsendDirectMessageMutation.mutate(msg.id)
+                            : unsendMessageMutation.mutate(msg.id)
+                          }
+                          disabled={unsendMessageMutation.isPending || unsendDirectMessageMutation.isPending}
                           className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                           data-testid={`button-unsend-${msg.id}`}
                         >

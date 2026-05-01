@@ -178,6 +178,7 @@ export interface IStorage {
   getJobMessages(jobId: string): Promise<JobMessage[]>;
   createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
   deleteJobMessage(messageId: string): Promise<void>;
+  deleteConversationMessage(messageId: string): Promise<void>;
   updateJobMessage(messageId: string, content: string): Promise<void>;
   toggleJobMessageThumbsUp(messageId: string, userId: string): Promise<void>;
   markMessagesAsRead(jobId: string, readerType: 'staff' | 'customer'): Promise<void>;
@@ -1360,6 +1361,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobMessage(messageId: string): Promise<void> {
     await db.update(jobMessages).set({ deleted: true, message: "" }).where(eq(jobMessages.id, messageId));
+  }
+
+  async deleteConversationMessage(messageId: string): Promise<void> {
+    await db.delete(conversationMessages).where(eq(conversationMessages.id, messageId));
   }
 
   async updateJobMessage(messageId: string, content: string): Promise<void> {
