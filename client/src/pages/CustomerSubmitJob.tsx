@@ -456,7 +456,7 @@ export default function CustomerSubmitJob() {
                       <FormControl>
                         <Textarea
                           placeholder="Add any special instructions or notes..."
-                          rows={4}
+                          autoResize
                           {...field}
                           data-testid="input-notes"
                         />

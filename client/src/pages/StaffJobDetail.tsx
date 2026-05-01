@@ -473,7 +473,7 @@ export default function StaffJobDetail() {
                       <Textarea
                         value={editedJob.notes}
                         onChange={(e) => setEditedJob({ ...editedJob, notes: e.target.value })}
-                        rows={4}
+                        autoResize
                         placeholder="Notes"
                         data-testid="input-edit-notes"
                       />

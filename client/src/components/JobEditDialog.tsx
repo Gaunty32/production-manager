@@ -1162,7 +1162,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                     <Textarea 
                       {...field} 
                       placeholder="Add any additional notes about this order..."
-                      className="resize-none min-h-[100px]"
+                      autoResize
                       data-testid="input-edit-notes" 
                     />
                   </FormControl>
