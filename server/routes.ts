@@ -3195,7 +3195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return {
               ...msg,
               imageUrl: normalizeImgUrl((msg as any).imageUrl),
-              senderName: staffMember?.name || null,
+              senderName: staffMember?.name || [linkedUser?.firstName, linkedUser?.lastName].filter(Boolean).join(' ') || null,
               senderImageUrl: normalizeImgUrl(linkedUser?.profileImageUrl),
             };
           } else if (msg.senderType === 'customer' && msg.senderId) {
