@@ -65,6 +65,7 @@ export default function CustomerTeam() {
   const { isImpersonating } = usePermissions();
 
   const [showAdd, setShowAdd] = useState(false);
+  const [addDialogError, setAddDialogError] = useState<string | null>(null);
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const [isUploadingPic, setIsUploadingPic] = useState(false);
   const picInputRef = useRef<HTMLInputElement>(null);
@@ -87,10 +88,16 @@ export default function CustomerTeam() {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/team"] });
       toast({ title: "Invitation sent", description: "They'll receive an email to set their password and access the portal." });
       setShowAdd(false);
+      setAddDialogError(null);
       addForm.reset();
     },
     onError: (e: any) => {
-      toast({ title: "Error", description: e.message || "Failed to add team member", variant: "destructive" });
+      const msg = e.message || "Failed to add team member";
+      if (msg.toLowerCase().includes("already a member")) {
+        setAddDialogError("This person is already a member of your team. You can resend their invite link using the button next to their name in the list below.");
+      } else {
+        setAddDialogError(msg);
+      }
     },
   });
 
@@ -269,7 +276,7 @@ export default function CustomerTeam() {
       </div>
 
       {/* Add Member Dialog */}
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+      <Dialog open={showAdd} onOpenChange={(open) => { setShowAdd(open); if (!open) { setAddDialogError(null); addForm.reset(); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Team Member</DialogTitle>
@@ -277,8 +284,13 @@ export default function CustomerTeam() {
           <p className="text-sm text-muted-foreground -mt-2">
             They'll receive an email with a link to set their own password and access the portal.
           </p>
+          {addDialogError && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+              {addDialogError}
+            </div>
+          )}
           <Form {...addForm}>
-            <form onSubmit={addForm.handleSubmit(d => addMutation.mutate(d))} className="space-y-4">
+            <form onSubmit={addForm.handleSubmit(d => { setAddDialogError(null); addMutation.mutate(d); })} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <FormField control={addForm.control} name="firstName" render={({ field }) => (
                   <FormItem>

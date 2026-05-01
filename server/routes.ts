@@ -6409,7 +6409,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check for duplicate email
       const existing = await storage.getCustomerUserByEmail(email);
-      if (existing) return res.status(409).json({ error: "A portal login with this email already exists" });
+      if (existing) {
+        if (existing.customerId === currentUser.customerId) {
+          return res.status(409).json({ error: "This person is already a member of your team", alreadyMember: true });
+        }
+        return res.status(409).json({ error: "This email address is already registered in the portal under a different account. Please use a different email." });
+      }
 
       // Generate a random placeholder password (user will set via invite link)
       const crypto = await import("crypto");
