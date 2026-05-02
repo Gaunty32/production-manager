@@ -65,7 +65,7 @@ const CONTACT = {
   phone: "01234 567890",
   phoneTel: "tel:01234567890",
   email: "info@selectbranding.co.uk",
-  whatsapp: "https://wa.me/441234567890",
+  whatsapp: "https://wa.me/441132552694",
 } as const;
 
 type WelcomeCard = { emoji: string; greeting: string; fact: string };
