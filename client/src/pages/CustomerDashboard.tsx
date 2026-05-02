@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart, Phone, Mail, MessageCircle, Headphones } from "lucide-react";
+import { SiWhatsapp } from "react-icons/si";
+import sbsLogo from "@assets/logo_transparent.png";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
 import { MobileInstallBanner } from "@/components/MobileInstallBanner";
@@ -58,6 +60,13 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+
+const CONTACT = {
+  phone: "01234 567890",
+  phoneTel: "tel:01234567890",
+  email: "info@selectbranding.co.uk",
+  whatsapp: "https://wa.me/441234567890",
+} as const;
 
 type WelcomeCard = { emoji: string; greeting: string; fact: string };
 
@@ -622,6 +631,101 @@ export default function CustomerDashboard() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6 pb-24 md:pb-8">
+
+        {/* Logo hero */}
+        <div className="flex justify-center mb-6">
+          <img
+            src={sbsLogo}
+            alt="Select Branding Solutions"
+            className="object-contain"
+            style={{ maxHeight: "100px", maxWidth: "360px", width: "100%" }}
+            data-testid="img-sbs-logo-hero"
+          />
+        </div>
+
+        {/* Contact Us section */}
+        <div className="mb-6">
+          <h2 className="text-center text-lg font-semibold mb-3" data-testid="heading-contact-us">Contact Us</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            {/* Phone */}
+            <a
+              href={CONTACT.phoneTel}
+              className="flex flex-col items-center gap-2 rounded-md border bg-card p-4 text-center hover-elevate active-elevate-2 transition-colors"
+              data-testid="contact-phone"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40">
+                <Phone className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Phone</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{CONTACT.phone}</p>
+              </div>
+            </a>
+
+            {/* Email */}
+            <a
+              href={`mailto:${CONTACT.email}`}
+              className="flex flex-col items-center gap-2 rounded-md border bg-card p-4 text-center hover-elevate active-elevate-2 transition-colors"
+              data-testid="contact-email"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/40">
+                <Mail className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Email</p>
+                <p className="text-xs text-muted-foreground mt-0.5 break-all">{CONTACT.email}</p>
+              </div>
+            </a>
+
+            {/* Message via app */}
+            <button
+              onClick={() => setLocation("/customer/messages")}
+              className="flex flex-col items-center gap-2 rounded-md border bg-card p-4 text-center hover-elevate active-elevate-2 transition-colors"
+              data-testid="contact-message"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <MessageSquare className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Message Us</p>
+                <p className="text-xs text-muted-foreground mt-0.5">via the app</p>
+              </div>
+            </button>
+
+            {/* WhatsApp */}
+            <a
+              href={CONTACT.whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-2 rounded-md border bg-card p-4 text-center hover-elevate active-elevate-2 transition-colors"
+              data-testid="contact-whatsapp"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40">
+                <SiWhatsapp className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">WhatsApp</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Chat with us</p>
+              </div>
+            </a>
+
+            {/* Live Chat */}
+            <button
+              onClick={() => setLocation("/customer/messages")}
+              className="flex flex-col items-center gap-2 rounded-md border bg-card p-4 text-center hover-elevate active-elevate-2 transition-colors col-span-2 sm:col-span-1"
+              data-testid="contact-live-chat"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
+                <Headphones className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Live Chat</p>
+                <p className="text-xs text-muted-foreground mt-0.5">We're here to help</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
         {/* Greeting card */}
         {customerUser && (() => {
           const card = getWelcomeCard(customerUser.firstName);
