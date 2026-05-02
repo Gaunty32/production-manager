@@ -62,8 +62,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 const CONTACT = {
-  phone: "01234 567890",
-  phoneTel: "tel:01234567890",
+  phone: "0113 2552694",
+  phoneTel: "tel:01132552694",
   email: "info@selectbranding.co.uk",
   whatsapp: "https://wa.me/441132552694",
 } as const;
