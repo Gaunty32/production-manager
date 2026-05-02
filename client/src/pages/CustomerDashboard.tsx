@@ -21,7 +21,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { format, isPast, isToday, formatDistanceToNow } from "date-fns";
 import { getMachineName } from "@shared/machines";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -205,6 +205,21 @@ export default function CustomerDashboard() {
   const [selectedLineItemIds, setSelectedLineItemIds] = useState<Set<string>>(new Set());
   const [payDialogOpen, setPayDialogOpen] = useState(false);
   const [paymentResult, setPaymentResult] = useState<{ success: boolean; message: string; reference?: string } | null>(null);
+
+  // Inject live chat widget — only on customer portal, cleaned up on unmount
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://beta.leadconnectorhq.com/loader.js";
+    script.setAttribute("data-resources-url", "https://beta.leadconnectorhq.com/chat-widget/loader.js");
+    script.setAttribute("data-widget-id", "69b2725d6a7fad523c100573");
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+      // Remove any widget elements the loader may have injected
+      document.querySelectorAll('[id^="leadconnector"], [class*="leadconnector"], [id^="chat-widget"]').forEach(el => el.remove());
+    };
+  }, []);
 
   // Helper to toggle sort on column click
   const handleColumnSort = (column: typeof sortBy) => {
