@@ -4698,6 +4698,240 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Schedule Health — categorise every active embroidery line item by deadline risk
+  app.get("/api/scheduling/health", isStaffAuthenticated, async (req, res) => {
+    try {
+      const allJobs = await storage.getJobs();
+      const allLineItems = await storage.getAllJobLineItems();
+      const existingSchedules = await storage.getJobSchedules();
+      const customers = await storage.getCustomers();
+
+      const jobMap = new Map(allJobs.map(j => [j.id, j]));
+      const customerMap = new Map(customers.map(c => [c.id, c]));
+
+      // lineItemId -> most recent non-cancelled schedule
+      const scheduleByLineItem = new Map<string, typeof existingSchedules[0]>();
+      for (const s of existingSchedules) {
+        if (s.lineItemId && s.status !== 'cancelled') {
+          scheduleByLineItem.set(s.lineItemId, s);
+        }
+      }
+
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      const items: any[] = [];
+
+      for (const lineItem of allLineItems) {
+        if (lineItem.completed) continue;
+        const jobTypeLc = (lineItem.jobType || '').toLowerCase();
+        if (!jobTypeLc.includes('embroidery')) continue;
+
+        const job = jobMap.get(lineItem.jobId);
+        if (!job || job.completed || job.status === 'completed') continue;
+
+        const customer = job.customerId ? customerMap.get(job.customerId) : null;
+
+        const dispatchDate = job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null;
+        if (dispatchDate) dispatchDate.setHours(0, 0, 0, 0);
+
+        let daysUntilDispatch: number | null = null;
+        if (dispatchDate) {
+          daysUntilDispatch = Math.floor((dispatchDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        const estimatedMinutes = (lineItem.stitchCount && lineItem.quantity)
+          ? Math.ceil((Math.ceil(lineItem.quantity / 6) * ((lineItem.stitchCount / 750) + 3)) / 10) * 10
+          : null;
+
+        const schedule = lineItem.machineId ? scheduleByLineItem.get(lineItem.id) : undefined;
+
+        let status: string;
+        let daysLate: number | null = null;
+        let scheduledDateStr: string | null = null;
+
+        if (schedule) {
+          const scheduledDate = new Date(schedule.scheduledDate);
+          scheduledDate.setHours(0, 0, 0, 0);
+          scheduledDateStr = scheduledDate.toISOString().split('T')[0];
+
+          if (dispatchDate) {
+            const daysAfter = Math.floor((scheduledDate.getTime() - dispatchDate.getTime()) / (1000 * 60 * 60 * 24));
+            if (daysAfter > 0) {
+              status = 'will_miss';
+              daysLate = daysAfter;
+            } else if (daysAfter >= -1) {
+              status = 'at_risk';
+            } else {
+              status = 'on_track';
+            }
+          } else {
+            status = 'on_track';
+          }
+        } else {
+          if (!lineItem.machineId) {
+            // No machine assigned — extra urgency signal
+            if (dispatchDate && daysUntilDispatch !== null && daysUntilDispatch <= 3) {
+              status = 'unscheduled_urgent';
+            } else if (dispatchDate && daysUntilDispatch !== null && daysUntilDispatch <= 7) {
+              status = 'at_risk';
+            } else {
+              status = 'unscheduled';
+            }
+          } else {
+            // Machine assigned but not yet scheduled
+            if (dispatchDate && daysUntilDispatch !== null && daysUntilDispatch <= 3) {
+              status = 'unscheduled_urgent';
+            } else if (dispatchDate && daysUntilDispatch !== null && daysUntilDispatch <= 7) {
+              status = 'at_risk';
+            } else {
+              status = 'unscheduled';
+            }
+          }
+        }
+
+        items.push({
+          lineItemId: lineItem.id,
+          jobId: job.id,
+          jobName: job.jobName,
+          customerName: customer?.name || 'Unknown',
+          position: lineItem.position,
+          quantity: lineItem.quantity,
+          stitchCount: lineItem.stitchCount,
+          estimatedMinutes,
+          machineId: lineItem.machineId,
+          dispatchDate: dispatchDate ? dispatchDate.toISOString().split('T')[0] : null,
+          scheduledDate: scheduledDateStr,
+          status,
+          daysUntilDispatch,
+          daysLate,
+        });
+      }
+
+      const statusOrder: Record<string, number> = {
+        will_miss: 0,
+        unscheduled_urgent: 1,
+        at_risk: 2,
+        on_track: 3,
+        unscheduled: 4,
+      };
+
+      items.sort((a, b) => {
+        const orderDiff = (statusOrder[a.status] ?? 4) - (statusOrder[b.status] ?? 4);
+        if (orderDiff !== 0) return orderDiff;
+        if (a.daysUntilDispatch !== null && b.daysUntilDispatch !== null) {
+          return a.daysUntilDispatch - b.daysUntilDispatch;
+        }
+        return 0;
+      });
+
+      const summary = {
+        willMiss: items.filter(i => i.status === 'will_miss').length,
+        unscheduledUrgent: items.filter(i => i.status === 'unscheduled_urgent').length,
+        atRisk: items.filter(i => i.status === 'at_risk').length,
+        onTrack: items.filter(i => i.status === 'on_track').length,
+        unscheduled: items.filter(i => i.status === 'unscheduled').length,
+      };
+
+      res.json({ summary, items });
+    } catch (error) {
+      console.error("Schedule health error:", error);
+      res.status(500).json({ error: "Failed to calculate schedule health" });
+    }
+  });
+
+  // Production Accuracy — compare estimated vs actual times for completed embroidery jobs
+  app.get("/api/scheduling/accuracy", isStaffAuthenticated, async (req, res) => {
+    try {
+      const allLineItems = await storage.getAllJobLineItems();
+      const allJobs = await storage.getJobs();
+      const machines = await storage.getMachines();
+
+      const jobMap = new Map(allJobs.map(j => [j.id, j]));
+      const machineMap = new Map(machines.map(m => [m.id, m]));
+
+      const completedItems = allLineItems.filter(li =>
+        li.completed &&
+        li.actualProductionTimeMinutes !== null &&
+        li.actualProductionTimeMinutes !== undefined &&
+        li.stitchCount > 0 &&
+        li.quantity > 0 &&
+        li.machineId !== null
+      );
+
+      const items = completedItems.map(li => {
+        const job = jobMap.get(li.jobId);
+        const machine = li.machineId ? machineMap.get(li.machineId) : null;
+
+        const heads = (machine as any)?.heads || 6;
+        const spm = (machine as any)?.stitchesPerMinute || 750;
+        const changeover = (machine as any)?.changeoverTimeMinutes || 3;
+
+        const runs = Math.ceil(li.quantity / heads);
+        const estimatedMinutes = Math.ceil((runs * ((li.stitchCount / spm) + changeover)) / 10) * 10;
+        const actualMinutes = li.actualProductionTimeMinutes!;
+        const variance = actualMinutes - estimatedMinutes;
+        const ratio = estimatedMinutes > 0 ? actualMinutes / estimatedMinutes : null;
+
+        return {
+          lineItemId: li.id,
+          jobName: job?.jobName || 'Unknown',
+          machineId: li.machineId,
+          machineName: machine ? (machine as any).name : `Machine ${li.machineId}`,
+          quantity: li.quantity,
+          stitchCount: li.stitchCount,
+          estimatedMinutes,
+          actualMinutes,
+          variance,
+          ratio,
+          completedAt: li.completedAt,
+        };
+      }).sort((a, b) => {
+        if (a.completedAt && b.completedAt) {
+          return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
+        }
+        return 0;
+      });
+
+      // Per-machine aggregates
+      const byMachineAcc: Record<number, { count: number; totalRatio: number; totalVariance: number; name: string }> = {};
+      for (const item of items) {
+        if (!item.machineId || item.ratio === null) continue;
+        if (!byMachineAcc[item.machineId]) {
+          byMachineAcc[item.machineId] = { count: 0, totalRatio: 0, totalVariance: 0, name: item.machineName };
+        }
+        byMachineAcc[item.machineId].count++;
+        byMachineAcc[item.machineId].totalRatio += item.ratio;
+        byMachineAcc[item.machineId].totalVariance += item.variance;
+      }
+
+      const machineStats = Object.entries(byMachineAcc).map(([mid, s]) => ({
+        machineId: parseInt(mid),
+        name: s.name,
+        count: s.count,
+        avgRatio: s.totalRatio / s.count,
+        avgVarianceMinutes: Math.round(s.totalVariance / s.count),
+      })).sort((a, b) => b.count - a.count);
+
+      const validItems = items.filter(i => i.ratio !== null);
+      const overallRatioSum = validItems.reduce((sum, i) => sum + (i.ratio || 0), 0);
+      const overallCount = validItems.length;
+
+      res.json({
+        overall: {
+          count: overallCount,
+          avgRatio: overallCount > 0 ? overallRatioSum / overallCount : null,
+          avgAccuracyPercent: overallCount > 0 ? Math.round((overallRatioSum / overallCount) * 100) : null,
+        },
+        byMachine: machineStats,
+        items: items.slice(0, 50),
+      });
+    } catch (error) {
+      console.error("Schedule accuracy error:", error);
+      res.status(500).json({ error: "Failed to calculate schedule accuracy" });
+    }
+  });
+
   // Schedule suggestion route
   app.post("/api/suggest-schedule", isStaffAuthenticated, async (req, res) => {
     try {
