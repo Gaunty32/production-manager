@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/popover";
 import { CalendarIcon, Plus, Trash2, Info } from "lucide-react";
 import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
+import { MachineSuggestions } from "@/components/MachineSuggestions";
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -923,6 +924,17 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
+
+                      {/* Machine suggestions — auto-fetches when embroidery fields are filled */}
+                      <MachineSuggestions
+                        quantity={item.quantity}
+                        stitchCount={item.stitchCount}
+                        jobType={item.jobType}
+                        dispatchDate={form.watch("requiredDispatchDate")}
+                        currentMachineId={item.machineId}
+                        onSelect={(machineId) => updateLineItem(index, 'machineId', machineId)}
+                      />
+
                       <div>
                         <label className="text-xs text-muted-foreground">Additional Information</label>
                         <Input

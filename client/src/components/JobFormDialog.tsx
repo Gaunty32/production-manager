@@ -48,6 +48,7 @@ import { CalendarIcon, Plus, Trash2, Info, ChevronRight, ChevronLeft, Check } fr
 import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { QuackingDuckDialog } from "@/components/QuackingDuckDialog";
+import { MachineSuggestions } from "@/components/MachineSuggestions";
 
 type LineItem = {
   jobType: string;
@@ -1167,6 +1168,17 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
+
+                      {/* Machine suggestions — auto-fetches when embroidery fields are filled */}
+                      <MachineSuggestions
+                        quantity={item.quantity}
+                        stitchCount={item.stitchCount}
+                        jobType={item.jobType}
+                        dispatchDate={requiredDispatchDate}
+                        currentMachineId={item.machineId}
+                        onSelect={(machineId) => updateLineItem(index, 'machineId', machineId)}
+                      />
+
                       <div>
                         <label className="text-xs text-muted-foreground font-medium">Additional Information</label>
                         <Input
