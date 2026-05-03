@@ -49,7 +49,13 @@ export default function StaffLogin() {
     mutationFn: async (data: LoginFormData) => {
       return await apiRequest("POST", "/api/staff-auth/login", data);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Clear any stale customer session before navigating to staff portal
+      try {
+        await fetch("/api/customer-auth/logout", { method: "POST" });
+      } catch {
+        // Ignore — clearing stale session is best-effort
+      }
       toast({
         title: "Welcome back",
         description: "You have been logged in successfully",

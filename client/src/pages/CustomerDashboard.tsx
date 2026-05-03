@@ -285,6 +285,13 @@ export default function CustomerDashboard() {
     queryKey: ["/api/customer-auth/user"],
   });
 
+  // Redirect to customer login if no valid customer session
+  useEffect(() => {
+    if (!isLoadingUser && !customerUser) {
+      setLocation("/customer/login");
+    }
+  }, [isLoadingUser, customerUser, setLocation]);
+
   const { data: jobs = [], isLoading: isLoadingJobs } = useQuery<Job[]>({
     queryKey: ["/api/customer-portal/jobs"],
     enabled: !!customerUser,
