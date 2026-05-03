@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw } from "lucide-react";
+import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw, Gauge } from "lucide-react";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -113,6 +113,34 @@ interface WeeklyProductionData {
     totalActualMinutes: number;
     totalEstimatedMinutes: number;
     efficiencyScore: number;
+  }>;
+}
+
+interface MachineStat {
+  machineId: number;
+  name: string;
+  count: number;
+  avgRatio: number;
+  avgVarianceMinutes: number;
+}
+
+interface AccuracyReportData {
+  overall: {
+    count: number;
+    avgRatio: number | null;
+    avgAccuracyPercent: number | null;
+  };
+  byMachine: MachineStat[];
+  items: Array<{
+    lineItemId: string;
+    jobName: string;
+    machineName: string;
+    quantity: number;
+    stitchCount: number;
+    estimatedMinutes: number;
+    actualMinutes: number;
+    ratio: number | null;
+    completedAt: string | null;
   }>;
 }
 
@@ -233,6 +261,19 @@ export default function WeeklyReports() {
   const { data: weeklyTrendData, isLoading: isLoadingTrend, error: trendError } = useQuery<WeeklyTrendData[]>({
     queryKey: ['/api/reports/weekly-performance', weeksCount, dateRange.to.toISOString()],
     queryFn: () => fetchWithParams('/api/reports/weekly-performance'),
+  });
+
+  const { data: accuracyData, isLoading: isLoadingAccuracy } = useQuery<AccuracyReportData>({
+    queryKey: ['/api/scheduling/accuracy', dateRange.from.toISOString(), dateRange.to.toISOString()],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        fromDate: dateRange.from.toISOString(),
+        toDate: dateRange.to.toISOString(),
+      });
+      const res = await fetch(`/api/scheduling/accuracy?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch accuracy data");
+      return res.json();
+    },
   });
 
   const { data: customerInsights, isLoading: isLoadingCustomers, error: customersError } = useQuery<CustomerInsightsData>({
@@ -457,6 +498,10 @@ export default function WeeklyReports() {
           <TabsTrigger value="customers" data-testid="tab-customers">
             <Building2 className="h-4 w-4 mr-2" />
             Customers
+          </TabsTrigger>
+          <TabsTrigger value="accuracy" data-testid="tab-accuracy">
+            <Gauge className="h-4 w-4 mr-2" />
+            Accuracy
           </TabsTrigger>
         </TabsList>
 
@@ -1116,6 +1161,188 @@ export default function WeeklyReports() {
                   )}
                 </CardContent>
               </Card>
+            </>
+          )}
+        </TabsContent>
+        {/* Accuracy Tab */}
+        <TabsContent value="accuracy" className="space-y-6">
+          {isLoadingAccuracy ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 grid-cols-3">
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full" />)}
+              </div>
+              <Skeleton className="h-48 w-full" />
+            </div>
+          ) : !accuracyData || accuracyData.overall.count === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Gauge className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                <p className="text-sm font-medium">No accuracy data for this period</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Embroidery jobs completed between {format(dateRange.from, "d MMM yyyy")} and {format(dateRange.to, "d MMM yyyy")} with actual production times will appear here.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Overview KPIs */}
+              <div className="grid gap-4 grid-cols-3">
+                <Card>
+                  <CardContent className="pt-4 pb-4">
+                    <p className="text-xs text-muted-foreground">Overall accuracy</p>
+                    <p className={`text-2xl font-bold mt-1 ${
+                      accuracyData.overall.avgRatio === null ? "text-muted-foreground"
+                      : accuracyData.overall.avgRatio <= 1.05 ? "text-green-600 dark:text-green-400"
+                      : accuracyData.overall.avgRatio <= 1.20 ? "text-amber-600 dark:text-amber-400"
+                      : "text-destructive"
+                    }`}>
+                      {accuracyData.overall.avgAccuracyPercent !== null ? `${accuracyData.overall.avgAccuracyPercent}%` : "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {accuracyData.overall.avgRatio === null ? "—"
+                       : accuracyData.overall.avgRatio <= 1.05 ? "Accurate"
+                       : accuracyData.overall.avgRatio <= 1.20 ? "Slightly over"
+                       : "Consistently over"}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4 pb-4">
+                    <p className="text-xs text-muted-foreground">Jobs measured</p>
+                    <p className="text-2xl font-bold mt-1">{accuracyData.overall.count}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">completed with actuals</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4 pb-4">
+                    <p className="text-xs text-muted-foreground">Avg overrun</p>
+                    <p className={`text-2xl font-bold mt-1 ${
+                      accuracyData.overall.avgRatio !== null && accuracyData.overall.avgRatio > 1
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-green-600 dark:text-green-400"
+                    }`}>
+                      {accuracyData.overall.avgRatio !== null
+                        ? accuracyData.overall.avgRatio >= 1
+                          ? `+${Math.round((accuracyData.overall.avgRatio - 1) * 100)}%`
+                          : `${Math.round((accuracyData.overall.avgRatio - 1) * 100)}%`
+                        : "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">actual vs estimated</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Per-machine */}
+              {accuracyData.byMachine.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Per-Machine Accuracy</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Machine</TableHead>
+                          <TableHead className="text-right">Jobs</TableHead>
+                          <TableHead className="text-right">Accuracy</TableHead>
+                          <TableHead className="text-right">Avg Overrun</TableHead>
+                          <TableHead className="w-[140px]">Rating</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {accuracyData.byMachine.map(m => {
+                          const pct = Math.round(m.avgRatio * 100);
+                          const overPct = Math.round((m.avgRatio - 1) * 100);
+                          const color =
+                            m.avgRatio <= 1.05 ? "text-green-600 dark:text-green-400"
+                            : m.avgRatio <= 1.20 ? "text-amber-600 dark:text-amber-400"
+                            : "text-destructive";
+                          return (
+                            <TableRow key={m.machineId} data-testid={`row-accuracy-machine-${m.machineId}`}>
+                              <TableCell className="font-medium">{m.name}</TableCell>
+                              <TableCell className="text-right">{m.count}</TableCell>
+                              <TableCell className={`text-right font-semibold ${color}`}>{pct}%</TableCell>
+                              <TableCell className="text-right text-muted-foreground text-sm">
+                                {overPct >= 0 ? `+${overPct}%` : `${overPct}%`} ({m.avgVarianceMinutes >= 0 ? `+${m.avgVarianceMinutes}m` : `${m.avgVarianceMinutes}m`})
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Progress value={Math.min(100, (1 / m.avgRatio) * 100)} className="h-2" />
+                                  <span className="text-xs w-12">
+                                    {m.avgRatio <= 1.05 ? "Good" : m.avgRatio <= 1.20 ? "Slow" : "Review"}
+                                  </span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Recent jobs table */}
+              {accuracyData.items.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Completed Jobs in Period</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Job</th>
+                            <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Machine</th>
+                            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Est.</th>
+                            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Actual</th>
+                            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Accuracy</th>
+                            <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground hidden md:table-cell">Completed</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {accuracyData.items.map(item => {
+                            const ratio = item.ratio;
+                            const pct = ratio !== null ? Math.round(ratio * 100) : null;
+                            const badgeColor = ratio === null ? ""
+                              : ratio <= 1.05 ? "text-green-600 dark:text-green-400"
+                              : ratio <= 1.20 ? "text-amber-600 dark:text-amber-400"
+                              : "text-destructive";
+                            return (
+                              <tr key={item.lineItemId} className="border-b last:border-0">
+                                <td className="px-4 py-2.5">
+                                  <div className="font-medium truncate max-w-[180px]">{item.jobName}</div>
+                                  <div className="text-xs text-muted-foreground">{item.quantity} × {item.stitchCount?.toLocaleString()} sts</div>
+                                </td>
+                                <td className="px-4 py-2.5 text-xs text-muted-foreground">{item.machineName}</td>
+                                <td className="px-4 py-2.5 text-right text-xs">
+                                  {item.estimatedMinutes >= 60 ? `${Math.floor(item.estimatedMinutes / 60)}h ${item.estimatedMinutes % 60}m` : `${item.estimatedMinutes}m`}
+                                </td>
+                                <td className="px-4 py-2.5 text-right text-xs">
+                                  {item.actualMinutes >= 60 ? `${Math.floor(item.actualMinutes / 60)}h ${item.actualMinutes % 60}m` : `${item.actualMinutes}m`}
+                                </td>
+                                <td className={`px-4 py-2.5 text-right text-xs font-semibold ${badgeColor}`}>
+                                  {pct !== null ? `${pct}%` : "—"}
+                                </td>
+                                <td className="px-4 py-2.5 text-right text-xs text-muted-foreground hidden md:table-cell">
+                                  {item.completedAt ? format(new Date(item.completedAt), "d MMM yy") : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  <strong>Accuracy Guide:</strong> Actual time / estimated time. <span className="text-green-600 dark:text-green-400 font-semibold">≤105%</span> = accurate, <span className="text-amber-600 dark:text-amber-400 font-semibold">105–120%</span> = slightly over, <span className="text-destructive font-semibold">&gt;120%</span> = consistently slow — consider adjusting stitches/minute in Machine Management.
+                </p>
+              </div>
             </>
           )}
         </TabsContent>

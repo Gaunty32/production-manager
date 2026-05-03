@@ -4850,14 +4850,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobMap = new Map(allJobs.map(j => [j.id, j]));
       const machineMap = new Map(machines.map(m => [m.id, m]));
 
-      const completedItems = allLineItems.filter(li =>
-        li.completed &&
-        li.actualProductionTimeMinutes !== null &&
-        li.actualProductionTimeMinutes !== undefined &&
-        li.stitchCount > 0 &&
-        li.quantity > 0 &&
-        li.machineId !== null
-      );
+      const fromDateParam = req.query.fromDate as string | undefined;
+      const toDateParam = req.query.toDate as string | undefined;
+      const fromDate = fromDateParam ? new Date(fromDateParam) : null;
+      const toDate = toDateParam ? new Date(toDateParam) : null;
+
+      const completedItems = allLineItems.filter(li => {
+        if (!li.completed) return false;
+        if (li.actualProductionTimeMinutes === null || li.actualProductionTimeMinutes === undefined) return false;
+        if (li.stitchCount <= 0 || li.quantity <= 0 || li.machineId === null) return false;
+        if (fromDate && li.completedAt && new Date(li.completedAt) < fromDate) return false;
+        if (toDate && li.completedAt && new Date(li.completedAt) > toDate) return false;
+        return true;
+      });
 
       const items = completedItems.map(li => {
         const job = jobMap.get(li.jobId);

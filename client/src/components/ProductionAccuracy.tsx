@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { TrendingUp, TrendingDown, Minus, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { formatTimeDisplay } from "@shared/machines";
 import { cn } from "@/lib/utils";
@@ -65,9 +69,21 @@ function AccuracyBadge({ ratio }: { ratio: number | null }) {
   );
 }
 
+const DEFAULT_FROM = new Date("2026-05-01");
+
 export function ProductionAccuracy() {
+  const [fromDate, setFromDate] = useState<Date>(DEFAULT_FROM);
+  const [calOpen, setCalOpen] = useState(false);
+
+  const queryKey = ["/api/scheduling/accuracy", fromDate.toISOString()];
   const { data, isLoading } = useQuery<AccuracyData>({
-    queryKey: ["/api/scheduling/accuracy"],
+    queryKey,
+    queryFn: async () => {
+      const params = new URLSearchParams({ fromDate: fromDate.toISOString() });
+      const res = await fetch(`/api/scheduling/accuracy?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch accuracy");
+      return res.json();
+    },
     refetchInterval: 120_000,
   });
 
@@ -82,20 +98,8 @@ export function ProductionAccuracy() {
     );
   }
 
-  if (!data || data.overall.count === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <p className="text-sm font-medium">No accuracy data yet</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Once embroidery jobs are completed with actual production times recorded, accuracy statistics will appear here.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const { overall, byMachine, items } = data ?? { overall: { count: 0, avgRatio: null, avgAccuracyPercent: null }, byMachine: [], items: [] };
 
-  const { overall, byMachine, items } = data;
   const overallPct = overall.avgAccuracyPercent;
   const overallRatio = overall.avgRatio;
 
@@ -113,117 +117,161 @@ export function ProductionAccuracy() {
 
   return (
     <div className="space-y-6">
-      {/* Overall summary */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-muted-foreground">Overall accuracy</p>
-            <p className={cn("text-2xl font-bold mt-1", overallColor)}>
-              {overallPct !== null ? `${overallPct}%` : "—"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{overallLabel}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-muted-foreground">Jobs measured</p>
-            <p className="text-2xl font-bold mt-1">{overall.count}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">completed with actuals</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-muted-foreground">Avg overrun</p>
-            <p className={cn("text-2xl font-bold mt-1", overallRatio && overallRatio > 1 ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400")}>
-              {overallRatio !== null
-                ? overallRatio >= 1
-                  ? `+${Math.round((overallRatio - 1) * 100)}%`
-                  : `${Math.round((overallRatio - 1) * 100)}%`
-                : "—"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">actual vs estimated</p>
-          </CardContent>
-        </Card>
+      {/* Date filter */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-muted-foreground">Measuring from:</span>
+        <Popover open={calOpen} onOpenChange={setCalOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2" data-testid="button-accuracy-from-date">
+              <CalendarIcon className="h-3.5 w-3.5" />
+              {format(fromDate, "d MMM yyyy")}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={fromDate}
+              onSelect={(d) => { if (d) { setFromDate(d); setCalOpen(false); } }}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        {fromDate.toDateString() !== DEFAULT_FROM.toDateString() && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-muted-foreground h-7"
+            onClick={() => setFromDate(DEFAULT_FROM)}
+          >
+            Reset to 1 May 2026
+          </Button>
+        )}
       </div>
 
-      {/* Per-machine breakdown */}
-      {byMachine.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold mb-3">Per-machine accuracy</h3>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            {byMachine.map(m => {
-              const pct = Math.round(m.avgRatio * 100);
-              const color =
-                m.avgRatio <= 1.05 ? "text-green-600 dark:text-green-400"
-                : m.avgRatio <= 1.20 ? "text-amber-600 dark:text-amber-400"
-                : "text-destructive";
-              const label =
-                m.avgVarianceMinutes >= 0
-                  ? `+${m.avgVarianceMinutes}m avg overrun`
-                  : `${m.avgVarianceMinutes}m avg under`;
-              return (
-                <Card key={m.machineId}>
-                  <CardContent className="pt-4 pb-4">
-                    <p className="text-xs font-medium truncate">{m.name}</p>
-                    <p className={cn("text-xl font-bold mt-1", color)}>{pct}%</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-                    <p className="text-xs text-muted-foreground">{m.count} job{m.count !== 1 ? "s" : ""}</p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Explanatory note */}
-      {overallRatio !== null && overallRatio > 1.10 && (
-        <Card className="border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20">
-          <CardContent className="py-3 px-4 text-xs text-amber-700 dark:text-amber-300">
-            <strong>Tip:</strong> The formula is running consistently slower than estimated. Consider increasing the stitch count entered per job to account for practical speed, or adjust machine stitches/minute in Machine Management.
+      {overall.count === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-sm font-medium">No accuracy data for this period</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Once embroidery jobs completed after {format(fromDate, "d MMM yyyy")} have actual production times recorded, accuracy statistics will appear here.
+            </p>
           </CardContent>
         </Card>
-      )}
-
-      {/* Recent items table */}
-      <div>
-        <h3 className="text-sm font-semibold mb-3">Recent completed jobs</h3>
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Job</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Machine</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Est.</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Actual</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Accuracy</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground hidden md:table-cell">Completed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map(item => (
-                  <tr key={item.lineItemId} className="border-b last:border-0" data-testid={`accuracy-item-${item.lineItemId}`}>
-                    <td className="px-4 py-2.5">
-                      <div className="font-medium truncate max-w-[180px]">{item.jobName}</div>
-                      <div className="text-xs text-muted-foreground">{item.quantity} × {item.stitchCount?.toLocaleString()} sts</div>
-                    </td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{item.machineName}</td>
-                    <td className="px-4 py-2.5 text-right text-xs">{formatTimeDisplay(item.estimatedMinutes)}</td>
-                    <td className="px-4 py-2.5 text-right text-xs">{formatTimeDisplay(item.actualMinutes)}</td>
-                    <td className="px-4 py-2.5 text-right">
-                      <AccuracyBadge ratio={item.ratio} />
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-xs text-muted-foreground hidden md:table-cell">
-                      {item.completedAt ? format(new Date(item.completedAt), "d MMM yy") : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      ) : (
+        <>
+          {/* Overall summary */}
+          <div className="grid grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-muted-foreground">Overall accuracy</p>
+                <p className={cn("text-2xl font-bold mt-1", overallColor)}>
+                  {overallPct !== null ? `${overallPct}%` : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{overallLabel}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-muted-foreground">Jobs measured</p>
+                <p className="text-2xl font-bold mt-1">{overall.count}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">completed with actuals</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <p className="text-xs text-muted-foreground">Avg overrun</p>
+                <p className={cn("text-2xl font-bold mt-1", overallRatio && overallRatio > 1 ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400")}>
+                  {overallRatio !== null
+                    ? overallRatio >= 1
+                      ? `+${Math.round((overallRatio - 1) * 100)}%`
+                      : `${Math.round((overallRatio - 1) * 100)}%`
+                    : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">actual vs estimated</p>
+              </CardContent>
+            </Card>
           </div>
-        </Card>
-      </div>
+
+          {/* Per-machine breakdown */}
+          {byMachine.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-3">Per-machine accuracy</h3>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                {byMachine.map(m => {
+                  const pct = Math.round(m.avgRatio * 100);
+                  const color =
+                    m.avgRatio <= 1.05 ? "text-green-600 dark:text-green-400"
+                    : m.avgRatio <= 1.20 ? "text-amber-600 dark:text-amber-400"
+                    : "text-destructive";
+                  const label =
+                    m.avgVarianceMinutes >= 0
+                      ? `+${m.avgVarianceMinutes}m avg overrun`
+                      : `${m.avgVarianceMinutes}m avg under`;
+                  return (
+                    <Card key={m.machineId}>
+                      <CardContent className="pt-4 pb-4">
+                        <p className="text-xs font-medium truncate">{m.name}</p>
+                        <p className={cn("text-xl font-bold mt-1", color)}>{pct}%</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                        <p className="text-xs text-muted-foreground">{m.count} job{m.count !== 1 ? "s" : ""}</p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Explanatory note */}
+          {overallRatio !== null && overallRatio > 1.10 && (
+            <Card className="border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20">
+              <CardContent className="py-3 px-4 text-xs text-amber-700 dark:text-amber-300">
+                <strong>Tip:</strong> The formula is running consistently slower than estimated. Consider increasing the stitch count entered per job to account for practical speed, or adjust machine stitches/minute in Machine Management.
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Recent items table */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Recent completed jobs</h3>
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Job</th>
+                      <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Machine</th>
+                      <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Est.</th>
+                      <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Actual</th>
+                      <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Accuracy</th>
+                      <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground hidden md:table-cell">Completed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(item => (
+                      <tr key={item.lineItemId} className="border-b last:border-0" data-testid={`accuracy-item-${item.lineItemId}`}>
+                        <td className="px-4 py-2.5">
+                          <div className="font-medium truncate max-w-[180px]">{item.jobName}</div>
+                          <div className="text-xs text-muted-foreground">{item.quantity} × {item.stitchCount?.toLocaleString()} sts</div>
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-muted-foreground">{item.machineName}</td>
+                        <td className="px-4 py-2.5 text-right text-xs">{formatTimeDisplay(item.estimatedMinutes)}</td>
+                        <td className="px-4 py-2.5 text-right text-xs">{formatTimeDisplay(item.actualMinutes)}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <AccuracyBadge ratio={item.ratio} />
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-xs text-muted-foreground hidden md:table-cell">
+                          {item.completedAt ? format(new Date(item.completedAt), "d MMM yy") : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 }
