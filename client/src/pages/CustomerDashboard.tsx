@@ -11,6 +11,7 @@ import sbsLogo from "@assets/logo_transparent.png";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
 import { MobileInstallBanner } from "@/components/MobileInstallBanner";
+import { AppDownloadModal } from "@/components/AppDownloadModal";
 import {
   Sheet,
   SheetContent,
@@ -540,6 +541,8 @@ export default function CustomerDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      {customerUser && !isImpersonating && <AppDownloadModal userId={customerUser.id} />}
+
       {/* Impersonation Banner - only shown when staff is viewing as customer */}
       {isImpersonating && customerUser && (
         <ImpersonationBanner customerEmail={customerUser.email} />
@@ -593,6 +596,7 @@ export default function CustomerDashboard() {
                   <span className="absolute -top-1 -right-1 h-4 w-4 bg-destructive text-destructive-foreground rounded-full text-[10px] flex items-center justify-center font-medium">
                     {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
                   </span>
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive animate-ping opacity-75" />
                 </Button>
               )}
               <Sheet>
@@ -803,13 +807,16 @@ export default function CustomerDashboard() {
               <MessageSquare className="h-4 w-4 mr-2" />
               Messages
               {unreadMessageCount > 0 && (
-                <Badge
-                  variant="destructive"
-                  className="ml-1.5 h-5 min-w-5 px-1 text-xs"
-                  data-testid="badge-unread-messages"
-                >
-                  {unreadMessageCount}
-                </Badge>
+                <>
+                  <Badge
+                    variant="destructive"
+                    className="ml-1.5 h-5 min-w-5 px-1 text-xs"
+                    data-testid="badge-unread-messages"
+                  >
+                    {unreadMessageCount}
+                  </Badge>
+                  <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-destructive animate-ping opacity-75" />
+                </>
               )}
             </Button>
             <Button
