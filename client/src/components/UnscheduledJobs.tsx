@@ -1,8 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 import { type Job, type Customer } from "@shared/schema";
-import { Clock, Package, AlertTriangle } from "lucide-react";
+import { Clock, Package, AlertTriangle, CheckCircle2, CheckCheck } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +31,10 @@ function urgencyInfo(job: Job): { label: string | null; color: string } {
 }
 
 export function UnscheduledJobs() {
+  const { toast } = useToast();
+  const [confirmJobId, setConfirmJobId] = useState<string | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
+
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
   });
@@ -27,6 +45,30 @@ export function UnscheduledJobs() {
 
   const { data: schedules = [] } = useQuery<any[]>({
     queryKey: ["/api/job-schedules"],
+  });
+
+  const completeJobMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      await apiRequest("PATCH", `/api/jobs/${jobId}`, { completed: true, status: "completed" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: "Job marked as complete" });
+    },
+    onError: () => toast({ title: "Failed to mark job complete", variant: "destructive" }),
+  });
+
+  const completeAllMutation = useMutation({
+    mutationFn: async (jobIds: string[]) => {
+      await Promise.all(
+        jobIds.map(id => apiRequest("PATCH", `/api/jobs/${id}`, { completed: true, status: "completed" }))
+      );
+    },
+    onSuccess: (_data, jobIds) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: `${jobIds.length} jobs marked as complete` });
+    },
+    onError: () => toast({ title: "Failed to mark jobs complete", variant: "destructive" }),
   });
 
   if (jobsLoading || customersLoading) {
@@ -70,60 +112,131 @@ export function UnscheduledJobs() {
     return differenceInCalendarDays(new Date(j.requiredDispatchDate), new Date()) <= 3;
   }).length;
 
+  const confirmJob = jobs.find(j => j.id === confirmJobId);
+
   return (
-    <Card className="flex flex-col max-h-[400px]">
-      <CardHeader className="flex-shrink-0 flex-row items-center justify-between gap-2 flex-wrap">
-        <CardTitle className="text-sm font-medium">
-          Unscheduled Jobs ({unscheduledJobs.length})
-        </CardTitle>
-        {urgentCount > 0 && (
-          <Badge variant="destructive" className="gap-1 text-xs">
-            <AlertTriangle className="h-3 w-3" />
-            {urgentCount} urgent
-          </Badge>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-2 overflow-y-auto flex-1">
-        {unscheduledJobs.map((job) => {
-          const { label: urgLabel, color: urgColor } = urgencyInfo(job);
-          const isUrgent = urgLabel && (urgLabel.includes("overdue") || urgLabel === "Due today" || urgLabel.match(/^[1-3]d left/));
-          return (
-            <div
-              key={job.id}
-              className={cn(
-                "p-3 border rounded-md space-y-1 hover-elevate active-elevate-2",
-                isUrgent ? "border-orange-200 dark:border-orange-900/40" : ""
-              )}
-              data-testid={`job-unscheduled-${job.id}`}
+    <>
+      <Card className="flex flex-col max-h-[400px]">
+        <CardHeader className="flex-shrink-0 flex-row items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-sm font-medium">
+            Unscheduled Jobs ({unscheduledJobs.length})
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {urgentCount > 0 && (
+              <Badge variant="destructive" className="gap-1 text-xs">
+                <AlertTriangle className="h-3 w-3" />
+                {urgentCount} urgent
+              </Badge>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs gap-1"
+              onClick={() => setConfirmAll(true)}
+              disabled={completeAllMutation.isPending}
+              data-testid="button-mark-all-complete"
             >
-              <div className="font-medium text-sm">{job.jobName}</div>
-              <div className="text-xs text-muted-foreground">
-                {getCustomerName(job.customerId)}
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <Package className="h-3 w-3" />
-                  <span>{job.quantity} units</span>
+              <CheckCheck className="h-3.5 w-3.5" />
+              Mark all done
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2 overflow-y-auto flex-1">
+          {unscheduledJobs.map((job) => {
+            const { label: urgLabel, color: urgColor } = urgencyInfo(job);
+            const isUrgent = urgLabel && (urgLabel.includes("overdue") || urgLabel === "Due today" || urgLabel.match(/^[1-3]d left/));
+            return (
+              <div
+                key={job.id}
+                className={cn(
+                  "p-3 border rounded-md space-y-1",
+                  isUrgent ? "border-orange-200 dark:border-orange-900/40 bg-orange-50/40 dark:bg-orange-950/10" : ""
+                )}
+                data-testid={`job-unscheduled-${job.id}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-medium text-sm leading-snug">{job.jobName}</div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-green-600"
+                    onClick={() => setConfirmJobId(job.id)}
+                    disabled={completeJobMutation.isPending}
+                    title="Mark as complete"
+                    data-testid={`button-complete-job-${job.id}`}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                  </Button>
                 </div>
-                {job.requiredDispatchDate && (
+                <div className="text-xs text-muted-foreground">
+                  {getCustomerName(job.customerId)}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <div className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    <span>{format(new Date(job.requiredDispatchDate), "MMM d")}</span>
+                    <Package className="h-3 w-3" />
+                    <span>{job.quantity} units</span>
                   </div>
-                )}
-                {urgLabel && (
-                  <span className={cn("font-medium", urgColor)}>{urgLabel}</span>
-                )}
+                  {job.requiredDispatchDate && (
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      <span>{format(new Date(job.requiredDispatchDate), "MMM d")}</span>
+                    </div>
+                  )}
+                  {urgLabel && (
+                    <span className={cn("font-medium", urgColor)}>{urgLabel}</span>
+                  )}
+                </div>
               </div>
-              {job.machineId && (
-                <Badge variant="secondary" className="text-xs">
-                  Machine {job.machineId}
-                </Badge>
-              )}
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Single job confirm */}
+      <AlertDialog open={!!confirmJobId} onOpenChange={(o) => { if (!o) setConfirmJobId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark job as complete?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark <span className="font-semibold">{confirmJob?.jobName}</span> as completed and remove it from the unscheduled list. Only do this if the job has genuinely been finished.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmJobId) completeJobMutation.mutate(confirmJobId);
+                setConfirmJobId(null);
+              }}
+            >
+              Yes, mark complete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Mark all confirm */}
+      <AlertDialog open={confirmAll} onOpenChange={setConfirmAll}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark all {unscheduledJobs.length} jobs as complete?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark every job in the unscheduled list as completed. Only do this if you are sure all of these jobs have been finished. This cannot be undone easily.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                completeAllMutation.mutate(unscheduledJobs.map(j => j.id));
+                setConfirmAll(false);
+              }}
+            >
+              Yes, mark all complete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
