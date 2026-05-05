@@ -165,7 +165,14 @@ export default function StaffMessages() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState<Tab>("job");
-  const [selected, setSelected] = useState<Selected>(null);
+
+  // Pre-select a job from ?jobId= URL param
+  const urlJobId = (() => {
+    try { return new URLSearchParams(window.location.search).get("jobId"); } catch { return null; }
+  })();
+  const [selected, setSelected] = useState<Selected>(
+    urlJobId ? { type: "job", jobId: urlJobId } : null
+  );
   const [newMessage, setNewMessage] = useState("");
   const [isInternal, setIsInternal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);

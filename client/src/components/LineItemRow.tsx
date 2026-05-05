@@ -1,5 +1,5 @@
 import { format, isPast, isToday } from "date-fns";
-import { Pencil, Trash2, StickyNote, CheckCircle2, XCircle, Package, Printer, Truck, PlayCircle } from "lucide-react";
+import { Pencil, Trash2, StickyNote, CheckCircle2, XCircle, Package, Printer, Truck, PlayCircle, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -40,6 +40,8 @@ interface LineItemRowProps {
   onPrintWorksheet?: (id: string) => void;
   onEditTracking?: (id: string) => void;
   onRecordProduction?: (lineItem: JobLineItem) => void;
+  onOpenMessages?: () => void;
+  hasUnreadMessages?: boolean;
   isCompleted?: boolean;
   dhlTrackingNumber?: string | null;
   errorsSlot?: React.ReactNode;
@@ -70,6 +72,8 @@ export function LineItemRow({
   onPrintWorksheet,
   onEditTracking,
   onRecordProduction,
+  onOpenMessages,
+  hasUnreadMessages = false,
   isCompleted = false,
   dhlTrackingNumber,
   errorsSlot,
@@ -321,31 +325,75 @@ export function LineItemRow({
       <td className="py-2 px-3">
         {isFirstLineItem && (
           isCompleted ? (
-            onEditTracking ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => onEditTracking(jobId)}
-                    data-testid={`button-edit-tracking-${jobId}`}
-                  >
-                    <Truck className="h-3 w-3" />
-                    {dhlTrackingNumber || "Add Tracking"}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{dhlTrackingNumber ? "Edit tracking number" : "Add tracking number"}</p>
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <span className="text-sm" data-testid={`text-invoice-ref-${jobId}`}>
-                -
-              </span>
-            )
+            <div className="flex gap-1 items-center">
+              {onOpenMessages && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 relative"
+                      onClick={onOpenMessages}
+                      data-testid={`button-messages-${jobId}`}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {hasUnreadMessages && (
+                        <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-destructive" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{hasUnreadMessages ? "Unread messages — open chat" : "Open job chat"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {onEditTracking ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => onEditTracking(jobId)}
+                      data-testid={`button-edit-tracking-${jobId}`}
+                    >
+                      <Truck className="h-3 w-3" />
+                      {dhlTrackingNumber || "Add Tracking"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{dhlTrackingNumber ? "Edit tracking number" : "Add tracking number"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <span className="text-sm" data-testid={`text-invoice-ref-${jobId}`}>
+                  -
+                </span>
+              )}
+            </div>
           ) : (
-            <div className="flex gap-1">
+            <div className="flex gap-1 items-center">
+              {onOpenMessages && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 relative"
+                      onClick={onOpenMessages}
+                      data-testid={`button-messages-${jobId}`}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {hasUnreadMessages && (
+                        <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-destructive" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{hasUnreadMessages ? "Unread messages — open chat" : "Open job chat"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               {onPrintWorksheet && (
                 <Tooltip>
                   <TooltipTrigger asChild>

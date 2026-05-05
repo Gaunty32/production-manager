@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { DemoText, DemoAmount } from "@/components/DemoText";
-import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText, MessageSquare } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -40,7 +40,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getMachineName } from "@shared/machines";
 import type { Customer, Job, JobWithLineItems, JobLineItem, Staff, LogoSetup, User } from "@shared/schema";
 import { canViewPrices } from "@shared/schema";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { isPast, isToday, format, addDays, startOfDay, endOfDay } from "date-fns";
 import { getPrice, getPrintPrice, getFlatRatePrice, getBaggingPrice, type PricingTable } from "@shared/pricing";
 import { getCustomerColorClasses } from "@shared/colors";
@@ -113,6 +113,19 @@ export default function Dashboard() {
   const { data: allJobErrors = [] } = useQuery<JobError[]>({
     queryKey: ["/api/job-errors/all"],
   });
+
+  // Fetch conversation unread counts for the message badges
+  interface StaffConversation { jobId: string; unreadCount: number; }
+  const { data: staffConversations = [] } = useQuery<StaffConversation[]>({
+    queryKey: ["/api/staff/conversations"],
+    refetchInterval: 30000,
+  });
+  const unreadByJobId = staffConversations.reduce<Record<string, number>>((acc, c) => {
+    acc[c.jobId] = c.unreadCount;
+    return acc;
+  }, {});
+
+  const [, setLocation] = useLocation();
 
   const errorsByJobId = allJobErrors.reduce<Record<string, JobError[]>>((acc, error) => {
     if (!acc[error.jobId]) {
@@ -929,11 +942,18 @@ export default function Dashboard() {
                           </div>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" data-testid={`button-menu-${job.id}`}>
+                              <Button variant="ghost" size="icon" data-testid={`button-menu-${job.id}`} className="relative">
                                 <MoreVertical className="h-4 w-4" />
+                                {!!(unreadByJobId[job.id] && unreadByJobId[job.id] > 0) && (
+                                  <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-destructive" />
+                                )}
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setLocation(`/messages?jobId=${job.id}`)} data-testid={`menu-messages-${job.id}`}>
+                                <MessageSquare className="h-4 w-4 mr-2" />
+                                Messages{!!(unreadByJobId[job.id] && unreadByJobId[job.id] > 0) ? ` (${unreadByJobId[job.id]} unread)` : ""}
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleEdit(job.id)}>
                                 Edit Job
                               </DropdownMenuItem>
@@ -1160,29 +1180,43 @@ export default function Dashboard() {
                               <span className="text-amber-600 text-xs">Needs line items</span>
                             </TableCell>
                             <TableCell className="py-2 px-3">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" data-testid={`button-actions-${job.id}`}>
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleEdit(job.id)} data-testid={`menu-edit-${job.id}`}>
-                                    Edit Job
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onClick={() => {
-                                      if (window.confirm(`Are you sure you want to delete this job: ${job.jobName}?`)) {
-                                        deleteJobMutation.mutate(job.id);
-                                      }
-                                    }}
-                                    className="text-destructive"
-                                    data-testid={`menu-delete-${job.id}`}
-                                  >
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 relative"
+                                  onClick={() => setLocation(`/messages?jobId=${job.id}`)}
+                                  data-testid={`button-messages-${job.id}`}
+                                >
+                                  <MessageSquare className="h-3.5 w-3.5" />
+                                  {!!(unreadByJobId[job.id] && unreadByJobId[job.id] > 0) && (
+                                    <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-destructive" />
+                                  )}
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-actions-${job.id}`}>
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleEdit(job.id)} data-testid={`menu-edit-${job.id}`}>
+                                      Edit Job
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      onClick={() => {
+                                        if (window.confirm(`Are you sure you want to delete this job: ${job.jobName}?`)) {
+                                          deleteJobMutation.mutate(job.id);
+                                        }
+                                      }}
+                                      className="text-destructive"
+                                      data-testid={`menu-delete-${job.id}`}
+                                    >
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </TableCell>
                             <TableCell className="py-2 px-3">
                               <JobErrorsDialog
@@ -1244,6 +1278,8 @@ export default function Dashboard() {
                               setWorksheetJob(fullJob);
                             }
                           }}
+                          onOpenMessages={() => setLocation(`/messages?jobId=${job.id}`)}
+                          hasUnreadMessages={!!(unreadByJobId[job.id] && unreadByJobId[job.id] > 0)}
                           onRecordProduction={(li) => {
                             setRecordingProductionItem({ lineItem: li, jobName: job.jobName });
                           }}
