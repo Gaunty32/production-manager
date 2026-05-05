@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { ObjectUploader } from "@/components/ObjectUploader";
 import { Upload, FileText, X, ExternalLink, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -37,7 +36,10 @@ interface StaffJobFileUploadProps {
 const AUTO_MESSAGE = "Thank you for submitting your files. They are being reviewed by our team.";
 
 export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload = false }: StaffJobFileUploadProps) {
-  const [pendingFiles, setPendingFiles] = useState<UploadedFile[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
   const { toast } = useToast();
 
   const { data: existingFiles = [], isLoading } = useQuery<JobFile[]>({
@@ -83,8 +85,65 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
     },
   });
 
-  const handleFileUploaded = async (file: UploadedFile) => {
-    await addFileMutation.mutateAsync(file);
+  const uploadFiles = useCallback(async (files: File[]) => {
+    if (!files.length) return;
+    setIsUploading(true);
+    let successCount = 0;
+    try {
+      await Promise.all(files.map(async (file) => {
+        const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
+        const { url, key } = await uploadRes.json();
+        await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
+        await addFileMutation.mutateAsync({
+          objectKey: key,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type || "application/octet-stream",
+        });
+        successCount++;
+      }));
+      if (successCount > 0) {
+        toast({ title: `${successCount} file${successCount !== 1 ? "s" : ""} uploaded` });
+      }
+    } catch {
+      toast({ title: "Failed to upload one or more files", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  }, [addFileMutation, toast]);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (files.length) await uploadFiles(files);
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.types.includes("Files")) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length) await uploadFiles(files);
   };
 
   const handleDownloadAll = async () => {
@@ -112,56 +171,25 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
 
   return (
     <div className="space-y-3">
+      {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">Files</span>
-        <div className="flex items-center gap-1">
-          {existingFiles.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadAll}
-              data-testid="button-download-all-files"
-              className="h-8 text-xs"
-            >
-              <Download className="h-3 w-3 mr-1" />
-              Download All
-            </Button>
-          )}
-          <ObjectUploader
-            maxNumberOfFiles={10}
-            onGetUploadParameters={async () => {
-              const res = await apiRequest("POST", "/api/staff/objects/upload", {});
-              const data = await res.json();
-              return {
-                method: "PUT" as const,
-                url: data.url,
-                key: data.key,
-              };
-            }}
-            onComplete={(result) => {
-              result.successful?.forEach((file: any) => {
-                const objectKey = file.meta.key as string;
-                handleFileUploaded({
-                  objectKey,
-                  fileName: file.name,
-                  fileSize: file.size,
-                  fileType: file.type || "application/octet-stream",
-                });
-              });
-            }}
-            buttonClassName="h-8"
+        {existingFiles.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadAll}
+            data-testid="button-download-all-files"
+            className="h-8 text-xs"
           >
-            <Upload className="h-3 w-3 mr-1" />
-            Upload
-          </ObjectUploader>
-        </div>
+            <Download className="h-3 w-3 mr-1" />
+            Download All
+          </Button>
+        )}
       </div>
 
-      {isLoading ? (
-        <p className="text-xs text-muted-foreground">Loading files...</p>
-      ) : existingFiles.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No files attached</p>
-      ) : (
+      {/* File list */}
+      {!isLoading && existingFiles.length > 0 && (
         <div className="space-y-1">
           {existingFiles.map((file) => (
             <div
@@ -202,6 +230,39 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
           ))}
         </div>
       )}
+
+      {/* Drop zone */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileSelect}
+        data-testid="input-file-upload"
+      />
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        disabled={isUploading}
+        data-testid="dropzone-files"
+        className={`w-full flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed py-6 px-4 transition-colors cursor-pointer
+          ${isDragging
+            ? "border-primary bg-primary/5 text-primary"
+            : "border-border text-muted-foreground hover:border-primary/50 hover:bg-muted/40"
+          }
+          ${isUploading ? "opacity-60 cursor-not-allowed" : ""}
+        `}
+      >
+        <Upload className={`h-5 w-5 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
+        <span className="text-sm font-medium">
+          {isUploading ? "Uploading…" : isDragging ? "Drop files here" : "Drag & drop files, or click to browse"}
+        </span>
+        <span className="text-xs text-muted-foreground">Any file type accepted</span>
+      </button>
     </div>
   );
 }
