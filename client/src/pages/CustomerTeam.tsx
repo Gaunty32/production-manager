@@ -67,6 +67,7 @@ export default function CustomerTeam() {
   const [showAdd, setShowAdd] = useState(false);
   const [addDialogError, setAddDialogError] = useState<string | null>(null);
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
+  const [uploadingForId, setUploadingForId] = useState<string | null>(null);
   const [isUploadingPic, setIsUploadingPic] = useState(false);
   const picInputRef = useRef<HTMLInputElement>(null);
 
@@ -123,6 +124,11 @@ export default function CustomerTeam() {
     },
   });
 
+  const openPickerForMember = (memberId: string) => {
+    setUploadingForId(memberId);
+    picInputRef.current?.click();
+  };
+
   const handlePicFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -138,7 +144,12 @@ export default function CustomerTeam() {
       const { url, key } = await uploadRes.json();
       await fetch(url, { method: "PUT", body: blob, headers: { "Content-Type": "image/jpeg" } });
       const normalizedKey = `/api/img${key.replace("/objects", "")}`;
-      await apiRequest("PUT", "/api/customer-portal/me/profile-picture", { profileImageUrl: normalizedKey });
+      const isOwnPic = !uploadingForId || uploadingForId === me?.id;
+      if (isOwnPic) {
+        await apiRequest("PUT", "/api/customer-portal/me/profile-picture", { profileImageUrl: normalizedKey });
+      } else {
+        await apiRequest("PUT", `/api/customer-portal/team/${uploadingForId}/profile-picture`, { profileImageUrl: normalizedKey });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/me"] });
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/team"] });
       toast({ title: "Profile picture updated" });
@@ -146,6 +157,7 @@ export default function CustomerTeam() {
       toast({ title: "Failed to upload profile picture", variant: "destructive" });
     } finally {
       setIsUploadingPic(false);
+      setUploadingForId(null);
     }
   };
 
@@ -203,29 +215,22 @@ export default function CustomerTeam() {
               return (
                 <Card key={member.id} data-testid={`card-member-${member.id}`}>
                   <CardContent className="flex items-center gap-4 p-4">
-                    {isMe ? (
-                      <button
-                        type="button"
-                        className="relative h-11 w-11 flex-shrink-0 rounded-full group focus:outline-none"
-                        onClick={() => picInputRef.current?.click()}
-                        disabled={isUploadingPic}
-                        title="Change profile picture"
-                        data-testid="button-change-avatar"
-                      >
-                        <Avatar className="h-11 w-11">
-                          {member.profileImageUrl && <AvatarImage src={member.profileImageUrl} />}
-                          <AvatarFallback className="text-sm font-semibold">{getInitials(member)}</AvatarFallback>
-                        </Avatar>
-                        <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Camera className="h-4 w-4 text-white" />
-                        </div>
-                      </button>
-                    ) : (
-                      <Avatar className="h-11 w-11 flex-shrink-0">
+                    <button
+                      type="button"
+                      className="relative h-11 w-11 flex-shrink-0 rounded-full group focus:outline-none"
+                      onClick={() => openPickerForMember(member.id)}
+                      disabled={isUploadingPic}
+                      title="Change profile picture"
+                      data-testid={`button-change-avatar-${member.id}`}
+                    >
+                      <Avatar className="h-11 w-11">
                         {member.profileImageUrl && <AvatarImage src={member.profileImageUrl} />}
                         <AvatarFallback className="text-sm font-semibold">{getInitials(member)}</AvatarFallback>
                       </Avatar>
-                    )}
+                      <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Camera className="h-4 w-4 text-white" />
+                      </div>
+                    </button>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">

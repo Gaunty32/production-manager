@@ -6862,6 +6862,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Toggle active status for a team member
+  app.put("/api/customer-portal/team/:id/profile-picture", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
+      const currentUser = await storage.getCustomerUserById(customerUserId);
+      if (!currentUser) return res.status(404).json({ error: "Not found" });
+      const target = await storage.getCustomerUserById(req.params.id);
+      if (!target || target.customerId !== currentUser.customerId) return res.status(403).json({ error: "Forbidden" });
+      const { profileImageUrl } = z.object({ profileImageUrl: z.string() }).parse(req.body);
+      await storage.updateCustomerUserProfileImage(req.params.id, profileImageUrl);
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to update profile picture" });
+    }
+  });
+
   app.patch("/api/customer-portal/team/:id/active", isCustomerAuthenticated, async (req: any, res) => {
     try {
       const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
