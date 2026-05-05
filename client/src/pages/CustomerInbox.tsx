@@ -941,7 +941,6 @@ export default function CustomerInbox() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv"
                   className="hidden"
                   onChange={handleFileSelect}
                   data-testid="input-file-attachment"
