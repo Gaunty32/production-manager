@@ -782,10 +782,9 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                   control={form.control}
                   name="customerId"
                   render={({ field }) => {
-                    // Only show active customers with pricing tables
                     const activeCustomers = customers.filter(c => c.active !== false);
-                    const customersWithPricing = activeCustomers.filter(c => c.pricingTable2025 || c.pricingTable2026);
-                    const activeWithoutPricing = activeCustomers.length - customersWithPricing.length;
+                    const customersWithPricing = new Set(activeCustomers.filter(c => c.pricingTable2025 || c.pricingTable2026).map(c => c.id));
+                    const activeWithoutPricing = activeCustomers.length - customersWithPricing.size;
                     const inactiveCount = customers.length - activeCustomers.length;
                     
                     return (
@@ -798,16 +797,16 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent position="popper" className="max-h-[300px]">
-                            {customersWithPricing.map((customer) => (
+                            {activeCustomers.map((customer) => (
                               <SelectItem key={customer.id} value={customer.id}>
-                                {customer.name}
+                                {customer.name}{!customersWithPricing.has(customer.id) ? " (no pricing)" : ""}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                         {(activeWithoutPricing > 0 || inactiveCount > 0) && (
                           <FormDescription>
-                            {activeWithoutPricing > 0 && `${activeWithoutPricing} customer${activeWithoutPricing !== 1 ? 's' : ''} hidden (no pricing table)`}
+                            {activeWithoutPricing > 0 && `${activeWithoutPricing} customer${activeWithoutPricing !== 1 ? 's' : ''} without a pricing table`}
                             {activeWithoutPricing > 0 && inactiveCount > 0 && ', '}
                             {inactiveCount > 0 && `${inactiveCount} inactive`}
                           </FormDescription>
