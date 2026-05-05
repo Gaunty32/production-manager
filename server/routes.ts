@@ -3329,6 +3329,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff - Server-side file upload (works for all file types including DST, PDF)
+  app.post(
+    "/api/staff/upload-file",
+    isStaffAuthenticated,
+    express.raw({ type: "*/*", limit: "50mb" }),
+    async (req: any, res) => {
+      try {
+        const { objectStorageClient, ObjectStorageService } = await import("./objectStorage");
+        const { randomUUID } = await import("crypto");
+        const objectStorageService = new ObjectStorageService();
+        const privateObjectDir = objectStorageService.getPrivateObjectDir();
+
+        const fileName = req.headers["x-file-name"]
+          ? decodeURIComponent(req.headers["x-file-name"] as string)
+          : "upload";
+        const fileType = (req.headers["x-file-type"] as string) || "application/octet-stream";
+
+        const objectId = randomUUID();
+        const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+        const parts = fullPath.slice(1).split("/");
+        const bucketName = parts[0];
+        const objectName = parts.slice(1).join("/");
+
+        const bucket = objectStorageClient.bucket(bucketName);
+        const gcsFile = bucket.file(objectName);
+        await gcsFile.save(req.body as Buffer, { contentType: fileType });
+
+        const key = `/objects/uploads/${objectId}`;
+        res.json({ key, fileName, fileType });
+      } catch (error: any) {
+        console.error("Error uploading staff file:", error);
+        res.status(500).json({ error: error?.message || "Failed to upload file" });
+      }
+    }
+  );
+
   // Staff - Get current user info
   app.get("/api/staff/me", isStaffAuthenticated, async (req: any, res) => {
     try {

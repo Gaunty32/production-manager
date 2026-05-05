@@ -613,10 +613,21 @@ export default function StaffMessages() {
       const uploaded = await Promise.all(files.map(async (file) => {
         const isImage = IMAGE_MIME_TYPES.has(file.type);
         const previewUrl = isImage ? URL.createObjectURL(file) : null;
-        const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
-        const { url, key } = await uploadRes.json();
-        await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
-        const normalizedKey = `/api/img${key.replace("/objects", "")}`;
+        const contentType = file.type || "application/octet-stream";
+        const arrayBuffer = await file.arrayBuffer();
+        const uploadRes = await fetch("/api/staff/upload-file", {
+          method: "POST",
+          headers: {
+            "Content-Type": contentType,
+            "x-file-name": encodeURIComponent(file.name),
+            "x-file-type": contentType,
+          },
+          body: arrayBuffer,
+          credentials: "include",
+        });
+        if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.statusText}`);
+        const { key } = await uploadRes.json();
+        const normalizedKey = key.startsWith("/objects/") ? `/api/img${key.replace("/objects", "")}` : key;
         return { key: normalizedKey, preview: previewUrl, fileName: file.name, isImage };
       }));
       setChatImages(prev => [...prev, ...uploaded]);
@@ -1060,7 +1071,7 @@ export default function StaffMessages() {
 
       {/* ── Chat panel ──────────────────────────────────────────────────────── */}
       {selected ? (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Chat header */}
           <div className="px-4 py-3 border-b bg-card/40 flex items-center gap-3">
             <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setSelected(null)}>
@@ -1137,7 +1148,7 @@ export default function StaffMessages() {
           )}
 
           {/* Messages area */}
-          <div className="flex-1 overflow-y-auto px-4 pt-4 pb-6 space-y-3">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-6 space-y-3">
             {isLoadingMessages ? (
               <LoadingSpinner />
             ) : messages.length === 0 ? (
