@@ -32,6 +32,7 @@ import {
   Bell,
   BellOff,
   Paperclip,
+  FileText,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -130,7 +131,8 @@ export default function CustomerInbox() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // File attachment
-  const [chatImage, setChatImage] = useState<{ key: string; previewUrl: string } | null>(null);
+  const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/svg+xml", "image/avif"]);
+  const [chatImage, setChatImage] = useState<{ key: string; previewUrl: string | null; isImage: boolean; fileName: string } | null>(null);
   const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -379,7 +381,18 @@ export default function CustomerInbox() {
 
   const handleSend = () => {
     if ((!newMessage.trim() && !chatImage) || !selected) return;
-    const payload = { message: newMessage.trim(), imageUrl: chatImage?.key };
+    let payload: { message: string; imageUrl?: string };
+    if (chatImage) {
+      if (chatImage.isImage) {
+        payload = { message: newMessage.trim(), imageUrl: chatImage.key };
+      } else {
+        const fileMarker = `[FILE:${chatImage.fileName}:${chatImage.key}]`;
+        const text = [newMessage.trim(), fileMarker].filter(Boolean).join("\n");
+        payload = { message: text };
+      }
+    } else {
+      payload = { message: newMessage.trim() };
+    }
     if (selected.type === "job") sendJobMutation.mutate(payload);
     else sendDirectMutation.mutate(payload);
   };
@@ -395,21 +408,25 @@ export default function CustomerInbox() {
     }
     setIsUploadingChatImage(true);
     try {
+      const contentType = file.type || "application/octet-stream";
+      const isImage = IMAGE_MIME_TYPES.has(file.type);
       const arrayBuffer = await file.arrayBuffer();
       const res = await fetch("/api/customer-portal/upload-file", {
         method: "POST",
         headers: {
-          "Content-Type": file.type,
+          "Content-Type": contentType,
           "x-file-name": encodeURIComponent(file.name),
-          "x-file-type": file.type,
+          "x-file-type": contentType,
         },
         body: arrayBuffer,
         credentials: "include",
       });
       if (!res.ok) throw new Error("Upload failed");
       const { key } = await res.json();
-      const previewUrl = URL.createObjectURL(file);
-      setChatImage({ key, previewUrl });
+      // Normalize key for serving via /api/img route
+      const normalizedKey = key.startsWith("/objects/") ? `/api/img${key.replace("/objects", "")}` : key;
+      const previewUrl = isImage ? URL.createObjectURL(file) : null;
+      setChatImage({ key: normalizedKey, previewUrl, isImage, fileName: file.name });
     } catch {
       toast({ title: "Upload failed", description: "Could not upload the file. Please try again.", variant: "destructive" });
     } finally {
@@ -896,14 +913,40 @@ export default function CustomerInbox() {
                         <div className={`max-w-[82%] sm:max-w-[72%] flex flex-col gap-0.5 ${isCustomer ? "items-end" : "items-start"}`}>
                           {/* name moved under avatar */}
                           <div className={`rounded-2xl px-4 py-2.5 ${isCustomer ? "bg-blue-500 text-white rounded-br-sm" : "bg-orange-400 text-white rounded-bl-sm"}`}>
-                            {msg.message.trim() && (
-                              <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message}</p>
+                            {msg.message.replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim() && (
+                              <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.message.replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim()}</p>
                             )}
                             {msg.imageUrl && (
                               <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
-                                <img src={msg.imageUrl} alt="Sample" className="max-w-full rounded-lg max-h-48 object-contain hover:opacity-90 transition-opacity" />
+                                <img src={msg.imageUrl} alt="Attachment" className="max-w-full rounded-lg max-h-48 object-contain hover:opacity-90 transition-opacity" />
                               </a>
                             )}
+                            {(() => {
+                              const fileRegex = /\[FILE:([^:]+):([^\]]+)\]/g;
+                              const rawText = msg.message || "";
+                              const fileMatches: { name: string; url: string }[] = [];
+                              let m: RegExpExecArray | null;
+                              while ((m = fileRegex.exec(rawText)) !== null) {
+                                fileMatches.push({ name: m[1], url: m[2] });
+                              }
+                              if (!fileMatches.length) return null;
+                              return (
+                                <div className="mt-2 space-y-1">
+                                  {fileMatches.map((f, fi) => (
+                                    <a
+                                      key={fi}
+                                      href={f.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium no-underline bg-white/20 text-inherit border border-white/20 hover:opacity-80 transition-opacity"
+                                    >
+                                      <FileText className="h-4 w-4 shrink-0" />
+                                      <span className="truncate max-w-[200px]">{f.name}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
                           <p className={`text-[10px] text-muted-foreground px-1 mt-0.5 ${isCustomer ? "text-right" : ""}`}>
                             {format(msgDate, "h:mm a")}
@@ -918,14 +961,21 @@ export default function CustomerInbox() {
             </div>
 
             <div className="border-t px-3 py-3 bg-card/40 shrink-0">
-              {/* Attached image preview */}
+              {/* Attached file/image preview */}
               {chatImage && (
                 <div className="mb-2 relative inline-block">
-                  <img
-                    src={chatImage.previewUrl}
-                    alt="Attachment preview"
-                    className="max-h-28 max-w-[200px] rounded-lg border object-contain"
-                  />
+                  {chatImage.isImage && chatImage.previewUrl ? (
+                    <img
+                      src={chatImage.previewUrl}
+                      alt="Attachment preview"
+                      className="max-h-28 max-w-[200px] rounded-lg border object-contain"
+                    />
+                  ) : (
+                    <div className="h-16 w-36 rounded-md border border-border bg-muted flex flex-col items-center justify-center gap-1 px-2">
+                      <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                      <span className="text-[10px] text-muted-foreground text-center leading-tight line-clamp-2 break-all">{chatImage.fileName}</span>
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => setChatImage(null)}
