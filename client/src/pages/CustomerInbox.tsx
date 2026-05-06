@@ -441,6 +441,15 @@ export default function CustomerInbox() {
     if (file) processFile(file);
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData.items);
+    const fileItems = items.filter(item => item.kind === "file");
+    if (fileItems.length === 0) return;
+    e.preventDefault();
+    const file = fileItems[0].getAsFile();
+    if (file) processFile(file);
+  };
+
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1029,10 +1038,11 @@ export default function CustomerInbox() {
                   )}
                 </Button>
                 <Textarea
-                  placeholder="Message… (Enter to send)"
+                  placeholder="Message… (Enter to send, paste images/files with Ctrl+V)"
                   value={newMessage}
                   onChange={e => setNewMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
                   rows={1}
                   className="resize-none text-sm min-h-[42px] max-h-32"
                   style={{ fieldSizing: "content" } as React.CSSProperties}
