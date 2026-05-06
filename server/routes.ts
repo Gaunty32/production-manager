@@ -3119,7 +3119,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use staff.id if found, otherwise fall back to the userId (e.g. super_admin with no staff record)
       const senderId = staffMember ? staffMember.id : sessionUserId;
-      const senderName = staffMember?.name || 'Staff';
+      let senderName = staffMember?.name || '';
+      if (!senderName) {
+        const allUsers = await storage.getAllUsers();
+        const userRecord = allUsers.find(u => u.id === sessionUserId);
+        senderName = [userRecord?.firstName, userRecord?.lastName].filter(Boolean).join(' ') || 'Staff';
+      }
 
       const isInternal = !!req.body.isInternal;
 
@@ -6252,7 +6257,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessionUserId = String(req.session.userId);
       const allStaff = await storage.getStaff();
       const staffMember = allStaff.find((s: any) => s.userId && String(s.userId) === sessionUserId);
-      const senderName = staffMember?.name || 'Staff';
+      let senderName = staffMember?.name || '';
+      if (!senderName) {
+        const allUsers = await storage.getAllUsers();
+        const userRecord = allUsers.find(u => u.id === sessionUserId);
+        senderName = [userRecord?.firstName, userRecord?.lastName].filter(Boolean).join(' ') || 'Staff';
+      }
       const msg = await storage.createConversationMessage({
         conversationId: req.params.id,
         senderType: "staff",
@@ -6310,7 +6320,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const sessionUserId = String(req.session.userId);
           const allStaff = await storage.getStaff();
           const staffMember = allStaff.find(s => s.userId && String(s.userId) === sessionUserId);
-          const senderName = staffMember?.name || 'Staff';
+          let senderName = staffMember?.name || '';
+          if (!senderName) {
+            const allUsers = await storage.getAllUsers();
+            const userRecord = allUsers.find(u => u.id === sessionUserId);
+            senderName = [userRecord?.firstName, userRecord?.lastName].filter(Boolean).join(' ') || 'Staff';
+          }
 
           const customerUsers = await storage.getCustomerUsersByCustomerId(convo.customerId);
           const emails = customerUsers
