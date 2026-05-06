@@ -81,6 +81,7 @@ type CustomerUser = {
   customerName: string | null;
   customerLogoUrl: string | null;
   emailNotificationsMessages?: boolean;
+  emailNotificationsDispatch?: boolean;
 };
 
 function formatConvoTime(iso: string) {
@@ -143,8 +144,8 @@ export default function CustomerInbox() {
   });
 
   const notificationSettingsMutation = useMutation({
-    mutationFn: (enabled: boolean) =>
-      apiRequest("PATCH", "/api/customer-auth/me/notification-settings", { emailNotificationsMessages: enabled }),
+    mutationFn: (settings: { emailNotificationsMessages?: boolean; emailNotificationsDispatch?: boolean }) =>
+      apiRequest("PATCH", "/api/customer-auth/me/notification-settings", settings),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-auth/user"] });
     },
@@ -533,23 +534,39 @@ export default function CustomerInbox() {
                     : <BellOff className="h-4 w-4 text-muted-foreground" />}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-72">
-                <div className="space-y-3">
+              <PopoverContent align="end" className="w-80">
+                <div className="space-y-4">
                   <div>
-                    <p className="font-semibold text-sm">Notification settings</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Control how you receive updates from us</p>
+                    <p className="font-semibold text-sm">Email notification settings</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Choose when you receive email updates from us</p>
                   </div>
-                  <div className="flex items-center justify-between gap-4 pt-1">
-                    <Label htmlFor="customer-email-notifs" className="text-sm leading-snug flex-1">
-                      Email me when a new message arrives
-                    </Label>
-                    <Switch
-                      id="customer-email-notifs"
-                      checked={currentUser?.emailNotificationsMessages ?? false}
-                      onCheckedChange={(checked) => notificationSettingsMutation.mutate(checked)}
-                      disabled={notificationSettingsMutation.isPending}
-                      data-testid="toggle-customer-email-notifications"
-                    />
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <Label htmlFor="customer-email-notifs-messages" className="text-sm leading-snug flex-1 pt-0.5">
+                        New messages
+                        <p className="text-xs text-muted-foreground font-normal mt-0.5">Email me when a staff member sends a new message</p>
+                      </Label>
+                      <Switch
+                        id="customer-email-notifs-messages"
+                        checked={currentUser?.emailNotificationsMessages ?? false}
+                        onCheckedChange={(checked) => notificationSettingsMutation.mutate({ emailNotificationsMessages: checked })}
+                        disabled={notificationSettingsMutation.isPending}
+                        data-testid="toggle-customer-email-notifications"
+                      />
+                    </div>
+                    <div className="border-t pt-3 flex items-start justify-between gap-4">
+                      <Label htmlFor="customer-email-notifs-dispatch" className="text-sm leading-snug flex-1 pt-0.5">
+                        Order dispatched
+                        <p className="text-xs text-muted-foreground font-normal mt-0.5">Email me when an order is dispatched with DPD tracking</p>
+                      </Label>
+                      <Switch
+                        id="customer-email-notifs-dispatch"
+                        checked={currentUser?.emailNotificationsDispatch ?? false}
+                        onCheckedChange={(checked) => notificationSettingsMutation.mutate({ emailNotificationsDispatch: checked })}
+                        disabled={notificationSettingsMutation.isPending}
+                        data-testid="toggle-customer-dispatch-notifications"
+                      />
+                    </div>
                   </div>
                 </div>
               </PopoverContent>

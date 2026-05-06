@@ -43,7 +43,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 
@@ -1789,11 +1789,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const customerUserId = req.session?.customerUserId || req.session?.impersonationCustomerUserId;
       if (!customerUserId) return res.status(401).json({ error: "Not authenticated" });
-      const { emailNotificationsMessages } = req.body;
-      if (typeof emailNotificationsMessages !== "boolean") {
-        return res.status(400).json({ error: "emailNotificationsMessages must be a boolean" });
+      const { emailNotificationsMessages, emailNotificationsDispatch } = req.body;
+      const settings: { emailNotificationsMessages?: boolean; emailNotificationsDispatch?: boolean } = {};
+      if (typeof emailNotificationsMessages === "boolean") settings.emailNotificationsMessages = emailNotificationsMessages;
+      if (typeof emailNotificationsDispatch === "boolean") settings.emailNotificationsDispatch = emailNotificationsDispatch;
+      if (!Object.keys(settings).length) {
+        return res.status(400).json({ error: "No valid settings provided" });
       }
-      await storage.updateCustomerNotificationSettings(customerUserId, emailNotificationsMessages);
+      await storage.updateCustomerNotificationSettings(customerUserId, settings);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to update notification settings" });
@@ -7082,6 +7085,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
           storage.updateJob(id, { dhlTrackingNumber: result.trackingNumber.trim() })
         )
       );
+
+      // Send dispatch notification emails to opted-in customer users
+      try {
+        // Group jobs by customer so we send one email per customer
+        const customerJobMap = new Map<string, { jobNames: string[]; customerName: string; logoUrl: string | null }>();
+        for (const job of validJobs) {
+          if (!job) continue;
+          const customerId = job.customerId;
+          if (!customerJobMap.has(customerId)) {
+            const customer = await storage.getCustomer(customerId);
+            customerJobMap.set(customerId, {
+              jobNames: [],
+              customerName: customer?.name ?? "Customer",
+              logoUrl: customer?.logoUrl ?? null,
+            });
+          }
+          customerJobMap.get(customerId)!.jobNames.push(job.jobName);
+        }
+
+        const portalUrl = `${process.env.REPLIT_DEPLOYMENT_URL || process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://your-portal.com"}/customer/orders`;
+
+        for (const [customerId, { jobNames, customerName, logoUrl }] of customerJobMap) {
+          const customerUsersList = await storage.getCustomerUsersByCustomerId(customerId);
+          const emailsToNotify = customerUsersList
+            .filter(u => u.active && u.emailNotificationsDispatch && u.email)
+            .map(u => u.email);
+
+          if (emailsToNotify.length > 0) {
+            sendDispatchNotificationEmail(emailsToNotify, {
+              customerName,
+              jobNames,
+              trackingNumber: result.trackingNumber.trim(),
+              portalUrl,
+              customerLogoUrl: logoUrl,
+            }).catch(err => console.error("[DPD] Dispatch email error:", err));
+          }
+        }
+      } catch (emailErr) {
+        console.error("[DPD] Failed to send dispatch notification emails:", emailErr);
+      }
 
       res.json({
         trackingNumber: result.trackingNumber,

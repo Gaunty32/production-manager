@@ -964,3 +964,43 @@ export async function sendPaymentReceiptEmail(params: {
     console.error('Failed to send payment receipt email:', error);
   }
 }
+
+export async function sendDispatchNotificationEmail(
+  customerEmails: string[],
+  details: {
+    customerName: string;
+    jobNames: string[];
+    trackingNumber: string;
+    portalUrl: string;
+    customerLogoUrl?: string | null;
+  }
+) {
+  if (!customerEmails.length) return;
+  const { client, fromEmail } = await getUncachableResendClient();
+  const safeName = sanitizeHtml(details.customerName);
+  const safeTracking = sanitizeHtml(details.trackingNumber);
+  const jobList = details.jobNames.map(j => `<li style="margin:4px 0;color:#18181b;font-size:14px;">${sanitizeHtml(j)}</li>`).join('');
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Your Order Has Been Dispatched</h2>
+    <p style="margin:0 0 12px;font-size:15px;color:#3f3f46;">Hi ${safeName},</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#3f3f46;">Great news — your order has been dispatched via DPD and is on its way to you.</p>
+    ${infoTable([{ label: 'DPD Tracking Number', value: safeTracking }])}
+    <p style="margin:16px 0 8px;font-size:14px;font-weight:600;color:#18181b;">Order(s) included:</p>
+    <ul style="margin:0 0 20px;padding-left:20px;">${jobList}</ul>
+    <p style="margin:0 0 20px;font-size:14px;color:#71717a;">Log in to your customer portal to view full tracking details and order status.</p>
+    ${ctaButton(details.portalUrl, 'Track Your Order')}
+    ${muted('If you have any questions about your delivery, please don\'t hesitate to get in touch.')}
+  `;
+
+  const { error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: customerEmails,
+    subject: `Your order has been dispatched — DPD tracking: ${safeTracking}`,
+    html: brandedEmail(body, { customerLogoUrl: details.customerLogoUrl, customerName: details.customerName }),
+  });
+
+  if (error) {
+    console.error('Failed to send dispatch notification email:', error);
+  }
+}

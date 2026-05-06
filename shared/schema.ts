@@ -221,6 +221,7 @@ export const customerUsers = pgTable("customer_users", {
   mustResetPassword: boolean("must_reset_password").notNull().default(true),
   active: boolean("active").notNull().default(true),
   emailNotificationsMessages: boolean("email_notifications_messages").notNull().default(true),
+  emailNotificationsDispatch: boolean("email_notifications_dispatch").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
   inviteSentAt: timestamp("invite_sent_at"),

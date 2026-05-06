@@ -173,7 +173,7 @@ export interface IStorage {
   updateCustomerActive(id: string, active: boolean): Promise<void>;
   updateCustomerMustResetPassword(id: string, mustResetPassword: boolean): Promise<void>;
   updateCustomerUserDetails(id: string, data: { email?: string; firstName?: string; lastName?: string }): Promise<CustomerUser>;
-  updateCustomerNotificationSettings(id: string, emailNotificationsMessages: boolean): Promise<void>;
+  updateCustomerNotificationSettings(id: string, settings: { emailNotificationsMessages?: boolean; emailNotificationsDispatch?: boolean }): Promise<void>;
   updateCustomerUserInviteSent(id: string): Promise<void>;
   getJobMessages(jobId: string): Promise<JobMessage[]>;
   createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
@@ -1333,10 +1333,14 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async updateCustomerNotificationSettings(id: string, emailNotificationsMessages: boolean): Promise<void> {
+  async updateCustomerNotificationSettings(id: string, settings: { emailNotificationsMessages?: boolean; emailNotificationsDispatch?: boolean }): Promise<void> {
+    const updates: Record<string, boolean> = {};
+    if (typeof settings.emailNotificationsMessages === "boolean") updates.emailNotificationsMessages = settings.emailNotificationsMessages;
+    if (typeof settings.emailNotificationsDispatch === "boolean") updates.emailNotificationsDispatch = settings.emailNotificationsDispatch;
+    if (!Object.keys(updates).length) return;
     await db
       .update(customerUsers)
-      .set({ emailNotificationsMessages })
+      .set(updates)
       .where(eq(customerUsers.id, id));
   }
 
