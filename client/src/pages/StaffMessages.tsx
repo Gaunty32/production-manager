@@ -1031,7 +1031,7 @@ export default function StaffMessages() {
                     data-testid="button-toggle-hidden"
                   >
                     {showHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                    {showHidden ? "Hide archived" : `Show ${hiddenCount} archived`}
+                    {showHidden ? "Hide hidden chats" : `Show ${hiddenCount} hidden`}
                   </button>
                 )}
                 {archivedConversations.length > 0 && (
@@ -1093,9 +1093,9 @@ export default function StaffMessages() {
                   View Job
                 </Button>
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  title={selectedJobConvo?.isArchivedByStaff ? "Unarchive conversation" : "Archive conversation"}
+                  variant="outline"
+                  size="sm"
+                  title={selectedJobConvo?.isArchivedByStaff ? "Restore conversation to active list" : "Archive this conversation"}
                   onClick={() => {
                     if (selectedJobConvo?.isArchivedByStaff) {
                       archiveConvoJobMutation.mutate({ jobId: selectedJobConvo!.jobId, archive: false });
@@ -1106,7 +1106,9 @@ export default function StaffMessages() {
                   disabled={archiveConvoJobMutation.isPending}
                   data-testid="button-archive-job-convo"
                 >
-                  {selectedJobConvo?.isArchivedByStaff ? <ArchiveX className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                  {selectedJobConvo?.isArchivedByStaff
+                    ? <><ArchiveX className="h-3.5 w-3.5 mr-1.5" />Restore</>
+                    : <><Archive className="h-3.5 w-3.5 mr-1.5" />Archive</>}
                 </Button>
               </>
             ) : (
@@ -1119,12 +1121,13 @@ export default function StaffMessages() {
                   <p className="text-xs text-muted-foreground">{selectedDirectConvo?.customerName ? <DemoText>{selectedDirectConvo.customerName}</DemoText> : null}</p>
                 </div>
                 <Button
-                  variant="ghost"
-                  size="icon"
+                  variant="outline"
+                  size="sm"
+                  title="Archive this conversation"
                   onClick={() => archiveConvoMutation.mutate(selectedDirectConvo!.id)}
                   data-testid="button-archive-convo"
                 >
-                  <Archive className="h-4 w-4" />
+                  <Archive className="h-3.5 w-3.5 mr-1.5" />Archive
                 </Button>
               </>
             )}
@@ -1903,39 +1906,43 @@ type ArchivedSectionProps = {
 function ArchivedSection({ conversations, selected, onSelect, onUnarchive }: ArchivedSectionProps) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="border-t">
+    <div className="border-t bg-muted/20">
       <button
         onClick={() => setExpanded(e => !e)}
-        className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground hover-elevate"
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-muted-foreground hover-elevate"
         data-testid="button-toggle-archived"
       >
-        <Archive className="h-3 w-3" />
-        {expanded ? "Hide archived" : `Show ${conversations.length} archived`}
+        <Archive className="h-3.5 w-3.5 shrink-0" />
+        <span className="flex-1 text-left">Archived Chats</span>
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{conversations.length}</Badge>
+        <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`} />
       </button>
       {expanded && (
-        <div className="border-t divide-y">
+        <div className="border-t divide-y divide-border/40">
           {conversations.map(c => (
             <div
               key={c.jobId}
-              className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover-elevate ${selected?.type === "job" && selected.jobId === c.jobId ? "bg-accent" : ""}`}
+              className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer hover-elevate ${selected?.type === "job" && selected.jobId === c.jobId ? "bg-primary/8" : ""}`}
               onClick={() => onSelect(c.jobId)}
               data-testid={`archived-convo-${c.jobId}`}
             >
+              <Package className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate text-muted-foreground">{c.jobName}</p>
                 <p className="text-[10px] text-muted-foreground/60 truncate"><DemoText>{c.customerName}</DemoText></p>
               </div>
               {c.unreadCount > 0 && (
-                <span className="text-[10px] font-bold text-blue-500">{c.unreadCount}</span>
+                <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">{c.unreadCount}</Badge>
               )}
               <button
                 type="button"
-                title="Unarchive"
+                title="Restore to active chats"
                 onClick={e => { e.stopPropagation(); onUnarchive(c.jobId); }}
-                className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+                className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-muted-foreground border border-border/60 hover-elevate"
                 data-testid={`button-unarchive-${c.jobId}`}
               >
-                <ArchiveX className="h-3.5 w-3.5" />
+                <ArchiveX className="h-3 w-3" />
+                Restore
               </button>
             </div>
           ))}

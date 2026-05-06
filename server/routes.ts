@@ -3759,7 +3759,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               shippingCost: null, // Don't duplicate shipping cost on consolidated jobs
               completed: true, // Mark as completed
               invoiceStatus: "ready", // Ready for invoicing
-            });
+              conversationArchivedByStaff: true, // Auto-archive chat when job moves to invoicing
+            } as any);
           }
         } else {
           // Creating a single-job consolidated shipment (for future consolidation)
@@ -3927,8 +3928,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Don't overwrite jobs that have already been sent/paid
           await storage.updateJob(lineItem.jobId, {
             completed: true,
-            invoiceStatus: "ready"
-          });
+            invoiceStatus: "ready",
+            conversationArchivedByStaff: true, // Auto-archive chat when job moves to invoicing
+          } as any);
         } else if (anyIncomplete && job.invoiceStatus === "ready") {
           // If any line item is incomplete and job is only at 'ready' status (not yet invoiced),
           // reset job completion status. Don't downgrade jobs that have been sent/paid.
