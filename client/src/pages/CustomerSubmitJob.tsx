@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles, Layers } from "lucide-react";
 import { customerJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
@@ -353,6 +353,22 @@ export default function CustomerSubmitJob() {
                             <div>
                               <p className="font-medium text-sm text-foreground">Digitising Required</p>
                               <p className="text-xs text-muted-foreground mt-0.5">New logo setup — £12 charge, allow 48 hours for a sample</p>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => field.onChange("new_logo_files_supplied")}
+                            data-testid="button-logo-type-files-supplied"
+                            className={`flex items-start gap-3 p-4 rounded-md border text-left transition-colors sm:col-span-2 ${
+                              field.value === "new_logo_files_supplied"
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/40 hover:bg-muted/40"
+                            }`}
+                          >
+                            <Layers className={`h-5 w-5 mt-0.5 shrink-0 ${field.value === "new_logo_files_supplied" ? "text-primary" : "text-muted-foreground"}`} />
+                            <div>
+                              <p className="font-medium text-sm text-foreground">New Logo — Embroidery files &amp; Madeira thread colours supplied</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">You are providing your own embroidery files and thread colour references</p>
                             </div>
                           </button>
                         </div>
