@@ -855,7 +855,7 @@ export default function CustomerInbox() {
                     size="sm"
                     variant="outline"
                     className="text-xs h-8 gap-1.5"
-                    onClick={() => sendJobMutation.mutate("Approved, please proceed.")}
+                    onClick={() => sendJobMutation.mutate({ message: "Approved, please proceed." })}
                     disabled={sendJobMutation.isPending}
                     data-testid="button-approve-sample-quick-reply"
                   >
