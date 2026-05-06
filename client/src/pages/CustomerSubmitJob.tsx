@@ -322,55 +322,56 @@ export default function CustomerSubmitJob() {
                     <FormItem>
                       <FormLabel>Logo Type *</FormLabel>
                       <FormControl>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => field.onChange("repeat_logo")}
-                            data-testid="button-logo-type-repeat"
-                            className={`flex items-start gap-3 p-4 rounded-md border text-left transition-colors ${
-                              field.value === "repeat_logo"
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:border-primary/40 hover:bg-muted/40"
-                            }`}
-                          >
-                            <RefreshCw className={`h-5 w-5 mt-0.5 shrink-0 ${field.value === "repeat_logo" ? "text-primary" : "text-muted-foreground"}`} />
-                            <div>
-                              <p className="font-medium text-sm text-foreground">Repeat Logo</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">We already have this logo set up and ready to go</p>
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => field.onChange("new_logo")}
-                            data-testid="button-logo-type-new"
-                            className={`flex items-start gap-3 p-4 rounded-md border text-left transition-colors ${
-                              field.value === "new_logo"
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:border-primary/40 hover:bg-muted/40"
-                            }`}
-                          >
-                            <Sparkles className={`h-5 w-5 mt-0.5 shrink-0 ${field.value === "new_logo" ? "text-primary" : "text-muted-foreground"}`} />
-                            <div>
-                              <p className="font-medium text-sm text-foreground">Digitising Required</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">New logo setup — £12 charge, allow 48 hours for a sample</p>
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => field.onChange("new_logo_files_supplied")}
-                            data-testid="button-logo-type-files-supplied"
-                            className={`flex items-start gap-3 p-4 rounded-md border text-left transition-colors sm:col-span-2 ${
-                              field.value === "new_logo_files_supplied"
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:border-primary/40 hover:bg-muted/40"
-                            }`}
-                          >
-                            <Layers className={`h-5 w-5 mt-0.5 shrink-0 ${field.value === "new_logo_files_supplied" ? "text-primary" : "text-muted-foreground"}`} />
-                            <div>
-                              <p className="font-medium text-sm text-foreground">New Logo — Embroidery files &amp; Madeira thread colours supplied</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">You are providing your own embroidery files and thread colour references</p>
-                            </div>
-                          </button>
+                        <div className="flex flex-col gap-2 pt-1">
+                          {([
+                            {
+                              value: "repeat_logo",
+                              icon: RefreshCw,
+                              label: "Repeat Logo",
+                              description: "We already have this logo set up and ready to go",
+                              testId: "button-logo-type-repeat",
+                            },
+                            {
+                              value: "new_logo",
+                              icon: Sparkles,
+                              label: "Digitising Required",
+                              description: "New logo setup — £12 charge, allow 48 hours for a sample",
+                              testId: "button-logo-type-new",
+                            },
+                            {
+                              value: "new_logo_files_supplied",
+                              icon: Layers,
+                              label: "New Logo — Embroidery files & Madeira thread colours supplied",
+                              description: "You are providing your own embroidery files and thread colour references",
+                              testId: "button-logo-type-files-supplied",
+                            },
+                          ] as const).map(({ value, icon: Icon, label, description, testId }) => {
+                            const selected = field.value === value;
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                onClick={() => field.onChange(value)}
+                                data-testid={testId}
+                                className={`flex items-center gap-4 w-full p-4 rounded-md border text-left transition-colors ${
+                                  selected
+                                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                    : "border-border hover:border-primary/50 hover:bg-muted/40"
+                                }`}
+                              >
+                                <div className={`flex-shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                  selected ? "border-primary" : "border-muted-foreground/40"
+                                }`}>
+                                  {selected && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                                </div>
+                                <Icon className={`h-5 w-5 shrink-0 ${selected ? "text-primary" : "text-muted-foreground"}`} />
+                                <div className="min-w-0">
+                                  <p className={`font-medium text-sm ${selected ? "text-primary" : "text-foreground"}`}>{label}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
                       </FormControl>
                       <FormMessage />
