@@ -912,6 +912,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Demo user management (super_admin only)
+  app.post("/api/admin/send-test-email", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: "email required" });
+      const baseUrl = getBaseUrl();
+      await sendNewChatEmail([email], {
+        staffName: "Select Branding",
+        subject: "Test notification",
+        firstMessage: "This is a test email to confirm your notification settings are working correctly. If you received this, email notifications are active on your account.",
+        portalUrl: `${baseUrl}/customer/dashboard`,
+        isJobChat: false,
+      });
+      res.json({ success: true, sentTo: email });
+    } catch (err) {
+      console.error("Test email error:", err);
+      res.status(500).json({ error: "Failed to send test email" });
+    }
+  });
+
   app.post("/api/admin/ensure-demo-user", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
     const DEMO_EMAIL = "demo@selectbranding.co.uk";
     const DEMO_USERNAME = "demo";
