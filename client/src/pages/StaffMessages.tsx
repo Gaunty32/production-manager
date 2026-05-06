@@ -1221,8 +1221,6 @@ export default function StaffMessages() {
                       <div className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center border-2 border-background ${isStaff ? "bg-blue-500" : "bg-orange-400"}`}>
                         {msg.senderImageUrl ? (
                           <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
-                        ) : !isStaff && currentCustomerLogo ? (
-                          <img src={currentCustomerLogo} alt={msg.senderName || ""} className="h-full w-full object-cover" />
                         ) : (
                           <span className="text-[10px] font-bold leading-none text-white">
                             {initials}
