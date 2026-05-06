@@ -2515,7 +2515,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Send new logo setup notification if needed
-      if (data.logoType === "new_logo" || data.logoType === "new_logo_files_supplied") {
+      if (data.logoType === "new_logo") {
         try {
           await sendNewLogoSetupEmail({
             customerName: customer.name,
