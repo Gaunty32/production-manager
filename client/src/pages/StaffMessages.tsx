@@ -1194,7 +1194,7 @@ export default function StaffMessages() {
                     {/* Avatar + name below */}
                     <div className={`flex flex-col items-center gap-0.5 shrink-0 ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
                       <div className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center border-2 border-background ${isStaff ? "bg-blue-500" : "bg-orange-400"}`}>
-                        {isStaff && msg.senderImageUrl ? (
+                        {msg.senderImageUrl ? (
                           <img src={msg.senderImageUrl} alt={msg.senderName || ""} className="h-full w-full object-cover" />
                         ) : !isStaff && currentCustomerLogo ? (
                           <img src={currentCustomerLogo} alt={msg.senderName || ""} className="h-full w-full object-cover" />
