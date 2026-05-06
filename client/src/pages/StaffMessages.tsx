@@ -276,6 +276,15 @@ export default function StaffMessages() {
     queryKey: ["/api/staff"],
   });
 
+  const { data: currentConvoCustomerUsers = [] } = useQuery<{ id: string; firstName: string | null; lastName: string | null; email: string; active: boolean }[]>({
+    queryKey: ["/api/customers", currentCustomerId, "users"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/customers/${currentCustomerId}/users`);
+      return res.json();
+    },
+    enabled: !!currentCustomerId,
+  });
+
   const { data: messagingUsers = [] } = useQuery<MessagingUser[]>({
     queryKey: ["/api/staff/messaging-users"],
   });
@@ -713,9 +722,22 @@ export default function StaffMessages() {
     }
   };
 
-  const filteredMentions = staffList
+  const customerMentions = currentConvoCustomerUsers
+    .filter(u => u.active)
+    .map(u => ({
+      id: u.id,
+      name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+      isCustomer: true,
+    }));
+
+  const allMentionCandidates = [
+    ...staffList.map(s => ({ ...s, isCustomer: false })),
+    ...customerMentions,
+  ];
+
+  const filteredMentions = allMentionCandidates
     .filter(s => !mentionSearch || s.name.toLowerCase().includes(mentionSearch))
-    .slice(0, 6);
+    .slice(0, 8);
 
   const insertMention = (name: string) => {
     const handle = name.split(" ")[0]; // first word as the @handle
@@ -1440,7 +1462,12 @@ export default function StaffMessages() {
                           {getInitials(s.name)}
                         </div>
                         <span>{s.name}</span>
-                        <span className="text-xs text-muted-foreground ml-auto">@{s.name.split(" ")[0]}</span>
+                        <span className="ml-auto flex items-center gap-1.5">
+                          {s.isCustomer && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Customer</span>
+                          )}
+                          <span className="text-xs text-muted-foreground">@{s.name.split(" ")[0]}</span>
+                        </span>
                       </button>
                     ))}
                     <div className="px-3 py-1 border-t bg-muted/30">
