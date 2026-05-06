@@ -577,7 +577,7 @@ export default function CustomerInbox() {
                   data-testid={`tab-${t}`}
                 >
                   {t === "job" ? <Package className="h-3.5 w-3.5" /> : <MessageCircle className="h-3.5 w-3.5" />}
-                  {t === "job" ? "Order Chats" : "Direct Messages"}
+                  {t === "job" ? "Order Chats" : "General Chat"}
                   {(t === "job" ? jobUnread : directUnread) > 0 && (
                     <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
                       {t === "job" ? jobUnread : directUnread}
@@ -741,7 +741,7 @@ export default function CustomerInbox() {
               isLoadingDirectConvos ? (
                 <LoadingSpinner />
               ) : directConversations.filter(c => c.status === "open").length === 0 ? (
-                <EmptyState label="No direct messages" sublabel="Start a conversation with Select Branding" />
+                <EmptyState label="No general chats" sublabel="Start a general conversation with Select Branding" />
               ) : (
                 directConversations
                   .filter(c => c.status === "open" && (!searchQuery || c.subject.toLowerCase().includes(searchQuery.toLowerCase())))

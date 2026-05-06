@@ -861,7 +861,7 @@ export default function StaffMessages() {
                 data-testid={`tab-${t}`}
               >
                 {t === "job" ? <Package className="h-3.5 w-3.5" /> : <MessageCircle className="h-3.5 w-3.5" />}
-                {t === "job" ? "Order Chats" : "Direct Messages"}
+                {t === "job" ? "Order Chats" : "General Chat"}
                 {(t === "job" ? jobUnread : directUnread) > 0 && (
                   <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
                     {t === "job" ? jobUnread : directUnread}
@@ -1049,7 +1049,7 @@ export default function StaffMessages() {
             isLoadingDirectConvos ? (
               <LoadingSpinner />
             ) : directConversations.filter(c => c.status === "open").length === 0 ? (
-              <EmptyState label="No direct conversations" sublabel="Start a conversation with a customer" />
+              <EmptyState label="No general chats" sublabel="Start a general conversation with a customer" />
             ) : (
               directConversations.filter(c => c.status === "open").map(c => (
                 <ConvoRow
@@ -1775,7 +1775,7 @@ export default function StaffMessages() {
       <Dialog open={showNewConvo} onOpenChange={(open) => { setShowNewConvo(open); if (!open) { setNewSubject(""); setNewRecipientId(""); setNewRecipientSearch(""); setNewFirstMessage(""); } }}>
         <DialogContent data-testid="dialog-new-conversation">
           <DialogHeader>
-            <DialogTitle>New Direct Message</DialogTitle>
+            <DialogTitle>New General Chat</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
