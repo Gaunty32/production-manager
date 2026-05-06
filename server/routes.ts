@@ -6239,7 +6239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (msg.senderType === 'customer' && msg.senderId) {
           const customerUser = await storage.getCustomerUserById(msg.senderId);
           const name = [customerUser?.firstName, customerUser?.lastName].filter(Boolean).join(' ') || null;
-          return { ...msg, imageUrl: normalizeImgUrl((msg as any).imageUrl), senderName: name, senderImageUrl: null };
+          return { ...msg, imageUrl: normalizeImgUrl((msg as any).imageUrl), senderName: name, senderImageUrl: normalizeImgUrl((customerUser as any)?.profileImageUrl) };
         }
         return { ...msg, imageUrl: normalizeImgUrl((msg as any).imageUrl), senderName: null, senderImageUrl: null };
       }));
