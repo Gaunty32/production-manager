@@ -114,7 +114,9 @@ export default function CustomerInbox() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevStaffMsgCount = useRef(0);
   const isInitialLoad = useRef(true);
+  const prevTotalUnread = useRef<number | null>(null);
   const [newMessageBanner, setNewMessageBanner] = useState(false);
+  const [globalNewMessageConvo, setGlobalNewMessageConvo] = useState<string | null>(null);
 
   // Request browser notification permission once on mount
   useEffect(() => {
@@ -273,6 +275,7 @@ export default function CustomerInbox() {
   useEffect(() => {
     if (selected) {
       setNewMessageBanner(false);
+      setGlobalNewMessageConvo(null);
       isInitialLoad.current = true;
       setChatImage(null);
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/messages/unread-count"] });
@@ -525,6 +528,39 @@ export default function CustomerInbox() {
 
   useAppBadge(totalUnread);
 
+  // Fire browser notification + banner when unread count rises from ANY conversation
+  useEffect(() => {
+    if (prevTotalUnread.current === null) {
+      prevTotalUnread.current = totalUnread;
+      return;
+    }
+    if (totalUnread > prevTotalUnread.current) {
+      // Find which conversation has a new message (not the one we're viewing)
+      const newUnreadJob = jobConversations.find(c => {
+        const isViewing = selected?.type === "job" && selected.jobId === c.jobId;
+        return !isViewing && c.unreadCount > 0;
+      });
+      const newUnreadDirect = directConversations.find(c => {
+        const isViewing = selected?.type === "direct" && selected.conversationId === c.id;
+        return !isViewing && c.unreadCount > 0;
+      });
+      const source = newUnreadJob?.jobName || newUnreadDirect?.subject;
+      // Only notify for conversations OTHER than the active one (active one handled by existing effect)
+      if (newUnreadJob || newUnreadDirect) {
+        const label = source ? `New message: ${source}` : "New message from Select Branding Solutions";
+        toast({ title: label });
+        setGlobalNewMessageConvo(source || "New message");
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("New message from Select Branding Solutions", {
+            body: source ? `New message in: ${source}` : "You have a new message",
+            icon: "/favicon.ico",
+          });
+        }
+      }
+    }
+    prevTotalUnread.current = totalUnread;
+  }, [totalUnread]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="bg-background flex flex-col" style={{ height: "100dvh" }}>
       {isImpersonating && currentUser && (
@@ -681,6 +717,25 @@ export default function CustomerInbox() {
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
                 New Message
               </Button>
+            </div>
+          )}
+
+          {/* Global new message banner — fires when message arrives in a non-active conversation */}
+          {globalNewMessageConvo && (
+            <div
+              className="flex items-center gap-2 px-3 py-2.5 bg-primary text-primary-foreground shrink-0 cursor-pointer border-b"
+              onClick={() => setGlobalNewMessageConvo(null)}
+              data-testid="banner-global-new-message"
+            >
+              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+              <span className="text-xs font-medium flex-1 truncate">New message in: {globalNewMessageConvo}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setGlobalNewMessageConvo(null); }}
+                className="text-primary-foreground/80 hover:text-primary-foreground"
+                data-testid="button-dismiss-global-banner"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
 

@@ -3187,15 +3187,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const isInternal = !!req.body.isInternal;
 
-      // Check if this is the first staff message on the job (before creating)
-      let isFirstStaffMessage = false;
-      if (!isInternal) {
-        const existingMessages = await storage.getJobMessages(req.params.jobId);
-        isFirstStaffMessage = !existingMessages.some(
-          (m) => m.senderType === 'staff' && !(m as any).isInternal
-        );
-      }
-
       const message = await storage.createJobMessage({
         jobId: req.params.jobId,
         senderType: 'staff',
@@ -3205,8 +3196,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(isInternal ? { isInternal: true } : {}),
       });
 
-      // Send email notification to customer on first staff message
-      if (isFirstStaffMessage && job.customerId) {
+      // Send email notification to customer for every non-internal staff message
+      if (!isInternal && job.customerId) {
         try {
           const customerUsers = await storage.getCustomerUsersByCustomerId(job.customerId);
           const emails = customerUsers
@@ -3225,7 +3216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
         } catch (emailErr) {
-          console.error('Failed to send new job chat email notification:', emailErr);
+          console.error('Failed to send job chat email notification:', emailErr);
         }
       }
 
