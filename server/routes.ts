@@ -2422,6 +2422,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer Portal - Get distinct previous job names (for autocomplete on job submission)
+  app.get("/api/customer-portal/jobs/previous-names", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Customer user not found" });
+      const jobs = await storage.getJobsByCustomerId(customerUser.customerId);
+      const completed = jobs.filter(j =>
+        j.completed || j.invoiceStatus === "invoiced" || j.status === "completed"
+      );
+      const seen = new Set<string>();
+      const names: { jobName: string; jobNumber: number | null; completedAt: string | null }[] = [];
+      for (const job of completed.sort((a, b) => {
+        const ad = (a as any).completedAt || (a as any).submittedAt;
+        const bd = (b as any).completedAt || (b as any).submittedAt;
+        return bd && ad ? new Date(bd).getTime() - new Date(ad).getTime() : 0;
+      })) {
+        const key = job.jobName.trim().toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          names.push({
+            jobName: job.jobName.trim(),
+            jobNumber: job.jobNumber ?? null,
+            completedAt: (job as any).completedAt ?? (job as any).submittedAt ?? null,
+          });
+        }
+      }
+      res.json(names);
+    } catch (error) {
+      console.error("Error fetching previous job names:", error);
+      res.status(500).json({ error: "Failed to fetch previous job names" });
+    }
+  });
+
   // Customer Portal - Get pending jobs (awaiting approval)
   app.get("/api/customer-portal/jobs/pending", isCustomerAuthenticated, async (req: any, res) => {
     try {

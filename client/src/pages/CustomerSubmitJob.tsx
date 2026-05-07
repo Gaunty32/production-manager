@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles, Layers } from "lucide-react";
+import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles, Layers, History, CheckCircle2 } from "lucide-react";
 import { customerJobSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
@@ -34,6 +34,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { addDays, format } from "date-fns";
+
+type PreviousJobName = {
+  jobName: string;
+  jobNumber: number | null;
+  completedAt: string | null;
+};
 
 type CustomerUser = {
   id: string;
@@ -102,12 +108,30 @@ export default function CustomerSubmitJob() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [showExpressDialog, setShowExpressDialog] = useState(false);
   const [pendingDispatchDate, setPendingDispatchDate] = useState<string>("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [repeatHint, setRepeatHint] = useState<string | null>(null);
+  const jobNameWrapperRef = useRef<HTMLDivElement>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: customerUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
   });
+
+  const { data: previousJobNames = [] } = useQuery<PreviousJobName[]>({
+    queryKey: ["/api/customer-portal/jobs/previous-names"],
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (jobNameWrapperRef.current && !jobNameWrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const defaultDispatchDate = format(addWorkingDays(new Date(), 7), "yyyy-MM-dd");
 
@@ -299,20 +323,75 @@ export default function CustomerSubmitJob() {
                 <FormField
                   control={form.control}
                   name="jobName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Job Name *</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g., Company Logo Polo Shirts"
-                          autoComplete="off"
-                          {...field}
-                          data-testid="input-job-name"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const inputVal = field.value ?? "";
+                    const filtered = inputVal.trim().length > 0
+                      ? previousJobNames.filter(p =>
+                          p.jobName.toLowerCase().includes(inputVal.toLowerCase())
+                        ).slice(0, 8)
+                      : previousJobNames.slice(0, 8);
+
+                    return (
+                      <FormItem>
+                        <FormLabel>Job Name *</FormLabel>
+                        <div ref={jobNameWrapperRef} className="relative">
+                          <FormControl>
+                            <Input
+                              placeholder="e.g., Company Logo Polo Shirts"
+                              autoComplete="off"
+                              {...field}
+                              onFocus={() => setShowSuggestions(true)}
+                              onChange={(e) => {
+                                field.onChange(e);
+                                setRepeatHint(null);
+                                setShowSuggestions(true);
+                              }}
+                              data-testid="input-job-name"
+                            />
+                          </FormControl>
+                          {showSuggestions && filtered.length > 0 && (
+                            <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden">
+                              <p className="px-3 py-2 text-[11px] text-muted-foreground border-b flex items-center gap-1.5">
+                                <History className="h-3 w-3" />
+                                Previous jobs — select to auto-fill
+                              </p>
+                              <ul className="max-h-56 overflow-y-auto">
+                                {filtered.map((prev) => (
+                                  <li key={prev.jobName}>
+                                    <button
+                                      type="button"
+                                      className="w-full text-left px-3 py-2.5 flex items-center gap-2 hover:bg-muted/60 transition-colors"
+                                      data-testid={`suggestion-${prev.jobName}`}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        field.onChange(prev.jobName);
+                                        form.setValue("logoType", "repeat_logo");
+                                        setRepeatHint(prev.jobName);
+                                        setShowSuggestions(false);
+                                      }}
+                                    >
+                                      <History className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                      <span className="text-sm flex-1 truncate">{prev.jobName}</span>
+                                      {prev.jobNumber && (
+                                        <span className="text-[11px] text-muted-foreground shrink-0">#{prev.jobNumber}</span>
+                                      )}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                        {repeatHint && (
+                          <p className="flex items-center gap-1.5 text-xs text-primary mt-1">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            Matched a previous job — Logo Type set to <strong>Repeat Logo</strong>
+                          </p>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
 
                 <FormField
