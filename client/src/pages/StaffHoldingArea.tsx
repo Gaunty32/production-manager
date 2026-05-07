@@ -350,7 +350,10 @@ export default function StaffHoldingArea() {
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Submitted</p>
                     <p className="font-medium text-sm">
-                      {format(new Date(job.submittedAt), "MMM d, yyyy")}
+                      {format(new Date(job.submittedAt), "d MMM yyyy")}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(job.submittedAt), "HH:mm")}
                     </p>
                   </div>
                   <div>

@@ -28,6 +28,7 @@ interface LineItemRowProps {
   lineItem: JobLineItem;
   goodsReceived: Date | null;
   requiredDispatchDate: Date | null;
+  submittedAt?: Date | null;
   completedOnTime: boolean | null;
   notes: string | null;
   allLogosApproved: boolean;
@@ -60,6 +61,7 @@ export function LineItemRow({
   lineItem,
   goodsReceived,
   requiredDispatchDate,
+  submittedAt,
   completedOnTime,
   notes,
   allLogosApproved,
@@ -314,6 +316,18 @@ export function LineItemRow({
       {/* Date Required - only show on first line item */}
       <td className="py-2 px-3 font-mono whitespace-nowrap">
         {isFirstLineItem ? (requiredDispatchDate ? format(requiredDispatchDate, "PP") : "-") : ""}
+      </td>
+
+      {/* Submitted - only show on first line item */}
+      <td className="py-2 px-3 whitespace-nowrap">
+        {isFirstLineItem && submittedAt ? (
+          <div className="flex flex-col">
+            <span className="text-xs font-mono">{format(submittedAt, "d MMM yy")}</span>
+            <span className="text-[10px] text-muted-foreground">{format(submittedAt, "HH:mm")}</span>
+          </div>
+        ) : isFirstLineItem ? (
+          <span className="text-muted-foreground text-xs">—</span>
+        ) : ""}
       </td>
 
       {/* Status - only show on first line item */}

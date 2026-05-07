@@ -1108,6 +1108,7 @@ export default function Dashboard() {
                           {sortOrder === 'date' && <ArrowUpDown className="h-3 w-3" />}
                         </div>
                       </TableHead>
+                      <TableHead className="py-3 px-3">Submitted</TableHead>
                       <TableHead className="py-3 px-3">Status</TableHead>
                       <TableHead className="py-3 px-3">Actions</TableHead>
                       <TableHead className="py-3 px-3">Errors</TableHead>
@@ -1175,6 +1176,14 @@ export default function Dashboard() {
                               {job.requiredDispatchDate 
                                 ? format(new Date(job.requiredDispatchDate), 'dd/MM/yy')
                                 : '-'}
+                            </TableCell>
+                            <TableCell className="py-2 px-3 whitespace-nowrap">
+                              {job.submittedAt ? (
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-mono">{format(new Date(job.submittedAt), 'd MMM yy')}</span>
+                                  <span className="text-[10px] text-muted-foreground">{format(new Date(job.submittedAt), 'HH:mm')}</span>
+                                </div>
+                              ) : <span className="text-muted-foreground text-xs">—</span>}
                             </TableCell>
                             <TableCell className="py-2 px-3">
                               <span className="text-amber-600 text-xs">Needs line items</span>
@@ -1251,6 +1260,7 @@ export default function Dashboard() {
                           lineItem={lineItem}
                           goodsReceived={job.goodsReceived ? new Date(job.goodsReceived) : null}
                           requiredDispatchDate={job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null}
+                          submittedAt={job.submittedAt ? new Date(job.submittedAt) : null}
                           completedOnTime={job.completedOnTime}
                           notes={job.notes}
                           allLogosApproved={allLogosApproved}
