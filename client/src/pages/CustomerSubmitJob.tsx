@@ -325,11 +325,12 @@ export default function CustomerSubmitJob() {
                   name="jobName"
                   render={({ field }) => {
                     const inputVal = field.value ?? "";
-                    const filtered = inputVal.trim().length > 0
+                    const filtered = (inputVal.trim().length > 0
                       ? previousJobNames.filter(p =>
                           p.jobName.toLowerCase().includes(inputVal.toLowerCase())
-                        ).slice(0, 8)
-                      : previousJobNames.slice(0, 8);
+                        )
+                      : [...previousJobNames]
+                    ).sort((a, b) => a.jobName.localeCompare(b.jobName)).slice(0, 8);
 
                     return (
                       <FormItem>
@@ -372,9 +373,6 @@ export default function CustomerSubmitJob() {
                                     >
                                       <History className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                       <span className="text-sm flex-1 truncate">{prev.jobName}</span>
-                                      {prev.jobNumber && (
-                                        <span className="text-[11px] text-muted-foreground shrink-0">#{prev.jobNumber}</span>
-                                      )}
                                     </button>
                                   </li>
                                 ))}
