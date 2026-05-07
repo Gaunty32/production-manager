@@ -47,6 +47,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useConversationFlags } from "@/hooks/useConversationFlags";
+import { useAppBadge } from "@/hooks/useAppBadge";
 
 type JobConversation = {
   jobId: string;
@@ -521,6 +522,8 @@ export default function CustomerInbox() {
     return s + effective;
   }, 0);
   const totalUnread = jobUnread + directUnread;
+
+  useAppBadge(totalUnread);
 
   return (
     <div className="bg-background flex flex-col" style={{ height: "100dvh" }}>
