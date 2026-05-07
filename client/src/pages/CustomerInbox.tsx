@@ -33,6 +33,8 @@ import {
   BellOff,
   Paperclip,
   FileText,
+  MailOpen,
+  Clock,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -44,6 +46,7 @@ import {
 import { format, isToday, isYesterday } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useConversationFlags } from "@/hooks/useConversationFlags";
 
 type JobConversation = {
   jobId: string;
@@ -100,6 +103,9 @@ type Selected =
 export default function CustomerInbox() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const flags = useConversationFlags("customer", (reminder) => {
+    toast({ title: `Reminder: ${reminder.label}`, description: "You asked to be reminded about this conversation." });
+  });
   const { isImpersonating } = usePermissions();
   const [tab, setTab] = useState<Tab>("job");
   const [selected, setSelected] = useState<Selected>(null);
@@ -197,6 +203,28 @@ export default function CustomerInbox() {
 
   const selectedJobConvo = jobConversations.find(c => c.jobId === jobId) ?? null;
   const selectedDirectConvo = directConversations.find(c => c.id === directId) ?? null;
+  const convKey = jobId ? `job:${jobId}` : directId ? `direct:${directId}` : null;
+
+  const handleMarkUnread = () => {
+    if (!convKey) return;
+    flags.markUnread(convKey);
+    setSelected(null);
+    toast({ title: "Marked as unread" });
+  };
+
+  const handleToggleReminder = () => {
+    if (!convKey) return;
+    if (flags.hasReminder(convKey)) {
+      flags.clearReminder(convKey);
+      toast({ title: "Reminder cancelled" });
+    } else {
+      const label = selected?.type === "job"
+        ? selectedJobConvo?.jobName || "Job conversation"
+        : selectedDirectConvo?.subject || "General chat";
+      flags.setReminder(convKey, label || "Conversation");
+      toast({ title: "Reminder set", description: "We'll remind you in 1 hour." });
+    }
+  };
 
   // Auto-select first conversation per tab
   useEffect(() => {
@@ -251,6 +279,10 @@ export default function CustomerInbox() {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/direct-conversations"] });
     }
   }, [selected]);
+
+  useEffect(() => {
+    if (convKey) flags.clearUnread(convKey);
+  }, [convKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendJobMutation = useMutation({
     mutationFn: async ({ message, imageUrl }: { message: string; imageUrl?: string }) => {
@@ -480,8 +512,14 @@ export default function CustomerInbox() {
     if (file) processFile(file);
   };
 
-  const jobUnread = jobConversations.reduce((s, c) => s + c.unreadCount, 0);
-  const directUnread = directConversations.reduce((s, c) => s + c.unreadCount, 0);
+  const jobUnread = jobConversations.reduce((s, c) => {
+    const effective = c.unreadCount > 0 ? c.unreadCount : (flags.isManuallyUnread(`job:${c.jobId}`) ? 1 : 0);
+    return s + effective;
+  }, 0);
+  const directUnread = directConversations.reduce((s, c) => {
+    const effective = c.unreadCount > 0 ? c.unreadCount : (flags.isManuallyUnread(`direct:${c.id}`) ? 1 : 0);
+    return s + effective;
+  }, 0);
   const totalUnread = jobUnread + directUnread;
 
   return (
@@ -718,13 +756,14 @@ export default function CustomerInbox() {
                         icon={<Package className="h-4 w-4 text-primary" />}
                         title={convo.jobName}
                         subtitle={convo.completed ? "Completed" : "In Production"}
-                        unread={convo.unreadCount}
+                        unread={convo.unreadCount > 0 ? convo.unreadCount : (flags.isManuallyUnread(`job:${convo.jobId}`) ? 1 : 0)}
                         latest={convo.latestMessage}
                         myLabel="You"
                         theirLabel="Select"
                         onClick={() => setSelected({ type: "job", jobId: convo.jobId })}
                         testId={`conversation-${convo.jobId}`}
                         onArchive={() => archiveJobConvoMutation.mutate(convo.jobId)}
+                        hasReminder={flags.hasReminder(`job:${convo.jobId}`)}
                       />
                     ))
                   }
@@ -779,7 +818,7 @@ export default function CustomerInbox() {
                       icon={<MessageCircle className="h-4 w-4 text-primary" />}
                       title={convo.subject}
                       subtitle="Select Branding Solutions"
-                      unread={convo.unreadCount}
+                      unread={convo.unreadCount > 0 ? convo.unreadCount : (flags.isManuallyUnread(`direct:${convo.id}`) ? 1 : 0)}
                       latest={convo.latestMessage}
                       myLabel="You"
                       theirLabel="Select"
@@ -787,6 +826,7 @@ export default function CustomerInbox() {
                       testId={`direct-conversation-${convo.id}`}
                       onArchive={() => archiveConvoMutation.mutate(convo.id)}
                       onDelete={() => deleteConvoMutation.mutate(convo.id)}
+                      hasReminder={flags.hasReminder(`direct:${convo.id}`)}
                     />
                   ))
               )
@@ -816,7 +856,7 @@ export default function CustomerInbox() {
               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
                 {selected.type === "job" ? <Package className="h-4 w-4 text-primary" /> : <MessageCircle className="h-4 w-4 text-primary" />}
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold">
                   {selected.type === "job" ? selectedJobConvo?.jobName : selectedDirectConvo?.subject}
                 </p>
@@ -826,6 +866,25 @@ export default function CustomerInbox() {
                     : "Select Branding Solutions"}
                 </p>
               </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Mark as unread"
+                onClick={handleMarkUnread}
+                data-testid="button-mark-unread"
+              >
+                <MailOpen className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                title={convKey && flags.hasReminder(convKey) ? "Cancel reminder" : "Remind me in 1 hour"}
+                onClick={handleToggleReminder}
+                data-testid="button-toggle-reminder"
+                className={convKey && flags.hasReminder(convKey) ? "text-primary" : ""}
+              >
+                <Clock className="h-4 w-4" />
+              </Button>
             </div>
 
             {/* Pinned sample images — shown when staff has sent images in this job chat */}
@@ -1255,7 +1314,7 @@ export default function CustomerInbox() {
   );
 }
 
-function ConvoRow({ isActive, icon, title, subtitle, unread, latest, myLabel, theirLabel, onClick, testId, onArchive, onDelete, onUnarchive, dimmed }: {
+function ConvoRow({ isActive, icon, title, subtitle, unread, latest, myLabel, theirLabel, onClick, testId, onArchive, onDelete, onUnarchive, dimmed, hasReminder }: {
   isActive: boolean;
   icon: React.ReactNode;
   title: string;
@@ -1270,6 +1329,7 @@ function ConvoRow({ isActive, icon, title, subtitle, unread, latest, myLabel, th
   onDelete?: () => void;
   onUnarchive?: () => void;
   dimmed?: boolean;
+  hasReminder?: boolean;
 }) {
   return (
     <div
@@ -1285,6 +1345,7 @@ function ConvoRow({ isActive, icon, title, subtitle, unread, latest, myLabel, th
             <span className={`text-sm font-semibold truncate ${unread > 0 ? "text-foreground" : "text-foreground/80"}`}>{title}</span>
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {unread > 0 && <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">{unread}</Badge>}
+              {hasReminder && <Clock className="h-3 w-3 text-primary/70" />}
               {latest && <span className="text-[10px] text-muted-foreground">{formatConvoTime(latest.createdAt)}</span>}
             </div>
           </div>

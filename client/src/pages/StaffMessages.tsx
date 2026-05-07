@@ -55,11 +55,14 @@ import {
   Pencil,
   Check,
   ThumbsUp,
+  MailOpen,
+  Clock,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { useConversationFlags } from "@/hooks/useConversationFlags";
 
 type JobConversation = {
   jobId: string;
@@ -163,6 +166,9 @@ type LeftView = "tiles" | "jobs";
 
 export default function StaffMessages() {
   const { toast } = useToast();
+  const flags = useConversationFlags("staff", (reminder) => {
+    toast({ title: `Reminder: ${reminder.label}`, description: "You asked to be reminded about this conversation." });
+  });
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState<Tab>("job");
 
@@ -281,6 +287,29 @@ export default function StaffMessages() {
   const selectedJobConvo = jobConversations.find(c => c.jobId === jobId) ?? null;
   const selectedDirectConvo = directConversations.find(c => c.id === directId) ?? null;
   const currentCustomerId = selected?.type === "job" ? selectedJobConvo?.customerId : selectedDirectConvo?.customerId;
+  const convKey = jobId ? `job:${jobId}` : directId ? `direct:${directId}` : null;
+
+  const handleMarkUnread = () => {
+    if (!convKey) return;
+    flags.markUnread(convKey);
+    setSelected(null);
+    toast({ title: "Marked as unread" });
+  };
+
+  const handleToggleReminder = () => {
+    if (!convKey) return;
+    if (flags.hasReminder(convKey)) {
+      flags.clearReminder(convKey);
+      toast({ title: "Reminder cancelled" });
+    } else {
+      const label = selected?.type === "job"
+        ? selectedJobConvo?.jobName || "Job conversation"
+        : selectedDirectConvo?.subject || "General chat";
+      flags.setReminder(convKey, label || "Conversation");
+      toast({ title: "Reminder set", description: "We'll remind you in 1 hour." });
+    }
+  };
+
   const currentCustomerLogo = customers.find(c => c.id === currentCustomerId)?.logoUrl ?? null;
 
   const { data: currentConvoCustomerUsers = [] } = useQuery<{ id: string; firstName: string | null; lastName: string | null; email: string; active: boolean }[]>({
@@ -393,6 +422,10 @@ export default function StaffMessages() {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/direct-conversations"] });
     }
   }, [selected]);
+
+  useEffect(() => {
+    if (convKey) flags.clearUnread(convKey);
+  }, [convKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const sendJobMessageMutation = useMutation({
@@ -785,8 +818,14 @@ export default function StaffMessages() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const jobUnread = jobConversations.reduce((s, c) => s + c.unreadCount, 0);
-  const directUnread = directConversations.reduce((s, c) => s + c.unreadCount, 0);
+  const jobUnread = jobConversations.reduce((s, c) => {
+    const effective = c.unreadCount > 0 ? c.unreadCount : (flags.isManuallyUnread(`job:${c.jobId}`) ? 1 : 0);
+    return s + effective;
+  }, 0);
+  const directUnread = directConversations.reduce((s, c) => {
+    const effective = c.unreadCount > 0 ? c.unreadCount : (flags.isManuallyUnread(`direct:${c.id}`) ? 1 : 0);
+    return s + effective;
+  }, 0);
 
   // Build customer groups for tile grid
   const visibleConvos = showHidden ? jobConversations : jobConversations.filter(c => !hiddenJobIds.has(c.jobId));
@@ -964,8 +1003,13 @@ export default function StaffMessages() {
                             <div className="flex items-center justify-between gap-1">
                               <span className={`text-xs font-medium truncate ${isActive ? "text-primary" : ""}`}>{c.jobName}</span>
                               <div className="flex items-center gap-1 shrink-0">
-                                {c.unreadCount > 0 && (
-                                  <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">{c.unreadCount}</Badge>
+                                {(c.unreadCount > 0 || flags.isManuallyUnread(`job:${c.jobId}`)) && (
+                                  <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">
+                                    {c.unreadCount > 0 ? c.unreadCount : 1}
+                                  </Badge>
+                                )}
+                                {flags.hasReminder(`job:${c.jobId}`) && (
+                                  <Clock className="h-3 w-3 text-primary/70" />
                                 )}
                                 {c.latestMessage && (
                                   <span className="text-[10px] text-muted-foreground">{formatConvoTime(c.latestMessage.createdAt)}</span>
@@ -1002,7 +1046,11 @@ export default function StaffMessages() {
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
                       {sortedGroups.map(group => {
-                        const groupUnread = group.jobs.reduce((s, j) => s + j.unreadCount, 0);
+                        const groupUnread = group.jobs.reduce((s, j) => {
+                          const effective = j.unreadCount > 0 ? j.unreadCount : (flags.isManuallyUnread(`job:${j.jobId}`) ? 1 : 0);
+                          return s + effective;
+                        }, 0);
+                        const groupHasReminder = group.jobs.some(j => flags.hasReminder(`job:${j.jobId}`));
                         const isSelectedCustomer = group.jobs.some(j => selected?.type === "job" && selected.jobId === j.jobId);
                         const lastMsg = group.jobs
                           .map(j => j.latestMessage)
@@ -1035,6 +1083,7 @@ export default function StaffMessages() {
                             <div className="flex items-center gap-1">
                               <Package className="h-3 w-3 text-muted-foreground" />
                               <span className="text-[10px] text-muted-foreground">{group.jobs.length} job{group.jobs.length !== 1 ? "s" : ""}</span>
+                              {groupHasReminder && <Clock className="h-3 w-3 text-primary/70" />}
                             </div>
                             {lastMsg && (
                               <p className="text-[10px] text-muted-foreground">{formatConvoTime(lastMsg.createdAt)}</p>
@@ -1078,11 +1127,12 @@ export default function StaffMessages() {
                   isActive={selected?.type === "direct" && selected.conversationId === c.id}
                   title={c.customerName}
                   subtitle={c.subject}
-                  unread={c.unreadCount}
+                  unread={c.unreadCount > 0 ? c.unreadCount : (flags.isManuallyUnread(`direct:${c.id}`) ? 1 : 0)}
                   latest={c.latestMessage}
                   senderLabel={c.customerName}
                   onClick={() => setSelected({ type: "direct", conversationId: c.id })}
                   testId={`direct-convo-${c.id}`}
+                  hasReminder={flags.hasReminder(`direct:${c.id}`)}
                 />
               ))
             )
@@ -1131,6 +1181,25 @@ export default function StaffMessages() {
                     ? <><ArchiveX className="h-3.5 w-3.5 mr-1.5" />Restore</>
                     : <><Archive className="h-3.5 w-3.5 mr-1.5" />Archive</>}
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Mark as unread"
+                  onClick={handleMarkUnread}
+                  data-testid="button-mark-unread"
+                >
+                  <MailOpen className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title={convKey && flags.hasReminder(convKey) ? "Cancel reminder" : "Remind me in 1 hour"}
+                  onClick={handleToggleReminder}
+                  data-testid="button-toggle-reminder"
+                  className={convKey && flags.hasReminder(convKey) ? "text-primary" : ""}
+                >
+                  <Clock className="h-4 w-4" />
+                </Button>
               </>
             ) : (
               <>
@@ -1149,6 +1218,25 @@ export default function StaffMessages() {
                   data-testid="button-archive-convo"
                 >
                   <Archive className="h-3.5 w-3.5 mr-1.5" />Archive
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Mark as unread"
+                  onClick={handleMarkUnread}
+                  data-testid="button-mark-unread"
+                >
+                  <MailOpen className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title={convKey && flags.hasReminder(convKey) ? "Cancel reminder" : "Remind me in 1 hour"}
+                  onClick={handleToggleReminder}
+                  data-testid="button-toggle-reminder"
+                  className={convKey && flags.hasReminder(convKey) ? "text-primary" : ""}
+                >
+                  <Clock className="h-4 w-4" />
                 </Button>
               </>
             )}
@@ -1863,7 +1951,7 @@ export default function StaffMessages() {
   );
 }
 
-function ConvoRow({ isActive, title, subtitle, unread, latest, senderLabel, onClick, testId }: {
+function ConvoRow({ isActive, title, subtitle, unread, latest, senderLabel, onClick, testId, hasReminder }: {
   isActive: boolean;
   title: string;
   subtitle: string;
@@ -1872,6 +1960,7 @@ function ConvoRow({ isActive, title, subtitle, unread, latest, senderLabel, onCl
   senderLabel: string;
   onClick: () => void;
   testId: string;
+  hasReminder?: boolean;
 }) {
   return (
     <button
@@ -1890,6 +1979,7 @@ function ConvoRow({ isActive, title, subtitle, unread, latest, senderLabel, onCl
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {unread > 0 && <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">{unread}</Badge>}
+            {hasReminder && <Clock className="h-3 w-3 text-primary/70" />}
             {latest && <span className="text-[10px] text-muted-foreground">{formatConvoTime(latest.createdAt)}</span>}
           </div>
         </div>
