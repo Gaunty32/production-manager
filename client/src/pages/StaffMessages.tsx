@@ -1298,10 +1298,14 @@ export default function StaffMessages() {
                             fileMatches.push({ name: m[1], url: m[2] });
                           }
                           const displayText = rawText.replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim();
+                          const hasVisibleContent = displayText || msg.imageUrl || fileMatches.length > 0;
                           return (
                             <>
                               {displayText && (
                                 <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{renderMessageContent(displayText)}</p>
+                              )}
+                              {!hasVisibleContent && (
+                                <p className="text-sm italic opacity-60">(no content)</p>
                               )}
                               {fileMatches.map((f, fi) => (
                                 <a

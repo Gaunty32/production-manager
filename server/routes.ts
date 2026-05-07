@@ -2830,12 +2830,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Job not found" });
       }
 
+      const messageText = (req.body.message || '').trim();
+      const imageUrl = req.body.imageUrl || null;
+      if (!messageText && !imageUrl) {
+        return res.status(400).json({ error: "Message cannot be empty" });
+      }
+
       const message = await storage.createJobMessage({
         jobId: req.params.jobId,
         senderType: 'customer',
         senderId: userId,
-        message: req.body.message || '',
-        ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
+        message: messageText,
+        ...(imageUrl ? { imageUrl } : {}),
       });
 
       // Email staff who have notifications enabled (fire-and-forget)

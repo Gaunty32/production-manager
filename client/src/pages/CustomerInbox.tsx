@@ -265,6 +265,7 @@ export default function CustomerInbox() {
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/conversations"] });
       setNewMessage("");
       setChatImage(null);
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     },
     onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
   });
