@@ -276,6 +276,13 @@ export default function StaffMessages() {
     queryKey: ["/api/staff"],
   });
 
+  const jobId = selected?.type === "job" ? selected.jobId : null;
+  const directId = selected?.type === "direct" ? selected.conversationId : null;
+  const selectedJobConvo = jobConversations.find(c => c.jobId === jobId) ?? null;
+  const selectedDirectConvo = directConversations.find(c => c.id === directId) ?? null;
+  const currentCustomerId = selected?.type === "job" ? selectedJobConvo?.customerId : selectedDirectConvo?.customerId;
+  const currentCustomerLogo = customers.find(c => c.id === currentCustomerId)?.logoUrl ?? null;
+
   const { data: currentConvoCustomerUsers = [] } = useQuery<{ id: string; firstName: string | null; lastName: string | null; email: string; active: boolean }[]>({
     queryKey: ["/api/customers", currentCustomerId, "users"],
     queryFn: async () => {
@@ -319,9 +326,6 @@ export default function StaffMessages() {
     }
   };
 
-  const jobId = selected?.type === "job" ? selected.jobId : null;
-  const directId = selected?.type === "direct" ? selected.conversationId : null;
-
   const { data: jobMessages = [], isLoading: isLoadingJobMsgs } = useQuery<ChatMessage[]>({
     queryKey: [`/api/staff/jobs/${jobId}/messages`],
     enabled: !!jobId,
@@ -340,11 +344,6 @@ export default function StaffMessages() {
 
   const messages = selected?.type === "job" ? jobMessages : directMessages;
   const isLoadingMessages = selected?.type === "job" ? isLoadingJobMsgs : isLoadingDirectMsgs;
-
-  const selectedJobConvo = jobConversations.find(c => c.jobId === jobId) ?? null;
-  const selectedDirectConvo = directConversations.find(c => c.id === directId) ?? null;
-  const currentCustomerId = selected?.type === "job" ? selectedJobConvo?.customerId : selectedDirectConvo?.customerId;
-  const currentCustomerLogo = customers.find(c => c.id === currentCustomerId)?.logoUrl ?? null;
 
   // Auto-select first conversation per tab on load
   useEffect(() => {
