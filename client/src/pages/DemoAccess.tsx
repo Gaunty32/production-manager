@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,10 +14,33 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { apiRequest } from "@/lib/queryClient";
-import { CheckCircle2, Layers, CalendarDays, BarChart3, MessageSquare, FileText, Zap, ArrowDown, Clock, CheckCheck } from "lucide-react";
+import { CheckCircle2, Layers, CalendarDays, BarChart3, MessageSquare, FileText, Zap, ArrowDown, Clock, CheckCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { PRICING_2026 } from "@shared/pricing";
 import customerDashboardImg from "@assets/screenshots/production_selectbranding_co_uk_demo.png";
 import customerPortalImg from "@assets/screenshots/production_selectbranding_co_uk_customer_login.png";
+import prodImg1 from "@assets/SWM07349_1778335006727.jpg";
+import prodImg2 from "@assets/SWM00610_1778335033870.jpg";
+import prodImg3 from "@assets/SWM00709_1778335040781.jpg";
+import prodImg4 from "@assets/SWM00529_1778335054895.jpg";
+import prodImg5 from "@assets/SWM00543_1778335073241.jpg";
+import prodImg6 from "@assets/IMG_20250828_110500_1778335115271.jpg";
+import prodImg7 from "@assets/SWM04080_1778335119599.jpg";
+import prodImg8 from "@assets/SWM04094_1778335134804.jpg";
+import prodImg9 from "@assets/SWM04102_1778335146071.jpg";
+import prodImg10 from "@assets/SWM04109_1778335174184.jpg";
+
+const productionPhotos = [
+  { src: prodImg9,  caption: "Precision in every stitch" },
+  { src: prodImg6,  caption: "38 embroidery heads, running every day" },
+  { src: prodImg4,  caption: "Expert hands on every machine" },
+  { src: prodImg7,  caption: "Hooping and preparing each run" },
+  { src: prodImg2,  caption: "Careful setup before every job" },
+  { src: prodImg10, caption: "The full production floor" },
+  { src: prodImg8,  caption: "Quality checked at every stage" },
+  { src: prodImg1,  caption: "Fast, accurate dispatch" },
+  { src: prodImg3,  caption: "Ready for the next run" },
+  { src: prodImg5,  caption: "Industrial-scale embroidery machinery" },
+];
 
 const schema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -53,6 +76,25 @@ function BrowserFrame({ src, label, className = "" }: { src: string; label: stri
 
 export default function DemoAccess() {
   const [submitted, setSubmitted] = useState(false);
+  const [activePhoto, setActivePhoto] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused) return;
+    const timer = setInterval(() => {
+      setActivePhoto(i => (i + 1) % productionPhotos.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [paused]);
+
+  const prevPhoto = () => {
+    setPaused(true);
+    setActivePhoto(i => (i - 1 + productionPhotos.length) % productionPhotos.length);
+  };
+  const nextPhoto = () => {
+    setPaused(true);
+    setActivePhoto(i => (i + 1) % productionPhotos.length);
+  };
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -166,6 +208,78 @@ export default function DemoAccess() {
                 </li>
               ))}
             </ul>
+          </div>
+        </section>
+
+        {/* ── PRODUCTION PHOTO CAROUSEL ────────────────────────────────────────── */}
+        <section className="border-t px-4 py-16">
+          <div className="max-w-5xl mx-auto space-y-6">
+            <div className="text-center space-y-1">
+              <h2 className="text-2xl font-bold tracking-tight">Inside the production floor</h2>
+              <p className="text-muted-foreground text-sm">Real people, real machines, real output — every working day.</p>
+            </div>
+
+            {/* Carousel */}
+            <div className="relative rounded-lg overflow-hidden bg-black select-none" style={{ aspectRatio: "16/9" }}>
+              {productionPhotos.map((photo, i) => (
+                <img
+                  key={i}
+                  src={photo.src}
+                  alt={photo.caption}
+                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+                  style={{ opacity: i === activePhoto ? 1 : 0 }}
+                  loading={i === 0 ? "eager" : "lazy"}
+                />
+              ))}
+
+              {/* Gradient wash for caption legibility */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+
+              {/* Caption */}
+              <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
+                <span className="text-white/90 text-sm font-medium drop-shadow">
+                  {productionPhotos[activePhoto].caption}
+                </span>
+              </div>
+
+              {/* Prev / Next */}
+              <button
+                type="button"
+                onClick={prevPhoto}
+                aria-label="Previous photo"
+                data-testid="button-carousel-prev"
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-black/40 hover:bg-black/60 transition-colors flex items-center justify-center text-white"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={nextPhoto}
+                aria-label="Next photo"
+                data-testid="button-carousel-next"
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-black/40 hover:bg-black/60 transition-colors flex items-center justify-center text-white"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Dot indicators */}
+            <div className="flex items-center justify-center gap-2">
+              {productionPhotos.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`Go to photo ${i + 1}`}
+                  data-testid={`button-carousel-dot-${i}`}
+                  onClick={() => { setPaused(true); setActivePhoto(i); }}
+                  className={`rounded-full transition-all duration-300 ${
+                    i === activePhoto
+                      ? "bg-primary w-5 h-2"
+                      : "bg-muted-foreground/30 hover:bg-muted-foreground/60 w-2 h-2"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         </section>
 
