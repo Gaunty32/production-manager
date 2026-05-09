@@ -534,6 +534,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         demoEmail: DEMO_EMAIL,
         demoPassword: DEMO_PASSWORD,
       });
+
+      // Sync contact to HighLevel (fire-and-forget — never block the response)
+      const hlApiKey = process.env.HIGHLEVEL_API_KEY;
+      const hlLocationId = process.env.HIGHLEVEL_LOCATION_ID;
+      if (hlApiKey && hlLocationId) {
+        fetch("https://services.leadconnectorhq.com/contacts/upsert", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${hlApiKey}`,
+            "Version": "2021-07-28",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            locationId: hlLocationId,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: data.email,
+            ...(data.company ? { companyName: data.company } : {}),
+            tags: ["demo-request"],
+            source: "Select Branding Demo Page",
+          }),
+        })
+          .then(async (r) => {
+            const body = await r.json().catch(() => ({}));
+            if (!r.ok) {
+              console.error("[HighLevel] Upsert failed:", r.status, body);
+            } else {
+              console.log("[HighLevel] Contact upserted:", body?.contact?.id ?? body?.id ?? "ok");
+            }
+          })
+          .catch((err) => console.error("[HighLevel] Network error:", err));
+      }
+
       res.json({ success: true });
     } catch (error: any) {
       console.error("Demo access request error:", error);
