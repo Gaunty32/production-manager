@@ -7227,6 +7227,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Google Drive invoice verification ─────────────────────────────────────
+  // Uses @replit/connectors-sdk to access Google Drive + Sheets
+
+  app.get("/api/google-drive/customer-rows", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { customerName } = req.query;
+      if (!customerName || typeof customerName !== "string") {
+        return res.status(400).json({ error: "customerName is required" });
+      }
+      const { getCustomerDriveRows } = await import("./googleService.js");
+      const result = await getCustomerDriveRows(customerName);
+      if (!result) {
+        return res.status(404).json({ error: "No Google Drive folder or spreadsheet found for this customer" });
+      }
+      res.json(result);
+    } catch (err: any) {
+      console.error("[Google Drive] Failed to fetch customer rows:", err);
+      res.status(500).json({ error: err.message || "Failed to fetch Drive data" });
+    }
+  });
+
+  app.post("/api/google-drive/hide-rows", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { spreadsheetId, sheetNumericId, rowIndices } = req.body;
+      if (!spreadsheetId || !Array.isArray(rowIndices) || rowIndices.length === 0) {
+        return res.status(400).json({ error: "spreadsheetId and rowIndices are required" });
+      }
+      const { hideDriveRows } = await import("./googleService.js");
+      await hideDriveRows(spreadsheetId, sheetNumericId ?? 0, rowIndices);
+      res.json({ success: true, hidden: rowIndices.length });
+    } catch (err: any) {
+      console.error("[Google Drive] Failed to hide rows:", err);
+      res.status(500).json({ error: err.message || "Failed to hide rows" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

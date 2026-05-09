@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil } from "lucide-react";
+import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff } from "lucide-react";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -62,6 +62,219 @@ interface EditLineItemsState {
   jobId: string;
   jobName: string;
   lineItems: LineItem[];
+}
+
+interface DriveSheetRow {
+  rowIndex: number;
+  id: string;
+  name: string;
+  stitches: string;
+  quantity: string;
+  dateCompleted: string;
+  carriageCost: string;
+  embCost: string;
+  total: string;
+  setUp: string;
+  processTime: string;
+  notes: string;
+}
+
+interface CustomerDriveData {
+  rows: DriveSheetRow[];
+  spreadsheetId: string;
+  folderName: string;
+  sheetNumericId: number;
+}
+
+function DriveVerificationPanel({ customerId, customerName }: { customerId: number; customerName: string }) {
+  const { toast } = useToast();
+  const [expanded, setExpanded] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [hiding, setHiding] = useState(false);
+
+  const { data, isLoading, isError, error, refetch } = useQuery<CustomerDriveData>({
+    queryKey: ["/api/google-drive/customer-rows", customerName],
+    queryFn: async () => {
+      const res = await fetch(`/api/google-drive/customer-rows?customerName=${encodeURIComponent(customerName)}`, { credentials: "include" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
+    enabled: expanded,
+    staleTime: 60_000,
+  });
+
+  const toggleRow = (rowIndex: number) => {
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(rowIndex)) next.delete(rowIndex);
+      else next.add(rowIndex);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (!data) return;
+    setSelectedRows(new Set(data.rows.map(r => r.rowIndex)));
+  };
+
+  const clearAll = () => setSelectedRows(new Set());
+
+  const hideSelected = async () => {
+    if (!data || selectedRows.size === 0) return;
+    setHiding(true);
+    try {
+      const res = await fetch("/api/google-drive/hide-rows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          spreadsheetId: data.spreadsheetId,
+          sheetNumericId: data.sheetNumericId,
+          rowIndices: Array.from(selectedRows),
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      toast({ title: `${body.hidden} row${body.hidden === 1 ? "" : "s"} hidden in Google Drive` });
+      setSelectedRows(new Set());
+      refetch();
+    } catch (err: any) {
+      toast({ title: "Failed to hide rows", description: err.message, variant: "destructive" });
+    } finally {
+      setHiding(false);
+    }
+  };
+
+  const formatTotal = (raw: string) => {
+    const n = parseFloat(raw.replace(/[£,]/g, ""));
+    if (isNaN(n)) return raw || "—";
+    return `£${n.toFixed(2)}`;
+  };
+
+  return (
+    <div className="mt-6 pt-6 border-t">
+      <button
+        type="button"
+        className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+        onClick={() => setExpanded(v => !v)}
+        data-testid={`button-drive-verify-${customerId}`}
+      >
+        <HardDrive className="h-4 w-4 text-primary" />
+        <span className="text-foreground">Google Drive Verification</span>
+        <Badge variant="outline" className="ml-1 text-xs">
+          {data ? `${data.rows.length} rows` : "Calculations sheet"}
+        </Badge>
+        <span className="ml-auto">
+          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="mt-3">
+          {isLoading && (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-8 w-full" />)}
+            </div>
+          )}
+
+          {isError && (
+            <div className="flex items-center gap-2 text-sm text-destructive p-3 bg-destructive/10 rounded-md">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{(error as Error)?.message || "Could not load Drive data"}</span>
+            </div>
+          )}
+
+          {data && data.rows.length === 0 && (
+            <p className="text-sm text-muted-foreground italic py-2">
+              No visible rows found in the Calculations sheet for <strong>{data.folderName}</strong>.
+            </p>
+          )}
+
+          {data && data.rows.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-xs text-muted-foreground">
+                  Folder: <strong>{data.folderName}</strong> &mdash; {data.rows.length} visible rows
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={selectedRows.size === data.rows.length ? clearAll : selectAll}
+                    data-testid={`button-drive-select-all-${customerId}`}
+                  >
+                    {selectedRows.size === data.rows.length
+                      ? <><Square className="h-3 w-3 mr-1" />Clear all</>
+                      : <><CheckSquare className="h-3 w-3 mr-1" />Select all</>}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={selectedRows.size === 0 || hiding}
+                    onClick={hideSelected}
+                    data-testid={`button-drive-hide-${customerId}`}
+                  >
+                    <EyeOff className="h-3 w-3 mr-1" />
+                    {hiding ? "Hiding…" : `Hide ${selectedRows.size > 0 ? selectedRows.size : ""} selected`}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" data-testid={`table-drive-rows-${customerId}`}>
+                    <thead>
+                      <tr className="bg-muted/50">
+                        <th className="w-8 p-2"></th>
+                        <th className="text-left p-2 font-medium text-muted-foreground">Name</th>
+                        <th className="text-right p-2 font-medium text-muted-foreground">Qty</th>
+                        <th className="text-right p-2 font-medium text-muted-foreground">Stitches</th>
+                        <th className="text-left p-2 font-medium text-muted-foreground">Date</th>
+                        <th className="text-right p-2 font-medium text-muted-foreground">Emb Cost</th>
+                        <th className="text-right p-2 font-medium text-muted-foreground">Total</th>
+                        <th className="text-left p-2 font-medium text-muted-foreground">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.rows.map(row => (
+                        <tr
+                          key={row.rowIndex}
+                          className={`border-t cursor-pointer ${selectedRows.has(row.rowIndex) ? "bg-primary/5" : "hover:bg-muted/30"}`}
+                          onClick={() => toggleRow(row.rowIndex)}
+                          data-testid={`row-drive-${customerId}-${row.rowIndex}`}
+                        >
+                          <td className="p-2 text-center">
+                            <Checkbox
+                              checked={selectedRows.has(row.rowIndex)}
+                              onCheckedChange={() => toggleRow(row.rowIndex)}
+                              onClick={e => e.stopPropagation()}
+                              data-testid={`checkbox-drive-row-${customerId}-${row.rowIndex}`}
+                            />
+                          </td>
+                          <td className="p-2 font-medium">{row.name}</td>
+                          <td className="p-2 text-right text-muted-foreground">{row.quantity || "—"}</td>
+                          <td className="p-2 text-right text-muted-foreground">
+                            {row.stitches ? parseInt(row.stitches, 10).toLocaleString() : "—"}
+                          </td>
+                          <td className="p-2 text-muted-foreground whitespace-nowrap">{row.dateCompleted || "—"}</td>
+                          <td className="p-2 text-right text-muted-foreground">{formatTotal(row.embCost)}</td>
+                          <td className="p-2 text-right font-semibold">{formatTotal(row.total)}</td>
+                          <td className="p-2 text-muted-foreground text-xs">{row.notes || ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function InvoicingQueue() {
@@ -1344,6 +1557,12 @@ export default function InvoicingQueue() {
                           </div>
                         );
                       })()}
+
+                      {/* Google Drive Verification Panel */}
+                      <DriveVerificationPanel
+                        customerId={customerId}
+                        customerName={customer.name}
+                      />
                     </div>
                   </CardContent>
                 </Card>
