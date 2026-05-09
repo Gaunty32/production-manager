@@ -246,6 +246,28 @@ export default function DemoAccess() {
           </div>
         </section>
 
+        {/* Video tour section */}
+        <section className="border-t px-4 py-16">
+          <div className="max-w-4xl mx-auto space-y-8">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight">See a full walkthrough</h2>
+              <p className="text-muted-foreground">
+                Watch a guided tour of the production system — from job intake through to invoicing.
+              </p>
+            </div>
+            <div className="rounded-lg overflow-hidden shadow-2xl border border-border/50 aspect-video">
+              <iframe
+                src="https://www.youtube.com/embed/6HE3NCGQMfg"
+                title="Select Branding Production System — Full Walkthrough"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full"
+                loading="lazy"
+              />
+            </div>
+          </div>
+        </section>
+
         {/* Screenshots section */}
         <section className="bg-muted/40 border-t px-4 py-16">
           <div className="max-w-6xl mx-auto space-y-10">
