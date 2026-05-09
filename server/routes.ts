@@ -5571,7 +5571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           poNumber: null,
           description: `Logo Set-Up - ${setup.jobName}`,
           quantity: 1,
-          unitPrice: 10, // £10 per approved logo setup
+          unitPrice: 12, // £12 per approved logo setup
           stitchCount: 0,
           itemCode: "EMB Set-Up",
         });
@@ -5934,7 +5934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Attribute logo setup costs to the first job (or stand-alone if logo-only invoice)
-      const logoSetupTotal = customerLogoSetups.length * 10;
+      const logoSetupTotal = customerLogoSetups.length * 12;
       if (logoSetupTotal > 0 && selectedJobs.length > 0) {
         jobInvoiceTotals[selectedJobs[0].id] = (jobInvoiceTotals[selectedJobs[0].id] || 0) + logoSetupTotal;
       }
@@ -5945,7 +5945,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           poNumber: null,
           description: `Logo Set-Up - ${setup.jobName}`,
           quantity: 1,
-          unitPrice: 10, // £10 per approved logo setup
+          unitPrice: 12, // £12 per approved logo setup
           stitchCount: 0,
           itemCode: "EMB Set-Up",
         });

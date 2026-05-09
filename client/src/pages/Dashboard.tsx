@@ -1376,7 +1376,7 @@ export default function Dashboard() {
                             data-testid={`button-approve-${setup.id}`}
                           >
                             <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve (£10)
+                            Approve (£12)
                           </Button>
                           <Button
                             size="sm"
@@ -1441,7 +1441,7 @@ export default function Dashboard() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground border rounded px-2 py-1">Invoiced £10</span>
+                            <span className="text-xs text-muted-foreground border rounded px-2 py-1">Invoiced £12</span>
                           </div>
                         </div>
                       );

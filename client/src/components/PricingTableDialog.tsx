@@ -139,7 +139,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
                   <ul className="text-muted-foreground space-y-1.5">
                     <li className="flex items-start gap-2">
                       <span className="text-primary font-bold mt-0.5">+</span>
-                      <span>A one-off set-up cost of <span className="font-medium text-foreground">£10</span> applies to digitize your design for 3D embroidery.</span>
+                      <span>A one-off set-up cost of <span className="font-medium text-foreground">£12</span> applies to digitize your design for 3D embroidery.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-primary font-bold mt-0.5">+</span>

@@ -913,7 +913,7 @@ export default function InvoicingQueue() {
               const someSelected = customerJobs.some(job => selectedJobs.has(job.id));
               const totalPrice = getTotalPrice(customerJobs);
               const selectedCount = customerJobs.filter(job => selectedJobs.has(job.id)).length;
-              const logoSetupTotal = customerLogoSetups.length * 10;
+              const logoSetupTotal = customerLogoSetups.length * 12;
               // Customer can invoice logo setups when no jobs are selected (either because they have no jobs, or because they deselected all)
               const canInvoiceLogoSetupsOnly = selectedCount === 0 && customerLogoSetups.length > 0;
               const hasOnlyLogoSetups = customerJobs.length === 0 && customerLogoSetups.length > 0;
@@ -1246,7 +1246,7 @@ export default function InvoicingQueue() {
                                   </div>
                                   {canViewPrices(user?.role) && (
                                     <Badge variant="secondary" className="text-base shrink-0">
-                                      £10.00
+                                      £12.00
                                     </Badge>
                                   )}
                                 </div>

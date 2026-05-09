@@ -98,7 +98,7 @@ export function LogoSetupDialog({ trigger, customers, open: controlledOpen, onOp
         <DialogHeader>
           <DialogTitle>Add Logo Set-Up Request</DialogTitle>
           <DialogDescription>
-            Create a new logo set-up request. Approved set-ups will be charged at £10.
+            Create a new logo set-up request. Approved set-ups will be charged at £12.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
