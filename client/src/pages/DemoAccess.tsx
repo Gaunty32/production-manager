@@ -14,7 +14,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { apiRequest } from "@/lib/queryClient";
-import { CheckCircle2, Layers, CalendarDays, BarChart3, MessageSquare, FileText, Zap, ArrowDown } from "lucide-react";
+import { CheckCircle2, Layers, CalendarDays, BarChart3, MessageSquare, FileText, Zap, ArrowDown, Clock, CheckCheck } from "lucide-react";
+import { PRICING_2026 } from "@shared/pricing";
 import customerDashboardImg from "@assets/screenshots/production_selectbranding_co_uk_demo.png";
 import customerPortalImg from "@assets/screenshots/production_selectbranding_co_uk_customer_login.png";
 
@@ -165,6 +166,112 @@ export default function DemoAccess() {
                 </li>
               ))}
             </ul>
+          </div>
+        </section>
+
+        {/* ── ON TIME, EVERY TIME ──────────────────────────────────────────────── */}
+        <section className="border-t px-4 py-20 bg-foreground text-background">
+          <div className="max-w-4xl mx-auto text-center space-y-6">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Clock className="h-5 w-5 text-primary" />
+              <p className="text-sm font-semibold text-primary uppercase tracking-widest">Guaranteed turnaround</p>
+            </div>
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
+              Find out how we deliver on time, every time.
+            </h2>
+            <p className="text-lg leading-relaxed text-background/75 max-w-2xl mx-auto">
+              With your own Production Management &amp; Ordering portal, you get full visibility of every job —
+              and production times of <strong className="text-background">3–4 days, every single time.</strong>
+            </p>
+            <div className="flex flex-wrap justify-center gap-6 pt-4">
+              {[
+                "Live job tracking from receipt to dispatch",
+                "Automated scheduling across 38 embroidery heads",
+                "Real-time alerts if anything falls behind",
+                "Your own branded customer portal",
+              ].map(point => (
+                <div key={point} className="flex items-center gap-2 text-sm text-background/80">
+                  <CheckCheck className="h-4 w-4 text-primary shrink-0" />
+                  {point}
+                </div>
+              ))}
+            </div>
+            <div className="pt-2">
+              <Button onClick={scrollToForm} size="lg" className="text-base px-8" data-testid="button-ontime-cta">
+                Book a discovery call
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── PRICING TABLE ─────────────────────────────────────────────────────── */}
+        <section className="border-t px-4 py-16">
+          <div className="max-w-5xl mx-auto space-y-10">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight">Transparent pricing per garment</h2>
+              <p className="text-muted-foreground">Per-unit embroidery pricing based on quantity and stitch count. No hidden fees.</p>
+            </div>
+
+            {/* Embroidery pricing grid — 2026 table, columns up to 25k stitches */}
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/60 border-b">
+                    <th className="text-left px-4 py-3 font-semibold">Qty</th>
+                    {["≤5,000", "≤7,500", "≤10,000", "≤15,000", "≤20,000", "≤25,000"].map(s => (
+                      <th key={s} className="text-center px-3 py-3 font-semibold text-muted-foreground whitespace-nowrap">
+                        {s} sts
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {PRICING_2026.filter(t => t.maxQty !== null).map((tier, i) => {
+                    // Extract prices for the 6 stitch bands we display
+                    const bandMaxes = [5000, 7500, 10000, 15000, 20000, 25000];
+                    const qtyLabel = `${tier.minQty}${tier.maxQty ? `–${tier.maxQty}` : "+"}`;
+                    return (
+                      <tr key={i} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
+                        <td className="px-4 py-3 font-semibold whitespace-nowrap">{qtyLabel}</td>
+                        {bandMaxes.map(band => {
+                          const entry = tier.prices.find(p => p.maxStitches === band);
+                          const price = entry?.price;
+                          return (
+                            <td key={band} className="px-3 py-3 text-center">
+                              {price === undefined || price === "POA"
+                                ? <span className="text-muted-foreground text-xs">POA</span>
+                                : <span className="font-medium">£{(price as number).toFixed(2)}</span>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                  {/* 1000+ row */}
+                  <tr className="border-t bg-muted/10">
+                    <td className="px-4 py-3 font-semibold">1,000+</td>
+                    <td colSpan={6} className="px-3 py-3 text-center text-muted-foreground text-sm">
+                      Price on application — <button type="button" onClick={scrollToForm} className="underline hover:text-foreground transition-colors">get in touch</button>
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr className="border-t bg-muted/30">
+                    <td colSpan={7} className="px-4 py-2 text-xs text-muted-foreground">
+                      All prices per unit, excluding VAT. Logo set-up £12 per logo. Prices shown are 2026 rates.
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <p className="text-center text-sm text-muted-foreground">
+              Need a quote for a specific job?{" "}
+              <button type="button" onClick={scrollToForm} className="underline font-medium hover:text-foreground transition-colors">
+                Book a discovery call
+              </button>{" "}
+              and we'll price it up for you.
+            </p>
           </div>
         </section>
 
