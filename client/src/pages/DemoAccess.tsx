@@ -126,10 +126,10 @@ export default function DemoAccess() {
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-3 relative flex items-center justify-center">
-          <img src={sbsLogo} alt="Select Branding Solutions" className="h-10 w-auto" />
+          <img src={sbsLogo} alt="Select Branding Solutions" className="h-16 w-auto" />
           <div className="absolute right-6">
             <Button onClick={scrollToForm} size="sm" data-testid="button-header-cta">
-              Book a discovery call
+              Book a Discovery Call
             </Button>
           </div>
         </div>
@@ -172,7 +172,7 @@ export default function DemoAccess() {
             {/* CTA */}
             <div className="flex flex-col items-center gap-3">
               <Button size="lg" onClick={scrollToForm} className="text-base px-8" data-testid="button-hero-cta">
-                Book a discovery call
+                Book a Discovery Call
               </Button>
               <button
                 type="button"
@@ -311,7 +311,7 @@ export default function DemoAccess() {
             </div>
             <div className="pt-2">
               <Button onClick={scrollToForm} size="lg" className="text-base px-8" data-testid="button-ontime-cta">
-                Book a discovery call
+                Book a Discovery Call
               </Button>
             </div>
           </div>
@@ -381,7 +381,7 @@ export default function DemoAccess() {
             <p className="text-center text-sm text-muted-foreground">
               Need a quote for a specific job?{" "}
               <button type="button" onClick={scrollToForm} className="underline font-medium hover:text-foreground transition-colors">
-                Book a discovery call
+                Book a Discovery Call
               </button>{" "}
               and we'll price it up for you.
             </p>
@@ -418,11 +418,11 @@ export default function DemoAccess() {
           </div>
         </section>
 
-        {/* ── FORM: Book a discovery call ───────────────────────────────────────── */}
+        {/* ── FORM: Book a Discovery Call ───────────────────────────────────────── */}
         <section id="book-call" className="border-t bg-muted/30 px-4 py-16">
           <div className="max-w-lg mx-auto">
             <div className="text-center space-y-2 mb-8">
-              <h2 className="text-3xl font-bold tracking-tight">Book a discovery call</h2>
+              <h2 className="text-3xl font-bold tracking-tight">Book a Discovery Call</h2>
               <p className="text-muted-foreground">
                 Leave your details and we'll send you instant demo access, then follow up to find a time that works.
               </p>
@@ -538,7 +538,7 @@ export default function DemoAccess() {
                       disabled={requestMutation.isPending}
                       data-testid="button-request-demo"
                     >
-                      {requestMutation.isPending ? "Sending..." : "Book a discovery call"}
+                      {requestMutation.isPending ? "Sending..." : "Book a Discovery Call"}
                     </Button>
 
                     <p className="text-xs text-muted-foreground text-center leading-relaxed">
