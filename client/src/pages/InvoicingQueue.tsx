@@ -1253,6 +1253,73 @@ export default function InvoicingQueue() {
                                       <span>{lineItems.length} {lineItems.length === 1 ? 'item' : 'items'}</span>
                                     </div>
                                   </div>
+                                  {/* Line items breakdown table */}
+                                  {lineItems.length > 0 && (() => {
+                                    const jobCustomer = customers.find(c => c.id === job.customerId);
+                                    const pricingTable = jobCustomer?.pricingTable2026 ? "2026" : jobCustomer?.pricingTable2025 ? "2025" : null;
+                                    return (
+                                      <div className="mt-3 overflow-hidden rounded-md border">
+                                        <table className="w-full text-xs">
+                                          <thead>
+                                            <tr className="bg-muted/50 border-b">
+                                              <th className="text-left px-3 py-2 font-medium text-muted-foreground">Description</th>
+                                              <th className="text-right px-2 py-2 font-medium text-muted-foreground">Qty</th>
+                                              <th className="text-right px-2 py-2 font-medium text-muted-foreground">Stitches</th>
+                                              {canViewPrices(user?.role) && (
+                                                <th className="text-right px-3 py-2 font-medium text-muted-foreground">Total</th>
+                                              )}
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {lineItems.map((item, idx) => {
+                                              let itemTotal: number | "POA" | null = null;
+                                              if (pricingTable) {
+                                                if (needsManualPrice(item)) {
+                                                  if (manualPrices[item.id]) {
+                                                    itemTotal = parseFloat(manualPrices[item.id]) * item.quantity;
+                                                  }
+                                                } else {
+                                                  try {
+                                                    const r = calculateJobPrice([item], pricingTable);
+                                                    itemTotal = r.totalPrice;
+                                                  } catch {}
+                                                }
+                                              }
+                                              return (
+                                                <tr key={item.id} className={`border-t ${idx % 2 === 1 ? "bg-muted/20" : ""}`}>
+                                                  <td className="px-3 py-2">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                      <Badge variant="outline" className="text-xs px-1.5 py-0 h-4 shrink-0">{item.jobType}</Badge>
+                                                      {item.description && (
+                                                        <span className="text-muted-foreground">{item.description}</span>
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                  <td className="px-2 py-2 text-right text-muted-foreground">
+                                                    {item.quantity.toLocaleString()}
+                                                  </td>
+                                                  <td className="px-2 py-2 text-right text-muted-foreground">
+                                                    {item.jobType === "Print"
+                                                      ? (CODE_TO_PRINT_SIZE[item.stitchCount as keyof typeof CODE_TO_PRINT_SIZE] || "—")
+                                                      : item.stitchCount > 0 ? item.stitchCount.toLocaleString() : "—"}
+                                                  </td>
+                                                  {canViewPrices(user?.role) && (
+                                                    <td className="px-3 py-2 text-right font-semibold">
+                                                      {needsManualPrice(item) && !manualPrices[item.id]
+                                                        ? <span className="text-muted-foreground font-normal italic">Manual needed</span>
+                                                        : itemTotal !== null
+                                                          ? (itemTotal === "POA" ? "POA" : formatPrice(itemTotal as number))
+                                                          : "—"}
+                                                    </td>
+                                                  )}
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    );
+                                  })()}
                                   {job.shippingMethod && (
                                     <div className="flex flex-col gap-1 mt-2 text-sm">
                                       <div className="flex items-center gap-2">
