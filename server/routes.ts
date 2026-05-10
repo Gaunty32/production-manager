@@ -504,6 +504,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       firstName: z.string().min(1, "First name is required").max(100),
       lastName: z.string().min(1, "Last name is required").max(100),
       email: z.string().email("Invalid email address"),
+      phone: z.string().min(1, "Phone number is required").max(50).default(""),
       company: z.string().max(200).default(""),
     });
     try {
@@ -551,6 +552,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             firstName: data.firstName,
             lastName: data.lastName,
             email: data.email,
+            ...(data.phone ? { phone: data.phone } : {}),
             ...(data.company ? { companyName: data.company } : {}),
             tags: ["demo-request"],
             source: "Select Branding Demo Page",

@@ -46,7 +46,8 @@ const schema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Please enter a valid email address"),
-  company: z.string().optional(),
+  phone: z.string().min(7, "Phone number is required"),
+  company: z.string().min(1, "Company name is required"),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -98,7 +99,7 @@ export default function DemoAccess() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { firstName: "", lastName: "", email: "", company: "" },
+    defaultValues: { firstName: "", lastName: "", email: "", phone: "", company: "" },
   });
 
   const requestMutation = useMutation({
@@ -498,22 +499,34 @@ export default function DemoAccess() {
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="company"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Company name{" "}
-                            <span className="text-muted-foreground font-normal">(optional)</span>
-                          </FormLabel>
-                          <FormControl>
-                            <Input placeholder="Acme Ltd" data-testid="input-company" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField
+                        control={form.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Phone number</FormLabel>
+                            <FormControl>
+                              <Input type="tel" placeholder="07700 900000" data-testid="input-phone" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="company"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Company name</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Acme Ltd" data-testid="input-company" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
                     {requestMutation.isError && (
                       <p className="text-sm text-destructive">
