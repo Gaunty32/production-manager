@@ -18,6 +18,7 @@ import { CheckCircle2, Layers, CalendarDays, BarChart3, MessageSquare, FileText,
 import { PRICING_2026 } from "@shared/pricing";
 import customerDashboardImg from "@assets/screenshots/production_selectbranding_co_uk_demo.png";
 import customerPortalImg from "@assets/screenshots/production_selectbranding_co_uk_customer_login.png";
+import sbsLogo from "@assets/logo_transparent.png";
 import prodImg1 from "@assets/SWM07349_1778335006727.jpg";
 import prodImg2 from "@assets/SWM00610_1778335033870.jpg";
 import prodImg3 from "@assets/SWM00709_1778335040781.jpg";
@@ -124,16 +125,13 @@ export default function DemoAccess() {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
-              <Layers className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="font-semibold text-lg tracking-tight">Select Branding Solutions</span>
+        <div className="max-w-6xl mx-auto px-6 py-3 relative flex items-center justify-center">
+          <img src={sbsLogo} alt="Select Branding Solutions" className="h-10 w-auto" />
+          <div className="absolute right-6">
+            <Button onClick={scrollToForm} size="sm" data-testid="button-header-cta">
+              Book a discovery call
+            </Button>
           </div>
-          <Button onClick={scrollToForm} size="sm" data-testid="button-header-cta">
-            Book a discovery call
-          </Button>
         </div>
       </header>
 
