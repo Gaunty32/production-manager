@@ -372,7 +372,39 @@ export default function CustomerJobDetail() {
                             : "bg-muted"
                         }`}
                       >
-                        <p className="text-sm whitespace-pre-line">{message.message}</p>
+                        {(() => {
+                          const fileRegex = /\[FILE:([^:]+):([^\]]+)\]/g;
+                          const rawText = message.message || "";
+                          const fileMatches: { name: string; url: string }[] = [];
+                          let m: RegExpExecArray | null;
+                          while ((m = fileRegex.exec(rawText)) !== null) {
+                            fileMatches.push({ name: m[1], url: m[2] });
+                          }
+                          const displayText = rawText.replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim();
+                          return (
+                            <>
+                              {displayText && (
+                                <p className="text-sm whitespace-pre-line">{displayText}</p>
+                              )}
+                              {fileMatches.map((f, fi) => (
+                                <a
+                                  key={fi}
+                                  href={`${f.url}?filename=${encodeURIComponent(f.name)}`}
+                                  download={f.name}
+                                  rel="noopener noreferrer"
+                                  className={`flex items-center gap-2 mt-2 px-3 py-2 rounded-lg text-sm font-medium no-underline transition-opacity hover:opacity-80 ${
+                                    message.senderType === "customer"
+                                      ? "bg-white/20 text-primary-foreground"
+                                      : "bg-background text-foreground border border-border"
+                                  }`}
+                                >
+                                  <FileText className="h-4 w-4 shrink-0" />
+                                  <span className="truncate max-w-[200px]">{f.name}</span>
+                                </a>
+                              ))}
+                            </>
+                          );
+                        })()}
                         <p
                           className={`text-xs mt-1 ${
                             message.senderType === "customer"
