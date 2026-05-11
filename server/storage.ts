@@ -171,6 +171,7 @@ export interface IStorage {
   updateCustomerLastLogin(id: string): Promise<void>;
   updateCustomerPassword(id: string, passwordHash: string): Promise<void>;
   updateCustomerActive(id: string, active: boolean): Promise<void>;
+  deleteCustomerUser(id: string): Promise<void>;
   updateCustomerMustResetPassword(id: string, mustResetPassword: boolean): Promise<void>;
   updateCustomerUserDetails(id: string, data: { email?: string; firstName?: string; lastName?: string }): Promise<CustomerUser>;
   updateCustomerNotificationSettings(id: string, settings: { emailNotificationsMessages?: boolean; emailNotificationsDispatch?: boolean }): Promise<void>;
@@ -1294,6 +1295,10 @@ export class DatabaseStorage implements IStorage {
       .update(customerUsers)
       .set({ active })
       .where(eq(customerUsers.id, id));
+  }
+
+  async deleteCustomerUser(id: string): Promise<void> {
+    await db.delete(customerUsers).where(eq(customerUsers.id, id));
   }
 
   async updateUserProfileImage(id: string, profileImageUrl: string): Promise<void> {

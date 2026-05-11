@@ -7065,6 +7065,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete a team member (cannot delete yourself)
+  app.delete("/api/customer-portal/team/:id", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session.customerUserId || req.session.impersonationCustomerUserId;
+      const currentUser = await storage.getCustomerUserById(customerUserId);
+      if (!currentUser) return res.status(404).json({ error: "Not found" });
+      const target = await storage.getCustomerUserById(req.params.id);
+      if (!target || target.customerId !== currentUser.customerId) return res.status(403).json({ error: "Forbidden" });
+      if (target.id === currentUser.id) return res.status(400).json({ error: "You cannot delete your own account" });
+      await storage.deleteCustomerUser(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete team member" });
+    }
+  });
+
   // ─── Customer Portal: Invoice History ────────────────────────────────────
 
   app.get("/api/customer-portal/invoices", isCustomerAuthenticated, async (req: any, res) => {

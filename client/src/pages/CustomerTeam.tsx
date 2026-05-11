@@ -27,7 +27,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, UserPlus, Mail, UserCheck, UserX, Users, Camera } from "lucide-react";
+import { ArrowLeft, UserPlus, Mail, UserCheck, UserX, Users, Camera, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -66,6 +66,7 @@ export default function CustomerTeam() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [addDialogError, setAddDialogError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const [uploadingForId, setUploadingForId] = useState<string | null>(null);
   const [isUploadingPic, setIsUploadingPic] = useState(false);
@@ -121,6 +122,18 @@ export default function CustomerTeam() {
     },
     onError: (e: any) => {
       toast({ title: "Error", description: e.message || "Failed to send reset link", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/customer-portal/team/${id}`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/team"] });
+      setConfirmDeleteId(null);
+      toast({ title: "Team member removed" });
+    },
+    onError: (e: any) => {
+      toast({ title: "Error", description: e.message || "Failed to remove team member", variant: "destructive" });
     },
   });
 
@@ -270,6 +283,16 @@ export default function CustomerTeam() {
                         >
                           <Mail className="h-4 w-4" />
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          title="Remove team member"
+                          data-testid={`button-delete-${member.id}`}
+                          onClick={() => setConfirmDeleteId(member.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     )}
                   </CardContent>
@@ -279,6 +302,33 @@ export default function CustomerTeam() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!confirmDeleteId} onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove team member?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will permanently remove{" "}
+            <span className="font-medium text-foreground">
+              {confirmDeleteId ? getFullName(team.find(m => m.id === confirmDeleteId)!) : ""}
+            </span>{" "}
+            from your team. They will no longer be able to access the portal.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => confirmDeleteId && deleteMutation.mutate(confirmDeleteId)}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Removing…" : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Member Dialog */}
       <Dialog open={showAdd} onOpenChange={(open) => { setShowAdd(open); if (!open) { setAddDialogError(null); addForm.reset(); } }}>
