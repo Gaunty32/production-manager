@@ -1,12 +1,12 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DemoText, DemoAmount } from "@/components/DemoText";
 import { useDemoMode } from "@/lib/demoMode";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff } from "lucide-react";
+import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff, GripVertical, CheckCircle2, Circle } from "lucide-react";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,6 +16,9 @@ import { canViewPrices, type Job, type Customer, type LogoSetup } from "@shared/
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Dialog,
   DialogContent,
@@ -277,11 +280,33 @@ function DriveVerificationPanel({ customerId, customerName }: { customerId: numb
   );
 }
 
+function SortableDragWrapper({
+  id,
+  children,
+}: {
+  id: string;
+  children: (dragHandleProps: { listeners: ReturnType<typeof useSortable>["listeners"]; attributes: ReturnType<typeof useSortable>["attributes"] }, isDragging: boolean) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children({ listeners, attributes }, isDragging)}
+    </div>
+  );
+}
+
 export default function InvoicingQueue() {
   const { user } = useAuth();
   const { toast } = useToast();
   const isDemoMode = useDemoMode();
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
+  const [approvedJobs, setApprovedJobs] = useState<Set<string>>(new Set());
+  const [jobOrders, setJobOrders] = useState<Record<string, string[]>>({});
   const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
   const [connectingXero, setConnectingXero] = useState(false);
   const [manualPrices, setManualPrices] = useState<Record<string, string>>({});
@@ -478,6 +503,24 @@ export default function InvoicingQueue() {
       }
     });
     setSelectedJobs(newSelected);
+  };
+
+  const toggleApprovedJob = (jobId: string) => {
+    setApprovedJobs(prev => {
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
+    });
+  };
+
+  const handleDragEnd = (customerId: string, orderedIds: string[]) => (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = orderedIds.indexOf(active.id as string);
+    const newIdx = orderedIds.indexOf(over.id as string);
+    const newOrder = arrayMove(orderedIds, oldIdx, newIdx);
+    setJobOrders(prev => ({ ...prev, [customerId]: newOrder }));
   };
 
   const getJobLineItems = (jobId: string) => {
@@ -1204,7 +1247,14 @@ export default function InvoicingQueue() {
                             }
                           }
                         }
-                        return customerJobs.map(job => {
+                        const orderedJobIds = jobOrders[customerId] || customerJobs.map(j => j.id);
+                        const orderedJobs = orderedJobIds
+                          .map(id => customerJobs.find(j => j.id === id))
+                          .filter(Boolean) as Job[];
+                        return (
+                          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd(customerId, orderedJobIds)}>
+                            <SortableContext items={orderedJobIds} strategy={verticalListSortingStrategy}>
+                              {orderedJobs.map(job => {
                         const price = getJobPrice(job);
                         const lineItems = getJobLineItems(job.id);
                         
@@ -1220,13 +1270,22 @@ export default function InvoicingQueue() {
                           : [];
                         
                         return (
+                          <SortableDragWrapper key={job.id} id={job.id}>
+                            {(dragHandleProps) => (
                           <div
-                            key={job.id}
-                            className={`flex items-start gap-3 p-4 rounded-lg border ${
+                            className={`flex items-start gap-2 p-4 rounded-lg border ${
                               selectedJobs.has(job.id) ? 'bg-accent/50 border-accent' : ''
-                            } ${job.consolidatedShipmentId ? 'border-l-4 border-l-primary/50' : ''} hover-elevate active-elevate-2`}
+                            } ${job.consolidatedShipmentId ? 'border-l-4 border-l-primary/50' : ''}`}
                             data-testid={`job-invoice-${job.id}`}
                           >
+                            <button
+                              {...dragHandleProps.listeners}
+                              {...dragHandleProps.attributes}
+                              className="mt-0.5 p-0.5 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground shrink-0"
+                              data-testid={`drag-handle-${job.id}`}
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </button>
                             <Checkbox
                               checked={selectedJobs.has(job.id)}
                               onCheckedChange={() => toggleJob(job.id)}
@@ -1266,21 +1325,27 @@ export default function InvoicingQueue() {
                                               <th className="text-right px-2 py-2 font-medium text-muted-foreground">Qty</th>
                                               <th className="text-right px-2 py-2 font-medium text-muted-foreground">Stitches</th>
                                               {canViewPrices(user?.role) && (
-                                                <th className="text-right px-3 py-2 font-medium text-muted-foreground">Total</th>
+                                                <>
+                                                  <th className="text-right px-2 py-2 font-medium text-muted-foreground">Unit</th>
+                                                  <th className="text-right px-3 py-2 font-medium text-muted-foreground">Total</th>
+                                                </>
                                               )}
                                             </tr>
                                           </thead>
                                           <tbody>
                                             {lineItems.map((item, idx) => {
+                                              let itemUnit: number | "POA" | null = null;
                                               let itemTotal: number | "POA" | null = null;
                                               if (pricingTable) {
                                                 if (needsManualPrice(item)) {
                                                   if (manualPrices[item.id]) {
-                                                    itemTotal = parseFloat(manualPrices[item.id]) * item.quantity;
+                                                    itemUnit = parseFloat(manualPrices[item.id]);
+                                                    itemTotal = itemUnit * item.quantity;
                                                   }
                                                 } else {
                                                   try {
                                                     const r = calculateJobPrice([item], pricingTable);
+                                                    itemUnit = r.lineItemPrices[0]?.unitPrice ?? null;
                                                     itemTotal = r.totalPrice;
                                                   } catch {}
                                                 }
@@ -1304,13 +1369,22 @@ export default function InvoicingQueue() {
                                                       : item.stitchCount > 0 ? item.stitchCount.toLocaleString() : "—"}
                                                   </td>
                                                   {canViewPrices(user?.role) && (
-                                                    <td className="px-3 py-2 text-right font-semibold">
-                                                      {needsManualPrice(item) && !manualPrices[item.id]
-                                                        ? <span className="text-muted-foreground font-normal italic">Manual needed</span>
-                                                        : itemTotal !== null
-                                                          ? (itemTotal === "POA" ? "POA" : formatPrice(itemTotal as number))
-                                                          : "—"}
-                                                    </td>
+                                                    <>
+                                                      <td className="px-2 py-2 text-right text-muted-foreground">
+                                                        {needsManualPrice(item) && !manualPrices[item.id]
+                                                          ? <span className="italic">—</span>
+                                                          : itemUnit !== null
+                                                            ? (itemUnit === "POA" ? "POA" : formatPrice(itemUnit as number))
+                                                            : "—"}
+                                                      </td>
+                                                      <td className="px-3 py-2 text-right font-semibold">
+                                                        {needsManualPrice(item) && !manualPrices[item.id]
+                                                          ? <span className="text-muted-foreground font-normal italic">Manual needed</span>
+                                                          : itemTotal !== null
+                                                            ? (itemTotal === "POA" ? "POA" : formatPrice(itemTotal as number))
+                                                            : "—"}
+                                                      </td>
+                                                    </>
                                                   )}
                                                 </tr>
                                               );
@@ -1462,35 +1536,53 @@ export default function InvoicingQueue() {
                                     </div>
                                   )}
                                 </div>
-                                {canViewPrices(user?.role) && (
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-7 w-7"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingLineItems({
-                                          jobId: job.id,
-                                          jobName: job.jobName,
-                                          lineItems: lineItems,
-                                        });
-                                        setEditedLineItems({});
-                                      }}
-                                      data-testid={`button-edit-line-items-${job.id}`}
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </Button>
-                                    <Badge variant="secondary" className="text-base">
-                                      {price !== null ? formatPrice(price) : "-"}
-                                    </Badge>
-                                  </div>
-                                )}
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); toggleApprovedJob(job.id); }}
+                                    className={`shrink-0 transition-colors ${approvedJobs.has(job.id) ? 'text-green-500' : 'text-muted-foreground/40 hover:text-muted-foreground'}`}
+                                    title={approvedJobs.has(job.id) ? "Reviewed — click to unmark" : "Mark as reviewed"}
+                                    data-testid={`button-approve-job-${job.id}`}
+                                  >
+                                    {approvedJobs.has(job.id)
+                                      ? <CheckCircle2 className="h-5 w-5" />
+                                      : <Circle className="h-5 w-5" />}
+                                  </button>
+                                  {canViewPrices(user?.role) && (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingLineItems({
+                                            jobId: job.id,
+                                            jobName: job.jobName,
+                                            lineItems: lineItems,
+                                          });
+                                          setEditedLineItems({});
+                                        }}
+                                        data-testid={`button-edit-line-items-${job.id}`}
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Badge variant="secondary" className="text-base">
+                                        {price !== null ? formatPrice(price) : "-"}
+                                      </Badge>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
+                            )}
+                          </SortableDragWrapper>
                         );
-                      }); })()}
+                              })}
+                            </SortableContext>
+                          </DndContext>
+                        );
+                      })()}
 
                       {/* Approved Logo Setups */}
                       {(() => {
