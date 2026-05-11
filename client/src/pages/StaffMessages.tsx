@@ -241,6 +241,7 @@ export default function StaffMessages() {
   const [chatImages, setChatImages] = useState<{ key: string; preview: string | null; fileName: string; isImage: boolean }[]>([]);
   const [isUploadingChatImage, setIsUploadingChatImage] = useState(false);
   const [isDraggingOverCompose, setIsDraggingOverCompose] = useState(false);
+  const composeAreaRef = useRef<HTMLDivElement>(null);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [showProfileDialog, setShowProfileDialog] = useState(false);
@@ -694,27 +695,38 @@ export default function StaffMessages() {
     if (files.length > 0) await uploadFiles(files);
   };
 
-  const handleComposeDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.dataTransfer.types.includes("Files")) setIsDraggingOverCompose(true);
-  };
-
-  const handleComposeDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+  // Native DOM drag listeners on compose area — bypasses React event delegation
+  useEffect(() => {
+    const el = composeAreaRef.current;
+    if (!el) return;
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      setIsDraggingOverCompose(true);
+    };
+    const onDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!el.contains(e.relatedTarget as Node)) setIsDraggingOverCompose(false);
+    };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
       setIsDraggingOverCompose(false);
-    }
-  };
-
-  const handleComposeDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingOverCompose(false);
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) await uploadFiles(files);
-  };
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      if (files.length > 0) uploadFiles(files);
+    };
+    el.addEventListener("dragover", onDragOver);
+    el.addEventListener("dragleave", onDragLeave);
+    el.addEventListener("drop", onDrop);
+    return () => {
+      el.removeEventListener("dragover", onDragOver);
+      el.removeEventListener("dragleave", onDragLeave);
+      el.removeEventListener("drop", onDrop);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
 
   const notificationSettingsMutation = useMutation({
     mutationFn: async (enabled: boolean) => {
@@ -1460,11 +1472,8 @@ export default function StaffMessages() {
 
           {/* Compose area */}
           <div
+            ref={composeAreaRef}
             className={`border-t p-3 bg-card/40 relative transition-colors ${isDraggingOverCompose ? "bg-primary/5 border-primary" : ""}`}
-            onDragOver={handleComposeDragOver}
-            onDragEnter={handleComposeDragOver}
-            onDragLeave={handleComposeDragLeave}
-            onDrop={handleComposeDrop}
           >
             {isDraggingOverCompose && (
               <div className="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg border-2 border-dashed border-primary bg-primary/10 pointer-events-none">

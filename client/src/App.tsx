@@ -1,4 +1,5 @@
 import { Switch, Route, useLocation, Router } from "wouter";
+import { useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -100,6 +101,21 @@ function StaffRouter() {
 
 function AppRouter() {
   useVersionCheck();
+
+  // Prevent the browser from opening dropped files when they miss a drop zone
+  useEffect(() => {
+    const prevent = (e: DragEvent) => {
+      if (!(e.target as HTMLElement)?.closest("[data-testid='dropzone-files'],[data-testid='dropzone-attachments']")) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener("dragover", prevent);
+    document.addEventListener("drop", prevent);
+    return () => {
+      document.removeEventListener("dragover", prevent);
+      document.removeEventListener("drop", prevent);
+    };
+  }, []);
 
   const style = {
     "--sidebar-width": "16rem",

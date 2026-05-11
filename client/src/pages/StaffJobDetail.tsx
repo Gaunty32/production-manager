@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useRoute } from "wouter";
-import { ArrowLeft, Send, FileText, MessageSquare, CheckCircle, XCircle, Clock, Edit2, Save, Users, X } from "lucide-react";
+import { ArrowLeft, Send, FileText, MessageSquare, CheckCircle, XCircle, Clock, Edit2, Save, Users, X, Paperclip } from "lucide-react";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -71,6 +71,11 @@ export default function StaffJobDetail() {
   const [newMessage, setNewMessage] = useState("");
   const [ccStaffIds, setCcStaffIds] = useState<string[]>([]);
   const [showCcPicker, setShowCcPicker] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<{ key: string; fileName: string; isImage: boolean; preview: string | null }[]>([]);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [isDraggingCompose, setIsDraggingCompose] = useState(false);
+  const attachInputRef = useRef<HTMLInputElement>(null);
+  const composeAreaRef = useRef<HTMLDivElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -265,10 +270,60 @@ export default function StaffJobDetail() {
     },
   });
 
-  const handleSendMessage = () => {
-    if (newMessage.trim() && jobId) {
-      sendMessageMutation.mutate({ message: newMessage.trim(), ccIds: ccStaffIds });
+  const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/svg+xml", "image/avif"]);
+
+  const uploadAttachments = async (files: File[]) => {
+    if (!files.length) return;
+    setIsUploadingAttachment(true);
+    try {
+      const uploaded = await Promise.all(files.map(async (file) => {
+        const isImage = IMAGE_MIME_TYPES.has(file.type);
+        const preview = isImage ? URL.createObjectURL(file) : null;
+        const contentType = file.type || "application/octet-stream";
+        const arrayBuffer = await file.arrayBuffer();
+        const uploadRes = await fetch("/api/staff/upload-file", {
+          method: "POST",
+          headers: { "Content-Type": contentType, "x-file-name": encodeURIComponent(file.name), "x-file-type": contentType },
+          body: arrayBuffer,
+          credentials: "include",
+        });
+        if (!uploadRes.ok) throw new Error("Upload failed");
+        const { key } = await uploadRes.json();
+        const normalizedKey = key.startsWith("/objects/") ? `/api/img${key.replace("/objects", "")}` : key;
+        return { key: normalizedKey, fileName: file.name, isImage, preview };
+      }));
+      setAttachedFiles(prev => [...prev, ...uploaded]);
+    } catch {
+      toast({ title: "Failed to upload file(s)", variant: "destructive" });
+    } finally {
+      setIsUploadingAttachment(false);
     }
+  };
+
+  // Native drag-and-drop on compose area
+  useEffect(() => {
+    const el = composeAreaRef.current;
+    if (!el) return;
+    const onDragOver = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; setIsDraggingCompose(true); };
+    const onDragLeave = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); if (!el.contains(e.relatedTarget as Node)) setIsDraggingCompose(false); };
+    const onDrop = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDraggingCompose(false); const files = Array.from(e.dataTransfer?.files ?? []); if (files.length) uploadAttachments(files); };
+    el.addEventListener("dragover", onDragOver);
+    el.addEventListener("dragleave", onDragLeave);
+    el.addEventListener("drop", onDrop);
+    return () => { el.removeEventListener("dragover", onDragOver); el.removeEventListener("dragleave", onDragLeave); el.removeEventListener("drop", onDrop); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSendMessage = () => {
+    if ((!newMessage.trim() && attachedFiles.length === 0) || !jobId) return;
+    const fileAttachments = attachedFiles.filter(f => !f.isImage);
+    const imageAttachments = attachedFiles.filter(f => f.isImage);
+    const fileMarkers = fileAttachments.map(f => `[FILE:${f.fileName}:${f.key}]`).join("\n");
+    const imageMarkers = imageAttachments.map(f => `[FILE:${f.fileName}:${f.key}]`).join("\n");
+    const fullMessage = [newMessage.trim(), fileMarkers, imageMarkers].filter(Boolean).join("\n");
+    attachedFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
+    setAttachedFiles([]);
+    sendMessageMutation.mutate({ message: fullMessage || " ", ccIds: ccStaffIds });
   };
 
   const toggleCcStaff = (staffId: string) => {
@@ -668,8 +723,20 @@ export default function StaffJobDetail() {
                 </div>
 
                 {/* Message Input */}
-                <div className="border-t p-4 space-y-2">
-                  {/* CC bar — shown when CC picker is open or CC'd members are selected */}
+                <div
+                  ref={composeAreaRef}
+                  className={`border-t p-4 space-y-2 relative transition-colors ${isDraggingCompose ? "bg-primary/5" : ""}`}
+                >
+                  {isDraggingCompose && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-primary bg-primary/10 rounded-b-lg pointer-events-none">
+                      <div className="flex items-center gap-2 text-primary font-medium text-sm">
+                        <Paperclip className="h-4 w-4" />
+                        Drop files to attach
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CC bar */}
                   {(showCcPicker || ccStaffIds.length > 0) && (
                     <div className="flex flex-wrap items-center gap-1.5 min-h-8">
                       <span className="text-xs text-muted-foreground shrink-0">CC:</span>
@@ -717,7 +784,53 @@ export default function StaffJobDetail() {
                     </div>
                   )}
 
+                  {/* Attachment preview */}
+                  {attachedFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {attachedFiles.map((f, i) => (
+                        <div key={f.key} className="relative">
+                          {f.isImage && f.preview ? (
+                            <img src={f.preview} alt="Preview" className="h-14 w-14 rounded-md object-cover border border-border" />
+                          ) : (
+                            <div className="h-14 w-24 rounded-md border border-border bg-muted flex flex-col items-center justify-center gap-1 px-2">
+                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="text-[10px] text-muted-foreground text-center leading-tight line-clamp-2 break-all">{f.fileName}</span>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setAttachedFiles(prev => prev.filter((_, j) => j !== i))}
+                            className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {isUploadingAttachment && <span className="text-xs text-muted-foreground self-center">Uploading…</span>}
+                    </div>
+                  )}
+
+                  <input
+                    ref={attachInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => { const files = Array.from(e.target.files || []); if (attachInputRef.current) attachInputRef.current.value = ""; if (files.length) uploadAttachments(files); }}
+                    data-testid="input-attach-file"
+                  />
+
                   <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      type="button"
+                      onClick={() => attachInputRef.current?.click()}
+                      disabled={isUploadingAttachment}
+                      title="Attach file"
+                      data-testid="button-attach-file"
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
                     <Textarea
                       placeholder="Type your message to the customer..."
                       value={newMessage}
@@ -745,7 +858,7 @@ export default function StaffJobDetail() {
                       </Button>
                       <Button
                         onClick={handleSendMessage}
-                        disabled={!newMessage.trim() || sendMessageMutation.isPending}
+                        disabled={(!newMessage.trim() && attachedFiles.length === 0) || sendMessageMutation.isPending || isUploadingAttachment}
                         size="icon"
                         data-testid="button-send-message"
                       >
