@@ -240,29 +240,30 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
         onChange={handleFileSelect}
         data-testid="input-file-upload"
       />
-      <button
-        type="button"
-        onClick={() => fileInputRef.current?.click()}
+      <div
+        role="button"
+        tabIndex={isUploading ? -1 : 0}
+        onClick={() => !isUploading && fileInputRef.current?.click()}
+        onKeyDown={(e) => { if (!isUploading && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); fileInputRef.current?.click(); } }}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        disabled={isUploading}
         data-testid="dropzone-files"
-        className={`w-full flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed py-6 px-4 transition-colors cursor-pointer
+        className={`w-full flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed py-6 px-4 transition-colors select-none
+          ${isUploading ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}
           ${isDragging
             ? "border-primary bg-primary/5 text-primary"
             : "border-border text-muted-foreground hover:border-primary/50 hover:bg-muted/40"
           }
-          ${isUploading ? "opacity-60 cursor-not-allowed" : ""}
         `}
       >
-        <Upload className={`h-5 w-5 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
-        <span className="text-sm font-medium">
+        <Upload className={`h-5 w-5 pointer-events-none ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
+        <span className="text-sm font-medium pointer-events-none">
           {isUploading ? "Uploading…" : isDragging ? "Drop files here" : "Drag & drop files, or click to browse"}
         </span>
-        <span className="text-xs text-muted-foreground">Any file type accepted</span>
-      </button>
+        <span className="text-xs text-muted-foreground pointer-events-none">Any file type accepted</span>
+      </div>
     </div>
   );
 }
