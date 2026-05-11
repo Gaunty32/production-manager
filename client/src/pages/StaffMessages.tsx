@@ -1398,8 +1398,8 @@ export default function StaffMessages() {
                               {fileMatches.map((f, fi) => (
                                 <a
                                   key={fi}
-                                  href={f.url}
-                                  target="_blank"
+                                  href={`${f.url}?filename=${encodeURIComponent(f.name)}`}
+                                  download={f.name}
                                   rel="noopener noreferrer"
                                   className={`flex items-center gap-2 mt-2 px-3 py-2 rounded-lg text-sm font-medium no-underline transition-opacity hover:opacity-80 ${
                                     msg.isInternal ? "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-700" : "bg-white/20 text-white"

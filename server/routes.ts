@@ -256,6 +256,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const suffix = req.path.replace("/api/img", "");
       const objectPath = `/objects${suffix}`;
       const file = await svc.getObjectEntityFile(objectPath);
+
+      // If a filename hint is provided (e.g. from chat file attachments), set Content-Disposition
+      // so the browser downloads with the correct original filename and extension.
+      const filenameHint = req.query.filename as string | undefined;
+      if (filenameHint) {
+        const safeFilename = filenameHint.replace(/[^\w.\- ]/g, "_");
+        res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}"`);
+      }
+
       await svc.downloadObject(file, res, 86400); // cache 24h
     } catch (err: any) {
       if (err?.name === "ObjectNotFoundError") {
