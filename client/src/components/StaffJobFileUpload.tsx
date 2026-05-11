@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
   const dragCounterRef = useRef(0);
   const { toast } = useToast();
 
@@ -112,35 +113,56 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
     }
   }, [addFileMutation, toast]);
 
+  // Always keep a current ref to uploadFiles so native listeners never capture stale closures
+  const uploadFilesRef = useRef(uploadFiles);
+  useEffect(() => { uploadFilesRef.current = uploadFiles; }, [uploadFiles]);
+
+  // Native dragover + drop listeners — attached directly to the DOM node so we get
+  // the real native DataTransfer object with files, bypassing any React event layer.
+  useEffect(() => {
+    const el = dropZoneRef.current;
+    if (!el) return;
+
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    };
+
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      if (files.length) uploadFilesRef.current(files);
+    };
+
+    el.addEventListener("dragover", onDragOver);
+    el.addEventListener("drop", onDrop);
+    return () => {
+      el.removeEventListener("dragover", onDragOver);
+      el.removeEventListener("drop", onDrop);
+    };
+  }, []);
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (files.length) await uploadFiles(files);
   };
 
+  // React synthetic events for visual feedback only (enter/leave)
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     dragCounterRef.current += 1;
     if (e.dataTransfer.types.includes("Files")) setIsDragging(true);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-  };
-
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     dragCounterRef.current -= 1;
     if (dragCounterRef.current === 0) setIsDragging(false);
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    dragCounterRef.current = 0;
-    setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length) await uploadFiles(files);
   };
 
   const handleDownloadAll = async () => {
@@ -238,14 +260,13 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
         data-testid="input-file-upload"
       />
       <div
+        ref={dropZoneRef}
         role="button"
         tabIndex={isUploading ? -1 : 0}
         onClick={() => !isUploading && fileInputRef.current?.click()}
         onKeyDown={(e) => { if (!isUploading && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); fileInputRef.current?.click(); } }}
         onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
         data-testid="dropzone-files"
         className={`w-full flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed py-6 px-4 transition-colors select-none
           ${isUploading ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}
