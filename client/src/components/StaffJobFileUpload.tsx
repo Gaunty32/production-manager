@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -39,8 +39,7 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropZoneRef = useRef<HTMLDivElement>(null);
-  const uploadFilesRef = useRef<(files: File[]) => Promise<void>>();
+  const dragCounterRef = useRef(0);
   const { toast } = useToast();
 
   const { data: existingFiles = [], isLoading } = useQuery<JobFile[]>({
@@ -113,53 +112,34 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
     }
   }, [addFileMutation, toast]);
 
-  // Keep a ref to uploadFiles so the native event listeners always call the latest version
-  useEffect(() => {
-    uploadFilesRef.current = uploadFiles;
-  }, [uploadFiles]);
-
-  // Attach native drag-and-drop listeners directly to the DOM node
-  useEffect(() => {
-    const el = dropZoneRef.current;
-    if (!el) return;
-
-    const onDragOver = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
-      setIsDragging(true);
-    };
-
-    const onDragLeave = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!el.contains(e.relatedTarget as Node)) {
-        setIsDragging(false);
-      }
-    };
-
-    const onDrop = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(false);
-      const files = Array.from(e.dataTransfer?.files ?? []);
-      if (files.length) uploadFilesRef.current?.(files);
-    };
-
-    el.addEventListener("dragover", onDragOver);
-    el.addEventListener("dragleave", onDragLeave);
-    el.addEventListener("drop", onDrop);
-
-    return () => {
-      el.removeEventListener("dragover", onDragOver);
-      el.removeEventListener("dragleave", onDragLeave);
-      el.removeEventListener("drop", onDrop);
-    };
-  }, []);
-
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (files.length) await uploadFiles(files);
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.types.includes("Files")) setIsDragging(true);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
     if (files.length) await uploadFiles(files);
   };
 
@@ -258,11 +238,14 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
         data-testid="input-file-upload"
       />
       <div
-        ref={dropZoneRef}
         role="button"
         tabIndex={isUploading ? -1 : 0}
         onClick={() => !isUploading && fileInputRef.current?.click()}
         onKeyDown={(e) => { if (!isUploading && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); fileInputRef.current?.click(); } }}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         data-testid="dropzone-files"
         className={`w-full flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed py-6 px-4 transition-colors select-none
           ${isUploading ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}
@@ -272,11 +255,11 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
           }
         `}
       >
-        <Upload className={`h-5 w-5 pointer-events-none ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
-        <span className="text-sm font-medium pointer-events-none">
+        <Upload className={`h-5 w-5 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
+        <span className="text-sm font-medium">
           {isUploading ? "Uploading…" : isDragging ? "Drop files here" : "Drag & drop files, or click to browse"}
         </span>
-        <span className="text-xs text-muted-foreground pointer-events-none">Any file type accepted</span>
+        <span className="text-xs text-muted-foreground">Any file type accepted</span>
       </div>
     </div>
   );

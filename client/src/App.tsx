@@ -102,13 +102,10 @@ function StaffRouter() {
 function AppRouter() {
   useVersionCheck();
 
-  // Prevent the browser from opening dropped files when they miss a drop zone
+  // Always prevent the browser's default file-open behaviour during drag operations.
+  // Drop zones handle their own files; this just stops the browser navigating away.
   useEffect(() => {
-    const prevent = (e: DragEvent) => {
-      if (!(e.target as HTMLElement)?.closest("[data-testid='dropzone-files'],[data-testid='dropzone-attachments']")) {
-        e.preventDefault();
-      }
-    };
+    const prevent = (e: DragEvent) => e.preventDefault();
     document.addEventListener("dragover", prevent);
     document.addEventListener("drop", prevent);
     return () => {
