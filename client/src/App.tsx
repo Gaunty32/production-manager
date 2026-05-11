@@ -91,6 +91,8 @@ function StaffRouter() {
       <Route path="/staff/job/:id"><StaffJobDetail /></Route>
       <Route path="/machines"><MachineManagement /></Route>
       <Route path="/machine/:id"><Dashboard /></Route>
+      {/* Customer portal paths — render without staff chrome */}
+      <Route path="/customer/:rest*"><CustomerPortalApp /></Route>
       <Route><NotFound /></Route>
     </Switch>
   );
@@ -164,7 +166,14 @@ function CustomerPortalApp() {
 
 function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   const { isAuthenticated, isLoading, user, isStaffImpersonating, realUser } = useAuth();
+  const [location] = useLocation();
   const { toast } = useToast();
+
+  // If the URL is a customer portal path, render the customer portal without staff chrome.
+  // This handles client-side navigation to /customer/... while the staff app is mounted.
+  if (!isLoading && location.startsWith("/customer/")) {
+    return <CustomerPortalApp />;
+  }
 
   if (isLoading) {
     return (
