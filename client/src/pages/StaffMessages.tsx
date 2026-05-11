@@ -2105,8 +2105,8 @@ function DropZone({ onFiles, onBrowse }: { onFiles: (files: File[]) => void; onB
           : "border-border hover:border-primary/50 hover:bg-muted/40 text-muted-foreground"
         }`}
     >
-      <Upload className={`h-6 w-6 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground/60"}`} />
-      <div className="text-center">
+      <Upload className={`h-6 w-6 transition-colors pointer-events-none ${isDragging ? "text-primary" : "text-muted-foreground/60"}`} />
+      <div className="text-center pointer-events-none">
         <p className="text-sm font-medium">
           {isDragging ? "Drop files here" : "Drag & drop files here"}
         </p>
