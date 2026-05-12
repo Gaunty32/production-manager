@@ -22,8 +22,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn } from "lucide-react";
+import { LogIn, LayoutDashboard, MonitorSmartphone, ExternalLink } from "lucide-react";
 import { useLocation } from "wouter";
+import sbsLogo from "@assets/logo_transparent.png";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Username or email is required"),
@@ -50,17 +51,15 @@ export default function StaffLogin() {
       return await apiRequest("POST", "/api/staff-auth/login", data);
     },
     onSuccess: async () => {
-      // Clear any stale customer session before navigating to staff portal
       try {
         await fetch("/api/customer-auth/logout", { method: "POST" });
       } catch {
-        // Ignore — clearing stale session is best-effort
+        // ignore
       }
       toast({
         title: "Welcome back",
         description: "You have been logged in successfully",
       });
-      // Force reload to ensure session is recognized
       window.location.href = "/";
     },
     onError: (error: any) => {
@@ -81,11 +80,21 @@ export default function StaffLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-6">
+
+      {/* Logo */}
+      <img
+        src={sbsLogo}
+        alt="Select Branding Solutions"
+        className="object-contain mb-2"
+        style={{ maxHeight: "72px", maxWidth: "260px", width: "100%" }}
+      />
+
+      {/* Login card */}
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <div className="flex items-center justify-center mb-2">
-            <LogIn className="h-8 w-8 text-primary" />
+          <div className="flex items-center justify-center mb-1">
+            <LogIn className="h-7 w-7 text-primary" />
           </div>
           <CardTitle className="text-2xl text-center">Production Management</CardTitle>
           <CardDescription className="text-center">
@@ -166,6 +175,44 @@ export default function StaffLogin() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Demo pages */}
+      <div className="w-full max-w-md">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-center mb-3">
+          Demo Pages
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <a
+            href="/demo"
+            className="flex flex-col items-center gap-2.5 rounded-md border bg-card p-4 text-center hover-elevate transition-colors"
+            data-testid="link-landing-page"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <LayoutDashboard className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Landing Page</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Staff production portal demo</p>
+            </div>
+            <ExternalLink className="h-3 w-3 text-muted-foreground/50" />
+          </a>
+          <a
+            href="/portal-preview"
+            className="flex flex-col items-center gap-2.5 rounded-md border bg-card p-4 text-center hover-elevate transition-colors"
+            data-testid="link-portal-preview"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <MonitorSmartphone className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Portal Preview</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Customer portal interactive demo</p>
+            </div>
+            <ExternalLink className="h-3 w-3 text-muted-foreground/50" />
+          </a>
+        </div>
+      </div>
+
     </div>
   );
 }
