@@ -1005,6 +1005,52 @@ export async function sendDispatchNotificationEmail(
   }
 }
 
+// ─── @Mention Notification ────────────────────────────────────────────────────
+export async function sendMentionNotificationEmail(details: {
+  mentionedName: string;
+  mentionedEmail: string;
+  senderName: string;
+  messageText: string;
+  contextLabel: string; // e.g. "School Hoodie — Keeps London"
+  contextUrl: string;
+}): Promise<void> {
+  const { client, fromEmail } = await getUncachableResendClient();
+
+  // Truncate long messages for the email preview
+  const preview = details.messageText.length > 400
+    ? details.messageText.slice(0, 397) + '…'
+    : details.messageText;
+
+  // Highlight the @handle in the message snippet
+  const highlighted = preview.replace(
+    /@(\w+)/g,
+    `<span style="font-weight:600;color:#6366f1;">@$1</span>`
+  );
+
+  const body = `
+    <p style="margin:0 0 12px;font-size:14px;color:#71717a;">
+      <strong style="color:#18181b;">${details.senderName}</strong> mentioned you in a message:
+    </p>
+    <blockquote style="margin:0 0 20px;padding:12px 16px;background:#f4f4f5;border-left:3px solid #6366f1;border-radius:0 4px 4px 0;font-size:14px;line-height:1.6;color:#18181b;">
+      ${highlighted}
+    </blockquote>
+    <p style="margin:0 0 20px;font-size:13px;color:#71717a;">Context: <strong style="color:#18181b;">${details.contextLabel}</strong></p>
+    ${ctaButton(details.contextUrl, 'Open Conversation')}
+    ${muted('You received this because you were @mentioned in a staff message.')}
+  `;
+
+  const { error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: [details.mentionedEmail],
+    subject: `${details.senderName} mentioned you: "${details.contextLabel}"`,
+    html: brandedEmail(body),
+  });
+
+  if (error) {
+    console.error('Failed to send @mention notification email:', error);
+  }
+}
+
 // ─── Feature Request Notification ─────────────────────────────────────────────
 export async function sendFeatureRequestNotificationEmail(details: {
   title: string;

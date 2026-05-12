@@ -44,7 +44,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 
@@ -54,6 +54,57 @@ function getBaseUrl() {
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
   if (process.env.REPLIT_DOMAINS) return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
   return 'http://localhost:5000';
+}
+
+// ─── @Mention detection & notification ───────────────────────────────────────
+// Extracts @FirstName handles from a message and fires notification emails to
+// matched staff members (excluding the sender themselves).
+async function notifyMentionedStaff(
+  messageText: string,
+  senderName: string,
+  senderUserId: string,
+  contextLabel: string,
+  contextUrl: string,
+): Promise<void> {
+  try {
+    const handles = [...messageText.matchAll(/@(\w+)/g)].map(m => m[1].toLowerCase());
+    if (!handles.length) return;
+
+    const allStaff = await storage.getStaff();
+    const allUsers = await storage.getAllUsers();
+
+    // Build a map: first name (lowercase) → { staffRecord, user }
+    for (const handle of [...new Set(handles)]) {
+      const matched = allStaff.find(s => {
+        const firstName = s.name.split(' ')[0].toLowerCase();
+        return firstName === handle;
+      });
+      if (!matched) continue;
+
+      // Look up the user record (for email)
+      const userRecord = matched.userId
+        ? allUsers.find(u => u.id === matched.userId)
+        : allUsers.find(u => {
+            const fn = [u.firstName, u.lastName].filter(Boolean).join(' ');
+            return fn.toLowerCase().startsWith(handle);
+          });
+
+      if (!userRecord?.email) continue;
+      // Don't notify the sender themselves
+      if (userRecord.id === senderUserId) continue;
+
+      sendMentionNotificationEmail({
+        mentionedName: matched.name,
+        mentionedEmail: userRecord.email,
+        senderName,
+        messageText,
+        contextLabel,
+        contextUrl,
+      }).catch(e => console.error('[Mention] Email failed:', e));
+    }
+  } catch (e) {
+    console.error('[Mention] notifyMentionedStaff error:', e);
+  }
 }
 
 // Helper function to auto-schedule a line item when it has a machine assigned
@@ -3241,6 +3292,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(isInternal ? { isInternal: true } : {}),
       });
 
+      // Fire @mention notifications for any @handles in this message
+      if (req.body.message) {
+        const baseUrl = getBaseUrl();
+        notifyMentionedStaff(
+          req.body.message,
+          senderName,
+          sessionUserId,
+          `${job.jobName}`,
+          `${baseUrl}/messages`,
+        );
+      }
+
       // Send email notification to customer for every non-internal staff message
       if (!isInternal && job.customerId) {
         try {
@@ -6365,6 +6428,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: req.body.message,
         ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
       });
+
+      // Fire @mention notifications for any @handles in this message
+      if (req.body.message) {
+        const baseUrl = getBaseUrl();
+        notifyMentionedStaff(
+          req.body.message,
+          senderName,
+          sessionUserId,
+          convo.subject || 'Direct Message',
+          `${baseUrl}/messages`,
+        );
+      }
+
       // Email notification to customer (fire-and-forget)
       if (convo.customerId) {
         (async () => {
