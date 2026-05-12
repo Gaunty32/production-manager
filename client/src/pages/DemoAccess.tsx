@@ -437,7 +437,7 @@ export default function DemoAccess() {
                   <div className="space-y-2">
                     <h3 className="text-xl font-bold">You're all set!</h3>
                     <p className="text-muted-foreground text-sm leading-relaxed">
-                      We've sent your demo login credentials to your inbox. Someone from the team will also be in touch shortly to book your discovery call.
+                      We've sent a link to your inbox so you can explore the customer portal right away. Someone from the team will also be in touch shortly to book your discovery call.
                     </p>
                     <p className="text-muted-foreground text-sm">
                       Can't see the email? Check your spam folder or request again below.
