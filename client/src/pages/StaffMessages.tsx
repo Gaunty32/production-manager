@@ -280,7 +280,7 @@ export default function StaffMessages() {
   });
 
   const { data: staffList = [] } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ["/api/staff"],
+    queryKey: ["/api/staff/mentionable"],
   });
 
   const jobId = selected?.type === "job" ? selected.jobId : null;

@@ -73,28 +73,40 @@ async function notifyMentionedStaff(
     const allStaff = await storage.getStaff();
     const allUsers = await storage.getAllUsers();
 
-    // Build a map: first name (lowercase) → { staffRecord, user }
-    for (const handle of [...new Set(handles)]) {
-      const matched = allStaff.find(s => {
-        const firstName = s.name.split(' ')[0].toLowerCase();
-        return firstName === handle;
-      });
-      if (!matched) continue;
+    // Build a set of userIds already linked to a staff record
+    const linkedUserIds = new Set(allStaff.map(s => s.userId).filter(Boolean));
 
-      // Look up the user record (for email)
-      const userRecord = matched.userId
-        ? allUsers.find(u => u.id === matched.userId)
-        : allUsers.find(u => {
-            const fn = [u.firstName, u.lastName].filter(Boolean).join(' ');
-            return fn.toLowerCase().startsWith(handle);
-          });
+    for (const handle of [...new Set(handles)]) {
+      // First try to match against a staff record by first name
+      const staffMatch = allStaff.find(s => s.name.split(' ')[0].toLowerCase() === handle);
+
+      let mentionedName: string;
+      let userRecord: typeof allUsers[number] | undefined;
+
+      if (staffMatch) {
+        mentionedName = staffMatch.name;
+        userRecord = staffMatch.userId
+          ? allUsers.find(u => u.id === staffMatch.userId)
+          : allUsers.find(u => [u.firstName, u.lastName].filter(Boolean).join(' ').toLowerCase().startsWith(handle));
+      } else {
+        // Fall back to matching users who have no staff record (e.g. admin/super_admin without a staff entry)
+        userRecord = allUsers.find(u =>
+          !linkedUserIds.has(u.id) &&
+          u.active &&
+          u.role !== 'demo' &&
+          (u.firstName || '').toLowerCase() === handle
+        );
+        mentionedName = userRecord
+          ? [userRecord.firstName, userRecord.lastName].filter(Boolean).join(' ') || userRecord.email
+          : handle;
+      }
 
       if (!userRecord?.email) continue;
       // Don't notify the sender themselves
       if (userRecord.id === senderUserId) continue;
 
       sendMentionNotificationEmail({
-        mentionedName: matched.name,
+        mentionedName,
         mentionedEmail: userRecord.email,
         senderName,
         messageText,
@@ -3749,6 +3761,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(staff);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch staff" });
+    }
+  });
+
+  // Returns every person who can be @mentioned: staff records + users without a staff record (excluding demo role)
+  app.get("/api/staff/mentionable", isStaffAuthenticated, async (req, res) => {
+    try {
+      const staffMembers = await storage.getStaff();
+      const allUsers = await storage.getAllUsers();
+      const linkedUserIds = new Set(staffMembers.map(s => s.userId).filter(Boolean));
+      const userOnlyPeople = allUsers
+        .filter(u => u.active && u.role !== "demo" && !linkedUserIds.has(u.id))
+        .map(u => ({
+          id: u.id,
+          name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+        }));
+      const staffPeople = staffMembers.map(s => ({ id: s.id, name: s.name }));
+      res.json([...staffPeople, ...userOnlyPeople]);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch mentionable users" });
     }
   });
 
