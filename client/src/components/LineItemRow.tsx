@@ -14,6 +14,7 @@ import { calculateProductionMetrics, formatTimeDisplay } from "@shared/machines"
 import { getCustomerColorClasses } from "@shared/colors";
 import { formatPrice, getPrice } from "@shared/pricing";
 import type { JobLineItem, Customer } from "@shared/schema";
+import { DemoText } from "@/components/DemoText";
 
 interface LineItemRowProps {
   jobId: string;
@@ -140,7 +141,7 @@ export function LineItemRow({
 
       {/* Customer - replicate on all rows */}
       <td className="py-2 px-3">
-        {customerName}
+        <DemoText>{customerName}</DemoText>
       </td>
 
       {/* Job - show full info on first line item, badges only on first */}

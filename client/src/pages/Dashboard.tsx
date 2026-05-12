@@ -1498,13 +1498,13 @@ export default function Dashboard() {
                           data-testid={`row-completed-job-${job.id}`}
                         >
                           <TableCell className="py-1 px-2 font-medium truncate max-w-[150px]">
-                            {job.customerName}
+                            <DemoText>{job.customerName}</DemoText>
                           </TableCell>
                           <TableCell className="py-1 px-2 text-muted-foreground">
                             #{job.jobNumber}
                           </TableCell>
                           <TableCell className="py-1 px-2 truncate max-w-[200px]">
-                            {job.jobName}
+                            <DemoText>{job.jobName}</DemoText>
                             {job.poNumber && <span className="text-muted-foreground ml-1">({job.poNumber})</span>}
                           </TableCell>
                           <TableCell className="py-1 px-2 text-right">{totalQty}</TableCell>
