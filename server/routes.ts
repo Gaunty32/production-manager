@@ -592,24 +592,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastName: data.lastName,
         email: data.email,
         company: data.company,
-        loginUrl: `${baseUrl}/`,
-        demoEmail: DEMO_EMAIL,
-        demoPassword: DEMO_PASSWORD,
+        portalUrl: `${baseUrl}/portal-preview`,
       });
 
       // Sync contact to HighLevel (fire-and-forget — never block the response)
+      // Uses HighLevel v1 REST API (location API key auth)
       const hlApiKey = process.env.HIGHLEVEL_API_KEY;
       const hlLocationId = process.env.HIGHLEVEL_LOCATION_ID;
       if (hlApiKey && hlLocationId) {
-        fetch("https://services.leadconnectorhq.com/contacts/upsert", {
+        fetch("https://rest.gohighlevel.com/v1/contacts/", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${hlApiKey}`,
-            "Version": "2021-07-28",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            locationId: hlLocationId,
             firstName: data.firstName,
             lastName: data.lastName,
             email: data.email,
@@ -622,9 +619,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .then(async (r) => {
             const body = await r.json().catch(() => ({}));
             if (!r.ok) {
-              console.error("[HighLevel] Upsert failed:", r.status, body);
+              console.error("[HighLevel] Contact creation failed:", r.status, JSON.stringify(body));
             } else {
-              console.log("[HighLevel] Contact upserted:", body?.contact?.id ?? body?.id ?? "ok");
+              const contactId = body?.contact?.id ?? body?.id;
+              console.log("[HighLevel] Contact created:", contactId ?? "ok");
             }
           })
           .catch((err) => console.error("[HighLevel] Network error:", err));

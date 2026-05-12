@@ -700,17 +700,13 @@ export async function sendDemoAccessEmail(params: {
   lastName: string;
   email: string;
   company: string;
-  loginUrl: string;
-  demoEmail: string;
-  demoPassword: string;
+  portalUrl: string;
 }): Promise<void> {
   const { client, fromEmail } = await getUncachableResendClient();
 
   const safeName = sanitizeHtml(`${params.firstName} ${params.lastName}`.trim());
   const safeFirst = sanitizeHtml(params.firstName);
   const safeCompany = sanitizeHtml(params.company);
-  const safeEmail = sanitizeHtml(params.demoEmail);
-  const safePassword = sanitizeHtml(params.demoPassword);
 
   const companyLine = safeCompany
     ? `<p style="margin:0 0 18px;color:#71717a;font-size:13px;">Requested by: ${safeName}${safeCompany ? ` &mdash; ${safeCompany}` : ''}</p>`
@@ -720,22 +716,17 @@ export async function sendDemoAccessEmail(params: {
     <p style="margin:0 0 18px;">Hi ${safeFirst},</p>
     <p style="margin:0 0 18px;">
       Thanks for your interest in the <strong>Select Branding Production System</strong>!
-      Your demo account is ready — you can log in right now to explore the platform.
+      We've put together an interactive demo of our customer portal so you can see exactly
+      what your team would experience day-to-day.
     </p>
     <p style="margin:0 0 18px;">
-      You'll be seeing our <em>real system</em> in action, with customer names and financial
-      figures anonymised so everything remains confidential. All the core functionality —
-      the production queue, scheduling, invoicing, messaging, and reports — is live and
-      working as our team uses it every day.
+      The demo includes a live order tracker, job messaging, invoice history, team management,
+      and more — no login required, just click the button below to explore.
     </p>
-    ${infoTable([
-      { label: 'Login email', value: safeEmail },
-      { label: 'Password', value: safePassword },
-    ])}
-    ${ctaButton(params.loginUrl, 'Open the Demo')}
+    ${ctaButton(params.portalUrl, 'Explore the Customer Portal')}
     <p style="margin:0 0 18px;">
-      If you have any questions or would like a guided walkthrough, just reply to this email
-      or reach out directly — we'd love to chat.
+      Someone from our team will also be in touch shortly to arrange a guided walkthrough
+      of the full system. If you have any questions in the meantime, just reply to this email.
     </p>
     <p style="margin:0 0 8px;">
       Best wishes,<br />
