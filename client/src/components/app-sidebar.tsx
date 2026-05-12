@@ -168,7 +168,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link href="/demo" onClick={handleNavClick} data-testid="link-landing-page">
+              <Link href="/demo-access" onClick={handleNavClick} data-testid="link-landing-page">
                 <Sparkles className="h-4 w-4" />
                 <span>Landing Page</span>
               </Link>

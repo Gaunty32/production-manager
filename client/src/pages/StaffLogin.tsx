@@ -183,7 +183,7 @@ export default function StaffLogin() {
         </p>
         <div className="grid grid-cols-2 gap-3">
           <a
-            href="/demo"
+            href="/demo-access"
             className="flex flex-col items-center gap-2.5 rounded-md border bg-card p-4 text-center hover-elevate transition-colors"
             data-testid="link-landing-page"
           >
