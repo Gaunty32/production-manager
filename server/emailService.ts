@@ -1004,3 +1004,39 @@ export async function sendDispatchNotificationEmail(
     console.error('Failed to send dispatch notification email:', error);
   }
 }
+
+// ─── Feature Request Notification ─────────────────────────────────────────────
+export async function sendFeatureRequestNotificationEmail(details: {
+  title: string;
+  description: string;
+  submitterName: string;
+  submitterType: string;
+  submitterEmail?: string | null;
+}): Promise<void> {
+  const { client, fromEmail } = await getUncachableResendClient();
+
+  const body = `
+    <p style="margin:0 0 16px;font-size:15px;font-weight:600;">New Feature Request</p>
+    <table style="width:100%;border-collapse:collapse;margin:0 0 20px;">
+      <tr><td style="padding:8px 12px;background:#f4f4f5;border-radius:4px 4px 0 0;font-size:13px;color:#71717a;width:120px;">From</td>
+          <td style="padding:8px 12px;background:#f9f9fb;border-radius:4px 4px 0 0;font-size:14px;">${details.submitterName} <span style="color:#71717a;">(${details.submitterType})</span>${details.submitterEmail ? ` &middot; ${details.submitterEmail}` : ''}</td></tr>
+      <tr><td style="padding:8px 12px;background:#f4f4f5;font-size:13px;color:#71717a;">Title</td>
+          <td style="padding:8px 12px;background:#f9f9fb;font-size:14px;font-weight:600;">${details.title}</td></tr>
+      <tr><td style="padding:8px 12px;background:#f4f4f5;border-radius:0 0 4px 4px;font-size:13px;color:#71717a;vertical-align:top;">Details</td>
+          <td style="padding:8px 12px;background:#f9f9fb;border-radius:0 0 4px 4px;font-size:14px;white-space:pre-wrap;">${details.description}</td></tr>
+    </table>
+    ${ctaButton('https://production.selectbranding.co.uk/feature-requests', 'Review &amp; Prioritise')}
+    ${muted('Only super admins can see this page.')}
+  `;
+
+  const { error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: ['chris@selectbranding.co.uk'],
+    subject: `New feature suggestion: "${details.title}"`,
+    html: brandedEmail(body),
+  });
+
+  if (error) {
+    console.error('Failed to send feature request notification email:', error);
+  }
+}

@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart, Phone, Mail, MessageCircle, Headphones } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart, Phone, Mail, MessageCircle, Headphones, Lightbulb } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import sbsLogo from "@assets/logo_transparent.png";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
+import { FeatureRequestDialog } from "@/components/FeatureRequestDialog";
 import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 import { AppDownloadModal } from "@/components/AppDownloadModal";
 import {
@@ -206,6 +207,7 @@ export default function CustomerDashboard() {
   const [selectedLineItemIds, setSelectedLineItemIds] = useState<Set<string>>(new Set());
   const [payDialogOpen, setPayDialogOpen] = useState(false);
   const [paymentResult, setPaymentResult] = useState<{ success: boolean; message: string; reference?: string } | null>(null);
+  const [featureDialogOpen, setFeatureDialogOpen] = useState(false);
 
   // Inject live chat widget — only on customer portal, cleaned up on unmount
   useEffect(() => {
@@ -637,6 +639,10 @@ export default function CustomerDashboard() {
                       <CreditCard className="h-4 w-4" />
                       Payment Cards
                     </Button>
+                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setFeatureDialogOpen(true)} data-testid="menu-suggest-feature">
+                      <Lightbulb className="h-4 w-4" />
+                      Suggest a Feature
+                    </Button>
                     <Separator className="my-2" />
                     <PricingTableDialog />
                     <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setChangePasswordOpen(true)} data-testid="menu-change-password">
@@ -842,6 +848,14 @@ export default function CustomerDashboard() {
             >
               <CreditCard className="h-4 w-4 mr-2" />
               Payment Cards
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setFeatureDialogOpen(true)}
+              data-testid="button-suggest-feature"
+            >
+              <Lightbulb className="h-4 w-4 mr-2" />
+              Suggest a Feature
             </Button>
           </div>
 
@@ -1520,6 +1534,12 @@ export default function CustomerDashboard() {
       </nav>
       {/* PWA install prompt — shows on mobile when not yet installed */}
       {!isImpersonating && <MobileInstallBanner />}
+      <FeatureRequestDialog
+        open={featureDialogOpen}
+        onOpenChange={setFeatureDialogOpen}
+        submitterType="customer"
+        endpoint="/api/customer-portal/feature-requests"
+      />
     </div>
   );
 }

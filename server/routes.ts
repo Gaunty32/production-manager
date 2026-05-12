@@ -32,6 +32,7 @@ import {
   insertConversationMessageSchema,
   insertSampleSchema,
   insertSampleFileSchema,
+  featureRequests,
 } from "@shared/schema";
 import { z } from "zod";
 import { xeroService } from "./xero";
@@ -7320,6 +7321,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) {
       console.error("[Google Drive] Failed to hide rows:", err);
       res.status(500).json({ error: err.message || "Failed to hide rows" });
+    }
+  });
+
+  // ─── Feature Requests ───────────────────────────────────────────────────────
+
+  // Staff: submit a feature request
+  app.post("/api/feature-requests", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      const { title, description } = req.body;
+      if (!title || !description) return res.status(400).json({ error: "title and description are required" });
+      const [created] = await db.insert(featureRequests).values({
+        title: title.trim(),
+        description: description.trim(),
+        submitterType: "staff",
+        submitterName: user.name || user.email || "Staff",
+        submitterEmail: user.email || null,
+      }).returning();
+      const { sendFeatureRequestNotificationEmail } = await import("./emailService.js");
+      sendFeatureRequestNotificationEmail({
+        title: created.title,
+        description: created.description,
+        submitterName: created.submitterName,
+        submitterType: created.submitterType,
+        submitterEmail: created.submitterEmail,
+      }).catch(e => console.error("Feature request email failed:", e));
+      res.json(created);
+    } catch (err: any) {
+      console.error("[FeatureRequests] POST staff:", err);
+      res.status(500).json({ error: "Failed to submit feature request" });
+    }
+  });
+
+  // Customer: submit a feature request
+  app.post("/api/customer-portal/feature-requests", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUser = req.customerUser;
+      const { title, description } = req.body;
+      if (!title || !description) return res.status(400).json({ error: "title and description are required" });
+      const [created] = await db.insert(featureRequests).values({
+        title: title.trim(),
+        description: description.trim(),
+        submitterType: "customer",
+        submitterName: customerUser.name || customerUser.email || "Customer",
+        submitterEmail: customerUser.email || null,
+      }).returning();
+      const { sendFeatureRequestNotificationEmail } = await import("./emailService.js");
+      sendFeatureRequestNotificationEmail({
+        title: created.title,
+        description: created.description,
+        submitterName: created.submitterName,
+        submitterType: created.submitterType,
+        submitterEmail: created.submitterEmail,
+      }).catch(e => console.error("Feature request email failed:", e));
+      res.json(created);
+    } catch (err: any) {
+      console.error("[FeatureRequests] POST customer:", err);
+      res.status(500).json({ error: "Failed to submit feature request" });
+    }
+  });
+
+  // Super admin: list all feature requests
+  app.get("/api/feature-requests", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      const rows = await db.select().from(featureRequests).orderBy(featureRequests.createdAt);
+      res.json(rows);
+    } catch (err: any) {
+      console.error("[FeatureRequests] GET:", err);
+      res.status(500).json({ error: "Failed to fetch feature requests" });
+    }
+  });
+
+  // Super admin: update status / priority / notes
+  app.patch("/api/feature-requests/:id", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status, priority, adminNotes } = req.body;
+      const updates: Record<string, unknown> = {};
+      if (status !== undefined) updates.status = status;
+      if (priority !== undefined) updates.priority = priority === null ? null : Number(priority);
+      if (adminNotes !== undefined) updates.adminNotes = adminNotes;
+      if (Object.keys(updates).length === 0) return res.status(400).json({ error: "Nothing to update" });
+      const [updated] = await db.update(featureRequests).set(updates).where(eq(featureRequests.id, id)).returning();
+      if (!updated) return res.status(404).json({ error: "Not found" });
+      res.json(updated);
+    } catch (err: any) {
+      console.error("[FeatureRequests] PATCH:", err);
+      res.status(500).json({ error: "Failed to update feature request" });
     }
   });
 

@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +19,8 @@ import type { Machine } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import type { Job } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
+import { FeatureRequestDialog } from "@/components/FeatureRequestDialog";
 import logoImage from "@assets/logo_transparent.png";
 
 const menuItems = [
@@ -43,6 +45,7 @@ export function AppSidebar() {
   const isUserSuperAdmin = isSuperAdmin(user?.role);
   const userCanViewPrices = canViewPrices(user?.role);
   const { isMobile, setOpenMobile } = useSidebar();
+  const [featureDialogOpen, setFeatureDialogOpen] = useState(false);
 
   const handleNavClick = () => {
     if (isMobile) setOpenMobile(false);
@@ -167,6 +170,22 @@ export function AppSidebar() {
       <SidebarFooter className="border-t p-2">
         <SidebarMenu>
           <SidebarMenuItem>
+            <SidebarMenuButton onClick={() => setFeatureDialogOpen(true)} data-testid="button-suggest-feature">
+              <Lightbulb className="h-4 w-4" />
+              <span>Suggest a Feature</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {isUserSuperAdmin && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild>
+                <Link href="/feature-requests" onClick={handleNavClick} data-testid="link-feature-requests">
+                  <Settings className="h-4 w-4" />
+                  <span>Feature Requests</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          <SidebarMenuItem>
             <SidebarMenuButton asChild>
               <Link href="/demo-access" onClick={handleNavClick} data-testid="link-landing-page">
                 <Sparkles className="h-4 w-4" />
@@ -184,6 +203,12 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      <FeatureRequestDialog
+        open={featureDialogOpen}
+        onOpenChange={setFeatureDialogOpen}
+        submitterType="staff"
+        endpoint="/api/feature-requests"
+      />
     </Sidebar>
   );
 }

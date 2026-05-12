@@ -1133,6 +1133,24 @@ export interface ProductionDisplayLeaderboard {
 }
 
 // App settings — key/value store for persisting server-side config (e.g. Xero tokens)
+// Feature requests — submitted by staff or customers, reviewed by super_admin
+export const featureRequests = pgTable("feature_requests", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description").notNull(),
+  submitterType: varchar("submitter_type", { length: 20 }).notNull(), // "staff" | "customer"
+  submitterName: varchar("submitter_name", { length: 200 }).notNull(),
+  submitterEmail: varchar("submitter_email", { length: 200 }),
+  status: varchar("status", { length: 30 }).notNull().default("new"), // new | reviewed | planned | in_progress | done | declined
+  priority: integer("priority"), // lower number = higher priority; null = unranked
+  adminNotes: text("admin_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type FeatureRequest = typeof featureRequests.$inferSelect;
+export const insertFeatureRequestSchema = createInsertSchema(featureRequests).omit({ id: true, createdAt: true, status: true, priority: true, adminNotes: true });
+export type InsertFeatureRequest = z.infer<typeof insertFeatureRequestSchema>;
+
 export const appSettings = pgTable("app_settings", {
   key: varchar("key").primaryKey(),
   value: text("value").notNull(),
