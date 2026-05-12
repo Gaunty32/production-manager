@@ -47,6 +47,7 @@ import DemoPortal from "@/pages/DemoPortal";
 import DemoAccess from "@/pages/DemoAccess";
 import MachineManagement from "@/pages/MachineManagement";
 import CustomerPaymentMethods from "@/pages/CustomerPaymentMethods";
+import PortalPreview from "@/pages/PortalPreview";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -121,6 +122,7 @@ function AppRouter() {
   return (
     <Switch>
       {/* Public Routes - No Authentication Required */}
+      <Route path="/portal-preview" component={PortalPreview} />
       <Route path="/demo-access" component={DemoAccess} />
       <Route path="/demo" component={DemoPortal} />
       <Route path="/production-display" component={ProductionDisplay} />
