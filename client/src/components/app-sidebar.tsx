@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -168,9 +168,17 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link href="/demo-access" onClick={handleNavClick} data-testid="link-demo-access">
+              <Link href="/demo" onClick={handleNavClick} data-testid="link-landing-page">
                 <Sparkles className="h-4 w-4" />
-                <span>Demo</span>
+                <span>Landing Page</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Link href="/portal-preview" onClick={handleNavClick} data-testid="link-portal-preview">
+                <MonitorSmartphone className="h-4 w-4" />
+                <span>Portal Preview</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
