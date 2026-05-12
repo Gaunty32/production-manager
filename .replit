@@ -45,3 +45,4 @@ integrations = ["javascript_database:1.0.0", "javascript_log_in_with_replit:1.0.
 
 [userenv.shared]
 BASE_URL = "https://production.selectbranding.co.uk"
+HIGHLEVEL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6IjlwTndpRWVGRUdvbUF3WGhLbUFkIiwiY29tcGFueV9pZCI6IkZERGtyTGQ4TFFuNWZJRDUxVmVaIiwidmVyc2lvbiI6MSwiaWF0IjoxNjkyMDQxMjYzNjc4LCJzdWIiOiJ1c2VyX2lkIn0.o3o4LWQrGeV66WJi8tK89WvXb4jBC49RRCAUHEgzpVM"

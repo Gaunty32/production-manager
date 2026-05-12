@@ -600,13 +600,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hlApiKey = process.env.HIGHLEVEL_API_KEY;
       const hlLocationId = process.env.HIGHLEVEL_LOCATION_ID;
       if (hlApiKey && hlLocationId) {
-        fetch("https://rest.gohighlevel.com/v1/contacts/", {
+        fetch("https://services.leadconnectorhq.com/contacts/", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${hlApiKey}`,
+            "Version": "2021-07-28",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            locationId: hlLocationId,
             firstName: data.firstName,
             lastName: data.lastName,
             email: data.email,
