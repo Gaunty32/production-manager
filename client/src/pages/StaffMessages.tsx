@@ -849,7 +849,20 @@ export default function StaffMessages() {
     }
     customerGroups.get(c.customerId)!.jobs.push(c);
   });
-  const sortedGroups = Array.from(customerGroups.values()).sort((a, b) => a.customerName.localeCompare(b.customerName));
+  const sortedGroups = Array.from(customerGroups.values()).sort((a, b) => {
+    const aUnread = a.jobs.reduce((s, j) => s + (j.unreadCount > 0 ? j.unreadCount : flags.isManuallyUnread(`job:${j.jobId}`) ? 1 : 0), 0);
+    const bUnread = b.jobs.reduce((s, j) => s + (j.unreadCount > 0 ? j.unreadCount : flags.isManuallyUnread(`job:${j.jobId}`) ? 1 : 0), 0);
+    if (aUnread > 0 && bUnread === 0) return -1;
+    if (bUnread > 0 && aUnread === 0) return 1;
+    if (aUnread > 0 && bUnread > 0) {
+      const aLatest = Math.max(...a.jobs.map(j => j.latestMessage ? new Date(j.latestMessage.createdAt).getTime() : 0));
+      const bLatest = Math.max(...b.jobs.map(j => j.latestMessage ? new Date(j.latestMessage.createdAt).getTime() : 0));
+      return bLatest - aLatest;
+    }
+    return a.customerName.localeCompare(b.customerName);
+  });
+  const unreadGroups = sortedGroups.filter(g => g.jobs.some(j => j.unreadCount > 0 || flags.isManuallyUnread(`job:${j.jobId}`)));
+  const readGroups = sortedGroups.filter(g => !g.jobs.some(j => j.unreadCount > 0 || flags.isManuallyUnread(`job:${j.jobId}`)));
 
   const drilledGroup = drillCustomerId ? customerGroups.get(drillCustomerId) : null;
 
@@ -857,6 +870,49 @@ export default function StaffMessages() {
     // Always drill into the job list so staff always see which job they're opening
     setDrillCustomerId(group.customerId);
     setLeftView("jobs");
+  };
+
+  const renderCustomerTile = (group: { customerId: string; customerName: string; customerLogoUrl: string | null; jobs: JobConversation[] }) => {
+    const groupUnread = group.jobs.reduce((s, j) => {
+      return s + (j.unreadCount > 0 ? j.unreadCount : flags.isManuallyUnread(`job:${j.jobId}`) ? 1 : 0);
+    }, 0);
+    const groupHasReminder = group.jobs.some(j => flags.hasReminder(`job:${j.jobId}`));
+    const isSelectedCustomer = group.jobs.some(j => selected?.type === "job" && selected.jobId === j.jobId);
+    const lastMsg = group.jobs
+      .map(j => j.latestMessage)
+      .filter(Boolean)
+      .sort((a, b) => new Date(b!.createdAt).getTime() - new Date(a!.createdAt).getTime())[0];
+    return (
+      <button
+        key={group.customerId}
+        onClick={() => handleCustomerTileClick(group)}
+        className={`relative rounded-md border flex flex-col items-center gap-1.5 p-3 text-center hover-elevate transition-colors ${
+          isSelectedCustomer ? "border-primary bg-primary/5" : groupUnread > 0 ? "border-destructive/40 bg-destructive/5" : "border-border bg-card"
+        }`}
+        data-testid={`customer-tile-${group.customerId}`}
+      >
+        {groupUnread > 0 && (
+          <Badge variant="destructive" className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px] z-10">
+            {groupUnread}
+          </Badge>
+        )}
+        <div className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-sm shrink-0 ${group.customerLogoUrl ? "bg-transparent" : customerColor(group.customerId)}`}>
+          {group.customerLogoUrl
+            ? <img src={group.customerLogoUrl} alt={group.customerName} className="h-full w-full object-contain" />
+            : getInitials(group.customerName)
+          }
+        </div>
+        <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2"><DemoText>{group.customerName}</DemoText></p>
+        <div className="flex items-center gap-1">
+          <Package className="h-3 w-3 text-muted-foreground" />
+          <span className="text-[10px] text-muted-foreground">{group.jobs.length} job{group.jobs.length !== 1 ? "s" : ""}</span>
+          {groupHasReminder && <Clock className="h-3 w-3 text-primary/70" />}
+        </div>
+        {lastMsg && (
+          <p className="text-[10px] text-muted-foreground">{formatConvoTime(lastMsg.createdAt)}</p>
+        )}
+      </button>
+    );
   };
 
   const handleBackToTiles = () => {
@@ -1056,53 +1112,28 @@ export default function StaffMessages() {
                   {sortedGroups.length === 0 ? (
                     <EmptyState label="All conversations are hidden" />
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {sortedGroups.map(group => {
-                        const groupUnread = group.jobs.reduce((s, j) => {
-                          const effective = j.unreadCount > 0 ? j.unreadCount : (flags.isManuallyUnread(`job:${j.jobId}`) ? 1 : 0);
-                          return s + effective;
-                        }, 0);
-                        const groupHasReminder = group.jobs.some(j => flags.hasReminder(`job:${j.jobId}`));
-                        const isSelectedCustomer = group.jobs.some(j => selected?.type === "job" && selected.jobId === j.jobId);
-                        const lastMsg = group.jobs
-                          .map(j => j.latestMessage)
-                          .filter(Boolean)
-                          .sort((a, b) => new Date(b!.createdAt).getTime() - new Date(a!.createdAt).getTime())[0];
-                        return (
-                          <button
-                            key={group.customerId}
-                            onClick={() => handleCustomerTileClick(group)}
-                            className={`relative rounded-md border flex flex-col items-center gap-1.5 p-3 text-center hover-elevate transition-colors ${
-                              isSelectedCustomer ? "border-primary bg-primary/5" : "border-border bg-card"
-                            }`}
-                            data-testid={`customer-tile-${group.customerId}`}
-                          >
-                            {groupUnread > 0 && (
-                              <Badge
-                                variant="destructive"
-                                className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px] z-10"
-                              >
-                                {groupUnread}
-                              </Badge>
-                            )}
-                            <div className={`h-12 w-12 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-sm shrink-0 ${group.customerLogoUrl ? "bg-transparent" : customerColor(group.customerId)}`}>
-                              {group.customerLogoUrl
-                                ? <img src={group.customerLogoUrl} alt={group.customerName} className="h-full w-full object-contain" />
-                                : getInitials(group.customerName)
-                              }
-                            </div>
-                            <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2"><DemoText>{group.customerName}</DemoText></p>
-                            <div className="flex items-center gap-1">
-                              <Package className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-[10px] text-muted-foreground">{group.jobs.length} job{group.jobs.length !== 1 ? "s" : ""}</span>
-                              {groupHasReminder && <Clock className="h-3 w-3 text-primary/70" />}
-                            </div>
-                            {lastMsg && (
-                              <p className="text-[10px] text-muted-foreground">{formatConvoTime(lastMsg.createdAt)}</p>
-                            )}
-                          </button>
-                        );
-                      })}
+                    <div className="space-y-3">
+                      {unreadGroups.length > 0 && (
+                        <>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                            <Pin className="h-3 w-3" /> New Messages
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {unreadGroups.map(group => renderCustomerTile(group))}
+                          </div>
+                          {readGroups.length > 0 && <div className="border-t" />}
+                        </>
+                      )}
+                      {readGroups.length > 0 && (
+                        <>
+                          {unreadGroups.length > 0 && (
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">All Customers</p>
+                          )}
+                          <div className="grid grid-cols-2 gap-2">
+                            {readGroups.map(group => renderCustomerTile(group))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
