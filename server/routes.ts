@@ -2218,6 +2218,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff - Delete a portal user (must be disabled first)
+  app.delete("/api/customer-users/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.getCustomerUserById(req.params.id);
+      if (!user) return res.status(404).json({ error: "Customer user not found" });
+      if (user.active !== false) return res.status(400).json({ error: "Only disabled portal users can be deleted" });
+      await storage.deleteCustomerUser(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting portal user:", error);
+      res.status(500).json({ error: "Failed to delete portal user" });
+    }
+  });
+
   // Update customer user details (email, name)
   app.patch("/api/customer-users/:id", isStaffAuthenticated, async (req, res) => {
     try {

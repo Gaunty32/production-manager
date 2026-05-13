@@ -869,6 +869,7 @@ export async function sendMobileGuideEmail(params: {
   const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: params.to,
+    cc: ['chris@selectbranding.co.uk', 'james@selectuniforms.co.uk'],
     subject: 'How to use Production Planner on your phone',
     html: brandedEmail(body),
   });

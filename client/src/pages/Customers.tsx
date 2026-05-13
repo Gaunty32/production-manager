@@ -57,6 +57,7 @@ export default function Customers() {
   const [isGeneratingInvite, setIsGeneratingInvite] = useState<string | null>(null); // userId being actioned
   const [isSendingReset, setIsSendingReset] = useState<string | null>(null); // userId being reset
   const [isSendingMobileGuide, setIsSendingMobileGuide] = useState<string | null>(null); // userId being actioned
+  const [portalUserToDelete, setPortalUserToDelete] = useState<{ id: string; email: string } | null>(null);
   const [showReEngagement, setShowReEngagement] = useState(false);
 
   const { data: dormantData, isLoading: isLoadingDormant, refetch: refetchDormant } = useQuery<{
@@ -377,6 +378,22 @@ export default function Customers() {
         description: error.message || "Failed to start impersonation",
         variant: "destructive",
       });
+    },
+  });
+
+  const deletePortalUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/customer-users/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      toast({ title: "Success", description: "Portal user deleted" });
+      setPortalUserToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to delete portal user", variant: "destructive" });
+      setPortalUserToDelete(null);
     },
   });
 
@@ -846,6 +863,17 @@ export default function Customers() {
                                   {isSendingMobileGuide === portalUser.id ? "Sending…" : "Send App Guide"}
                                 </Button>
                                 <div className="flex items-center gap-1.5 ml-auto">
+                                  {!userActive && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-xs text-destructive"
+                                      onClick={() => setPortalUserToDelete({ id: portalUser.id, email: portalUser.email || "" })}
+                                      data-testid={`button-delete-portal-user-${portalUser.id}`}
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-1" />Delete
+                                    </Button>
+                                  )}
                                   <span className="text-xs text-muted-foreground">Access</span>
                                   <Switch
                                     checked={userActive}
@@ -899,6 +927,27 @@ export default function Customers() {
                 onClick={confirmDelete}
                 className="bg-destructive hover:bg-destructive/90"
                 data-testid="button-confirm-delete"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={portalUserToDelete !== null} onOpenChange={(open) => !open && setPortalUserToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Portal User</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to permanently delete <strong>{portalUserToDelete?.email}</strong>? This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => portalUserToDelete && deletePortalUserMutation.mutate(portalUserToDelete.id)}
+                className="bg-destructive hover:bg-destructive/90"
+                data-testid="button-confirm-delete-portal-user"
               >
                 Delete
               </AlertDialogAction>
