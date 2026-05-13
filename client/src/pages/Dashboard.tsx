@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { DemoText, DemoAmount } from "@/components/DemoText";
-import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText, MessageSquare } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText, MessageSquare, Paperclip, Download, ExternalLink } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,6 +24,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobEditDialog } from "@/components/JobEditDialog";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
@@ -33,6 +39,7 @@ import { ProductionWorksheet } from "@/components/ProductionWorksheet";
 import { EditTrackingDialog } from "@/components/EditTrackingDialog";
 import { JobErrorsDialog } from "@/components/JobErrorsDialog";
 import { JobErrorBadge } from "@/components/JobErrorBadge";
+import { JobFilesDialog } from "@/components/JobFilesDialog";
 import { RecordProductionDialog } from "@/components/RecordProductionDialog";
 import { CustomerDocumentsManager } from "@/components/CustomerDocumentsManager";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -63,6 +70,7 @@ export default function Dashboard() {
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [editingTrackingJob, setEditingTrackingJob] = useState<JobWithLineItems | null>(null);
   const [recordingProductionItem, setRecordingProductionItem] = useState<{ lineItem: JobLineItem; jobName: string } | null>(null);
+  const [filesDialogJob, setFilesDialogJob] = useState<{ id: string; jobName: string; jobNumber: number } | null>(null);
 
   // Fetch current user
   const { data: currentUser } = useQuery<{ id: string; username?: string; email: string; firstName?: string; lastName?: string; role?: string }>({
@@ -1475,6 +1483,7 @@ export default function Dashboard() {
                     <TableHead className="py-1 px-2 w-[50px] text-right">Qty</TableHead>
                     <TableHead className="py-1 px-2 w-[80px]">Dispatched</TableHead>
                     <TableHead className="py-1 px-2 w-[100px]">Tracking</TableHead>
+                    <TableHead className="py-1 px-2 w-[60px]">Files</TableHead>
                     <TableHead className="py-1 px-2 w-[70px]">Errors</TableHead>
                     <TableHead className="py-1 px-2 w-[80px]"></TableHead>
                   </TableRow>
@@ -1525,6 +1534,18 @@ export default function Dashboard() {
                             >
                               <Truck className="h-3 w-3 mr-1" />
                               {job.dhlTrackingNumber ? job.dhlTrackingNumber.slice(-6) : "Add"}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="py-1 px-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-xs px-2"
+                              onClick={() => setFilesDialogJob({ id: job.id, jobName: job.jobName, jobNumber: job.jobNumber })}
+                              data-testid={`button-files-completed-${job.id}`}
+                            >
+                              <Paperclip className="h-3 w-3 mr-1" />
+                              Files
                             </Button>
                           </TableCell>
                           <TableCell className="py-1 px-2">
@@ -1621,6 +1642,11 @@ export default function Dashboard() {
             currentUserId={currentUser?.id}
           />
         )}
+
+        <JobFilesDialog
+          job={filesDialogJob}
+          onClose={() => setFilesDialogJob(null)}
+        />
       </div>
     </div>
   );

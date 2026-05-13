@@ -2998,6 +2998,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(imageUrl ? { imageUrl } : {}),
       });
 
+      // Auto-save any file/image attachments to job_files for permanent record-keeping
+      (async () => {
+        try {
+          if (imageUrl) {
+            await storage.createJobFile({
+              jobId: req.params.jobId,
+              fileName: 'Image attachment (from chat)',
+              fileUrl: imageUrl,
+              fileSize: 0,
+              fileType: 'image',
+              uploadedBy: 'customer',
+              uploaderId: userId,
+            });
+          }
+          if (messageText) {
+            const fileRegex = /\[FILE:([^:]+):([^\]]+)\]/g;
+            let match;
+            while ((match = fileRegex.exec(messageText)) !== null) {
+              const [, fileName, fileKey] = match;
+              await storage.createJobFile({
+                jobId: req.params.jobId,
+                fileName,
+                fileUrl: fileKey,
+                fileSize: 0,
+                fileType: 'application/octet-stream',
+                uploadedBy: 'customer',
+                uploaderId: userId,
+              });
+            }
+          }
+        } catch (e) { /* non-critical */ }
+      })();
+
       // Email staff who have notifications enabled (fire-and-forget)
       (async () => {
         try {
@@ -3315,6 +3348,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(req.body.imageUrl ? { imageUrl: req.body.imageUrl } : {}),
         ...(isInternal ? { isInternal: true } : {}),
       });
+
+      // Auto-save any file/image attachments to job_files for permanent record-keeping
+      (async () => {
+        try {
+          if (req.body.imageUrl) {
+            await storage.createJobFile({
+              jobId: req.params.jobId,
+              fileName: 'Image attachment (from chat)',
+              fileUrl: req.body.imageUrl,
+              fileSize: 0,
+              fileType: 'image',
+              uploadedBy: 'staff',
+              uploaderId: senderId,
+            });
+          }
+          if (req.body.message) {
+            const fileRegex = /\[FILE:([^:]+):([^\]]+)\]/g;
+            let match;
+            while ((match = fileRegex.exec(req.body.message)) !== null) {
+              const [, fileName, fileKey] = match;
+              await storage.createJobFile({
+                jobId: req.params.jobId,
+                fileName,
+                fileUrl: fileKey,
+                fileSize: 0,
+                fileType: 'application/octet-stream',
+                uploadedBy: 'staff',
+                uploaderId: senderId,
+              });
+            }
+          }
+        } catch (e) { /* non-critical */ }
+      })();
 
       // Fire @mention notifications for any @handles in this message
       if (req.body.message) {
