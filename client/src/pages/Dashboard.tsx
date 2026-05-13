@@ -586,8 +586,7 @@ export default function Dashboard() {
               variant="outline" 
               data-testid="button-view-completed-orders"
               onClick={() => {
-                setCompletedOrdersOpen(true);
-                // Scroll to completed orders section after a brief delay to let it expand
+                setViewMode('completed');
                 setTimeout(() => {
                   const completedSection = document.querySelector('[data-testid="section-completed-orders"]');
                   if (completedSection) {
