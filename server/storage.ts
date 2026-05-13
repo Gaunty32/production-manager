@@ -1531,16 +1531,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUnreadCountForStaff(): Promise<number> {
-    const unread = await db
-      .select()
+    // Count unread customer job messages — excluding archived conversations
+    const unreadJobMsgs = await db
+      .select({ id: jobMessages.id })
       .from(jobMessages)
+      .innerJoin(jobs, eq(jobMessages.jobId, jobs.id))
       .where(
         and(
           eq(jobMessages.senderType, 'customer'),
-          eq(jobMessages.readByStaff, false)
+          eq(jobMessages.readByStaff, false),
+          isNull(jobs.conversationArchivedByStaff)
         )
       );
-    return unread.length;
+
+    // Count unread staff direct-conversation messages
+    const unreadDirectMsgs = await db
+      .select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(
+        and(
+          eq(conversationMessages.senderType, 'customer'),
+          eq(conversationMessages.readByStaff, false)
+        )
+      );
+
+    return unreadJobMsgs.length + unreadDirectMsgs.length;
   }
 
   async getJobFiles(jobId: string): Promise<JobFile[]> {
