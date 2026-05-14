@@ -80,16 +80,28 @@ export function isCustomerAuthenticated(req: any, res: any, next: any) {
 export async function attachCustomerUser(req: any, res: any, next: any) {
   // Check for impersonation first, then regular customer auth
   const customerUserId = req.session?.impersonationCustomerUserId || req.session?.customerUserId;
+  const isImpersonating = !!req.session?.impersonationCustomerUserId;
   
   if (customerUserId) {
     try {
       const customerUser = await storage.getCustomerUserById(customerUserId);
       if (customerUser) {
+        // Refresh lastLoginAt once per hour for real sessions (not impersonation)
+        // so rolling sessions show an accurate "last active" time
+        if (!isImpersonating) {
+          const lastLogin = customerUser.lastLoginAt;
+          const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+          if (!lastLogin || lastLogin < hourAgo) {
+            storage.updateCustomerLastLogin(customerUserId).catch(() => {});
+            customerUser.lastLoginAt = new Date();
+          }
+        }
+
         const { passwordHash: _, ...user } = customerUser;
         req.customerUser = user;
         
         // If impersonating, also attach impersonation info
-        if (req.session?.impersonationCustomerUserId) {
+        if (isImpersonating) {
           req.isImpersonating = true;
           req.staffUserId = req.session.impersonationStaffUserId;
         }
