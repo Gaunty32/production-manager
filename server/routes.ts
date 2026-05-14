@@ -3850,13 +3850,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const staffMembers = await storage.getStaff();
       const allUsers = await storage.getAllUsers();
       const linkedUserIds = new Set(staffMembers.map(s => s.userId).filter(Boolean));
+      const userIdToEmail = new Map(allUsers.map(u => [u.id, u.email]));
       const userOnlyPeople = allUsers
         .filter(u => u.active && u.role !== "demo" && !linkedUserIds.has(u.id))
         .map(u => ({
           id: u.id,
           name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+          email: u.email ?? null,
         }));
-      const staffPeople = staffMembers.map(s => ({ id: s.id, name: s.name }));
+      const staffPeople = staffMembers.map(s => ({
+        id: s.id,
+        name: s.name,
+        email: s.userId ? (userIdToEmail.get(s.userId) ?? null) : null,
+      }));
       res.json([...staffPeople, ...userOnlyPeople]);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch mentionable users" });

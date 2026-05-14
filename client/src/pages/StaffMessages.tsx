@@ -286,7 +286,7 @@ export default function StaffMessages() {
     queryKey: ["/api/customers"],
   });
 
-  const { data: staffList = [] } = useQuery<{ id: string; name: string }[]>({
+  const { data: staffList = [] } = useQuery<{ id: string; name: string; email?: string | null }[]>({
     queryKey: ["/api/staff/mentionable"],
   });
 
@@ -837,8 +837,10 @@ export default function StaffMessages() {
     }
   };
 
+  const staffEmailSet = new Set(staffList.map(s => s.email).filter(Boolean) as string[]);
+
   const customerMentions = currentConvoCustomerUsers
-    .filter(u => u.active)
+    .filter(u => u.active && !staffEmailSet.has(u.email))
     .map(u => ({
       id: u.id,
       name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
