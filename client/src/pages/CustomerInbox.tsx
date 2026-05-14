@@ -392,6 +392,8 @@ export default function CustomerInbox() {
     onError: () => toast({ title: "Failed to delete conversation", variant: "destructive" }),
   });
 
+  const [remindOpenMsgId, setRemindOpenMsgId] = useState<string | null>(null);
+
   const archiveJobConvoMutation = useMutation({
     mutationFn: async (jobId: string) => {
       const res = await apiRequest("PUT", `/api/customer-portal/jobs/${jobId}/conversation/archive`, {});
@@ -416,6 +418,70 @@ export default function CustomerInbox() {
     },
     onError: () => toast({ title: "Failed to restore conversation", variant: "destructive" }),
   });
+
+  const markUnreadCustomerMutation = useMutation({
+    mutationFn: async ({ messageId, type }: { messageId: string; type: 'job' | 'direct' }) => {
+      const url = type === 'job'
+        ? `/api/customer-portal/messages/job/${messageId}/mark-unread`
+        : `/api/customer-portal/messages/direct/${messageId}/mark-unread`;
+      await apiRequest("PATCH", url, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/direct-conversations"] });
+      toast({ title: "Marked as unread" });
+    },
+    onError: () => toast({ title: "Failed to mark as unread", variant: "destructive" }),
+  });
+
+  const createCustomerReminderMutation = useMutation({
+    mutationFn: async ({ messageId, messageType, remindAt, messagePreview }: {
+      messageId: string; messageType: string; remindAt: Date; messagePreview: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/customer-portal/messages/reminders", {
+        messageId, messageType, remindAt: remindAt.toISOString(), messagePreview,
+      });
+      return res.json();
+    },
+    onSuccess: (_data, { remindAt }) => {
+      toast({ title: `Reminder set for ${format(remindAt, "d MMM 'at' h:mm a")}` });
+      setRemindOpenMsgId(null);
+    },
+    onError: () => toast({ title: "Failed to set reminder", variant: "destructive" }),
+  });
+
+  const dismissCustomerReminderMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("PATCH", `/api/customer-portal/messages/reminders/${id}/dismiss`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/messages/reminders"] });
+    },
+  });
+
+  const { data: pendingCustomerReminders = [] } = useQuery<{ id: string; messagePreview: string | null; remindAt: string }[]>({
+    queryKey: ["/api/customer-portal/messages/reminders"],
+    refetchInterval: 60_000,
+  });
+
+  useEffect(() => {
+    const now = new Date();
+    pendingCustomerReminders.forEach(r => {
+      if (new Date(r.remindAt) <= now) {
+        const preview = r.messagePreview ? `"${r.messagePreview.slice(0, 80)}"` : "You asked to be reminded about a message.";
+        toast({ title: "Message reminder", description: preview, duration: 10000 });
+        dismissCustomerReminderMutation.mutate(r.id);
+      }
+    });
+  }, [pendingCustomerReminders]);
+
+  const REMIND_OPTIONS = [
+    { label: "In 30 minutes", getDate: () => new Date(Date.now() + 30 * 60_000) },
+    { label: "In 1 hour", getDate: () => new Date(Date.now() + 60 * 60_000) },
+    { label: "In 4 hours", getDate: () => new Date(Date.now() + 4 * 60 * 60_000) },
+    { label: "Tomorrow 9am", getDate: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; } },
+    { label: "In 3 days", getDate: () => new Date(Date.now() + 3 * 24 * 60 * 60_000) },
+  ];
 
   const handleSend = () => {
     if ((!newMessage.trim() && !chatImage) || !selected) return;
@@ -1038,7 +1104,42 @@ export default function CustomerInbox() {
                           <div className="flex-1 h-px bg-border" />
                         </div>
                       )}
-                      <div className={`flex items-end gap-2.5 ${isCustomer ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
+                      <div className={`group/msg flex items-end gap-2.5 ${isCustomer ? "flex-row-reverse" : "flex-row"}`} data-testid={`message-${msg.id}`}>
+                        {/* Action buttons — own (customer) messages: remind only */}
+                        {isCustomer && (
+                          <div className="invisible group-hover/msg:visible flex flex-col gap-1 shrink-0">
+                            <Popover open={remindOpenMsgId === msg.id} onOpenChange={open => setRemindOpenMsgId(open ? msg.id : null)}>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  title="Remind me"
+                                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                                  data-testid={`button-remind-${msg.id}`}
+                                >
+                                  <Bell className="h-3.5 w-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-44 p-1" align="end" side="left">
+                                <p className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wide">Remind me</p>
+                                {REMIND_OPTIONS.map(opt => (
+                                  <button
+                                    key={opt.label}
+                                    type="button"
+                                    onClick={() => createCustomerReminderMutation.mutate({
+                                      messageId: msg.id,
+                                      messageType: selected?.type === 'direct' ? 'direct' : 'job',
+                                      remindAt: opt.getDate(),
+                                      messagePreview: (msg.message || "").replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim().slice(0, 120),
+                                    })}
+                                    className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-muted/60 transition-colors"
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        )}
                         {/* Avatar + name below */}
                         <div className={`flex flex-col items-center gap-0.5 shrink-0 ${showAvatar ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
                           <div className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center border-2 border-background ${isCustomer ? "bg-blue-500" : "bg-orange-400"}`}>
@@ -1096,6 +1197,50 @@ export default function CustomerInbox() {
                             {format(msgDate, "h:mm a")}
                           </p>
                         </div>
+                        {/* Action buttons — incoming (staff) messages: mark unread + remind */}
+                        {!isCustomer && (
+                          <div className="invisible group-hover/msg:visible flex flex-col gap-1 shrink-0 self-end mb-1">
+                            <button
+                              type="button"
+                              title="Mark as unread"
+                              onClick={() => markUnreadCustomerMutation.mutate({ messageId: msg.id, type: selected?.type === 'direct' ? 'direct' : 'job' })}
+                              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                              data-testid={`button-mark-unread-${msg.id}`}
+                            >
+                              <MailOpen className="h-3.5 w-3.5" />
+                            </button>
+                            <Popover open={remindOpenMsgId === msg.id} onOpenChange={open => setRemindOpenMsgId(open ? msg.id : null)}>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  title="Remind me"
+                                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                                  data-testid={`button-remind-staff-${msg.id}`}
+                                >
+                                  <Bell className="h-3.5 w-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-44 p-1" align="start" side="right">
+                                <p className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wide">Remind me</p>
+                                {REMIND_OPTIONS.map(opt => (
+                                  <button
+                                    key={opt.label}
+                                    type="button"
+                                    onClick={() => createCustomerReminderMutation.mutate({
+                                      messageId: msg.id,
+                                      messageType: selected?.type === 'direct' ? 'direct' : 'job',
+                                      remindAt: opt.getDate(),
+                                      messagePreview: (msg.message || "").replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim().slice(0, 120),
+                                    })}
+                                    className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-muted/60 transition-colors"
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

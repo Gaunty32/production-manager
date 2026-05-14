@@ -23,6 +23,7 @@ import {
   customerDocuments,
   conversations,
   conversationMessages,
+  messageReminders,
   samples,
   sampleFiles,
   machines,
@@ -72,6 +73,8 @@ import {
   type InsertSampleFile,
   type Machine,
   type InsertMachine,
+  type MessageReminder,
+  type InsertMessageReminder,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql, isNull, isNotNull, desc, inArray } from "drizzle-orm";
@@ -280,6 +283,16 @@ export interface IStorage {
   // App settings (key/value)
   getAppSetting(key: string): Promise<string | null>;
   setAppSetting(key: string, value: string): Promise<void>;
+
+  // Message mark-as-unread
+  markJobMessageUnread(messageId: string, field: 'readByStaff' | 'readByCustomer'): Promise<void>;
+  markConversationMessageUnread(messageId: string, field: 'readByStaff' | 'readByCustomer'): Promise<void>;
+
+  // Message reminders
+  createMessageReminder(data: InsertMessageReminder): Promise<MessageReminder>;
+  getMessageReminders(userId: string, userType: string): Promise<MessageReminder[]>;
+  dismissMessageReminder(id: string): Promise<void>;
+  deleteMessageReminder(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2878,6 +2891,50 @@ export class DatabaseStorage implements IStorage {
       .values({ key, value, updatedAt: new Date() })
       .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
   }
+
+  // ── Message mark-as-unread ──────────────────────────────────────────────────
+
+  async markJobMessageUnread(messageId: string, field: 'readByStaff' | 'readByCustomer'): Promise<void> {
+    await db.update(jobMessages).set({ [field]: false }).where(eq(jobMessages.id, messageId));
+  }
+
+  async markConversationMessageUnread(messageId: string, field: 'readByStaff' | 'readByCustomer'): Promise<void> {
+    await db.update(conversationMessages).set({ [field]: false }).where(eq(conversationMessages.id, messageId));
+  }
+
+  // ── Message reminders ────────────────────────────────────────────────────────
+
+  async createMessageReminder(data: InsertMessageReminder): Promise<MessageReminder> {
+    // Delete any existing reminder from this user for the same message before creating new one
+    await db.delete(messageReminders).where(
+      and(
+        eq(messageReminders.messageId, data.messageId),
+        eq(messageReminders.userId, data.userId),
+        eq(messageReminders.userType, data.userType),
+      )
+    );
+    const [row] = await db.insert(messageReminders).values(data).returning();
+    return row;
+  }
+
+  async getMessageReminders(userId: string, userType: string): Promise<MessageReminder[]> {
+    return db.select().from(messageReminders).where(
+      and(
+        eq(messageReminders.userId, userId),
+        eq(messageReminders.userType, userType),
+        eq(messageReminders.dismissed, false),
+      )
+    );
+  }
+
+  async dismissMessageReminder(id: string): Promise<void> {
+    await db.update(messageReminders).set({ dismissed: true }).where(eq(messageReminders.id, id));
+  }
+
+  async deleteMessageReminder(id: string): Promise<void> {
+    await db.delete(messageReminders).where(eq(messageReminders.id, id));
+  }
+
 }
 
 export const storage = new DatabaseStorage();

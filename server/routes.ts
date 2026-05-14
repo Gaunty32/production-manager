@@ -7597,6 +7597,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Message: Mark as Unread ─────────────────────────────────────────────────
+
+  // Staff: mark a job message unread (so badge reappears)
+  app.patch("/api/staff/messages/job/:messageId/mark-unread", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.markJobMessageUnread(req.params.messageId, 'readByStaff');
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to mark message unread" });
+    }
+  });
+
+  // Staff: mark a direct conversation message unread
+  app.patch("/api/staff/messages/direct/:messageId/mark-unread", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.markConversationMessageUnread(req.params.messageId, 'readByStaff');
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to mark message unread" });
+    }
+  });
+
+  // Customer: mark a job message unread
+  app.patch("/api/customer-portal/messages/job/:messageId/mark-unread", isCustomerAuthenticated, async (req, res) => {
+    try {
+      await storage.markJobMessageUnread(req.params.messageId, 'readByCustomer');
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to mark message unread" });
+    }
+  });
+
+  // Customer: mark a direct conversation message unread
+  app.patch("/api/customer-portal/messages/direct/:messageId/mark-unread", isCustomerAuthenticated, async (req, res) => {
+    try {
+      await storage.markConversationMessageUnread(req.params.messageId, 'readByCustomer');
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to mark message unread" });
+    }
+  });
+
+  // ── Message Reminders ────────────────────────────────────────────────────────
+
+  // Staff: get pending reminders
+  app.get("/api/staff/messages/reminders", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.id || req.session?.userId;
+      const reminders = await storage.getMessageReminders(userId, 'staff');
+      res.json(reminders);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch reminders" });
+    }
+  });
+
+  // Staff: create a reminder
+  app.post("/api/staff/messages/reminders", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.id || req.session?.userId;
+      const { messageId, messageType, remindAt, messagePreview } = req.body;
+      if (!messageId || !messageType || !remindAt) return res.status(400).json({ error: "Missing fields" });
+      const reminder = await storage.createMessageReminder({
+        messageId,
+        messageType,
+        userId,
+        userType: 'staff',
+        remindAt: new Date(remindAt),
+        messagePreview: messagePreview || null,
+        dismissed: false,
+      });
+      res.json(reminder);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to create reminder" });
+    }
+  });
+
+  // Staff: dismiss a reminder
+  app.patch("/api/staff/messages/reminders/:id/dismiss", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.dismissMessageReminder(req.params.id);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to dismiss reminder" });
+    }
+  });
+
+  // Staff: delete a reminder
+  app.delete("/api/staff/messages/reminders/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteMessageReminder(req.params.id);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to delete reminder" });
+    }
+  });
+
+  // Customer: get pending reminders
+  app.get("/api/customer-portal/messages/reminders", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.customerUser?.id;
+      const reminders = await storage.getMessageReminders(userId, 'customer');
+      res.json(reminders);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch reminders" });
+    }
+  });
+
+  // Customer: create a reminder
+  app.post("/api/customer-portal/messages/reminders", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.customerUser?.id;
+      const { messageId, messageType, remindAt, messagePreview } = req.body;
+      if (!messageId || !messageType || !remindAt) return res.status(400).json({ error: "Missing fields" });
+      const reminder = await storage.createMessageReminder({
+        messageId,
+        messageType,
+        userId,
+        userType: 'customer',
+        remindAt: new Date(remindAt),
+        messagePreview: messagePreview || null,
+        dismissed: false,
+      });
+      res.json(reminder);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to create reminder" });
+    }
+  });
+
+  // Customer: dismiss a reminder
+  app.patch("/api/customer-portal/messages/reminders/:id/dismiss", isCustomerAuthenticated, async (req, res) => {
+    try {
+      await storage.dismissMessageReminder(req.params.id);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to dismiss reminder" });
+    }
+  });
+
+  // Customer: delete a reminder
+  app.delete("/api/customer-portal/messages/reminders/:id", isCustomerAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteMessageReminder(req.params.id);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to delete reminder" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

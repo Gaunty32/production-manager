@@ -1170,6 +1170,23 @@ export const machines = pgTable("machines", {
   notes: text("notes"),
 });
 
+// Message reminders — per-user snooze/remind-me on any message
+export const messageReminders = pgTable("message_reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: varchar("message_id").notNull(),
+  messageType: varchar("message_type").notNull(), // 'job' | 'direct'
+  userId: varchar("user_id").notNull(),           // staff userId or customer customerUserId
+  userType: varchar("user_type").notNull(),        // 'staff' | 'customer'
+  messagePreview: text("message_preview"),         // snippet of message to show in toast
+  remindAt: timestamp("remind_at").notNull(),
+  dismissed: boolean("dismissed").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertMessageReminderSchema = createInsertSchema(messageReminders).omit({ id: true, createdAt: true });
+export type InsertMessageReminder = z.infer<typeof insertMessageReminderSchema>;
+export type MessageReminder = typeof messageReminders.$inferSelect;
+
 export const insertMachineSchema = createInsertSchema(machines).omit({ id: true });
 
 export const updateMachineSchema = z.object({
