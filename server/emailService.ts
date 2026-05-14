@@ -550,6 +550,7 @@ export async function sendNewChatEmail(
     ? `<strong>${safeStaffName}</strong> has started a conversation about your order <strong>${safeJobName || safeSubject}</strong>:`
     : `<strong>${safeStaffName}</strong> has sent you a new message:`;
 
+  const messagesUrl = `${getBaseUrl()}/customer/messages`;
   const body = `
     <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">New Message from Select Branding</h2>
     <p style="margin:0 0 12px;">${contextLine}</p>
@@ -557,7 +558,17 @@ export async function sendNewChatEmail(
       <p style="margin:0;color:#18181b;white-space:pre-line;">${safeMessage}</p>
     </div>
     ${ctaButton(details.portalUrl, 'View &amp; Reply')}
-    ${muted('You can reply directly from your customer portal. If you have any questions, please don\'t hesitate to get in touch.')}
+    ${divider}
+    <p style="color:#71717a;font-size:13px;margin:8px 0;">
+      You can reply directly from your customer portal. If you have any questions, please don't hesitate to get in touch.
+    </p>
+    <p style="color:#71717a;font-size:13px;margin:16px 0 4px;">
+      <strong style="color:#52525b;">Managing email notifications:</strong> You are receiving this email because message notifications are turned on for your account.
+      To turn them off — or back on — open your
+      <a href="${messagesUrl}" style="color:#4f46e5;text-decoration:underline;">Messages page</a>
+      in the customer portal, then click the <strong>bell icon</strong> in the top-right corner of the page and toggle
+      <em>Email me when a new message arrives</em>.
+    </p>
   `;
 
   const { error } = await sendEmail(client, {
