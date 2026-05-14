@@ -3850,9 +3850,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const staffMembers = await storage.getStaff();
       const allUsers = await storage.getAllUsers();
       const linkedUserIds = new Set(staffMembers.map(s => s.userId).filter(Boolean));
+      // Also deduplicate by email — a user account belonging to a staff member
+      // (even without a userId link) should not appear twice in the list.
+      const staffEmailSet = new Set(
+        staffMembers.map(s => s.email?.toLowerCase()).filter(Boolean) as string[]
+      );
       const userIdToEmail = new Map(allUsers.map(u => [u.id, u.email]));
+      // Add emails resolved via userId link so those are also deduped
+      staffMembers.forEach(s => {
+        if (s.userId) {
+          const email = userIdToEmail.get(s.userId);
+          if (email) staffEmailSet.add(email.toLowerCase());
+        }
+      });
       const userOnlyPeople = allUsers
-        .filter(u => u.active && u.role !== "demo" && !linkedUserIds.has(u.id))
+        .filter(u =>
+          u.active &&
+          u.role !== "demo" &&
+          !linkedUserIds.has(u.id) &&
+          !(u.email && staffEmailSet.has(u.email.toLowerCase()))
+        )
         .map(u => ({
           id: u.id,
           name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
@@ -3861,7 +3878,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const staffPeople = staffMembers.map(s => ({
         id: s.id,
         name: s.name,
-        email: s.userId ? (userIdToEmail.get(s.userId) ?? null) : null,
+        email: s.email ?? (s.userId ? (userIdToEmail.get(s.userId) ?? null) : null),
       }));
       res.json([...staffPeople, ...userOnlyPeople]);
     } catch (error) {
