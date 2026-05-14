@@ -393,6 +393,12 @@ export default function StaffMessages() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Keep sidebar unread badge in sync — messages are marked as read on the server
+  // each time they're fetched, so invalidate the count whenever messages change.
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["/api/staff/messages/unread-count"] });
+  }, [jobMessages, directMessages]);
+
   // Notify on new customer messages
   useEffect(() => {
     if (isLoadingMessages || !selected) return;

@@ -58,7 +58,8 @@ export function AppSidebar() {
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/staff/messages/unread-count"],
-    refetchInterval: 15000,
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: machines = [] } = useQuery<Machine[]>({
