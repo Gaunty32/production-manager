@@ -1,9 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const VERSION_KEY = "app_server_version";
 const CHECK_INTERVAL_MS = 30_000;
 
 export function useVersionCheck() {
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+
   useEffect(() => {
     const check = async () => {
       try {
@@ -15,7 +17,7 @@ export function useVersionCheck() {
           localStorage.setItem(VERSION_KEY, version);
         } else if (stored !== version) {
           localStorage.setItem(VERSION_KEY, version);
-          window.location.reload();
+          setUpdateAvailable(true);
         }
       } catch {
         // Network error — silently ignore
@@ -26,4 +28,8 @@ export function useVersionCheck() {
     const timer = setInterval(check, CHECK_INTERVAL_MS);
     return () => clearInterval(timer);
   }, []);
+
+  const applyUpdate = () => window.location.reload();
+
+  return { updateAvailable, applyUpdate };
 }
