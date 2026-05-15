@@ -1564,7 +1564,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(jobMessages.senderType, 'customer'),
           eq(jobMessages.readByStaff, false),
-          isNull(jobs.conversationArchivedByStaff)
+          eq(jobs.conversationArchivedByStaff, false)
         )
       );
 
