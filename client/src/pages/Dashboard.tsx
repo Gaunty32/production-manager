@@ -37,6 +37,7 @@ import { LogoSetupDialog } from "@/components/LogoSetupDialog";
 import { LineItemRow } from "@/components/LineItemRow";
 import { ProductionWorksheet } from "@/components/ProductionWorksheet";
 import { EditTrackingDialog } from "@/components/EditTrackingDialog";
+import { DpdBookingDialog } from "@/components/DpdBookingDialog";
 import { JobErrorsDialog } from "@/components/JobErrorsDialog";
 import { JobErrorBadge } from "@/components/JobErrorBadge";
 import { JobFilesDialog } from "@/components/JobFilesDialog";
@@ -69,6 +70,7 @@ export default function Dashboard() {
   const [sortOrder, setSortOrder] = useState<'date' | 'customer' | 'jobNumber'>('date');
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [editingTrackingJob, setEditingTrackingJob] = useState<JobWithLineItems | null>(null);
+  const [dpdBookingJob, setDpdBookingJob] = useState<JobWithLineItems | null>(null);
   const [recordingProductionItem, setRecordingProductionItem] = useState<{ lineItem: JobLineItem; jobName: string } | null>(null);
   const [filesDialogJob, setFilesDialogJob] = useState<{ id: string; jobName: string; jobNumber: number } | null>(null);
 
@@ -1520,21 +1522,36 @@ export default function Dashboard() {
                             {job.goodsReceived ? format(new Date(job.goodsReceived), 'dd MMM') : '-'}
                           </TableCell>
                           <TableCell className="py-1 px-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 text-xs px-2"
-                              onClick={() => {
-                                const fullJob = jobs.find(j => j.id === job.id);
-                                if (fullJob) {
-                                  setEditingTrackingJob(fullJob);
-                                }
-                              }}
-                              data-testid={`button-edit-tracking-${job.id}`}
-                            >
-                              <Truck className="h-3 w-3 mr-1" />
-                              {job.dhlTrackingNumber ? job.dhlTrackingNumber.slice(-6) : "Add"}
-                            </Button>
+                            {job.dhlTrackingNumber ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-xs px-2 font-mono"
+                                onClick={() => {
+                                  const fullJob = jobs.find(j => j.id === job.id);
+                                  if (fullJob) setEditingTrackingJob(fullJob);
+                                }}
+                                data-testid={`button-edit-tracking-${job.id}`}
+                                title={job.dhlTrackingNumber}
+                              >
+                                <Truck className="h-3 w-3 mr-1" />
+                                {job.dhlTrackingNumber.slice(-8)}
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 text-xs px-2"
+                                onClick={() => {
+                                  const fullJob = jobs.find(j => j.id === job.id);
+                                  if (fullJob) setDpdBookingJob(fullJob);
+                                }}
+                                data-testid={`button-book-dpd-${job.id}`}
+                              >
+                                <Truck className="h-3 w-3 mr-1" />
+                                Book DPD
+                              </Button>
+                            )}
                           </TableCell>
                           <TableCell className="py-1 px-2">
                             <Button
@@ -1647,6 +1664,29 @@ export default function Dashboard() {
           job={filesDialogJob}
           onClose={() => setFilesDialogJob(null)}
         />
+
+        {dpdBookingJob && (() => {
+          const customer = customers.find(c => c.id === dpdBookingJob.customerId);
+          const otherJobs = allCompletedJobs.filter(j =>
+            j.customerId === dpdBookingJob.customerId &&
+            j.id !== dpdBookingJob.id &&
+            !j.dhlTrackingNumber
+          );
+          return (
+            <DpdBookingDialog
+              open={true}
+              onOpenChange={(open) => { if (!open) setDpdBookingJob(null); }}
+              jobId={dpdBookingJob.id}
+              jobReference={dpdBookingJob.poNumber || dpdBookingJob.jobName}
+              prefillName={customer?.name}
+              prefillAddress={customer?.address ?? undefined}
+              prefillPhone={customer?.telephone ?? undefined}
+              prefillEmail={customer?.email ?? undefined}
+              otherJobs={otherJobs.map(j => ({ id: j.id, jobName: j.jobName, jobNumber: j.jobNumber }))}
+              onSuccess={() => setDpdBookingJob(null)}
+            />
+          );
+        })()}
       </div>
     </div>
   );

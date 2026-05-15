@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Truck, CheckCircle2, Download, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -44,6 +45,12 @@ const bookingSchema = z.object({
 
 type BookingFormData = z.infer<typeof bookingSchema>;
 
+interface OtherJob {
+  id: string;
+  jobName: string;
+  jobNumber: number | null;
+}
+
 interface DpdBookingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -54,6 +61,7 @@ interface DpdBookingDialogProps {
   prefillAddress?: string;
   prefillPhone?: string;
   prefillEmail?: string;
+  otherJobs?: OtherJob[];
   onSuccess?: (trackingNumber: string) => void;
 }
 
@@ -87,11 +95,13 @@ export function DpdBookingDialog({
   prefillAddress,
   prefillPhone,
   prefillEmail,
+  otherJobs = [],
   onSuccess,
 }: DpdBookingDialogProps) {
   const { toast } = useToast();
   const [result, setResult] = useState<{ trackingNumber: string; labelPdfBase64: string } | null>(null);
   const [isBooking, setIsBooking] = useState(false);
+  const [selectedOtherIds, setSelectedOtherIds] = useState<Set<string>>(new Set());
 
   const addressDefaults = parseAddressField(prefillAddress);
 
@@ -112,10 +122,20 @@ export function DpdBookingDialog({
     },
   });
 
+  function toggleOtherJob(id: string) {
+    setSelectedOtherIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function handleBook(data: BookingFormData) {
     setIsBooking(true);
     try {
-      const allJobIds = jobIds?.length ? jobIds : [jobId];
+      const baseIds = jobIds?.length ? jobIds : [jobId];
+      const allJobIds = [...new Set([...baseIds, ...Array.from(selectedOtherIds)])];
       const response = await apiRequest("POST", "/api/dpd/book-shipment", {
         ...data,
         jobId,
@@ -154,6 +174,7 @@ export function DpdBookingDialog({
     if (!isBooking) {
       setResult(null);
       form.reset();
+      setSelectedOtherIds(new Set());
       onOpenChange(false);
     }
   }
@@ -358,6 +379,28 @@ export function DpdBookingDialog({
                   )}
                 />
               </div>
+
+              {otherJobs.length > 0 && (
+                <div className="space-y-2 border-t pt-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Consolidate with other orders</h3>
+                  <p className="text-xs text-muted-foreground">Tick any other orders for this customer to ship in the same DPD booking — they'll all get the same tracking number.</p>
+                  <div className="space-y-2">
+                    {otherJobs.map(j => (
+                      <div key={j.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`consolidate-${j.id}`}
+                          checked={selectedOtherIds.has(j.id)}
+                          onCheckedChange={() => toggleOtherJob(j.id)}
+                          data-testid={`checkbox-consolidate-${j.id}`}
+                        />
+                        <label htmlFor={`consolidate-${j.id}`} className="text-sm cursor-pointer">
+                          {j.jobNumber ? `#${j.jobNumber} — ` : ""}{j.jobName}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <Alert>
                 <AlertCircle className="h-4 w-4" />
