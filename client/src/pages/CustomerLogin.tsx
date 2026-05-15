@@ -65,6 +65,17 @@ export default function CustomerLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Read ?redirect= query param so we can send the customer back to where they
+  // came from (e.g. clicking "View & Reply" in an email while not logged in)
+  const redirectTo = (() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const r = params.get("redirect");
+      if (r && r.startsWith("/customer/")) return r;
+    } catch {}
+    return "/customer/dashboard";
+  })();
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -120,7 +131,7 @@ export default function CustomerLogin() {
     },
     onSuccess: () => {
       toast({ title: "Welcome back!", description: "You've been signed in successfully." });
-      setLocation("/customer/dashboard");
+      setLocation(redirectTo);
     },
     onError: (error: any) => {
       toast({

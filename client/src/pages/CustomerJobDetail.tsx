@@ -58,23 +58,33 @@ export default function CustomerJobDetail() {
 
   const jobId = params?.id;
 
-  const { data: customerUser } = useQuery<CustomerUser>({
+  const { data: customerUser, isLoading: isLoadingAuth, isError: isAuthError } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
+    retry: false,
   });
+
+  // Redirect to login if not authenticated, preserving the current URL so they
+  // land back here after signing in
+  useEffect(() => {
+    if (!isLoadingAuth && (isAuthError || !customerUser)) {
+      const returnPath = `/customer/job/${jobId}`;
+      setLocation(`/customer/login?redirect=${encodeURIComponent(returnPath)}`);
+    }
+  }, [isLoadingAuth, isAuthError, customerUser, jobId, setLocation]);
 
   const { data: job, isLoading: isLoadingJob } = useQuery<Job>({
     queryKey: [`/api/customer-portal/jobs/${jobId}`],
-    enabled: !!jobId,
+    enabled: !!jobId && !!customerUser,
   });
 
   const { data: files = [], isLoading: isLoadingFiles } = useQuery<JobFile[]>({
     queryKey: [`/api/customer-portal/jobs/${jobId}/files`],
-    enabled: !!jobId,
+    enabled: !!jobId && !!customerUser,
   });
 
   const { data: messages = [], isLoading: isLoadingMessages } = useQuery<JobMessage[]>({
     queryKey: [`/api/customer-portal/jobs/${jobId}/messages`],
-    enabled: !!jobId,
+    enabled: !!jobId && !!customerUser,
     refetchInterval: 3000, // Poll every 3 seconds for real-time chat
   });
 
