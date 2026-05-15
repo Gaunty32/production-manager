@@ -75,6 +75,9 @@ import {
   type InsertMachine,
   type MessageReminder,
   type InsertMessageReminder,
+  tasks,
+  type Task,
+  type InsertTask,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql, isNull, isNotNull, desc, inArray } from "drizzle-orm";
@@ -293,6 +296,14 @@ export interface IStorage {
   getMessageReminders(userId: string, userType: string): Promise<MessageReminder[]>;
   dismissMessageReminder(id: string): Promise<void>;
   deleteMessageReminder(id: string): Promise<void>;
+
+  // Tasks
+  getTasks(filters?: { assignedToUserId?: string; status?: string }): Promise<Task[]>;
+  getTask(id: number): Promise<Task | undefined>;
+  createTask(data: InsertTask): Promise<Task>;
+  updateTask(id: number, data: Partial<InsertTask & { completedAt: Date | null }>): Promise<Task>;
+  deleteTask(id: number): Promise<void>;
+  getOpenTaskCount(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2933,6 +2944,43 @@ export class DatabaseStorage implements IStorage {
 
   async deleteMessageReminder(id: string): Promise<void> {
     await db.delete(messageReminders).where(eq(messageReminders.id, id));
+  }
+
+  // ── Tasks ──────────────────────────────────────────────────────────────────
+
+  async getTasks(filters?: { assignedToUserId?: string; status?: string }): Promise<Task[]> {
+    let query = db.select().from(tasks).$dynamic();
+    const conditions = [];
+    if (filters?.assignedToUserId) conditions.push(eq(tasks.assignedToUserId, filters.assignedToUserId));
+    if (filters?.status) conditions.push(eq(tasks.status, filters.status));
+    if (conditions.length > 0) query = query.where(and(...conditions));
+    return query.orderBy(desc(tasks.createdAt));
+  }
+
+  async getTask(id: number): Promise<Task | undefined> {
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
+    return task;
+  }
+
+  async createTask(data: InsertTask): Promise<Task> {
+    const [task] = await db.insert(tasks).values(data).returning();
+    return task;
+  }
+
+  async updateTask(id: number, data: Partial<InsertTask & { completedAt: Date | null }>): Promise<Task> {
+    const [task] = await db.update(tasks).set(data as any).where(eq(tasks.id, id)).returning();
+    return task;
+  }
+
+  async deleteTask(id: number): Promise<void> {
+    await db.delete(tasks).where(eq(tasks.id, id));
+  }
+
+  async getOpenTaskCount(): Promise<number> {
+    const result = await db.select({ id: tasks.id }).from(tasks).where(
+      and(eq(tasks.status, "open"), isNull(tasks.completedAt))
+    );
+    return result.length;
   }
 
 }

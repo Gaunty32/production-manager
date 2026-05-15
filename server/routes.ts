@@ -40,7 +40,7 @@ import { dpdService } from "./dpd";
 import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
-import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, updateMachineSchema, type Job } from "@shared/schema";
+import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, updateMachineSchema, insertTaskSchema, type Job } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
@@ -7765,6 +7765,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: "Failed to delete reminder" });
+    }
+  });
+
+  // ── Tasks ──────────────────────────────────────────────────────────────────
+
+  app.get("/api/tasks", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { assignedTo, status } = req.query as { assignedTo?: string; status?: string };
+      const taskList = await storage.getTasks({ assignedToUserId: assignedTo, status });
+      res.json(taskList);
+    } catch {
+      res.status(500).json({ error: "Failed to fetch tasks" });
+    }
+  });
+
+  app.get("/api/tasks/count", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const count = await storage.getOpenTaskCount();
+      res.json({ count });
+    } catch {
+      res.status(500).json({ error: "Failed to get task count" });
+    }
+  });
+
+  app.post("/api/tasks", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const parsed = insertTaskSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.issues });
+      const task = await storage.createTask({ ...parsed.data, createdByUserId: req.session.userId });
+      res.json(task);
+    } catch {
+      res.status(500).json({ error: "Failed to create task" });
+    }
+  });
+
+  app.patch("/api/tasks/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { completedAt, ...rest } = req.body;
+      const updateData: any = { ...rest };
+      if (completedAt !== undefined) updateData.completedAt = completedAt ? new Date(completedAt) : null;
+      const task = await storage.updateTask(id, updateData);
+      res.json(task);
+    } catch {
+      res.status(500).json({ error: "Failed to update task" });
+    }
+  });
+
+  app.delete("/api/tasks/:id", isStaffAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteTask(parseInt(req.params.id));
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Failed to delete task" });
     }
   });
 

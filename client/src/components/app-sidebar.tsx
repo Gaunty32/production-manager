@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -19,8 +19,10 @@ import type { Machine } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import type { Job } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { FeatureRequestDialog } from "@/components/FeatureRequestDialog";
+import { useToast } from "@/hooks/use-toast";
+import { useLocation as useWouterLocation } from "wouter";
 import logoImage from "@assets/logo_transparent.png";
 
 const menuItems = [
@@ -28,6 +30,7 @@ const menuItems = [
   { title: "All Orders", url: "/orders", icon: ClipboardList },
   { title: "Holding Area", url: "/holding-area", icon: Inbox },
   { title: "Messages", url: "/messages", icon: MessageSquare },
+  { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Samples", url: "/samples", icon: Package },
   { title: "Invoicing", url: "/invoicing", icon: FileText },
   { title: "Schedule", url: "/schedule", icon: Calendar },
@@ -41,11 +44,14 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const [, navigate] = useWouterLocation();
   const { user } = useAuth();
+  const { toast } = useToast();
   const isUserSuperAdmin = isSuperAdmin(user?.role);
   const userCanViewPrices = canViewPrices(user?.role);
   const { isMobile, setOpenMobile } = useSidebar();
   const [featureDialogOpen, setFeatureDialogOpen] = useState(false);
+  const prevUnreadRef = useRef<number | null>(null);
 
   const handleNavClick = () => {
     if (isMobile) setOpenMobile(false);
@@ -62,6 +68,12 @@ export function AppSidebar() {
     refetchOnWindowFocus: true,
   });
 
+  const { data: taskCountData } = useQuery<{ count: number }>({
+    queryKey: ["/api/tasks/count"],
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
+
   const { data: machines = [] } = useQuery<Machine[]>({
     queryKey: ["/api/machines"],
     refetchInterval: 60000,
@@ -69,6 +81,29 @@ export function AppSidebar() {
 
   const pendingCount = pendingJobs.length;
   const unreadMessageCount = unreadData?.count ?? 0;
+  const openTaskCount = taskCountData?.count ?? 0;
+
+  // Show a toast notification when new unread messages arrive while not on the Messages page
+  useEffect(() => {
+    const count = unreadData?.count ?? 0;
+    if (prevUnreadRef.current !== null && count > prevUnreadRef.current && location !== "/messages") {
+      const newCount = count - prevUnreadRef.current;
+      toast({
+        title: `${newCount} new message${newCount > 1 ? "s" : ""}`,
+        description: "Click to go to Messages",
+        action: (
+          <button
+            className="text-sm font-medium underline"
+            onClick={() => navigate("/messages")}
+          >
+            View
+          </button>
+        ) as any,
+        duration: 6000,
+      });
+    }
+    prevUnreadRef.current = count;
+  }, [unreadData?.count, location, toast, navigate]);
 
   return (
     <Sidebar>
@@ -116,6 +151,15 @@ export function AppSidebar() {
                             data-testid="badge-messages-unread-count"
                           >
                             {unreadMessageCount}
+                          </Badge>
+                        )}
+                        {item.url === "/tasks" && openTaskCount > 0 && (
+                          <Badge
+                            variant="secondary"
+                            className="ml-auto h-5 min-w-5 px-1.5 text-xs"
+                            data-testid="badge-tasks-open-count"
+                          >
+                            {openTaskCount}
                           </Badge>
                         )}
                       </Link>

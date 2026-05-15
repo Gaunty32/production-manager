@@ -58,6 +58,7 @@ import {
   MailOpen,
   Clock,
   Bell,
+  CheckSquare,
 } from "lucide-react";
 import {
   Popover,
@@ -251,6 +252,9 @@ export default function StaffMessages() {
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [remindOpenMsgId, setRemindOpenMsgId] = useState<string | null>(null);
+  const [taskFromMsg, setTaskFromMsg] = useState<{ messageId: string; messageText: string; jobId?: string } | null>(null);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskPriority, setTaskPriority] = useState("medium");
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [pendingProfileCropFile, setPendingProfileCropFile] = useState<File | null>(null);
@@ -272,7 +276,7 @@ export default function StaffMessages() {
       const res = await apiRequest("GET", "/api/staff/conversations?includeArchived=true");
       return res.json();
     },
-    refetchInterval: 15000,
+    refetchInterval: 5000,
   });
   const jobConversations = allJobConversations.filter(c => !c.isArchivedByStaff);
   const archivedConversations = allJobConversations.filter(c => c.isArchivedByStaff);
@@ -813,6 +817,28 @@ export default function StaffMessages() {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/me"] });
     },
     onError: () => toast({ title: "Failed to update notification setting", variant: "destructive" }),
+  });
+
+  const createTaskFromMsgMutation = useMutation({
+    mutationFn: async () => {
+      if (!taskFromMsg || !taskTitle.trim()) return;
+      await apiRequest("POST", "/api/tasks", {
+        title: taskTitle.trim(),
+        priority: taskPriority,
+        sourceMessageId: taskFromMsg.messageId,
+        sourceMessageText: taskFromMsg.messageText.slice(0, 500),
+        jobId: taskFromMsg.jobId || null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/count"] });
+      toast({ title: "Task created", description: "View it in the Tasks page" });
+      setTaskFromMsg(null);
+      setTaskTitle("");
+      setTaskPriority("medium");
+    },
+    onError: () => toast({ title: "Failed to create task", variant: "destructive" }),
   });
 
   // File selected → open crop dialog
@@ -1455,7 +1481,7 @@ export default function StaffMessages() {
                         </Popover>
                       </div>
                     )}
-                    {/* Action buttons — incoming (customer) messages: mark unread + remind */}
+                    {/* Action buttons — incoming (customer) messages: mark unread + remind + create task */}
                     {!isStaff && !(msg as any).deleted && editingMsgId !== msg.id && (
                       <div className="invisible group-hover/msg:visible flex flex-col gap-1 shrink-0">
                         <button
@@ -1466,6 +1492,20 @@ export default function StaffMessages() {
                           data-testid={`button-mark-unread-${msg.id}`}
                         >
                           <MailOpen className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Create task from message"
+                          onClick={() => {
+                            const cleanText = (msg.message || "").replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim().slice(0, 200);
+                            setTaskFromMsg({ messageId: msg.id, messageText: cleanText, jobId: selected?.type === 'job' ? selected.jobId : undefined });
+                            setTaskTitle("");
+                            setTaskPriority("medium");
+                          }}
+                          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                          data-testid={`button-create-task-from-msg-${msg.id}`}
+                        >
+                          <CheckSquare className="h-3.5 w-3.5" />
                         </button>
                         <Popover open={remindOpenMsgId === msg.id} onOpenChange={open => setRemindOpenMsgId(open ? msg.id : null)}>
                           <PopoverTrigger asChild>
@@ -2136,6 +2176,57 @@ export default function StaffMessages() {
             <Button variant="outline" onClick={() => setShowNewConvo(false)}>Cancel</Button>
             <Button onClick={() => createConvoMutation.mutate()} disabled={!newSubject.trim() || !newRecipientId || createConvoMutation.isPending} data-testid="button-create-conversation">
               {createConvoMutation.isPending ? "Creating…" : "Start Conversation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert message to task */}
+      <Dialog open={taskFromMsg !== null} onOpenChange={(open) => { if (!open) { setTaskFromMsg(null); setTaskTitle(""); setTaskPriority("medium"); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Create Task from Message</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {taskFromMsg?.messageText && (
+              <div className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5 italic line-clamp-3">
+                "{taskFromMsg.messageText}"
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="task-from-msg-title">Title</Label>
+              <Input
+                id="task-from-msg-title"
+                placeholder="What needs to be done?"
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                autoFocus
+                data-testid="input-task-from-msg-title"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="task-from-msg-priority">Priority</Label>
+              <select
+                id="task-from-msg-priority"
+                value={taskPriority}
+                onChange={(e) => setTaskPriority(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid="select-task-from-msg-priority"
+              >
+                <option value="high">High priority</option>
+                <option value="medium">Medium priority</option>
+                <option value="low">Low priority</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setTaskFromMsg(null); setTaskTitle(""); setTaskPriority("medium"); }}>Cancel</Button>
+            <Button
+              onClick={() => createTaskFromMsgMutation.mutate()}
+              disabled={!taskTitle.trim() || createTaskFromMsgMutation.isPending}
+              data-testid="button-save-task-from-msg"
+            >
+              {createTaskFromMsgMutation.isPending ? "Creating…" : "Create Task"}
             </Button>
           </DialogFooter>
         </DialogContent>

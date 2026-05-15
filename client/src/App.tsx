@@ -49,6 +49,7 @@ import MachineManagement from "@/pages/MachineManagement";
 import CustomerPaymentMethods from "@/pages/CustomerPaymentMethods";
 import PortalPreview from "@/pages/PortalPreview";
 import FeatureRequests from "@/pages/FeatureRequests";
+import Tasks from "@/pages/Tasks";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -95,6 +96,7 @@ function StaffRouter() {
       <Route path="/machines"><MachineManagement /></Route>
       <Route path="/machine/:id"><Dashboard /></Route>
       <Route path="/feature-requests"><FeatureRequests /></Route>
+      <Route path="/tasks"><Tasks /></Route>
       {/* Customer portal paths — render without staff chrome */}
       <Route path="/customer/:rest*"><CustomerPortalApp /></Route>
       <Route><NotFound /></Route>

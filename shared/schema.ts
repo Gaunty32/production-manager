@@ -1171,6 +1171,26 @@ export const machines = pgTable("machines", {
 });
 
 // Message reminders — per-user snooze/remind-me on any message
+export const tasks = pgTable("tasks", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  assignedToUserId: varchar("assigned_to_user_id"),
+  createdByUserId: varchar("created_by_user_id"),
+  status: varchar("status", { length: 50 }).notNull().default("open"),
+  priority: varchar("priority", { length: 50 }).notNull().default("medium"),
+  dueDate: varchar("due_date"),
+  jobId: varchar("job_id"),
+  sourceMessageId: varchar("source_message_id"),
+  sourceMessageText: text("source_message_text"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });
+export type InsertTask = z.infer<typeof insertTaskSchema>;
+export type Task = typeof tasks.$inferSelect;
+
 export const messageReminders = pgTable("message_reminders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   messageId: varchar("message_id").notNull(),
