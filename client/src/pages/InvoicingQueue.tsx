@@ -310,6 +310,16 @@ export default function InvoicingQueue() {
   const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
   const [connectingXero, setConnectingXero] = useState(false);
   const [manualPrices, setManualPrices] = useState<Record<string, string>>({});
+  const [expandedLineItems, setExpandedLineItems] = useState<Set<string>>(new Set());
+
+  function toggleLineItems(jobId: string) {
+    setExpandedLineItems(prev => {
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
+    });
+  }
   const [manualShippingCosts, setManualShippingCosts] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [editingShipping, setEditingShipping] = useState<EditShippingState | null>(null);
@@ -1307,13 +1317,21 @@ export default function InvoicingQueue() {
                                         <span>{format(new Date(job.requiredDispatchDate), 'MMM d, yyyy')}</span>
                                       </div>
                                     )}
-                                    <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      className="flex items-center gap-1 hover:text-foreground transition-colors"
+                                      onClick={() => toggleLineItems(job.id)}
+                                      data-testid={`button-toggle-line-items-${job.id}`}
+                                    >
+                                      {expandedLineItems.has(job.id)
+                                        ? <ChevronDown className="h-3 w-3" />
+                                        : <ChevronRight className="h-3 w-3" />}
                                       <Package className="h-3 w-3" />
                                       <span>{lineItems.length} {lineItems.length === 1 ? 'item' : 'items'}</span>
-                                    </div>
+                                    </button>
                                   </div>
-                                  {/* Line items breakdown table */}
-                                  {lineItems.length > 0 && (() => {
+                                  {/* Line items breakdown table — collapsible */}
+                                  {lineItems.length > 0 && expandedLineItems.has(job.id) && (() => {
                                     const jobCustomer = customers.find(c => c.id === job.customerId);
                                     const pricingTable = jobCustomer?.pricingTable2026 ? "2026" : jobCustomer?.pricingTable2025 ? "2025" : null;
                                     return (
