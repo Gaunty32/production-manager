@@ -3197,9 +3197,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const files = await storage.getJobFiles(job.id);
           const messages = await storage.getJobMessages(job.id);
           const customer = customerMap.get(job.customerId);
+          let submitterEmail: string | null = null;
+          if (job.submittedById) {
+            try {
+              const submitter = await storage.getCustomerUserById(job.submittedById);
+              submitterEmail = submitter?.email || null;
+            } catch {}
+          }
           return {
             ...job,
             customerName: customer?.name || 'Unknown Customer',
+            customerStripePaymentLink: customer?.stripePaymentLink || null,
+            customerCreditAccount: customer?.creditAccount ?? true,
+            customerAddress: customer?.address || null,
+            submitterEmail,
             files,
             messages,
           };
@@ -3254,6 +3265,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error approving job:", error);
       res.status(500).json({ error: "Failed to approve job" });
+    }
+  });
+
+  // Staff - Send order acknowledgement email
+  app.post("/api/jobs/:jobId/send-acknowledgement", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { customerEmail } = req.body;
+      if (!customerEmail) {
+        return res.status(400).json({ error: "customerEmail is required" });
+      }
+      const job = await storage.getJob(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === job.customerId);
+      await sendJobApprovedEmail(customerEmail, {
+        jobName: job.jobName,
+        customerName: customer?.name || 'Customer',
+        jobId: job.id,
+        jobNumber: job.jobNumber,
+        quantity: job.quantity,
+        poNumber: job.poNumber,
+        notes: job.notes,
+        requiredDispatchDate: job.requiredDispatchDate ? new Date(job.requiredDispatchDate as any) : null,
+        customerAddress: customer?.address || null,
+        deliveryAddress: job.deliveryAddress || null,
+        orderDate: job.submittedAt ? new Date(job.submittedAt as any) : new Date(),
+        stripePaymentLink: customer?.stripePaymentLink || null,
+        creditAccount: customer?.creditAccount ?? true,
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error sending acknowledgement email:", error);
+      res.status(500).json({ error: "Failed to send acknowledgement email" });
     }
   });
 

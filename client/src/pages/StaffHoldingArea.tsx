@@ -27,12 +27,16 @@ import {
 import { StaffJobFileUpload } from "@/components/StaffJobFileUpload";
 import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobEditDialog } from "@/components/JobEditDialog";
+import { OrderAcknowledgementDialog } from "@/components/OrderAcknowledgementDialog";
 
 type Job = {
   id: string;
   jobName: string;
+  jobNumber?: number | null;
   customerId: string;
   customerName: string;
+  customerStripePaymentLink?: string | null;
+  customerCreditAccount?: boolean;
   poNumber: string | null;
   quantity: number;
   requiredDispatchDate: string | null;
@@ -40,6 +44,8 @@ type Job = {
   staffNotes: string | null;
   deliveryAddress: string | null;
   submittedAt: string;
+  submittedById?: string | null;
+  submitterEmail?: string | null;
   files?: { id: string; fileName: string; fileSize: number }[];
   messages?: { id: string; senderType: string; message: string; createdAt: string }[];
 };
@@ -63,6 +69,8 @@ export default function StaffHoldingArea() {
   const [setupNotRequired, setSetupNotRequired] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [editingJob, setEditingJob] = useState<any | null>(null);
+  const [ackJob, setAckJob] = useState<Job | null>(null);
+  const [showAckDialog, setShowAckDialog] = useState(false);
   const previousMessageCountsRef = useRef<Record<string, number>>({});
   const isInitialLoadRef = useRef<boolean>(true);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -190,6 +198,8 @@ export default function StaffHoldingArea() {
       } catch {
         toast({ title: "Job approved", description: "The job has been moved to production" });
       }
+      // Show the order acknowledgement dialog so staff can email the customer
+      setShowAckDialog(true);
     },
     onError: (error: any) => {
       toast({
@@ -252,6 +262,8 @@ export default function StaffHoldingArea() {
 
   const handleApprove = (jobId: string, jobName: string, customerId: string) => {
     setDialogState({ type: "approve", jobId, jobName, customerId });
+    const job = pendingJobs.find(j => j.id === jobId) || null;
+    setAckJob(job);
   };
 
   const handleReject = (jobId: string, jobName: string) => {
@@ -839,6 +851,24 @@ export default function StaffHoldingArea() {
         staff={staff}
         onSubmit={(id, data) => updateJobMutation.mutate({ id, data })}
       />
+
+      {/* Order acknowledgement email dialog — opens after approval */}
+      {ackJob && (
+        <OrderAcknowledgementDialog
+          open={showAckDialog}
+          onOpenChange={(open) => {
+            setShowAckDialog(open);
+            if (!open) setAckJob(null);
+          }}
+          jobId={ackJob.id}
+          jobName={ackJob.jobName}
+          jobNumber={ackJob.jobNumber}
+          customerName={ackJob.customerName}
+          submitterEmail={ackJob.submitterEmail}
+          stripePaymentLink={ackJob.customerStripePaymentLink}
+          creditAccount={ackJob.customerCreditAccount}
+        />
+      )}
     </div>
   );
 }
