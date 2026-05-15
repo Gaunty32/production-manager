@@ -255,6 +255,7 @@ export default function StaffMessages() {
   const [taskFromMsg, setTaskFromMsg] = useState<{ messageId: string; messageText: string; jobId?: string } | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskPriority, setTaskPriority] = useState("medium");
+  const [taskAssignee, setTaskAssignee] = useState("");
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [pendingProfileCropFile, setPendingProfileCropFile] = useState<File | null>(null);
@@ -825,6 +826,7 @@ export default function StaffMessages() {
       await apiRequest("POST", "/api/tasks", {
         title: taskTitle.trim(),
         priority: taskPriority,
+        assignedToUserId: taskAssignee || null,
         sourceMessageId: taskFromMsg.messageId,
         sourceMessageText: taskFromMsg.messageText.slice(0, 500),
         jobId: taskFromMsg.jobId || null,
@@ -837,6 +839,7 @@ export default function StaffMessages() {
       setTaskFromMsg(null);
       setTaskTitle("");
       setTaskPriority("medium");
+      setTaskAssignee("");
     },
     onError: () => toast({ title: "Failed to create task", variant: "destructive" }),
   });
@@ -2182,7 +2185,7 @@ export default function StaffMessages() {
       </Dialog>
 
       {/* Convert message to task */}
-      <Dialog open={taskFromMsg !== null} onOpenChange={(open) => { if (!open) { setTaskFromMsg(null); setTaskTitle(""); setTaskPriority("medium"); } }}>
+      <Dialog open={taskFromMsg !== null} onOpenChange={(open) => { if (!open) { setTaskFromMsg(null); setTaskTitle(""); setTaskPriority("medium"); setTaskAssignee(""); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Create Task from Message</DialogTitle>
@@ -2205,6 +2208,21 @@ export default function StaffMessages() {
               />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="task-from-msg-assignee">Assign to</Label>
+              <select
+                id="task-from-msg-assignee"
+                value={taskAssignee}
+                onChange={(e) => setTaskAssignee(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid="select-task-from-msg-assignee"
+              >
+                <option value="">Unassigned</option>
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="task-from-msg-priority">Priority</Label>
               <select
                 id="task-from-msg-priority"
@@ -2220,7 +2238,7 @@ export default function StaffMessages() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setTaskFromMsg(null); setTaskTitle(""); setTaskPriority("medium"); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setTaskFromMsg(null); setTaskTitle(""); setTaskPriority("medium"); setTaskAssignee(""); }}>Cancel</Button>
             <Button
               onClick={() => createTaskFromMsgMutation.mutate()}
               disabled={!taskTitle.trim() || createTaskFromMsgMutation.isPending}
