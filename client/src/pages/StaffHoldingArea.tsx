@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/accordion";
 import { StaffJobFileUpload } from "@/components/StaffJobFileUpload";
 import { JobFormDialog } from "@/components/JobFormDialog";
+import { JobEditDialog } from "@/components/JobEditDialog";
 
 type Job = {
   id: string;
@@ -61,6 +62,7 @@ export default function StaffHoldingArea() {
   const [embroiderySetups, setEmbroiderySetups] = useState<string[]>([]);
   const [setupNotRequired, setSetupNotRequired] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [editingJob, setEditingJob] = useState<any | null>(null);
   const previousMessageCountsRef = useRef<Record<string, number>>({});
   const isInitialLoadRef = useRef<boolean>(true);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -171,17 +173,23 @@ export default function StaffHoldingArea() {
       }
       return result;
     },
-    onSuccess: () => {
+    onSuccess: async (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/jobs/pending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/logo-setups"] });
-      toast({
-        title: "Job approved",
-        description: "The job has been approved and moved to production",
-      });
       setDialogState({ type: null, jobId: null, jobName: null, customerId: null });
       setEmbroiderySetups([]);
       setSetupNotRequired(false);
+      // Auto-open the production worksheet so staff can complete the job details
+      try {
+        const res = await fetch(`/api/jobs/${variables.jobId}`, { credentials: "include" });
+        if (res.ok) {
+          const fullJob = await res.json();
+          setEditingJob(fullJob);
+        }
+      } catch {
+        toast({ title: "Job approved", description: "The job has been moved to production" });
+      }
     },
     onError: (error: any) => {
       toast({
@@ -227,6 +235,19 @@ export default function StaffHoldingArea() {
       setEditingNoteJobId(null);
     },
     onError: () => toast({ title: "Failed to save note", variant: "destructive" }),
+  });
+
+  const updateJobMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/jobs/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      setEditingJob(null);
+      toast({ title: "Job updated", description: "Production details have been saved" });
+    },
+    onError: () => toast({ title: "Failed to update job", variant: "destructive" }),
   });
 
   const handleApprove = (jobId: string, jobName: string, customerId: string) => {
@@ -804,6 +825,20 @@ export default function StaffHoldingArea() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Auto-opened after approval so staff can fill in production details immediately */}
+      <JobEditDialog
+        open={editingJob !== null}
+        onOpenChange={(open) => !open && setEditingJob(null)}
+        job={editingJob ? {
+          ...editingJob,
+          goodsReceived: editingJob.goodsReceived ? new Date(editingJob.goodsReceived) : null,
+          requiredDispatchDate: editingJob.requiredDispatchDate ? new Date(editingJob.requiredDispatchDate) : null,
+        } : null}
+        customers={activeCustomers}
+        staff={staff}
+        onSubmit={(id, data) => updateJobMutation.mutate({ id, data })}
+      />
     </div>
   );
 }
