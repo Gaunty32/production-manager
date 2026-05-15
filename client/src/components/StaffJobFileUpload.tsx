@@ -166,12 +166,7 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
   };
 
   const handleDownloadAll = async () => {
-    const a = document.createElement("a");
-    a.href = `/api/jobs/${jobId}/files/download-all`;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    window.open(`/api/jobs/${jobId}/files/download-all`, "_blank");
 
     if (autoMessageOnDownload) {
       try {
