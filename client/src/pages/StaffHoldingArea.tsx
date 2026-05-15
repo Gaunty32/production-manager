@@ -72,7 +72,7 @@ export default function StaffHoldingArea() {
     refetchInterval: 5000, // Poll every 5 seconds for new messages
   });
 
-  const { data: customers = [] } = useQuery<{ id: string; name: string; isActive: boolean }[]>({
+  const { data: customers = [] } = useQuery<{ id: string; name: string; active: boolean }[]>({
     queryKey: ["/api/customers"],
   });
 
@@ -80,7 +80,7 @@ export default function StaffHoldingArea() {
     queryKey: ["/api/staff"],
   });
 
-  const activeCustomers = customers.filter(c => c.isActive);
+  const activeCustomers = customers.filter(c => c.active !== false);
 
   // Track which card is most visible using IntersectionObserver
   useEffect(() => {
