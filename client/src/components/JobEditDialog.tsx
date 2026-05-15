@@ -244,7 +244,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           positionOther: null,
           quantity: job.quantity,
           description: "",
-          stitchCount: 5000,
+          stitchCount: 0,
           logoApproved: false,
           completed: false,
           completedById: null,
@@ -260,7 +260,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           positionOther: null,
           quantity: 1,
           description: "",
-          stitchCount: 5000,
+          stitchCount: 0,
           logoApproved: false,
           completed: false,
           completedById: null,
@@ -274,7 +274,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }, [fetchedLineItems, open, job]);
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", position: null, positionOther: null, quantity: 1, description: "", stitchCount: 5000, logoApproved: false, completed: false, completedById: null, completedAt: null, actualProductionTimeMinutes: null, machineId: null }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", position: null, positionOther: null, quantity: 1, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, actualProductionTimeMinutes: null, machineId: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -853,13 +853,13 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                               <label className="text-xs text-muted-foreground whitespace-nowrap">Stitch Count</label>
                               <Input
                                 type="number"
-                                min="1"
-                                value={item.stitchCount}
+                                min="0"
+                                value={item.stitchCount || ""}
                                 onChange={(e) => {
                                   const val = parseInt(e.target.value) || 0;
-                                  updateLineItem(index, 'stitchCount', Math.max(1, val));
+                                  updateLineItem(index, 'stitchCount', val);
                                 }}
-                                placeholder="Stitch count"
+                                placeholder="TBA"
                                 className="font-mono mt-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 data-testid={`input-edit-line-item-stitch-count-${index}`}
                               />
