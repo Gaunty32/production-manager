@@ -129,43 +129,69 @@ export function AppSidebar() {
                   }
                   return true;
                 })
-                .map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={location === item.url}>
-                      <Link href={item.url} onClick={handleNavClick} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
-                        <item.icon className="h-4 w-4" />
-                        <span className="flex-1">{item.title}</span>
-                        {item.url === "/holding-area" && pendingCount > 0 && (
-                          <Badge 
-                            variant="destructive" 
-                            className="ml-auto h-5 min-w-5 px-1.5 text-xs"
-                            data-testid="badge-holding-area-count"
-                          >
-                            {pendingCount}
-                          </Badge>
-                        )}
-                        {item.url === "/messages" && unreadMessageCount > 0 && (
-                          <Badge
-                            variant="destructive"
-                            className="ml-auto h-5 min-w-5 px-1.5 text-xs"
-                            data-testid="badge-messages-unread-count"
-                          >
-                            {unreadMessageCount}
-                          </Badge>
-                        )}
-                        {item.url === "/tasks" && openTaskCount > 0 && (
-                          <Badge
-                            variant="secondary"
-                            className="ml-auto h-5 min-w-5 px-1.5 text-xs"
-                            data-testid="badge-tasks-open-count"
-                          >
-                            {openTaskCount}
-                          </Badge>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                .map((item) => {
+                  const holdingBadgeCount = item.url === "/holding-area" ? pendingCount : 0;
+                  const messagesBadgeCount = item.url === "/messages" ? unreadMessageCount : 0;
+                  const tasksBadgeCount = item.url === "/tasks" ? openTaskCount : 0;
+                  const destructiveBadgeCount = holdingBadgeCount || messagesBadgeCount;
+                  const secondaryBadgeCount = tasksBadgeCount;
+
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={location === item.url}>
+                        <Link href={item.url} onClick={handleNavClick} data-testid={`link-${item.title.toLowerCase().replace(' ', '-')}`}>
+                          <div className="relative flex-shrink-0">
+                            <item.icon className="h-4 w-4" />
+                            {destructiveBadgeCount > 0 && (
+                              <span
+                                className="hidden group-data-[collapsible=icon]:flex absolute -top-1.5 -right-1.5 h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-0.5"
+                                data-testid={`badge-icon-${item.url.replace('/', '')}`}
+                              >
+                                {destructiveBadgeCount > 99 ? "99+" : destructiveBadgeCount}
+                              </span>
+                            )}
+                            {secondaryBadgeCount > 0 && (
+                              <span
+                                className="hidden group-data-[collapsible=icon]:flex absolute -top-1.5 -right-1.5 h-4 min-w-4 items-center justify-center rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold px-0.5"
+                                data-testid={`badge-icon-tasks`}
+                              >
+                                {secondaryBadgeCount > 99 ? "99+" : secondaryBadgeCount}
+                              </span>
+                            )}
+                          </div>
+                          <span className="flex-1">{item.title}</span>
+                          {holdingBadgeCount > 0 && (
+                            <Badge
+                              variant="destructive"
+                              className="ml-auto h-5 min-w-5 px-1.5 text-xs group-data-[collapsible=icon]:hidden"
+                              data-testid="badge-holding-area-count"
+                            >
+                              {holdingBadgeCount}
+                            </Badge>
+                          )}
+                          {messagesBadgeCount > 0 && (
+                            <Badge
+                              variant="destructive"
+                              className="ml-auto h-5 min-w-5 px-1.5 text-xs group-data-[collapsible=icon]:hidden"
+                              data-testid="badge-messages-unread-count"
+                            >
+                              {messagesBadgeCount}
+                            </Badge>
+                          )}
+                          {tasksBadgeCount > 0 && (
+                            <Badge
+                              variant="secondary"
+                              className="ml-auto h-5 min-w-5 px-1.5 text-xs group-data-[collapsible=icon]:hidden"
+                              data-testid="badge-tasks-open-count"
+                            >
+                              {tasksBadgeCount}
+                            </Badge>
+                          )}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               {isUserSuperAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/users"}>
