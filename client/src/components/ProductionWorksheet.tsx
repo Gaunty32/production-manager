@@ -153,7 +153,17 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
               </div>
               <div>
                 <p className="font-medium">Shipping Method:</p>
-                <p className="mt-1">{job.shippingMethod || "Not specified"}</p>
+                <p className="mt-1">
+                  {job.shippingMethod === 'free_local'
+                    ? 'Free local delivery — Tim delivers Tuesdays & Fridays before lunchtime'
+                    : job.shippingMethod === 'customer_collection'
+                    ? 'Customer Collection'
+                    : job.shippingMethod === 'consolidated'
+                    ? 'Consolidated Back to Customer'
+                    : job.shippingMethod === 'direct_delivery'
+                    ? 'Direct Delivery'
+                    : job.shippingMethod || 'Not specified'}
+                </p>
               </div>
             </div>
             {(job.deliveryAddressType === "customer" || job.deliveryAddressType === "custom") && (

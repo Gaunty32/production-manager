@@ -313,6 +313,8 @@ export async function sendJobApprovedEmail(
     orderDate?: Date;
     stripePaymentLink?: string | null;
     creditAccount?: boolean;
+    shippingMethod?: string | null;
+    lineItems?: Array<{ jobType: string; position?: string | null; description?: string | null; quantity: number; unitPrice?: number | null }>;
   }
 ) {
   const { client, fromEmail } = await getUncachableResendClient();
@@ -331,6 +333,8 @@ export async function sendJobApprovedEmail(
       customerName: jobDetails.customerName,
       customerAddress: jobDetails.customerAddress || null,
       deliveryAddress: jobDetails.deliveryAddress || null,
+      shippingMethod: jobDetails.shippingMethod || null,
+      lineItems: jobDetails.lineItems || [],
     };
     const pdfBuffer = await generateOrderAcknowledgementPdf(pdfData);
     pdfAttachment = {

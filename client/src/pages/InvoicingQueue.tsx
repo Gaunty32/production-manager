@@ -1417,6 +1417,7 @@ export default function InvoicingQueue() {
                                       <div className="flex items-center gap-2">
                                         <Truck className="h-3 w-3 text-muted-foreground" />
                                         <span className="text-muted-foreground">
+                                          {job.shippingMethod === 'free_local' && 'Free local delivery — Tim delivers Tuesdays & Fridays before lunchtime'}
                                           {job.shippingMethod === 'customer_collection' && 'Customer Collection'}
                                           {job.shippingMethod === 'consolidated' && 'Consolidated Back to Customer'}
                                           {job.shippingMethod === 'direct_delivery' && 'Direct Delivery'}

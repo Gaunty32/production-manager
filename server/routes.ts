@@ -3281,6 +3281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const customers = await storage.getCustomers();
       const customer = customers.find(c => c.id === job.customerId);
+      const jobLineItems = await storage.getJobLineItems(job.id);
       await sendJobApprovedEmail(customerEmail, {
         jobName: job.jobName,
         customerName: customer?.name || 'Customer',
@@ -3295,6 +3296,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orderDate: job.submittedAt ? new Date(job.submittedAt as any) : new Date(),
         stripePaymentLink: customer?.stripePaymentLink || null,
         creditAccount: customer?.creditAccount ?? true,
+        shippingMethod: job.shippingMethod || null,
+        lineItems: jobLineItems.map(li => ({
+          jobType: li.jobType || 'Embroidery',
+          position: li.position || null,
+          description: li.description || null,
+          quantity: li.quantity,
+        })),
       });
       res.json({ success: true });
     } catch (error) {
