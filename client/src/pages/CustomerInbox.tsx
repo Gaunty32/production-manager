@@ -1182,6 +1182,7 @@ export default function CustomerInbox() {
                                       key={fi}
                                       href={`${f.url}?filename=${encodeURIComponent(f.name)}`}
                                       download={f.name}
+                                      target="_blank"
                                       rel="noopener noreferrer"
                                       className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium no-underline bg-white/20 text-inherit border border-white/20 hover:opacity-80 transition-opacity"
                                     >
