@@ -12,6 +12,7 @@ import {
   BookOpen,
   ShieldCheck,
   PoundSterling,
+  Palette,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
@@ -78,6 +79,33 @@ function DocumentTile({ doc }: { doc: CustomerDocument }) {
         {/* Footer */}
         <p className="text-[11px] text-muted-foreground/60 mt-4 font-medium">
           Added {format(new Date(doc.createdAt), "d MMM yyyy")}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ThreadChartTile({ onClick }: { onClick: () => void }) {
+  return (
+    <Card
+      className="hover-elevate group cursor-pointer border flex flex-col"
+      onClick={onClick}
+      data-testid="document-card-thread-library"
+    >
+      <CardContent className="p-5 flex flex-col flex-1">
+        <div className="flex items-start justify-between mb-4">
+          <div className="h-12 w-12 rounded-xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center flex-shrink-0">
+            <Palette className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+          </div>
+        </div>
+        <h4 className="font-semibold text-sm leading-snug group-hover:text-primary transition-colors mb-2">
+          Madeira Thread Colour Library
+        </h4>
+        <p className="text-xs text-muted-foreground leading-relaxed flex-1">
+          Browse our full Madeira Classic 40 &amp; PolyNeon 40 thread palette — search by code or name to choose your colours.
+        </p>
+        <p className="text-[11px] text-muted-foreground/60 mt-4 font-medium">
+          Interactive colour chart
         </p>
       </CardContent>
     </Card>
@@ -158,23 +186,23 @@ export default function CustomerDocuments() {
             <div className="h-10 w-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
             <p className="text-sm">Loading documents…</p>
           </div>
-        ) : documents.length === 0 ? (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                <FileText className="h-7 w-7 text-muted-foreground/50" />
-              </div>
-              <p className="font-medium text-muted-foreground">
-                No documents available yet.
-              </p>
-              <p className="text-sm text-muted-foreground/70 mt-1">
-                Check back soon — we'll add useful resources here.
-              </p>
-            </CardContent>
-          </Card>
         ) : (
           <div className="space-y-10">
-            {sortedCategories.map((category) => {
+            {/* Always-visible thread colour chart tile */}
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-8 w-8 rounded-lg flex items-center justify-center bg-violet-50 dark:bg-violet-950/40">
+                  <Palette className="h-4 w-4 text-foreground/70" />
+                </div>
+                <h2 className="text-base font-semibold">Colour Reference</h2>
+              </div>
+              <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                <ThreadChartTile onClick={() => setLocation("/customer/thread-library")} />
+              </div>
+            </section>
+
+            {/* Regular uploaded documents */}
+            {documents.length > 0 && sortedCategories.map((category) => {
               const meta = CATEGORY_META[category] ?? DEFAULT_META;
               const Icon = meta.icon;
               const docs = groupedDocuments[category];

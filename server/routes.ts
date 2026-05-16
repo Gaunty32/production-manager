@@ -7876,6 +7876,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── Thread Colour Library ────────────────────────────────────────────────
+
+  // Public endpoint — accessible to staff and customers without auth
+  app.get("/api/thread-library", async (_req, res) => {
+    try {
+      const colours = await storage.getThreadColours();
+      res.json(colours);
+    } catch {
+      res.status(500).json({ error: "Failed to fetch thread colours" });
+    }
+  });
+
+  // Staff only — import a .TCH file (UTF-16 LE CSV: code,chart,name,flag,r,g,b)
+  app.post("/api/thread-library/import-tch", isStaffAuthenticated, async (req, res) => {
+    try {
+      // Expect raw body as base64 string: { data: "<base64>" }
+      const { data: b64 } = req.body as { data: string };
+      if (!b64) return res.status(400).json({ error: "No data provided" });
+
+      const buf = Buffer.from(b64, "base64");
+
+      // Detect UTF-16 LE BOM (FF FE)
+      let text: string;
+      if (buf[0] === 0xff && buf[1] === 0xfe) {
+        text = buf.slice(2).toString("utf16le");
+      } else {
+        text = buf.toString("utf8");
+      }
+
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+      const colours: any[] = [];
+
+      for (const line of lines) {
+        const parts = line.split(",").map(p => p.trim());
+        if (parts.length < 7) continue;
+        const [code, chart, name, flag, rStr, gStr, bStr] = parts;
+        const r = parseInt(rStr, 10);
+        const g = parseInt(gStr, 10);
+        const b = parseInt(bStr, 10);
+        if (!code || isNaN(r) || isNaN(g) || isNaN(b)) continue;
+        colours.push({ code, chart, name, flag, r, g, b });
+      }
+
+      if (colours.length === 0) {
+        return res.status(400).json({ error: "No valid thread colour entries found in file" });
+      }
+
+      await storage.clearThreadColours();
+      await storage.upsertThreadColours(colours);
+      res.json({ imported: colours.length });
+    } catch (error) {
+      console.error("TCH import error:", error);
+      res.status(500).json({ error: "Failed to import TCH file" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

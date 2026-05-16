@@ -1220,3 +1220,20 @@ export const updateMachineSchema = z.object({
 
 export type InsertMachine = z.infer<typeof insertMachineSchema>;
 export type Machine = typeof machines.$inferSelect;
+
+// Thread Colour Library
+export const threadColours = pgTable("thread_colours", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 10 }).notNull(),
+  chart: text("chart").notNull(),
+  name: text("name").notNull(),
+  flag: varchar("flag", { length: 5 }),
+  r: integer("r").notNull(),
+  g: integer("g").notNull(),
+  b: integer("b").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertThreadColourSchema = createInsertSchema(threadColours).omit({ id: true, createdAt: true });
+export type InsertThreadColour = z.infer<typeof insertThreadColourSchema>;
+export type ThreadColour = typeof threadColours.$inferSelect;

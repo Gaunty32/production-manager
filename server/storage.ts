@@ -28,6 +28,9 @@ import {
   sampleFiles,
   machines,
   appSettings,
+  threadColours,
+  type ThreadColour,
+  type InsertThreadColour,
   type Customer, 
   type InsertCustomer, 
   type Job, 
@@ -304,6 +307,11 @@ export interface IStorage {
   updateTask(id: number, data: Partial<InsertTask & { completedAt: Date | null }>): Promise<Task>;
   deleteTask(id: number): Promise<void>;
   getOpenTaskCount(): Promise<number>;
+
+  // Thread Colour Library
+  getThreadColours(): Promise<ThreadColour[]>;
+  upsertThreadColours(colours: InsertThreadColour[]): Promise<void>;
+  clearThreadColours(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2981,6 +2989,22 @@ export class DatabaseStorage implements IStorage {
       and(eq(tasks.status, "open"), isNull(tasks.completedAt))
     );
     return result.length;
+  }
+
+  // Thread Colour Library
+  async getThreadColours(): Promise<ThreadColour[]> {
+    return db.select().from(threadColours).orderBy(threadColours.code);
+  }
+
+  async upsertThreadColours(colours: InsertThreadColour[]): Promise<void> {
+    if (colours.length === 0) return;
+    for (const colour of colours) {
+      await db.insert(threadColours).values(colour).onConflictDoNothing();
+    }
+  }
+
+  async clearThreadColours(): Promise<void> {
+    await db.delete(threadColours);
   }
 
 }

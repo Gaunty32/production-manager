@@ -47,6 +47,7 @@ import DemoPortal from "@/pages/DemoPortal";
 import DemoAccess from "@/pages/DemoAccess";
 import MachineManagement from "@/pages/MachineManagement";
 import CustomerPaymentMethods from "@/pages/CustomerPaymentMethods";
+import ThreadColourChart from "@/pages/ThreadColourChart";
 import PortalPreview from "@/pages/PortalPreview";
 import FeatureRequests from "@/pages/FeatureRequests";
 import Tasks from "@/pages/Tasks";
@@ -97,6 +98,7 @@ function StaffRouter() {
       <Route path="/machine/:id"><Dashboard /></Route>
       <Route path="/feature-requests"><FeatureRequests /></Route>
       <Route path="/tasks"><Tasks /></Route>
+      <Route path="/thread-library"><ThreadColourChart /></Route>
       {/* Customer portal paths — render without staff chrome */}
       <Route path="/customer/:rest*"><CustomerPortalApp /></Route>
       <Route><NotFound /></Route>
@@ -194,6 +196,7 @@ function CustomerPortalApp() {
       <Route path="/customer/invoices" component={CustomerInvoices} />
       <Route path="/customer/samples" component={CustomerSamples} />
       <Route path="/customer/payment-methods" component={CustomerPaymentMethods} />
+      <Route path="/customer/thread-library" component={ThreadColourChart} />
       <Route path="/customer/dashboard" component={CustomerDashboard} />
       <Route path="/customer" component={CustomerDashboard} />
       <Route component={NotFound} />
