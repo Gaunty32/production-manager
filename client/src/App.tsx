@@ -196,7 +196,7 @@ function CustomerPortalApp() {
       <Route path="/customer/invoices" component={CustomerInvoices} />
       <Route path="/customer/samples" component={CustomerSamples} />
       <Route path="/customer/payment-methods" component={CustomerPaymentMethods} />
-      <Route path="/customer/thread-library" component={ThreadColourChart} />
+      <Route path="/customer/thread-library">{() => <ThreadColourChart customerView />}</Route>
       <Route path="/customer/dashboard" component={CustomerDashboard} />
       <Route path="/customer" component={CustomerDashboard} />
       <Route component={NotFound} />

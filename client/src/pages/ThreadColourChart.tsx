@@ -56,7 +56,7 @@ function ColourSwatch({ colour }: { colour: ThreadColour }) {
   );
 }
 
-export default function ThreadColourChart() {
+export default function ThreadColourChart({ customerView = false }: { customerView?: boolean }) {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { isImpersonating } = usePermissions();
@@ -130,7 +130,7 @@ export default function ThreadColourChart() {
           <div className="h-5 w-px bg-border" />
           <span className="font-semibold text-sm">Thread Colour Library</span>
           <div className="flex-1" />
-          {isStaff && (
+          {!customerView && isStaff && (
             <>
               <input
                 ref={fileRef}
@@ -152,7 +152,7 @@ export default function ThreadColourChart() {
                 ) : (
                   <Upload className="h-3.5 w-3.5 mr-1.5" />
                 )}
-                Import .TCH file
+                Sync .TCH file
               </Button>
             </>
           )}
