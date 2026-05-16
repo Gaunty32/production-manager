@@ -7932,6 +7932,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff only — fetch colour codes from the Google Sheet (3 tabs: Classic 40, Classic 60, Poly Neon 60)
+  app.get("/api/thread-library/sheet-colours", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const { ReplitConnectors } = await import("@replit/connectors-sdk");
+      const connectors = new ReplitConnectors();
+      const SHEET_ID = "1mxsnnNoe-DwJGwlGh980x19euie-c-Ek0ug3pGBw3vs";
+      const TABS = ["Classic 40", "Classic 60", "Poly Neon 60"];
+
+      const results: Record<string, string[]> = {};
+      await Promise.all(
+        TABS.map(async (tab) => {
+          const r = await connectors.proxy(
+            "google-sheet",
+            `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(tab)}!A1:A1000`,
+            { method: "GET" }
+          );
+          const data = await r.json();
+          const codes: string[] = (data.values || [])
+            .map((row: string[]) => (row[0] || "").trim())
+            .filter(Boolean);
+          if (codes.length > 0) results[tab] = codes;
+        })
+      );
+
+      res.json(results);
+    } catch (error) {
+      console.error("Sheet colours fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch sheet colours" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
