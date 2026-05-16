@@ -5942,12 +5942,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "One or more jobs not found" });
       }
 
-      // Sort jobs by completion date (goodsReceived) - earliest first
-      selectedJobs.sort((a, b) => {
-        const dateA = a.goodsReceived ? new Date(a.goodsReceived).getTime() : 0;
-        const dateB = b.goodsReceived ? new Date(b.goodsReceived).getTime() : 0;
-        return dateA - dateB;
-      });
+      // Sort jobs to match Google Drive Calculations sheet order (so Xero invoice lines
+      // align with the Drive verification panel). Falls back to completion date order
+      // if Drive data is unavailable or a job name doesn't match any sheet row.
+      {
+        let driveOrderMap: Map<string, number> | null = null;
+        try {
+          const { getCustomerDriveRows } = await import("./googleService.js");
+          const driveData = await getCustomerDriveRows(customer.name);
+          if (driveData && driveData.rows.length > 0) {
+            driveOrderMap = new Map(
+              driveData.rows.map((row, i) => [row.name.toLowerCase().trim(), i])
+            );
+          }
+        } catch {
+          // Drive lookup failed — fall back to date order silently
+        }
+
+        selectedJobs.sort((a, b) => {
+          const nameA = (a.jobName || "").toLowerCase().trim();
+          const nameB = (b.jobName || "").toLowerCase().trim();
+          const posA = driveOrderMap?.has(nameA) ? driveOrderMap.get(nameA)! : Number.MAX_SAFE_INTEGER;
+          const posB = driveOrderMap?.has(nameB) ? driveOrderMap.get(nameB)! : Number.MAX_SAFE_INTEGER;
+          if (posA !== posB) return posA - posB;
+          // Tie-break (or no Drive match): sort by completion date
+          const dateA = a.goodsReceived ? new Date(a.goodsReceived).getTime() : 0;
+          const dateB = b.goodsReceived ? new Date(b.goodsReceived).getTime() : 0;
+          return dateA - dateB;
+        });
+      }
 
       // CRITICAL: Verify all selected jobs belong to the specified customer
       if (!logoSetupsOnly) {

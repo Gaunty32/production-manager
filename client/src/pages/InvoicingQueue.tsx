@@ -89,24 +89,44 @@ interface CustomerDriveData {
   sheetNumericId: number;
 }
 
-function DriveVerificationPanel({ customerId, customerName, sidePanel = false }: { customerId: number; customerName: string; sidePanel?: boolean }) {
+function DriveVerificationPanel({ customerId, customerName, sidePanel = false, loadDelay = 0 }: { customerId: number; customerName: string; sidePanel?: boolean; loadDelay?: number }) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(sidePanel);
+  const [ready, setReady] = useState(loadDelay === 0);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [hiding, setHiding] = useState(false);
+
+  useEffect(() => {
+    if (loadDelay > 0) {
+      const t = setTimeout(() => setReady(true), loadDelay);
+      return () => clearTimeout(t);
+    }
+  }, [loadDelay]);
 
   const { data, isLoading, isError, error, refetch } = useQuery<CustomerDriveData>({
     queryKey: ["/api/google-drive/customer-rows", customerName],
     queryFn: async () => {
       const res = await fetch(`/api/google-drive/customer-rows?customerName=${encodeURIComponent(customerName)}`, { credentials: "include" });
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get("Retry-After") || "2", 10);
+        await new Promise(r => setTimeout(r, (retryAfter + 1) * 1000));
+        const retry = await fetch(`/api/google-drive/customer-rows?customerName=${encodeURIComponent(customerName)}`, { credentials: "include" });
+        if (!retry.ok) {
+          const body = await retry.json().catch(() => ({}));
+          throw new Error(body.error || `HTTP ${retry.status}`);
+        }
+        return retry.json();
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);
       }
       return res.json();
     },
-    enabled: sidePanel || expanded,
+    enabled: ready && (sidePanel || expanded),
     staleTime: 60_000,
+    retry: 2,
+    retryDelay: (attempt) => attempt * 2000,
   });
 
   const toggleRow = (rowIndex: number) => {
@@ -1264,7 +1284,7 @@ export default function InvoicingQueue() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {sortedCustomerIds.map((customerId) => {
+            {sortedCustomerIds.map((customerId, customerIndex) => {
               const customerJobs = filteredJobsByCustomer[customerId];
               const customer = customers.find(c => c.id === customerId);
               if (!customer) return null;
@@ -1838,6 +1858,7 @@ export default function InvoicingQueue() {
                         customerId={customerId}
                         customerName={customer.name}
                         sidePanel
+                        loadDelay={customerIndex * 800}
                       />
                     </div>
                     </div>
