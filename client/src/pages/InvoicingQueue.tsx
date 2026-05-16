@@ -89,9 +89,9 @@ interface CustomerDriveData {
   sheetNumericId: number;
 }
 
-function DriveVerificationPanel({ customerId, customerName }: { customerId: number; customerName: string }) {
+function DriveVerificationPanel({ customerId, customerName, sidePanel = false }: { customerId: number; customerName: string; sidePanel?: boolean }) {
   const { toast } = useToast();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(sidePanel);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [hiding, setHiding] = useState(false);
 
@@ -105,7 +105,7 @@ function DriveVerificationPanel({ customerId, customerName }: { customerId: numb
       }
       return res.json();
     },
-    enabled: expanded,
+    enabled: sidePanel || expanded,
     staleTime: 60_000,
   });
 
@@ -156,6 +156,101 @@ function DriveVerificationPanel({ customerId, customerName }: { customerId: numb
     if (isNaN(n)) return raw || "—";
     return `£${n.toFixed(2)}`;
   };
+
+  if (sidePanel) {
+    return (
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b">
+          <HardDrive className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-sm font-semibold">Drive Verification</span>
+          <Badge variant="outline" className="ml-1 text-xs">
+            {isLoading ? "loading…" : data ? `${data.rows.length} rows` : "Calculations sheet"}
+          </Badge>
+        </div>
+        <div className="p-3">
+          {isLoading && (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-7 w-full" />)}
+            </div>
+          )}
+          {isError && (
+            <div className="flex items-center gap-2 text-sm text-destructive p-2 bg-destructive/10 rounded-md">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{(error as Error)?.message || "Could not load Drive data"}</span>
+            </div>
+          )}
+          {data && data.rows.length === 0 && (
+            <p className="text-sm text-muted-foreground italic py-1">
+              No visible rows for <strong>{data.folderName}</strong>.
+            </p>
+          )}
+          {data && data.rows.length > 0 && (
+            <>
+              <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">
+                  {data.folderName} — {data.rows.length} rows
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={selectedRows.size === data.rows.length ? clearAll : selectAll}
+                  data-testid={`button-drive-select-all-${customerId}`}
+                >
+                  {selectedRows.size === data.rows.length
+                    ? <><Square className="h-3 w-3 mr-1" />Clear</>
+                    : <><CheckSquare className="h-3 w-3 mr-1" />All</>}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={selectedRows.size === 0 || hiding}
+                  onClick={hideSelected}
+                  data-testid={`button-drive-hide-${customerId}`}
+                >
+                  <EyeOff className="h-3 w-3 mr-1" />
+                  {hiding ? "Hiding…" : `Hide ${selectedRows.size > 0 ? selectedRows.size : ""}`}
+                </Button>
+              </div>
+              <div className="rounded-md border overflow-hidden">
+                <table className="w-full text-xs" data-testid={`table-drive-rows-${customerId}`}>
+                  <thead>
+                    <tr className="bg-muted/50">
+                      <th className="w-6 p-1.5"></th>
+                      <th className="text-left p-1.5 font-medium text-muted-foreground">Name</th>
+                      <th className="text-right p-1.5 font-medium text-muted-foreground">Qty</th>
+                      <th className="text-right p-1.5 font-medium text-muted-foreground">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.rows.map(row => (
+                      <tr
+                        key={row.rowIndex}
+                        className={`border-t cursor-pointer ${selectedRows.has(row.rowIndex) ? "bg-primary/5" : "hover:bg-muted/30"}`}
+                        onClick={() => toggleRow(row.rowIndex)}
+                        data-testid={`row-drive-${customerId}-${row.rowIndex}`}
+                      >
+                        <td className="p-1.5 text-center">
+                          <Checkbox
+                            checked={selectedRows.has(row.rowIndex)}
+                            onCheckedChange={() => toggleRow(row.rowIndex)}
+                            onClick={e => e.stopPropagation()}
+                            data-testid={`checkbox-drive-row-${customerId}-${row.rowIndex}`}
+                          />
+                        </td>
+                        <td className="p-1.5 font-medium leading-tight">{row.name}</td>
+                        <td className="p-1.5 text-right text-muted-foreground">{row.quantity || "—"}</td>
+                        <td className="p-1.5 text-right font-semibold">{formatTotal(row.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-6 pt-6 border-t">
@@ -1241,6 +1336,7 @@ export default function InvoicingQueue() {
                     </div>
                   </CardHeader>
                   <CardContent>
+                    <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6 items-start">
                     <div className="space-y-3">
                       {(() => {
                         // Pre-compute which job is the TBA shipping representative.
@@ -1736,11 +1832,14 @@ export default function InvoicingQueue() {
                         );
                       })()}
 
-                      {/* Google Drive Verification Panel */}
+                    </div>
+                    <div className="sticky top-4">
                       <DriveVerificationPanel
                         customerId={customerId}
                         customerName={customer.name}
+                        sidePanel
                       />
+                    </div>
                     </div>
                   </CardContent>
                 </Card>
