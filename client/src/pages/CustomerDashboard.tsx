@@ -149,6 +149,7 @@ type LineItem = {
   jobId: string;
   jobType: string;
   quantity: number;
+  stitchCount: number | null;
   description: string | null;
   machineId: number | null;
   completed: boolean;
@@ -170,6 +171,8 @@ type Job = {
   invoiceStatus: string;
   dhlTrackingNumber: string | null;
   lineItems: LineItem[];
+  paymentReceived?: boolean;
+  customerRequiresAdvancePayment?: boolean;
 };
 
 type CustomerUser = {
@@ -500,6 +503,16 @@ export default function CustomerDashboard() {
         <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200">
           <CheckCircle2 className="h-3 w-3 mr-1" />
           Completed
+        </Badge>
+      );
+    }
+
+    // Awaiting advance payment — not yet in production
+    if (job.customerRequiresAdvancePayment && !job.paymentReceived) {
+      return (
+        <Badge variant="secondary" className="bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200">
+          <Clock className="h-3 w-3 mr-1" />
+          Awaiting Payment
         </Badge>
       );
     }
@@ -941,6 +954,41 @@ export default function CustomerDashboard() {
           </div>
         </div>
 
+        {/* Payment required notice — shown when any visible jobs are awaiting payment */}
+        {(() => {
+          const awaitingJobs = (statusFilter === "completed" ? [] : allJobs).filter(
+            j => j.customerRequiresAdvancePayment && !j.paymentReceived &&
+                 !j.completed && j.invoiceStatus !== 'ready' && j.invoiceStatus !== 'invoiced'
+          );
+          if (awaitingJobs.length === 0) return null;
+          const awaitingLineItems = awaitingJobs.flatMap(j => j.lineItems || []);
+          const totalEx = awaitingLineItems.reduce((s, li) => s + (typeof li.estimatedPrice === "number" ? li.estimatedPrice : 0), 0);
+          const totalVat = totalEx * 0.2;
+          const totalInc = totalEx + totalVat;
+          return (
+            <div className="mb-4 rounded-md border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-4 py-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-orange-900 dark:text-orange-100 text-sm">
+                    Payment required before production begins
+                  </p>
+                  <p className="text-xs text-orange-800 dark:text-orange-200 mt-0.5">
+                    {awaitingJobs.length} order{awaitingJobs.length !== 1 ? 's' : ''} ({awaitingJobs.map(j => j.jobName).join(', ')}) {awaitingJobs.length !== 1 ? 'are' : 'is'} on hold pending advance payment by BACS.
+                    Once payment is received and confirmed, production will be scheduled.
+                  </p>
+                </div>
+                {totalEx > 0 && (
+                  <div className="text-right shrink-0">
+                    <p className="text-xs text-orange-700 dark:text-orange-300">£{totalEx.toFixed(2)} ex. VAT</p>
+                    <p className="text-xs text-orange-700 dark:text-orange-300">+ £{totalVat.toFixed(2)} VAT</p>
+                    <p className="font-bold text-orange-900 dark:text-orange-100 text-sm">£{totalInc.toFixed(2)} total due</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         {filteredJobs.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
@@ -1039,6 +1087,11 @@ export default function CustomerDashboard() {
                                         {lineItem.description}
                                       </p>
                                     )}
+                                    {lineItem.stitchCount ? (
+                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                        {lineItem.stitchCount.toLocaleString()} stitches
+                                      </p>
+                                    ) : null}
                                   </div>
                                   <div className="text-right shrink-0">
                                     <p className="text-sm font-semibold mb-1">Qty: {lineItem.quantity}</p>
@@ -1236,6 +1289,11 @@ export default function CustomerDashboard() {
                                 {lineItem.description}
                               </div>
                             )}
+                            {lineItem.stitchCount ? (
+                              <div className="text-xs text-muted-foreground">
+                                {lineItem.stitchCount.toLocaleString()} stitches
+                              </div>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">{lineItem.quantity}</TableCell>
