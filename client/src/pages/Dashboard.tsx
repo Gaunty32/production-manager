@@ -255,6 +255,20 @@ export default function Dashboard() {
     },
   });
 
+  const markPaymentReceivedMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/mark-payment-received`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: "Payment confirmed", description: "Job released for production scheduling." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to mark payment as received.", variant: "destructive" });
+    },
+  });
+
   const deleteLogoSetupMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("DELETE", `/api/logo-setups/${id}`);
@@ -865,7 +879,7 @@ export default function Dashboard() {
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground mb-3">
-              These jobs require advance payment before production can be scheduled.
+              These jobs are awaiting BACS payment. Mark payment received to release for production.
             </p>
             <div className="border rounded-md overflow-hidden">
               <Table>
@@ -873,15 +887,28 @@ export default function Dashboard() {
                   <TableRow>
                     <TableHead>Job</TableHead>
                     <TableHead>Customer</TableHead>
+                    <TableHead>Contents</TableHead>
                     <TableHead>Required Date</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {awaitingPaymentJobs.map((job) => {
                     const customer = customers.find(c => c.id === job.customerId);
+                    const lineItems = (job as JobWithLineItems).lineItems ?? [];
+                    const totalQty = lineItems.reduce((sum, li) => sum + (li.quantity ?? 0), 0);
+                    const jobTypes = [...new Set(lineItems.map(li => li.jobType).filter(Boolean))];
+                    const contentsLabel = lineItems.length > 0
+                      ? `${totalQty} garment${totalQty !== 1 ? 's' : ''} · ${lineItems.length} line item${lineItems.length !== 1 ? 's' : ''}${jobTypes.length ? ` (${jobTypes.join(', ')})` : ''}`
+                      : '—';
+                    const isPending = markPaymentReceivedMutation.isPending && (markPaymentReceivedMutation.variables as string) === job.id;
                     return (
-                      <TableRow key={job.id} className="bg-orange-50/40 dark:bg-orange-950/20">
+                      <TableRow
+                        key={job.id}
+                        className="bg-orange-50/40 dark:bg-orange-950/20 cursor-pointer hover:bg-orange-100/60 dark:hover:bg-orange-950/40"
+                        onClick={() => setLocation(`/jobs/${job.id}`)}
+                        data-testid={`row-awaiting-payment-${job.id}`}
+                      >
                         <TableCell>
                           <div>
                             <p className="font-medium text-sm"><DemoText>{job.jobName}</DemoText></p>
@@ -889,7 +916,10 @@ export default function Dashboard() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <DemoText>{customer?.name || job.customerName}</DemoText>
+                          <span className="text-sm"><DemoText>{customer?.name || (job as any).customerName}</DemoText></span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground">{contentsLabel}</span>
                         </TableCell>
                         <TableCell>
                           <span className="text-sm">
@@ -898,10 +928,19 @@ export default function Dashboard() {
                               : '—'}
                           </span>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200">
-                            Awaiting Payment
-                          </Badge>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            className="bg-orange-600 text-white"
+                            disabled={isPending}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markPaymentReceivedMutation.mutate(job.id);
+                            }}
+                            data-testid={`button-mark-paid-${job.id}`}
+                          >
+                            {isPending ? "Confirming…" : "Mark as Paid"}
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );
