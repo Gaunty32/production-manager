@@ -44,6 +44,7 @@ export const customers = pgTable("customers", {
   active: boolean("active").notNull().default(true),
   xeroContactId: text("xero_contact_id"),
   creditAccount: boolean("credit_account").notNull().default(true),
+  requiresAdvancePayment: boolean("requires_advance_payment").notNull().default(false),
   stripePaymentLink: text("stripe_payment_link"),
   stripeCustomerId: text("stripe_customer_id"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -96,6 +97,9 @@ export const jobs = pgTable("jobs", {
   conversationArchivedByCustomer: boolean("conversation_archived_by_customer").notNull().default(false),
   conversationArchivedByStaff: boolean("conversation_archived_by_staff").notNull().default(false),
   staffNotes: text("staff_notes"),
+  paymentReceived: boolean("payment_received").notNull().default(false),
+  paymentReceivedAt: timestamp("payment_received_at"),
+  paymentReceivedById: varchar("payment_received_by_id").references(() => users.id),
 });
 
 export const staffShifts = pgTable("staff_shifts", {
@@ -398,6 +402,7 @@ export const updateCustomerSchema = z.object({
   pricingTable2026: z.boolean().optional(),
   active: z.boolean().optional(),
   creditAccount: z.boolean().optional(),
+  requiresAdvancePayment: z.boolean().optional(),
   stripePaymentLink: z.string().url().optional().or(z.literal("")).or(z.null()),
   stripeCustomerId: z.string().optional().or(z.null()),
 });
@@ -524,6 +529,8 @@ export const updateJobSchema = z.object({
   ),
   // This is not a database field - used to specify which jobs to consolidate together
   consolidatedJobIds: z.array(z.string()).optional(),
+  paymentReceived: z.boolean().optional(),
+  staffNotes: z.string().nullable().optional(),
 });
 
 export const insertStaffShiftSchema = createInsertSchema(staffShifts).omit({

@@ -40,6 +40,7 @@ const formSchema = insertCustomerSchema
     active: z.boolean().default(true),
     xeroContactId: z.string().optional(),
     creditAccount: z.boolean().default(true),
+    requiresAdvancePayment: z.boolean().default(false),
   });
 
 interface CustomerFormDialogProps {
@@ -74,6 +75,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
       logoUrl: "",
       active: true,
       creditAccount: true,
+      requiresAdvancePayment: false,
     },
   });
 
@@ -90,6 +92,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         active: customer.active !== false,
         xeroContactId: customer.xeroContactId || "",
         creditAccount: customer.creditAccount !== false,
+        requiresAdvancePayment: (customer as any).requiresAdvancePayment === true,
       });
       setPreviewUrl(customer.logoUrl || "");
     } else if (!open) {
@@ -104,6 +107,7 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
         active: true,
         xeroContactId: "",
         creditAccount: true,
+        requiresAdvancePayment: false,
       });
       setPreviewUrl("");
     }
@@ -140,13 +144,14 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
   };
 
   const handleSubmit = (data: z.infer<typeof formSchema>) => {
-    const { active, creditAccount, ...rest } = data;
+    const { active, creditAccount, requiresAdvancePayment, ...rest } = data;
     const submitData = {
       ...rest,
       pricingTable2025: isEditMode ? (customer?.pricingTable2025 ?? false) : false,
       pricingTable2026: isEditMode ? (customer?.pricingTable2026 ?? true) : true,
       active: active !== false,
       creditAccount: creditAccount !== false,
+      requiresAdvancePayment: requiresAdvancePayment === true,
     };
     onSubmit(submitData);
     setOpen(false);
@@ -354,6 +359,29 @@ export function CustomerFormDialog({ trigger, customer, onSubmit, open: controll
                       </FormLabel>
                       <FormDescription className="text-xs">
                         Tick if this customer pays by invoice/BACS. Untick for customers who must pay upfront via Stripe.
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="requiresAdvancePayment"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start gap-3">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-requires-advance-payment"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-sm font-normal cursor-pointer">
+                        Requires advance payment
+                      </FormLabel>
+                      <FormDescription className="text-xs">
+                        When ticked, all jobs for this customer will be held from production scheduling until staff manually confirm payment has been received.
                       </FormDescription>
                     </div>
                   </FormItem>

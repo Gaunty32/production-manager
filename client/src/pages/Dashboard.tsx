@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { DemoText, DemoAmount } from "@/components/DemoText";
 import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText, MessageSquare, Paperclip, Download, ExternalLink } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -307,6 +308,15 @@ export default function Dashboard() {
     );
   });
 
+  // Awaiting Payment: jobs where the customer requires advance payment and it hasn't been received yet
+  const awaitingPaymentJobs = filteredJobs.filter(job => {
+    if (job.status === 'pending_customer_approval') return false;
+    if (job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready') return false;
+    return (job as any).customerRequiresAdvancePayment === true && !(job as any).paymentReceived;
+  });
+
+  const awaitingPaymentJobIds = new Set(awaitingPaymentJobs.map(j => j.id));
+
   // Separate active and completed orders
   // Production Queue: only show jobs that have all required info (dates + embroidery approval)
   const activeJobs = filteredJobs.filter(job => {
@@ -315,6 +325,9 @@ export default function Dashboard() {
     
     // Exclude invoiced and ready jobs (only show pending and not_ready)
     if (job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready') return false;
+
+    // Exclude jobs awaiting advance payment
+    if (awaitingPaymentJobIds.has(job.id)) return false;
     
     // Must have both dates to enter production queue
     if (!job.requiredDispatchDate || !job.goodsReceived) return false;
@@ -333,6 +346,9 @@ export default function Dashboard() {
     
     // Exclude invoiced and ready jobs (only show pending and not_ready)
     if (job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready') return false;
+
+    // Exclude jobs awaiting advance payment
+    if (awaitingPaymentJobIds.has(job.id)) return false;
     
     // Missing dates OR missing logo approvals
     const missingDates = !job.requiredDispatchDate || !job.goodsReceived;
@@ -837,6 +853,64 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        {/* Awaiting Payment Section */}
+        {viewMode === 'production' && awaitingPaymentJobs.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-5 w-1 rounded-full bg-orange-500" />
+              <h2 className="text-xl font-semibold text-foreground">Awaiting Payment</h2>
+              <Badge variant="secondary" className="bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200">
+                {awaitingPaymentJobs.length} job{awaitingPaymentJobs.length > 1 ? 's' : ''} on hold
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mb-3">
+              These jobs require advance payment before production can be scheduled.
+            </p>
+            <div className="border rounded-md overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Job</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Required Date</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {awaitingPaymentJobs.map((job) => {
+                    const customer = customers.find(c => c.id === job.customerId);
+                    return (
+                      <TableRow key={job.id} className="bg-orange-50/40 dark:bg-orange-950/20">
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-sm"><DemoText>{job.jobName}</DemoText></p>
+                            {job.jobNumber && <p className="text-xs text-muted-foreground">#{job.jobNumber}</p>}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <DemoText>{customer?.name || job.customerName}</DemoText>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">
+                            {job.requiredDispatchDate
+                              ? format(new Date(job.requiredDispatchDate), 'dd/MM/yy')
+                              : '—'}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200">
+                            Awaiting Payment
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
 
         {/* Production Queue - All Jobs (Active + Pending) */}
         {viewMode === 'production' && (

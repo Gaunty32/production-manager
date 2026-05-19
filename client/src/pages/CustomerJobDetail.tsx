@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useRoute } from "wouter";
-import { ArrowLeft, Send, FileText, Package, Calendar, MessageSquare, CheckCircle, XCircle, Clock } from "lucide-react";
+import { ArrowLeft, Send, FileText, Package, Calendar, MessageSquare, CheckCircle, XCircle, Clock, CreditCard } from "lucide-react";
 import { format } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -25,6 +25,8 @@ type Job = {
   approvedAt: string | null;
   rejectedAt: string | null;
   rejectionReason: string | null;
+  paymentReceived?: boolean;
+  customerRequiresAdvancePayment?: boolean;
 };
 
 type JobFile = {
@@ -234,6 +236,18 @@ export default function CustomerJobDetail() {
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-5xl">
+        {/* Awaiting Payment Banner */}
+        {job.customerRequiresAdvancePayment && !job.paymentReceived && (
+          <div className="mb-6 rounded-md border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 p-4 flex items-start gap-3">
+            <CreditCard className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-orange-900 dark:text-orange-100">Payment required before production begins</p>
+              <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                Your order has been approved and is awaiting your advance payment. Once payment is confirmed by our team, your job will be scheduled for production.
+              </p>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Job Details */}
           <div className="lg:col-span-2 space-y-6">

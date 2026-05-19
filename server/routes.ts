@@ -146,6 +146,12 @@ async function autoScheduleLineItem(lineItemId: string): Promise<{ success: bool
     if (!job) {
       return { success: false, error: "Job not found" };
     }
+
+    // Block scheduling if customer requires advance payment and payment not yet received
+    const customer = await storage.getCustomer(job.customerId);
+    if (customer?.requiresAdvancePayment && !job.paymentReceived) {
+      return { success: false, error: "Awaiting advance payment before scheduling" };
+    }
     
     // Fetch machine specs from DB for accurate duration calculation
     const machine = await storage.getMachine(lineItem.machineId);
@@ -2531,6 +2537,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               estimatedPrice: lineItemPrices[i] ?? null,
             })),
             pricingTable,
+            customerRequiresAdvancePayment: customer?.requiresAdvancePayment ?? false,
           };
         })
       );
@@ -2604,6 +2611,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching pending jobs:", error);
       res.status(500).json({ error: "Failed to fetch pending jobs" });
+    }
+  });
+
+  // Customer Portal - Get a single job by ID (for job detail page)
+  app.get("/api/customer-portal/jobs/:jobId", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Customer user not found" });
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const customer = await storage.getCustomer(job.customerId);
+      res.json({
+        ...job,
+        customerRequiresAdvancePayment: customer?.requiresAdvancePayment ?? false,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch job" });
     }
   });
 
@@ -4004,7 +4033,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       const lineItems = await storage.getJobLineItems(id);
-      res.json({ ...job, lineItems });
+      const customer = await storage.getCustomer(job.customerId);
+      res.json({
+        ...job,
+        lineItems,
+        customerRequiresAdvancePayment: customer?.requiresAdvancePayment ?? false,
+      });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch job" });
     }
@@ -4030,12 +4064,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }, {} as Record<string, number>);
       console.log('[API /api/jobs] Returning', jobs.length, 'jobs. Status breakdown:', statusCounts);
       
-      // Enrich each job with its line items
+      // Enrich each job with its line items and customer advance payment flag
       const jobsWithLineItems = await Promise.all(
-        jobs.map(async (job) => ({
-          ...job,
-          lineItems: await storage.getJobLineItems(job.id),
-        }))
+        jobs.map(async (job) => {
+          const customer = await storage.getCustomer(job.customerId);
+          return {
+            ...job,
+            lineItems: await storage.getJobLineItems(job.id),
+            customerRequiresAdvancePayment: customer?.requiresAdvancePayment ?? false,
+          };
+        })
       );
       
       res.json(jobsWithLineItems);
@@ -4149,6 +4187,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("PATCH /api/jobs/:id error:", error);
         res.status(500).json({ error: "Failed to update job" });
       }
+    }
+  });
+
+  // Mark advance payment as received for a job
+  app.post("/api/jobs/:id/mark-payment-received", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const job = await storage.getJob(id);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+
+      const userId = req.session?.userId;
+      await storage.updateJob(id, {
+        paymentReceived: true,
+        paymentReceivedAt: new Date(),
+        paymentReceivedById: userId || null,
+      } as any);
+
+      // Trigger auto-scheduling for all unscheduled line items now that payment is received
+      const lineItems = await storage.getJobLineItems(id);
+      for (const item of lineItems) {
+        if (item.machineId && !item.completed) {
+          await autoScheduleLineItem(item.id);
+        }
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("mark-payment-received error:", error);
+      res.status(500).json({ error: "Failed to mark payment received" });
     }
   });
 

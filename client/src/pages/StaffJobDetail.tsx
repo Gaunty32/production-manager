@@ -35,6 +35,9 @@ type Job = {
   deliveryAddress: string | null;
   submittedAt: string;
   customerId: string;
+  paymentReceived?: boolean;
+  paymentReceivedAt?: string | null;
+  customerRequiresAdvancePayment?: boolean;
 };
 
 type JobFile = {
@@ -394,9 +397,63 @@ export default function StaffJobDetail() {
   }
 
   const isPending = job.status === "pending_customer_approval";
+  const isAwaitingPayment = job.customerRequiresAdvancePayment === true && !job.paymentReceived;
+
+  const markPaymentReceivedMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/mark-payment-received`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs/${jobId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({
+        title: "Payment confirmed",
+        description: "The job has been released for production scheduling.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to mark payment as received.",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <div className="h-full overflow-y-auto bg-background">
+      {isAwaitingPayment && (
+        <div className="bg-orange-50 dark:bg-orange-950/40 border-b border-orange-200 dark:border-orange-800 px-4 py-3">
+          <div className="container mx-auto max-w-6xl flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-orange-500 flex-shrink-0" />
+              <p className="text-sm font-medium text-orange-900 dark:text-orange-100">
+                Awaiting advance payment — this job is on hold until payment is confirmed
+              </p>
+            </div>
+            <Button
+              size="sm"
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+              onClick={() => markPaymentReceivedMutation.mutate()}
+              disabled={markPaymentReceivedMutation.isPending}
+              data-testid="button-mark-payment-received"
+            >
+              {markPaymentReceivedMutation.isPending ? "Confirming..." : "Mark Payment Received"}
+            </Button>
+          </div>
+        </div>
+      )}
+      {!isAwaitingPayment && job.customerRequiresAdvancePayment && job.paymentReceived && job.paymentReceivedAt && (
+        <div className="bg-green-50 dark:bg-green-950/20 border-b border-green-200 dark:border-green-800 px-4 py-2">
+          <div className="container mx-auto max-w-6xl flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0" />
+            <p className="text-xs text-green-800 dark:text-green-200">
+              Advance payment confirmed on {format(new Date(job.paymentReceivedAt), "dd MMM yyyy")}
+            </p>
+          </div>
+        </div>
+      )}
       <header className="border-b bg-card sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
