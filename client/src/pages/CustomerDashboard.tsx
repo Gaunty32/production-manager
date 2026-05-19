@@ -976,6 +976,13 @@ export default function CustomerDashboard() {
                     {awaitingJobs.length} order{awaitingJobs.length !== 1 ? 's' : ''} ({awaitingJobs.map(j => j.jobName).join(', ')}) {awaitingJobs.length !== 1 ? 'are' : 'is'} on hold pending advance payment by BACS.
                     Once payment is received and confirmed, production will be scheduled.
                   </p>
+                  <div className="mt-2 text-xs text-orange-800 dark:text-orange-200 space-y-0.5">
+                    <p className="font-semibold">BACS Payment Details:</p>
+                    <p>Account name: <span className="font-medium">Select Branding Solutions Ltd</span></p>
+                    <p>Sort code: <span className="font-medium">04-06-05</span></p>
+                    <p>Account number: <span className="font-medium">30422879</span></p>
+                    <p className="mt-1 text-orange-700 dark:text-orange-300">Please use your company name as the payment reference.</p>
+                  </div>
                 </div>
                 {totalEx > 0 && (
                   <div className="text-right shrink-0">
