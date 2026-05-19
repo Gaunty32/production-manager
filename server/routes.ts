@@ -4064,10 +4064,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }, {} as Record<string, number>);
       console.log('[API /api/jobs] Returning', jobs.length, 'jobs. Status breakdown:', statusCounts);
       
+      // Pre-load all customers once to avoid N+1 queries
+      const allCustomers = await storage.getCustomers();
+      const customerMap = new Map(allCustomers.map(c => [c.id, c]));
+
       // Enrich each job with its line items and customer advance payment flag
       const jobsWithLineItems = await Promise.all(
         jobs.map(async (job) => {
-          const customer = await storage.getCustomer(job.customerId);
+          const customer = customerMap.get(job.customerId);
           return {
             ...job,
             lineItems: await storage.getJobLineItems(job.id),
