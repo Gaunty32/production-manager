@@ -906,7 +906,7 @@ export default function Dashboard() {
                       <TableRow
                         key={job.id}
                         className="bg-orange-50/40 dark:bg-orange-950/20 cursor-pointer hover:bg-orange-100/60 dark:hover:bg-orange-950/40"
-                        onClick={() => setLocation(`/staff/job/${job.id}`)}
+                        onClick={() => setEditingJob(job)}
                         data-testid={`row-awaiting-payment-${job.id}`}
                       >
                         <TableCell>
