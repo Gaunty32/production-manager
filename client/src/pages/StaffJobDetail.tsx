@@ -380,25 +380,6 @@ export default function StaffJobDetail() {
     }
   };
 
-  if (isLoadingJob) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
-      </div>
-    );
-  }
-
-  if (!job) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-muted-foreground">Job not found</p>
-      </div>
-    );
-  }
-
-  const isPending = job.status === "pending_customer_approval";
-  const isAwaitingPayment = job.customerRequiresAdvancePayment === true && !job.paymentReceived;
-
   const markPaymentReceivedMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/jobs/${jobId}/mark-payment-received`, {});
@@ -420,6 +401,25 @@ export default function StaffJobDetail() {
       });
     },
   });
+
+  if (isLoadingJob) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!job) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Job not found</p>
+      </div>
+    );
+  }
+
+  const isPending = job.status === "pending_customer_approval";
+  const isAwaitingPayment = job.customerRequiresAdvancePayment === true && !job.paymentReceived;
 
   return (
     <div className="h-full overflow-y-auto bg-background">
