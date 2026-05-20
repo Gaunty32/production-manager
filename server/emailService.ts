@@ -63,7 +63,12 @@ async function sendEmail(
   client: Resend,
   params: Parameters<Resend['emails']['send']>[0],
 ): ReturnType<Resend['emails']['send']> {
-  const result = await client.emails.send(params);
+  // Always set reply_to so replies land in a real inbox, not spam
+  const enriched = {
+    reply_to: 'info@selectbranding.co.uk',
+    ...params,
+  };
+  const result = await client.emails.send(enriched);
   if (!result.error) recordEmailSent();
   return result;
 }
@@ -138,7 +143,7 @@ function brandedEmail(bodyHtml: string, opts?: { customerLogoUrl?: string | null
                 <a href="mailto:info@selectbranding.co.uk" style="color:#4f46e5;text-decoration:none;">info@selectbranding.co.uk</a>
               </p>
               <p style="margin:12px 0 0;font-size:11px;color:#a1a1aa;">
-                This email was sent from an automated system. Please do not reply directly to this message.
+                You can reply to this email and it will reach our team at <a href="mailto:info@selectbranding.co.uk" style="color:#4f46e5;text-decoration:none;">info@selectbranding.co.uk</a>.
               </p>
             </td>
           </tr>
@@ -1091,5 +1096,35 @@ export async function sendFeatureRequestNotificationEmail(details: {
 
   if (error) {
     console.error('Failed to send feature request notification email:', error);
+  }
+}
+
+export async function sendDeliverabilityTestEmail(params: { to: string; cc?: string }) {
+  const { client, fromEmail } = await getUncachableResendClient();
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Email Deliverability Test</h2>
+    <p style="margin:0 0 12px;">This is a test email sent from the Select Branding Solutions production management system to check email deliverability and spam scoring.</p>
+    ${infoTable([
+      { label: 'Sent from', value: 'info@selectbranding.co.uk' },
+      { label: 'Via', value: 'Resend (resend.com)' },
+      { label: 'Reply-To', value: 'info@selectbranding.co.uk' },
+      { label: 'Purpose', value: 'Deliverability test' },
+    ])}
+    <p style="margin:16px 0 0;font-size:14px;color:#3f3f46;">If you received this in your inbox (not spam), the email configuration is working correctly.</p>
+  `;
+
+  const sendParams: Parameters<Resend['emails']['send']>[0] = {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: [params.to],
+    subject: 'Select Branding Solutions — Email Deliverability Test',
+    html: brandedEmail(body),
+  };
+  if (params.cc) (sendParams as any).cc = [params.cc];
+
+  const { error } = await sendEmail(client, sendParams);
+  if (error) {
+    console.error('Failed to send deliverability test email:', error);
+    throw new Error(JSON.stringify(error));
   }
 }

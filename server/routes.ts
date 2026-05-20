@@ -44,7 +44,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 
@@ -1040,6 +1040,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Test email error:", err);
       res.status(500).json({ error: "Failed to send test email" });
+    }
+  });
+
+  app.post("/api/admin/send-deliverability-test", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { to, cc } = req.body;
+      if (!to) return res.status(400).json({ error: "to required" });
+      await sendDeliverabilityTestEmail({ to, cc });
+      res.json({ success: true, sentTo: to, cc });
+    } catch (err) {
+      console.error("Deliverability test email error:", err);
+      res.status(500).json({ error: String(err) });
     }
   });
 
