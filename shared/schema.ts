@@ -1175,7 +1175,25 @@ export const machines = pgTable("machines", {
   changeoverTimeMinutes: integer("changeover_time_minutes").notNull().default(3),
   isActive: boolean("is_active").notNull().default(true),
   notes: text("notes"),
+  schedulingMultiplier: real("scheduling_multiplier").notNull().default(1),
+  calibrationStartedAt: timestamp("calibration_started_at").notNull().defaultNow(),
+  lastRecalibratedAt: timestamp("last_recalibrated_at"),
 });
+
+export const machineCalibrationHistory = pgTable("machine_calibration_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  machineId: integer("machine_id").notNull(),
+  runAt: timestamp("run_at").notNull().defaultNow(),
+  previousMultiplier: real("previous_multiplier").notNull(),
+  newMultiplier: real("new_multiplier").notNull(),
+  observedRatio: real("observed_ratio"),
+  sampleCount: integer("sample_count").notNull(),
+  windowStart: timestamp("window_start").notNull(),
+  windowEnd: timestamp("window_end").notNull(),
+  trigger: varchar("trigger", { length: 20 }).notNull().default("auto"),
+});
+
+export type MachineCalibrationHistory = typeof machineCalibrationHistory.$inferSelect;
 
 // Message reminders — per-user snooze/remind-me on any message
 export const tasks = pgTable("tasks", {

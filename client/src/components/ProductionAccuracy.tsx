@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { TrendingUp, TrendingDown, Minus, CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
+import { TrendingUp, TrendingDown, Minus, CalendarIcon, RefreshCw, Sliders } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
 import { formatTimeDisplay } from "@shared/machines";
 import { cn } from "@/lib/utils";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface AccuracyItem {
   lineItemId: string;
@@ -71,9 +73,33 @@ function AccuracyBadge({ ratio }: { ratio: number | null }) {
 
 const DEFAULT_FROM = new Date("2026-05-01");
 
+interface CalibrationMachine {
+  id: number;
+  name: string;
+  isActive: boolean;
+  schedulingMultiplier: number;
+  calibrationStartedAt: string;
+  lastRecalibratedAt: string | null;
+}
+
+interface CalibrationData {
+  machines: CalibrationMachine[];
+  history: Array<{
+    id: string;
+    machineId: number;
+    runAt: string;
+    previousMultiplier: number;
+    newMultiplier: number;
+    observedRatio: number | null;
+    sampleCount: number;
+    trigger: string;
+  }>;
+}
+
 export function ProductionAccuracy() {
   const [fromDate, setFromDate] = useState<Date>(DEFAULT_FROM);
   const [calOpen, setCalOpen] = useState(false);
+  const { toast } = useToast();
 
   const queryKey = ["/api/scheduling/accuracy", fromDate.toISOString()];
   const { data, isLoading } = useQuery<AccuracyData>({
@@ -85,6 +111,29 @@ export function ProductionAccuracy() {
       return res.json();
     },
     refetchInterval: 120_000,
+  });
+
+  const { data: calibration } = useQuery<CalibrationData>({
+    queryKey: ["/api/scheduling/calibration"],
+  });
+
+  const recalibrateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/scheduling/recalibrate", {});
+      return res.json();
+    },
+    onSuccess: (data: { results: Array<{ machineName: string; sampleCount: number; newMultiplier: number }> }) => {
+      const updated = data.results.filter(r => r.sampleCount >= 3).length;
+      toast({
+        title: "Recalibration complete",
+        description: `${updated} machine${updated !== 1 ? "s" : ""} updated based on the last 2 weeks of completed jobs.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduling/calibration"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduling/accuracy"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Recalibration failed", description: err.message, variant: "destructive" });
+    },
   });
 
   if (isLoading) {
@@ -147,6 +196,58 @@ export function ProductionAccuracy() {
           </Button>
         )}
       </div>
+
+      {/* Calibration panel */}
+      {calibration && calibration.machines.length > 0 && (
+        <Card>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+              <div className="flex items-start gap-2">
+                <Sliders className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-semibold">Scheduling calibration</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
+                    Each machine has a multiplier the scheduler uses to convert stitches into minutes. Every 2 weeks the system gently nudges each multiplier halfway toward what the last 2 weeks of completed jobs suggest, so estimates trend toward 100% accuracy. Invoiced stitch counts are never changed.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                disabled={recalibrateMutation.isPending}
+                onClick={() => recalibrateMutation.mutate()}
+                data-testid="button-recalibrate-now"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", recalibrateMutation.isPending && "animate-spin")} />
+                Recalibrate now
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {calibration.machines.filter(m => m.isActive).map(m => {
+                const mult = m.schedulingMultiplier ?? 1;
+                const pct = Math.round(mult * 100);
+                const color =
+                  Math.abs(mult - 1) < 0.05 ? "text-green-600 dark:text-green-400"
+                  : Math.abs(mult - 1) < 0.20 ? "text-amber-600 dark:text-amber-400"
+                  : "text-destructive";
+                const lastRun = m.lastRecalibratedAt
+                  ? `Recalibrated ${formatDistanceToNow(new Date(m.lastRecalibratedAt), { addSuffix: true })}`
+                  : "Not yet recalibrated";
+                return (
+                  <div key={m.id} className="rounded-md border p-2.5" data-testid={`calibration-machine-${m.id}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium truncate">{m.name}</p>
+                      <span className={cn("text-sm font-bold", color)}>{pct}%</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{lastRun}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {overall.count === 0 ? (
         <Card>

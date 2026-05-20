@@ -167,11 +167,13 @@ async function autoScheduleLineItem(lineItemId: string): Promise<{ success: bool
       return { success: false, error: "Line item has no quantity" };
     }
     
+    const multiplier = (machine as any)?.schedulingMultiplier ?? 1;
     const calcDuration = (qty: number, stitches: number): number => {
       if (!stitches || !qty) return 0;
       const runs = Math.ceil(qty / heads);
       const timePerRun = (stitches / spm) + changeover;
-      return Math.ceil((runs * timePerRun) / 10) * 10;
+      const raw = runs * timePerRun;
+      return Math.ceil((raw * multiplier) / 10) * 10;
     };
     
     let effectiveDuration = calcDuration(quantity, stitchCount);
@@ -5144,9 +5146,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allLineItems = await storage.getAllJobLineItems();
       const existingSchedules = await storage.getJobSchedules();
       const customers = await storage.getCustomers();
+      const allMachines = await storage.getMachines();
 
       const jobMap = new Map(allJobs.map(j => [j.id, j]));
       const customerMap = new Map(customers.map(c => [c.id, c]));
+      const machineMap = new Map(allMachines.map(m => [m.id, m]));
 
       // lineItemId -> most recent non-cancelled schedule
       const scheduleByLineItem = new Map<string, typeof existingSchedules[0]>();
@@ -5179,8 +5183,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           daysUntilDispatch = Math.floor((dispatchDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         }
 
+        const liMachine = lineItem.machineId ? machineMap.get(lineItem.machineId) : null;
+        const liHeads = liMachine?.heads ?? 6;
+        const liSpm = liMachine?.stitchesPerMinute ?? 750;
+        const liChangeover = liMachine?.changeoverTimeMinutes ?? 3;
+        const liMultiplier = (liMachine as any)?.schedulingMultiplier ?? 1;
         const estimatedMinutes = (lineItem.stitchCount && lineItem.quantity)
-          ? Math.ceil((Math.ceil(lineItem.quantity / 6) * ((lineItem.stitchCount / 750) + 3)) / 10) * 10
+          ? Math.ceil((Math.ceil(lineItem.quantity / liHeads) * ((lineItem.stitchCount / liSpm) + liChangeover) * liMultiplier) / 10) * 10
           : null;
 
         const schedule = lineItem.machineId ? scheduleByLineItem.get(lineItem.id) : undefined;
@@ -5310,9 +5319,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const heads = (machine as any)?.heads || 6;
         const spm = (machine as any)?.stitchesPerMinute || 750;
         const changeover = (machine as any)?.changeoverTimeMinutes || 3;
+        const multiplier = (machine as any)?.schedulingMultiplier ?? 1;
 
         const runs = Math.ceil(li.quantity / heads);
-        const estimatedMinutes = Math.ceil((runs * ((li.stitchCount / spm) + changeover)) / 10) * 10;
+        const estimatedMinutes = Math.ceil((runs * ((li.stitchCount / spm) + changeover) * multiplier) / 10) * 10;
         const actualMinutes = li.actualProductionTimeMinutes!;
         const variance = actualMinutes - estimatedMinutes;
         const ratio = estimatedMinutes > 0 ? actualMinutes / estimatedMinutes : null;
@@ -5373,6 +5383,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Schedule accuracy error:", error);
       res.status(500).json({ error: "Failed to calculate schedule accuracy" });
+    }
+  });
+
+  // Calibration — current per-machine multipliers + recent history
+  app.get("/api/scheduling/calibration", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { machines, machineCalibrationHistory } = await import("@shared/schema");
+      const { desc } = await import("drizzle-orm");
+      const allMachines = await db.select().from(machines);
+      const history = await db.select().from(machineCalibrationHistory).orderBy(desc(machineCalibrationHistory.runAt)).limit(50);
+      res.json({
+        machines: allMachines.map(m => ({
+          id: m.id,
+          name: m.name,
+          isActive: m.isActive,
+          schedulingMultiplier: m.schedulingMultiplier ?? 1,
+          calibrationStartedAt: m.calibrationStartedAt,
+          lastRecalibratedAt: m.lastRecalibratedAt,
+        })),
+        history,
+      });
+    } catch (error) {
+      console.error("Calibration fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch calibration" });
+    }
+  });
+
+  // Calibration — manually trigger a recalibration now
+  app.post("/api/scheduling/recalibrate", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const { recalibrateMachines } = await import("./calibration");
+      const results = await recalibrateMachines("manual");
+      res.json({ success: true, results });
+    } catch (error) {
+      console.error("Manual recalibration error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to recalibrate" });
     }
   });
 
@@ -5542,8 +5589,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const heads = machine.heads;
         const spm = machine.stitchesPerMinute;
         const changeover = machine.changeoverTimeMinutes;
-        const duration = calcDurationFromSpecs(jobQuantity, jobStitchCount, heads, spm, changeover);
+        const multiplier = (machine as any).schedulingMultiplier ?? 1;
         const runs = Math.ceil(jobQuantity / heads);
+        const rawUnroundedMinutes = (jobStitchCount && jobQuantity)
+          ? runs * ((jobStitchCount / spm) + changeover)
+          : 0;
+        const duration = Math.ceil((rawUnroundedMinutes * multiplier) / 10) * 10;
         
         if (duration === 0) continue;
         
