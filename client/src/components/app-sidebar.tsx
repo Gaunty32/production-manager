@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, Monitor, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -37,7 +37,6 @@ const menuItems = [
   { title: "Holidays", url: "/holidays", icon: CalendarClock },
   { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
   { title: "Weekly Reports", url: "/reports/weekly", icon: BarChart3 },
-  { title: "Production Display", url: "/production-display", icon: Monitor },
   { title: "Customers", url: "/customers", icon: Users },
   { title: "Staff", url: "/staff", icon: UserCog },
 ];

@@ -23,7 +23,6 @@ import InvoicingQueue from "@/pages/InvoicingQueue";
 import StaffHoldingArea from "@/pages/StaffHoldingArea";
 import WeeklyReports from "@/pages/WeeklyReports";
 import StaffJobDetail from "@/pages/StaffJobDetail";
-import ProductionDisplay from "@/pages/ProductionDisplay";
 import HolidayManagement from "@/pages/HolidayManagement";
 import Landing from "@/pages/Landing";
 import CustomerLogin from "@/pages/CustomerLogin";
@@ -148,7 +147,6 @@ function AppRouter() {
         <Route path="/portal-preview" component={PortalPreview} />
         <Route path="/demo-access" component={DemoAccess} />
         <Route path="/demo" component={DemoPortal} />
-        <Route path="/production-display" component={ProductionDisplay} />
         <Route path="/forgot-password" component={ForgotPassword} />
         <Route path="/reset-password" component={ResetPassword} />
         <Route path="/customer/invite" component={CustomerInviteAccept} />
