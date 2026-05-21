@@ -6783,8 +6783,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/staff/direct-conversations", isStaffAuthenticated, async (req: any, res) => {
     try {
       const { message, ...rest } = req.body;
-      const data = insertConversationSchema.parse(rest);
-      const convo = await storage.createConversation(data as any);
+      const trimmedSubject = typeof rest.subject === "string" ? rest.subject.trim() : rest.subject;
+      const data = insertConversationSchema.parse({ ...rest, subject: trimmedSubject });
+      // Dedupe: reuse an existing open conversation with the same (subject + recipient) for this customer
+      let convo: any = null;
+      if (data.customerId) {
+        const existingConvos = await storage.getConversationsByCustomer(data.customerId);
+        const normalized = String(trimmedSubject || "").toLowerCase();
+        const incomingRecipient = (data as any).staffRecipientId ?? null;
+        convo = existingConvos.find((c: any) =>
+          c.status === "open"
+          && String(c.subject || "").trim().toLowerCase() === normalized
+          && (c.staffRecipientId ?? null) === incomingRecipient
+        ) ?? null;
+      }
+      if (!convo) {
+        convo = await storage.createConversation(data as any);
+      }
       if (message) {
         await storage.createConversationMessage({
           conversationId: convo.id,
@@ -6911,8 +6926,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
       const customerUser = await storage.getCustomerUserById(customerUserId);
       if (!customerUser) return res.status(404).json({ error: "Not found" });
-      const data = insertConversationSchema.parse({ ...req.body, customerId: customerUser.customerId });
-      const convo = await storage.createConversation(data);
+      const trimmedSubject = typeof req.body.subject === "string" ? req.body.subject.trim() : req.body.subject;
+      const data = insertConversationSchema.parse({ ...req.body, subject: trimmedSubject, customerId: customerUser.customerId });
+      // Dedupe: reuse an existing open conversation with the same (subject + recipient) for this customer
+      const existingConvos = await storage.getConversationsByCustomer(customerUser.customerId);
+      const normalized = String(trimmedSubject || "").toLowerCase();
+      const incomingRecipient = (data as any).staffRecipientId ?? null;
+      const existing = existingConvos.find((c: any) =>
+        c.status === "open"
+        && String(c.subject || "").trim().toLowerCase() === normalized
+        && (c.staffRecipientId ?? null) === incomingRecipient
+      );
+      const convo = existing ?? await storage.createConversation(data);
       if (req.body.message) {
         await storage.createConversationMessage({
           conversationId: convo.id,

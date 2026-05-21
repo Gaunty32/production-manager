@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -191,7 +191,7 @@ export default function CustomerInbox() {
     refetchInterval: 3000,
   });
 
-  const { data: directMessages = [], isLoading: isLoadingDirectMsgs } = useQuery<ChatMessage[]>({
+  const { data: directMessages = [], isLoading: isLoadingDirectMsgs, error: directMessagesError } = useQuery<ChatMessage[]>({
     queryKey: ["/api/customer-portal/direct-conversations", directId, "messages"],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/customer-portal/direct-conversations/${directId}/messages`);
@@ -199,6 +199,7 @@ export default function CustomerInbox() {
     },
     enabled: !!directId,
     refetchInterval: 3000,
+    placeholderData: keepPreviousData,
   });
 
   const messages = selected?.type === "job" ? jobMessages : directMessages;
@@ -1073,6 +1074,11 @@ export default function CustomerInbox() {
             <div className="flex-1 overflow-y-auto p-4 space-y-3" onScroll={() => newMessageBanner && setNewMessageBanner(false)}>
               {isLoadingMessages ? (
                 <LoadingSpinner />
+              ) : selected.type === "direct" && directMessagesError ? (
+                <EmptyState
+                  label="Couldn't load messages"
+                  sublabel={(directMessagesError as Error)?.message || "Please refresh the page or try again."}
+                />
               ) : messages.length === 0 ? (
                 <EmptyState label="No messages yet" sublabel="Start the conversation below" />
               ) : (
