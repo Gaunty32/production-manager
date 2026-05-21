@@ -3169,6 +3169,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff - Search a customer's job messages (live + archived)
+  app.get("/api/staff/customers/:customerId/messages/search", isStaffAuthenticated, async (req, res) => {
+    try {
+      const q = String(req.query.q || "").trim();
+      if (!q || q.length < 2) return res.json([]);
+      const results = await storage.searchCustomerJobMessages(req.params.customerId, q);
+      res.json(results);
+    } catch (error) {
+      console.error("Error searching customer messages:", error);
+      res.status(500).json({ error: "Failed to search messages" });
+    }
+  });
+
   // Staff - Unarchive a job conversation
   app.put("/api/staff/jobs/:jobId/conversation/unarchive", isStaffAuthenticated, async (req, res) => {
     try {

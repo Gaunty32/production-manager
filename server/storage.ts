@@ -187,6 +187,7 @@ export interface IStorage {
   updateCustomerNotificationSettings(id: string, settings: { emailNotificationsMessages?: boolean; emailNotificationsDispatch?: boolean }): Promise<void>;
   updateCustomerUserInviteSent(id: string): Promise<void>;
   getJobMessages(jobId: string): Promise<JobMessage[]>;
+  searchCustomerJobMessages(customerId: string, query: string): Promise<Array<{ id: string; jobId: string; jobName: string; jobNumber: number | null; isArchived: boolean; message: string; senderType: string; createdAt: Date }>>;
   createJobMessage(message: InsertJobMessage): Promise<JobMessage>;
   deleteJobMessage(messageId: string): Promise<void>;
   deleteConversationMessage(messageId: string): Promise<void>;
@@ -1392,6 +1393,41 @@ export class DatabaseStorage implements IStorage {
 
   async getJobMessages(jobId: string): Promise<JobMessage[]> {
     return await db.select().from(jobMessages).where(eq(jobMessages.jobId, jobId)).orderBy(jobMessages.createdAt);
+  }
+
+  async searchCustomerJobMessages(customerId: string, query: string): Promise<Array<{ id: string; jobId: string; jobName: string; jobNumber: number | null; isArchived: boolean; message: string; senderType: string; createdAt: Date }>> {
+    const q = (query || "").trim();
+    if (!q) return [];
+    const rows = await db
+      .select({
+        id: jobMessages.id,
+        jobId: jobMessages.jobId,
+        jobName: jobs.jobName,
+        jobNumber: jobs.jobNumber,
+        isArchived: jobs.conversationArchivedByStaff,
+        message: jobMessages.message,
+        senderType: jobMessages.senderType,
+        createdAt: jobMessages.createdAt,
+      })
+      .from(jobMessages)
+      .innerJoin(jobs, eq(jobMessages.jobId, jobs.id))
+      .where(and(
+        eq(jobs.customerId, customerId),
+        eq(jobMessages.deleted, false),
+        sql`${jobMessages.message} ILIKE ${'%' + q + '%'}`,
+      ))
+      .orderBy(desc(jobMessages.createdAt))
+      .limit(50);
+    return rows.map(r => ({
+      id: r.id,
+      jobId: r.jobId!,
+      jobName: r.jobName || "",
+      jobNumber: r.jobNumber ?? null,
+      isArchived: !!r.isArchived,
+      message: r.message || "",
+      senderType: r.senderType,
+      createdAt: r.createdAt,
+    }));
   }
 
   async createJobMessage(message: InsertJobMessage): Promise<JobMessage> {
