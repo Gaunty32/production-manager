@@ -213,9 +213,6 @@ export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload =
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
                 <span className="truncate">{file.fileName}</span>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  ({Math.round(file.fileSize / 1024)} KB)
-                </span>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {file.fileUrl && (

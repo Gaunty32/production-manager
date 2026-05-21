@@ -355,8 +355,7 @@ export default function CustomerJobDetail() {
                           <div>
                             <p className="text-sm font-medium">{file.fileName}</p>
                             <p className="text-xs text-muted-foreground">
-                              {Math.round(file.fileSize / 1024)} KB • Uploaded{" "}
-                              {format(new Date(file.uploadedAt), "MMM d, yyyy")}
+                              Uploaded {format(new Date(file.uploadedAt), "MMM d, yyyy")}
                             </p>
                           </div>
                         </div>

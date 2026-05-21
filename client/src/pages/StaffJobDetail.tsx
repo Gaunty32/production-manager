@@ -658,9 +658,6 @@ export default function StaffJobDetail() {
                       <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{file.fileName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {Math.round(file.fileSize / 1024)} KB
-                        </p>
                       </div>
                     </div>
                   ))}
