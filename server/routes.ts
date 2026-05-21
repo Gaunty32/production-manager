@@ -6998,34 +6998,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const msgs = await storage.getConversationMessages(req.params.id);
       await storage.markConversationMessagesReadByCustomer(req.params.id);
-      const allStaff = await storage.getStaffMembers();
+      const allStaff = await storage.getStaff();
       const allUsers = await storage.getAllUsers();
       const enriched = await Promise.all(msgs.map(async (m: any) => {
-        if (m.senderType === "staff" && m.senderId) {
-          const staffMember = allStaff.find((s: any) => s.id === m.senderId);
-          const linkedUser = staffMember?.userId
-            ? allUsers.find((u: any) => u.id === staffMember.userId)
-            : allUsers.find((u: any) => String(u.id) === String(m.senderId));
-          return {
-            ...m,
-            imageUrl: normalizeImgUrl(m.imageUrl),
-            senderName: staffMember?.name || [linkedUser?.firstName, linkedUser?.lastName].filter(Boolean).join(" ") || null,
-            senderImageUrl: normalizeImgUrl(linkedUser?.profileImageUrl),
-          };
+        try {
+          if (m.senderType === "staff" && m.senderId) {
+            const staffMember = allStaff.find((s: any) => s.id === m.senderId);
+            const linkedUser = staffMember?.userId
+              ? allUsers.find((u: any) => u.id === staffMember.userId)
+              : allUsers.find((u: any) => String(u.id) === String(m.senderId));
+            return {
+              ...m,
+              imageUrl: normalizeImgUrl(m.imageUrl),
+              senderName: staffMember?.name || [linkedUser?.firstName, linkedUser?.lastName].filter(Boolean).join(" ") || null,
+              senderImageUrl: normalizeImgUrl(linkedUser?.profileImageUrl),
+            };
+          }
+          if (m.senderType === "customer" && m.senderId) {
+            let cu: any = null;
+            try { cu = await storage.getCustomerUserById(m.senderId); } catch { cu = null; }
+            return {
+              ...m,
+              imageUrl: normalizeImgUrl(m.imageUrl),
+              senderName: [cu?.firstName, cu?.lastName].filter(Boolean).join(" ") || null,
+              senderImageUrl: normalizeImgUrl(cu?.profileImageUrl),
+            };
+          }
+          return { ...m, imageUrl: normalizeImgUrl(m.imageUrl), senderName: null, senderImageUrl: null };
+        } catch (innerErr: any) {
+          console.error(`[DirectMsg] enrich error msg=${m?.id}:`, innerErr?.message);
+          return { ...m, imageUrl: normalizeImgUrl(m?.imageUrl), senderName: null, senderImageUrl: null };
         }
-        if (m.senderType === "customer" && m.senderId) {
-          const cu = await storage.getCustomerUserById(m.senderId);
-          return {
-            ...m,
-            imageUrl: normalizeImgUrl(m.imageUrl),
-            senderName: [cu?.firstName, cu?.lastName].filter(Boolean).join(" ") || null,
-            senderImageUrl: normalizeImgUrl(cu?.profileImageUrl),
-          };
-        }
-        return { ...m, imageUrl: normalizeImgUrl(m.imageUrl), senderName: null, senderImageUrl: null };
       }));
       res.json(enriched);
-    } catch (e) {
+    } catch (e: any) {
+      console.error(`[DirectMsg] Failed to fetch messages convo=${req.params.id}:`, e?.message, e?.stack);
       res.status(500).json({ error: "Failed to fetch messages" });
     }
   });
