@@ -5940,6 +5940,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: e?.message || "Failed to read setting" });
     }
   });
+  // Lists all bank-type accounts from your Xero chart of accounts so staff
+  // can identify the correct code for the deposit clearing account.
+  app.get("/api/xero/bank-accounts", isStaffAuthenticated, async (_req, res) => {
+    try {
+      if (!xeroService.isConfigured() || !xeroService.isConnected()) {
+        return res.status(400).json({ error: "Xero is not connected" });
+      }
+      const token = await (xeroService as any).getAccessToken();
+      const tenantId = (xeroService as any).getTenantId();
+      const apiUrl = (xeroService as any).apiUrl;
+      const r = await fetch(`${apiUrl}/Accounts?where=${encodeURIComponent('Type=="BANK"')}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "xero-tenant-id": tenantId,
+          "Accept": "application/json",
+        },
+      });
+      if (!r.ok) {
+        return res.status(r.status).json({ error: await r.text() });
+      }
+      const data = await r.json();
+      const accounts = (data.Accounts || []).map((a: any) => ({
+        code: a.Code,
+        name: a.Name,
+        status: a.Status,
+        bankAccountNumber: a.BankAccountNumber,
+        accountID: a.AccountID,
+      }));
+      res.json({ accounts });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to fetch bank accounts" });
+    }
+  });
+
   app.patch("/api/xero/bank-account-code", isStaffAuthenticated, async (req, res) => {
     try {
       const { code } = req.body;
