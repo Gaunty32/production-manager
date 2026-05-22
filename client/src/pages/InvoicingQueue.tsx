@@ -89,12 +89,18 @@ interface CustomerDriveData {
   sheetNumericId: number;
 }
 
-function DriveVerificationPanel({ customerId, customerName, sidePanel = false, loadDelay = 0 }: { customerId: number; customerName: string; sidePanel?: boolean; loadDelay?: number }) {
+interface InvoiceJobForCheck {
+  name: string;
+  total: number | "POA" | "TBA" | null;
+}
+
+function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], sidePanel = false, loadDelay = 0 }: { customerId: number | string; customerName: string; invoiceJobs?: InvoiceJobForCheck[]; sidePanel?: boolean; loadDelay?: number }) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(sidePanel);
   const [ready, setReady] = useState(loadDelay === 0);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [hiding, setHiding] = useState(false);
+  const [showAllRows, setShowAllRows] = useState(false);
 
   useEffect(() => {
     if (loadDelay > 0) {
@@ -177,15 +183,70 @@ function DriveVerificationPanel({ customerId, customerName, sidePanel = false, l
     return `£${n.toFixed(2)}`;
   };
 
+  // Reconcile invoice jobs against Drive rows (by normalised job name)
+  const normName = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ");
+  const reconciliation = (() => {
+    if (!data) return null;
+    const invoiceMap = new Map<string, { total: number; hasPOA: boolean; display: string }>();
+    for (const j of invoiceJobs) {
+      const k = normName(j.name);
+      const prev = invoiceMap.get(k) ?? { total: 0, hasPOA: false, display: j.name };
+      if (j.total === "POA") prev.hasPOA = true;
+      else if (typeof j.total === "number") prev.total += j.total;
+      invoiceMap.set(k, prev);
+    }
+    const driveMap = new Map<string, { total: number; display: string; rowIndices: number[] }>();
+    for (const r of data.rows) {
+      const k = normName(r.name);
+      const n = parseFloat((r.total || "").replace(/[£,]/g, "")) || 0;
+      const prev = driveMap.get(k) ?? { total: 0, display: r.name, rowIndices: [] };
+      prev.total += n;
+      prev.rowIndices.push(r.rowIndex);
+      driveMap.set(k, prev);
+    }
+    const keys = new Set([...Array.from(invoiceMap.keys()), ...Array.from(driveMap.keys())]);
+    type Mismatch = { name: string; invoice: number | "POA" | null; drive: number | null; kind: "diff" | "missing_drive" | "missing_invoice" };
+    const mismatches: Mismatch[] = [];
+    for (const k of Array.from(keys)) {
+      const inv = invoiceMap.get(k);
+      const drv = driveMap.get(k);
+      const display = drv?.display ?? inv?.display ?? k;
+      if (inv && !drv) {
+        mismatches.push({ name: display, invoice: inv.hasPOA ? "POA" : inv.total, drive: null, kind: "missing_drive" });
+      } else if (drv && !inv) {
+        mismatches.push({ name: display, invoice: null, drive: drv.total, kind: "missing_invoice" });
+      } else if (inv && drv) {
+        if (inv.hasPOA) continue; // can't compare POA numerically
+        if (Math.abs(inv.total - drv.total) > 0.01) {
+          mismatches.push({ name: display, invoice: inv.total, drive: drv.total, kind: "diff" });
+        }
+      }
+    }
+    return { mismatches, invoiceCount: invoiceMap.size, driveCount: driveMap.size };
+  })();
+
+  const allMatch = !!reconciliation && reconciliation.mismatches.length === 0 && (reconciliation.invoiceCount > 0 || reconciliation.driveCount > 0);
+  const hasMismatches = !!reconciliation && reconciliation.mismatches.length > 0;
+
   if (sidePanel) {
     return (
       <div className="rounded-lg border bg-card">
         <div className="flex items-center gap-2 px-3 py-2.5 border-b">
           <HardDrive className="h-4 w-4 text-primary shrink-0" />
           <span className="text-sm font-semibold">Drive Verification</span>
-          <Badge variant="outline" className="ml-1 text-xs">
-            {isLoading ? "loading…" : data ? `${data.rows.length} rows` : "Calculations sheet"}
-          </Badge>
+          {allMatch ? (
+            <Badge variant="outline" className="ml-1 text-xs border-green-600 text-green-700 dark:text-green-400">
+              <CheckCircle2 className="h-3 w-3 mr-1" />Match
+            </Badge>
+          ) : hasMismatches ? (
+            <Badge variant="destructive" className="ml-1 text-xs">
+              <AlertCircle className="h-3 w-3 mr-1" />{reconciliation!.mismatches.length} mismatch{reconciliation!.mismatches.length === 1 ? "" : "es"}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="ml-1 text-xs">
+              {isLoading ? "loading…" : data ? `${data.rows.length} rows` : "Calculations sheet"}
+            </Badge>
+          )}
         </div>
         <div className="p-3">
           {isLoading && (
@@ -204,7 +265,70 @@ function DriveVerificationPanel({ customerId, customerName, sidePanel = false, l
               No visible rows for <strong>{data.folderName}</strong>.
             </p>
           )}
-          {data && data.rows.length > 0 && (
+
+          {allMatch && (
+            <div className="flex items-start gap-2 text-sm p-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900" data-testid={`drive-match-${customerId}`}>
+              <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-medium text-green-800 dark:text-green-300">Invoice matches Drive</p>
+                <p className="text-xs text-green-700/80 dark:text-green-400/80">
+                  {reconciliation!.driveCount} job{reconciliation!.driveCount === 1 ? "" : "s"} reconciled across {data!.rows.length} sheet row{data!.rows.length === 1 ? "" : "s"}.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {hasMismatches && (
+            <div className="space-y-2 mb-3" data-testid={`drive-mismatches-${customerId}`}>
+              <div className="flex items-start gap-2 text-sm p-2 rounded-md bg-destructive/5 border border-destructive/30">
+                <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                <p className="text-foreground">
+                  <span className="font-medium">{reconciliation!.mismatches.length}</span> job{reconciliation!.mismatches.length === 1 ? " doesn't" : "s don't"} reconcile with the Drive sheet.
+                </p>
+              </div>
+              <div className="rounded-md border overflow-hidden">
+                <table className="w-full text-xs" data-testid={`table-drive-mismatches-${customerId}`}>
+                  <thead>
+                    <tr className="bg-muted/50">
+                      <th className="text-left p-1.5 font-medium text-muted-foreground">Job</th>
+                      <th className="text-right p-1.5 font-medium text-muted-foreground">Invoice</th>
+                      <th className="text-right p-1.5 font-medium text-muted-foreground">Drive</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reconciliation!.mismatches.map((m, i) => (
+                      <tr key={i} className="border-t" data-testid={`row-mismatch-${customerId}-${i}`}>
+                        <td className="p-1.5 font-medium leading-tight">{m.name}</td>
+                        <td className="p-1.5 text-right">
+                          {m.invoice === null ? <span className="text-muted-foreground italic">—</span>
+                            : m.invoice === "POA" ? "POA"
+                            : <span className={m.kind === "diff" ? "text-destructive font-semibold" : ""}>£{m.invoice.toFixed(2)}</span>}
+                        </td>
+                        <td className="p-1.5 text-right">
+                          {m.drive === null ? <span className="text-muted-foreground italic">—</span>
+                            : <span className={m.kind === "diff" ? "text-destructive font-semibold" : ""}>£{m.drive.toFixed(2)}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {data && data.rows.length > 0 && (allMatch || hasMismatches) && !showAllRows && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs"
+              onClick={() => setShowAllRows(true)}
+              data-testid={`button-drive-show-all-${customerId}`}
+            >
+              <ChevronDown className="h-3 w-3 mr-1" />Show all {data.rows.length} Drive rows
+            </Button>
+          )}
+
+          {data && data.rows.length > 0 && (showAllRows || (!allMatch && !hasMismatches)) && (
             <>
               <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                 <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">
@@ -1857,6 +1981,7 @@ export default function InvoicingQueue() {
                       <DriveVerificationPanel
                         customerId={customerId}
                         customerName={customer.name}
+                        invoiceJobs={customerJobs.map(j => ({ name: j.jobName, total: getJobPrice(j) }))}
                         sidePanel
                         loadDelay={customerIndex * 800}
                       />
