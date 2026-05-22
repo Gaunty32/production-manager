@@ -44,7 +44,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail } from "./emailService";
+import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 
@@ -4265,7 +4265,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`Auto-scheduling skipped for line item ${lineItem.id}: ${result.error}`);
         }
       }
-      
+
+      // Notify Chris when a Print line item is added
+      if ((lineItem.jobType || "").toLowerCase() === "print") {
+        (async () => {
+          try {
+            const job = await storage.getJob(jobId);
+            if (!job) return;
+            const customers = await storage.getCustomers();
+            const customer = customers.find(c => c.id === job.customerId);
+            await sendNewPrintJobEmail({
+              customerName: customer?.name || "Unknown customer",
+              jobName: job.jobName,
+              jobId: job.id,
+            });
+          } catch (e) {
+            console.error("Failed to send new print job email:", e);
+          }
+        })();
+      }
+
       res.json(lineItem);
     } catch (error) {
       if (error instanceof z.ZodError) {

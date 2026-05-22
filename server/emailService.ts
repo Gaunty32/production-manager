@@ -227,6 +227,38 @@ export async function sendNewLogoSetupEmail(params: {
   }
 }
 
+export async function sendNewPrintJobEmail(params: {
+  customerName: string;
+  jobName: string;
+  jobId: string;
+}) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const safeCustomerName = sanitizeHtml(params.customerName);
+  const safeJobName = sanitizeHtml(params.jobName);
+  const viewUrl = `${getBaseUrl()}/jobs/${params.jobId}`;
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">New Print Job Added</h2>
+    <p style="margin:0 0 12px;">A job has been added with a <strong>Print</strong> line item.</p>
+    ${infoTable([
+      { label: 'Customer', value: safeCustomerName },
+      { label: 'Job Name', value: safeJobName },
+    ])}
+    ${ctaButton(viewUrl, 'View Job')}
+  `;
+
+  const { error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: ['chris@selectbranding.co.uk'],
+    subject: `New Print Job: ${safeJobName} (${safeCustomerName})`,
+    html: brandedEmail(body),
+  });
+
+  if (error) {
+    console.error('Failed to send new print job email:', error);
+  }
+}
+
 export async function sendPasswordResetEmail(email: string, resetToken: string) {
   const { client, fromEmail } = await getUncachableResendClient();
   const resetUrl = `${getBaseUrl()}/reset-password?token=${resetToken}`;
