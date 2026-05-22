@@ -153,8 +153,8 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
 
   const clearAll = () => setSelectedRows(new Set());
 
-  const hideSelected = async () => {
-    if (!data || selectedRows.size === 0) return;
+  const hideRowIndices = async (rowIndices: number[]) => {
+    if (!data || rowIndices.length === 0) return;
     setHiding(true);
     try {
       const res = await fetch("/api/google-drive/hide-rows", {
@@ -164,7 +164,7 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
         body: JSON.stringify({
           spreadsheetId: data.spreadsheetId,
           sheetNumericId: data.sheetNumericId,
-          rowIndices: Array.from(selectedRows),
+          rowIndices,
         }),
       });
       const body = await res.json();
@@ -178,6 +178,9 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
       setHiding(false);
     }
   };
+
+  const hideSelected = () => hideRowIndices(Array.from(selectedRows));
+  const hideAllVisible = () => data && hideRowIndices(data.rows.map(r => r.rowIndex));
 
   const formatTotal = (raw: string) => {
     const n = parseFloat(raw.replace(/[£,]/g, ""));
@@ -269,14 +272,29 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
           )}
 
           {allMatch && (
-            <div className="flex items-start gap-2 text-sm p-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900" data-testid={`drive-match-${customerId}`}>
-              <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium text-green-800 dark:text-green-300">Invoice matches Drive</p>
-                <p className="text-xs text-green-700/80 dark:text-green-400/80">
-                  {reconciliation!.driveCount} job{reconciliation!.driveCount === 1 ? "" : "s"} reconciled across {data!.rows.length} sheet row{data!.rows.length === 1 ? "" : "s"}.
-                </p>
+            <div className="space-y-2" data-testid={`drive-match-${customerId}`}>
+              <div className="flex items-start gap-2 text-sm p-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
+                <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-medium text-green-800 dark:text-green-300">Invoice matches Drive</p>
+                  <p className="text-xs text-green-700/80 dark:text-green-400/80">
+                    {reconciliation!.driveCount} job{reconciliation!.driveCount === 1 ? "" : "s"} reconciled across {data!.rows.length} sheet row{data!.rows.length === 1 ? "" : "s"}.
+                  </p>
+                </div>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={hiding || !data || data.rows.length === 0}
+                onClick={hideAllVisible}
+                data-testid={`button-drive-hide-all-matched-${customerId}`}
+              >
+                <EyeOff className="h-3 w-3 mr-1.5" />
+                {hiding
+                  ? "Hiding…"
+                  : `Hide ${data?.rows.length ?? 0} row${(data?.rows.length ?? 0) === 1 ? "" : "s"} in Drive`}
+              </Button>
             </div>
           )}
 
