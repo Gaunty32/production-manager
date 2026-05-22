@@ -1869,6 +1869,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reference
       );
 
+      // Allocate the deposit per job so we can apply it as a Xero Payment when
+      // the final invoice is raised. Each line item's inc-VAT charge is added
+      // to its parent job's depositAmountPaid.
+      if (chargeResult.success) {
+        const perJobDeposit = new Map<string, number>();
+        for (const detail of lineItemDetails) {
+          const lineItem = await storage.getJobLineItem(detail.id);
+          if (!lineItem) continue;
+          const grossForLine = detail.price * 1.2; // inc-VAT
+          perJobDeposit.set(lineItem.jobId, (perJobDeposit.get(lineItem.jobId) || 0) + grossForLine);
+        }
+        const now = new Date();
+        for (const [jobId, amount] of Array.from(perJobDeposit.entries())) {
+          try {
+            const existing = await storage.getJob(jobId);
+            const prev = existing?.depositAmountPaid || 0;
+            await storage.updateJob(jobId, {
+              depositAmountPaid: prev + amount,
+              depositLastPaidAt: now,
+            } as any);
+          } catch (e) {
+            console.error(`Failed to record deposit on job ${jobId}:`, e);
+          }
+        }
+      }
+
       // Send receipt email if charge succeeded
       if (chargeResult.success) {
         try {
@@ -5904,6 +5930,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Xero bank account code (where Stripe-collected deposits land in Xero).
+  // Required for the deposit-payment feature to post Payments against invoices.
+  app.get("/api/xero/bank-account-code", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const code = (await storage.getAppSetting("xero_bank_account_code")) || process.env.XERO_BANK_ACCOUNT_CODE || null;
+      res.json({ code });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to read setting" });
+    }
+  });
+  app.patch("/api/xero/bank-account-code", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (typeof code !== "string" || !code.trim()) {
+        return res.status(400).json({ error: "code is required" });
+      }
+      await storage.setAppSetting("xero_bank_account_code", code.trim());
+      res.json({ success: true, code: code.trim() });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to save setting" });
+    }
+  });
+
   app.post("/api/xero/invoice/:jobId", isStaffAuthenticated, async (req, res) => {
     try {
       const { jobId } = req.params;
@@ -6013,6 +6062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Calculate and save the invoice total and mark job as invoiced
       const invoiceTotal = lineItemsWithPricing.reduce((sum, item) => sum + (item.quantity || 0) * item.unitPrice, 0);
+      const invoiceTotalIncVat = invoiceTotal * 1.2;
       const invoiceId = invoice.Invoices?.[0]?.InvoiceID || "unknown";
       const invoiceNumber = invoice.Invoices?.[0]?.InvoiceNumber || null;
       await storage.updateJob(job.id, {
@@ -6027,18 +6077,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateLogoSetup(setup.id, { invoicedAt: new Date(), invoiceReference: invoiceNumber || invoiceId });
       }
 
-      // Auto-charge saved card for non-credit-account customers
+      // Apply any deposit already paid by the customer as a Xero Payment
+      // against this invoice, so the customer-facing invoice shows the
+      // correct Amount Due (gross balance).
+      let xeroPayment: { success: boolean; amountApplied?: number; error?: string } | null = null;
+      const depositPaid = job.depositAmountPaid || 0;
+      if (depositPaid > 0 && invoiceId !== "unknown") {
+        const amountToApply = Math.min(depositPaid, invoiceTotalIncVat);
+        const result = await xeroService.recordPayment(
+          invoiceId,
+          amountToApply,
+          new Date(),
+          `Deposit — ${invoiceNumber || invoiceId}`,
+        );
+        xeroPayment = { success: result.success, amountApplied: result.success ? amountToApply : undefined, error: result.error };
+        if (result.success) {
+          await storage.updateJob(job.id, { depositAmountPaid: Math.max(0, depositPaid - amountToApply) } as any);
+        }
+      }
+
+      // Auto-charge saved card for non-credit-account customers — for the
+      // outstanding balance only (gross invoice total minus deposit applied).
+      // If a deposit was paid but the Xero Payment post failed, we still
+      // charge only the gross balance (deposit is on file even if Xero is
+      // out of sync) and flag the response so staff can reconcile.
       let stripeCharge = null;
       if (!customer.creditAccount && customer.stripeCustomerId) {
-        stripeCharge = await chargeCustomerCard(
-          customer.stripeCustomerId,
-          invoiceTotal,
-          `Invoice ${invoiceNumber || invoiceId} — ${customer.name}`,
-          invoiceNumber || invoiceId,
-        );
+        const appliedDeposit = xeroPayment?.amountApplied || 0;
+        const hasDeposit = depositPaid > 0;
+        const balanceIncVat = Math.max(0, invoiceTotalIncVat - depositPaid);
+        const chargeAmount = hasDeposit ? balanceIncVat : invoiceTotal; // preserve legacy ex-VAT charge only when no deposit ever existed
+        if (chargeAmount > 0.01) {
+          stripeCharge = await chargeCustomerCard(
+            customer.stripeCustomerId,
+            chargeAmount,
+            `Invoice ${invoiceNumber || invoiceId}${hasDeposit ? " balance" : ""} — ${customer.name}`,
+            invoiceNumber || invoiceId,
+          );
+        } else {
+          stripeCharge = { success: true, amountCharged: 0, paymentIntentId: undefined };
+        }
+        if (hasDeposit && appliedDeposit === 0) {
+          (stripeCharge as any).reconciliationRequired = true;
+          (stripeCharge as any).reconciliationNote = `Deposit of £${depositPaid.toFixed(2)} was NOT applied in Xero (recordPayment failed: ${xeroPayment?.error || "unknown"}). Apply the payment in Xero manually so Amount Due is correct.`;
+        }
       }
       
-      res.json({ ...invoice, stripeCharge });
+      res.json({ ...invoice, stripeCharge, xeroPayment });
     } catch (error) {
       console.error("Xero invoice creation error:", error);
       res.status(500).json({ 
@@ -6438,16 +6523,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (sum, item) => sum + item.quantity * item.unitPrice,
         0,
       );
+      const consolidatedTotalIncVat = consolidatedTotal * 1.2;
 
-      // Auto-charge saved card for non-credit-account customers
+      // Apply any deposits already paid by the customer (summed across the
+      // selected jobs) as a single Xero Payment against the new invoice.
+      let xeroPayment: { success: boolean; amountApplied?: number; error?: string } | null = null;
+      const totalDeposit = selectedJobs.reduce((sum, j) => sum + (j.depositAmountPaid || 0), 0);
+      if (totalDeposit > 0 && invoiceId !== "unknown") {
+        const amountToApply = Math.min(totalDeposit, consolidatedTotalIncVat);
+        const result = await xeroService.recordPayment(
+          invoiceId,
+          amountToApply,
+          new Date(),
+          `Deposits — ${invoiceNumber || invoiceId}`,
+        );
+        xeroPayment = { success: result.success, amountApplied: result.success ? amountToApply : undefined, error: result.error };
+        if (result.success) {
+          // Proportionally clear deposits from each job
+          let remaining = amountToApply;
+          for (const j of selectedJobs) {
+            const jd = j.depositAmountPaid || 0;
+            if (jd <= 0 || remaining <= 0) continue;
+            const consume = Math.min(jd, remaining);
+            await storage.updateJob(j.id, { depositAmountPaid: jd - consume } as any);
+            remaining -= consume;
+          }
+        }
+      }
+
+      // Auto-charge saved card for non-credit-account customers — for the
+      // outstanding gross balance only when a deposit exists (regardless of
+      // whether the Xero Payment post succeeded). Failed Xero post is
+      // surfaced as reconciliationRequired so staff can fix it manually.
       let stripeCharge = null;
       if (!customer.creditAccount && customer.stripeCustomerId && consolidatedTotal > 0) {
-        stripeCharge = await chargeCustomerCard(
-          customer.stripeCustomerId,
-          consolidatedTotal,
-          `Invoice ${invoiceNumber || invoiceId} — ${customer.name}`,
-          invoiceNumber || invoiceId,
-        );
+        const appliedDeposit = xeroPayment?.amountApplied || 0;
+        const hasDeposit = totalDeposit > 0;
+        const balanceIncVat = Math.max(0, consolidatedTotalIncVat - totalDeposit);
+        const chargeAmount = hasDeposit ? balanceIncVat : consolidatedTotal; // preserve legacy ex-VAT charge only when no deposit ever existed
+        if (chargeAmount > 0.01) {
+          stripeCharge = await chargeCustomerCard(
+            customer.stripeCustomerId,
+            chargeAmount,
+            `Invoice ${invoiceNumber || invoiceId}${hasDeposit ? " balance" : ""} — ${customer.name}`,
+            invoiceNumber || invoiceId,
+          );
+        } else {
+          stripeCharge = { success: true, amountCharged: 0, paymentIntentId: undefined };
+        }
+        if (hasDeposit && appliedDeposit === 0) {
+          (stripeCharge as any).reconciliationRequired = true;
+          (stripeCharge as any).reconciliationNote = `Deposits totalling £${totalDeposit.toFixed(2)} were NOT applied in Xero (recordPayment failed: ${xeroPayment?.error || "unknown"}). Apply the payment in Xero manually so Amount Due is correct.`;
+        }
       }
 
       res.json({
@@ -6457,6 +6584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobsInvoiced: selectedJobs.length,
         logoSetupsInvoiced: customerLogoSetups.length,
         stripeCharge,
+        xeroPayment,
       });
     } catch (error) {
       console.error("Consolidated invoice creation error:", error);

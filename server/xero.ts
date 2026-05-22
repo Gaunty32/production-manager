@@ -565,6 +565,77 @@ export class XeroService {
     return response.json();
   }
 
+  /**
+   * Records a Payment against a Xero invoice. Used to apply customer deposits
+   * (e.g. a Stripe charge taken at order approval) so the invoice's "Amount
+   * Due" reflects the true outstanding balance.
+   *
+   * Requires the Xero account code of the bank account that received the
+   * payment — read from the `xero_bank_account_code` app setting, falling
+   * back to `process.env.XERO_BANK_ACCOUNT_CODE`.
+   */
+  async recordPayment(
+    invoiceId: string,
+    amount: number,
+    paymentDate: Date,
+    reference: string,
+  ): Promise<{ success: boolean; paymentId?: string; error?: string }> {
+    if (!this.isConfigured()) {
+      return { success: false, error: "Xero is not configured" };
+    }
+    if (amount <= 0) {
+      return { success: false, error: "Payment amount must be positive" };
+    }
+
+    let bankAccountCode: string | null = null;
+    try {
+      bankAccountCode = await storage.getAppSetting("xero_bank_account_code");
+    } catch {}
+    if (!bankAccountCode) bankAccountCode = process.env.XERO_BANK_ACCOUNT_CODE || null;
+    if (!bankAccountCode) {
+      return { success: false, error: "Xero bank account code is not configured (set xero_bank_account_code app setting or XERO_BANK_ACCOUNT_CODE env var)" };
+    }
+
+    try {
+      const token = await this.getAccessToken();
+      const tenantId = this.getTenantId();
+
+      const body = {
+        Payments: [{
+          Invoice: { InvoiceID: invoiceId },
+          Account: { Code: bankAccountCode },
+          Date: paymentDate.toISOString().split("T")[0],
+          Amount: Number(amount.toFixed(2)),
+          Reference: reference,
+        }],
+      };
+
+      const response = await fetch(`${this.apiUrl}/Payments`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "xero-tenant-id": tenantId,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        console.error("Xero recordPayment failed:", response.status, errText);
+        return { success: false, error: `Xero returned ${response.status}: ${errText.slice(0, 200)}` };
+      }
+
+      const data = await response.json();
+      const paymentId = data?.Payments?.[0]?.PaymentID;
+      return { success: true, paymentId };
+    } catch (err: any) {
+      console.error("Xero recordPayment error:", err);
+      return { success: false, error: err?.message || "Failed to record payment in Xero" };
+    }
+  }
+
   async createConsolidatedInvoice(
     jobs: Job[], 
     customer: Customer, 

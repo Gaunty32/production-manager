@@ -100,6 +100,8 @@ export const jobs = pgTable("jobs", {
   paymentReceived: boolean("payment_received").notNull().default(false),
   paymentReceivedAt: timestamp("payment_received_at"),
   paymentReceivedById: varchar("payment_received_by_id").references(() => users.id),
+  depositAmountPaid: real("deposit_amount_paid").notNull().default(0),
+  depositLastPaidAt: timestamp("deposit_last_paid_at"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {

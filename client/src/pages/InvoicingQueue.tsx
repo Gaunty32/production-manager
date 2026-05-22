@@ -2161,6 +2161,44 @@ export default function InvoicingQueue() {
                                       {isDemoMode ? "£**.00" : (hasPOA ? "POA" : `£${previewTotal.toFixed(2)}`)}
                                     </td>
                                   </tr>
+                                  {(() => {
+                                    const depositTotal = customerJobs
+                                      .filter(j => selectedJobs.has(j.id))
+                                      .reduce((sum, j) => sum + ((j as any).depositAmountPaid || 0), 0);
+                                    if (depositTotal <= 0 || hasPOA) return null;
+                                    const grossTotal = previewTotal * 1.2;
+                                    const balanceDue = Math.max(0, grossTotal - depositTotal);
+                                    return (
+                                      <>
+                                        <tr className="bg-muted/30">
+                                          <td colSpan={4} className="p-2 text-right text-muted-foreground">VAT (20%)</td>
+                                          <td className="p-2 text-right text-muted-foreground" data-testid={`text-invoice-vat-${customerId}`}>
+                                            {isDemoMode ? "£**.00" : `£${(previewTotal * 0.2).toFixed(2)}`}
+                                          </td>
+                                        </tr>
+                                        <tr className="bg-muted/30">
+                                          <td colSpan={4} className="p-2 text-right text-muted-foreground">Total (inc. VAT)</td>
+                                          <td className="p-2 text-right text-muted-foreground" data-testid={`text-invoice-gross-${customerId}`}>
+                                            {isDemoMode ? "£**.00" : `£${grossTotal.toFixed(2)}`}
+                                          </td>
+                                        </tr>
+                                        <tr className="bg-muted/30">
+                                          <td colSpan={4} className="p-2 text-right text-green-700 dark:text-green-400">
+                                            Less: Deposit already paid
+                                          </td>
+                                          <td className="p-2 text-right text-green-700 dark:text-green-400" data-testid={`text-invoice-deposit-${customerId}`}>
+                                            {isDemoMode ? "£**.00" : `−£${depositTotal.toFixed(2)}`}
+                                          </td>
+                                        </tr>
+                                        <tr className="border-t bg-primary/10">
+                                          <td colSpan={4} className="p-2 text-right font-bold">Balance Due (auto-charged)</td>
+                                          <td className="p-2 text-right font-bold text-primary" data-testid={`text-invoice-balance-${customerId}`}>
+                                            {isDemoMode ? "£**.00" : `£${balanceDue.toFixed(2)}`}
+                                          </td>
+                                        </tr>
+                                      </>
+                                    );
+                                  })()}
                                 </tfoot>
                               </table>
                             </div>
