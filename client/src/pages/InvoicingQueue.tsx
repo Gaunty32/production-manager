@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff, GripVertical, CheckCircle2, Circle, Printer } from "lucide-react";
+import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff, GripVertical, CheckCircle2, Circle, Printer, X } from "lucide-react";
 import { CustomerPickingSlip } from "@/components/CustomerPickingSlip";
 import type { JobLineItem } from "@shared/schema";
 import { format } from "date-fns";
@@ -810,7 +810,7 @@ export default function InvoicingQueue() {
     if (!customer) return [];
     
     const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
-    const previewLines: Array<{ description: string; quantity: number; unitPrice: number | string; itemCode: string }> = [];
+    const previewLines: Array<{ description: string; quantity: number; unitPrice: number | string; itemCode: string; lineItemId?: string }> = [];
     
     const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
     
@@ -908,7 +908,7 @@ export default function InvoicingQueue() {
           }
         }
         
-        previewLines.push({ description, quantity: lineItem.quantity, unitPrice, itemCode });
+        previewLines.push({ description, quantity: lineItem.quantity, unitPrice, itemCode, lineItemId: lineItem.id });
       });
       
       if (shipmentLastIndex.get(shipmentKey) === i) {
@@ -1977,21 +1977,72 @@ export default function InvoicingQueue() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {previewLines.map((line, idx) => (
-                                    <tr key={idx} className="border-t">
-                                      <td className="p-2">
-                                        <Badge variant="outline" className="text-xs">{line.itemCode}</Badge>
-                                      </td>
-                                      <td className="p-2 text-foreground">{line.description}</td>
-                                      <td className="p-2 text-right text-muted-foreground">{line.quantity}</td>
-                                      <td className="p-2 text-right text-muted-foreground">
-                                        {isDemoMode ? "£**.00" : (typeof line.unitPrice === 'number' ? `£${line.unitPrice.toFixed(2)}` : line.unitPrice)}
-                                      </td>
-                                      <td className="p-2 text-right font-medium">
-                                        {isDemoMode ? "£**.00" : (typeof line.unitPrice === 'number' ? `£${(line.unitPrice * line.quantity).toFixed(2)}` : line.unitPrice)}
-                                      </td>
-                                    </tr>
-                                  ))}
+                                  {previewLines.map((line, idx) => {
+                                    const editable = !isDemoMode && !!line.lineItemId;
+                                    const isOverridden = editable && !!manualPrices[line.lineItemId!];
+                                    return (
+                                      <tr key={idx} className="border-t">
+                                        <td className="p-2">
+                                          <Badge variant="outline" className="text-xs">{line.itemCode}</Badge>
+                                        </td>
+                                        <td className="p-2 text-foreground">{line.description}</td>
+                                        <td className="p-2 text-right text-muted-foreground">{line.quantity}</td>
+                                        <td className="p-2 text-right">
+                                          {isDemoMode ? (
+                                            <span className="text-muted-foreground">£**.00</span>
+                                          ) : editable ? (
+                                            <div className="flex items-center justify-end gap-1">
+                                              <span className="text-muted-foreground">£</span>
+                                              <Input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={
+                                                  manualPrices[line.lineItemId!] ??
+                                                  (typeof line.unitPrice === 'number' ? line.unitPrice.toFixed(2) : '')
+                                                }
+                                                onChange={(e) => {
+                                                  const v = e.target.value;
+                                                  setManualPrices(prev => {
+                                                    const next = { ...prev };
+                                                    if (v === '') delete next[line.lineItemId!];
+                                                    else next[line.lineItemId!] = v;
+                                                    return next;
+                                                  });
+                                                }}
+                                                className={`h-7 w-20 text-right text-sm ${isOverridden ? 'border-primary' : ''}`}
+                                                data-testid={`input-invoice-price-${line.lineItemId}`}
+                                                placeholder={typeof line.unitPrice === 'number' ? line.unitPrice.toFixed(2) : 'POA'}
+                                              />
+                                              {isOverridden && (
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-6 w-6"
+                                                  onClick={() => setManualPrices(prev => {
+                                                    const next = { ...prev };
+                                                    delete next[line.lineItemId!];
+                                                    return next;
+                                                  })}
+                                                  data-testid={`button-reset-invoice-price-${line.lineItemId}`}
+                                                  title="Reset to calculated price"
+                                                >
+                                                  <X className="h-3 w-3" />
+                                                </Button>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="text-muted-foreground">
+                                              {typeof line.unitPrice === 'number' ? `£${line.unitPrice.toFixed(2)}` : line.unitPrice}
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="p-2 text-right font-medium">
+                                          {isDemoMode ? "£**.00" : (typeof line.unitPrice === 'number' ? `£${(line.unitPrice * line.quantity).toFixed(2)}` : line.unitPrice)}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
                                 </tbody>
                                 <tfoot>
                                   <tr className="border-t bg-muted/30">
