@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DemoText, DemoAmount } from "@/components/DemoText";
 import { useDemoMode } from "@/lib/demoMode";
-import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
+import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -96,7 +96,7 @@ interface InvoiceJobForCheck {
   total: number | "POA" | "TBA" | null;
 }
 
-function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], sidePanel = false, loadDelay = 0 }: { customerId: number | string; customerName: string; invoiceJobs?: InvoiceJobForCheck[]; sidePanel?: boolean; loadDelay?: number }) {
+function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], sidePanel = false, loadDelay = 0, onApiReady }: { customerId: number | string; customerName: string; invoiceJobs?: InvoiceJobForCheck[]; sidePanel?: boolean; loadDelay?: number; onApiReady?: (api: { hideMatchedRows: () => Promise<number> }) => void }) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(sidePanel);
   const [ready, setReady] = useState(loadDelay === 0);
@@ -181,6 +181,9 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
 
   const hideSelected = () => hideRowIndices(Array.from(selectedRows));
   const hideAllVisible = () => data && hideRowIndices(data.rows.map(r => r.rowIndex));
+
+  // Stable ref to latest hide function so parent can call it imperatively
+  const hideMatchedRowsRef = useRef<() => Promise<number>>(async () => 0);
 
   const formatTotal = (raw: string) => {
     const n = parseFloat(raw.replace(/[£,]/g, ""));
@@ -282,6 +285,7 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
 
     type Mismatch = { name: string; invoice: number | "POA" | null; drive: number | null; kind: "diff" | "missing_drive" | "missing_invoice" };
     const mismatches: Mismatch[] = [];
+    const matchedRowIndices: number[] = [];
     let invoiceCount = 0;
     let driveCount = 0;
     for (const b of buckets) {
@@ -292,17 +296,36 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
       } else if (b.hasDrive && !b.hasInvoice) {
         mismatches.push({ name: b.display, invoice: null, drive: b.driveTotal, kind: "missing_invoice" });
       } else if (b.hasInvoice && b.hasDrive) {
-        if (b.hasPOA) continue;
+        if (b.hasPOA) {
+          matchedRowIndices.push(...b.rowIndices);
+          continue;
+        }
         if (Math.abs(b.invoiceTotal - b.driveTotal) > 0.01) {
           mismatches.push({ name: b.display, invoice: b.invoiceTotal, drive: b.driveTotal, kind: "diff" });
+        } else {
+          matchedRowIndices.push(...b.rowIndices);
         }
       }
     }
-    return { mismatches, invoiceCount, driveCount };
+    return { mismatches, invoiceCount, driveCount, matchedRowIndices };
   })();
 
   const allMatch = !!reconciliation && reconciliation.mismatches.length === 0 && (reconciliation.invoiceCount > 0 || reconciliation.driveCount > 0);
   const hasMismatches = !!reconciliation && reconciliation.mismatches.length > 0;
+
+  // Keep hideMatchedRowsRef pointing at a function that always uses the latest data
+  hideMatchedRowsRef.current = async () => {
+    const idx = reconciliation?.matchedRowIndices ?? [];
+    if (idx.length === 0) return 0;
+    await hideRowIndices(idx);
+    return idx.length;
+  };
+
+  // Register imperative API with parent once
+  useEffect(() => {
+    if (!onApiReady) return;
+    onApiReady({ hideMatchedRows: () => hideMatchedRowsRef.current() });
+  }, [onApiReady]);
 
   if (sidePanel) {
     return (
@@ -659,6 +682,7 @@ export default function InvoicingQueue() {
   const [mergePackageCount, setMergePackageCount] = useState<number | undefined>(undefined);
   const [mergePackageType, setMergePackageType] = useState<"boxes" | "bags">("boxes");
   const [pickingSlipCustomerId, setPickingSlipCustomerId] = useState<string | null>(null);
+  const drivePanelApiRef = useRef<Map<string, { hideMatchedRows: () => Promise<number> }>>(new Map());
 
   const updateLineItemMutation = useMutation({
     mutationFn: async (data: { lineItemId: string; stitchCount: number }) => {
@@ -1343,6 +1367,21 @@ export default function InvoicingQueue() {
         title: "Invoice Created",
         description: `${invoiceDescription} Reference: ${response.invoiceNumber || response.invoiceId}`,
       });
+
+      // Auto-hide matched Drive rows for this customer (snapshot of current matches
+      // must happen BEFORE we clear selectedJobs, otherwise reconciliation has no
+      // invoice side to match against).
+      try {
+        const api = drivePanelApiRef.current.get(String(customerId));
+        if (api) {
+          const hidden = await api.hideMatchedRows();
+          if (hidden > 0) {
+            toast({ title: `${hidden} Drive row${hidden === 1 ? "" : "s"} hidden` });
+          }
+        }
+      } catch (e) {
+        console.error("Auto-hide of Drive rows failed:", e);
+      }
 
       // Show Stripe charge result if a card was charged
       if (response.stripeCharge) {
@@ -2137,6 +2176,7 @@ export default function InvoicingQueue() {
                         invoiceJobs={customerJobs.map(j => ({ name: j.jobName, total: getJobPrice(j) }))}
                         sidePanel
                         loadDelay={customerIndex * 800}
+                        onApiReady={(api) => { drivePanelApiRef.current.set(String(customerId), api); }}
                       />
                     </div>
                     </div>
