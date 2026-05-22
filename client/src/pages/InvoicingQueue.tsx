@@ -188,46 +188,117 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
     return `£${n.toFixed(2)}`;
   };
 
-  // Reconcile invoice jobs against Drive rows (by normalised job name)
-  const normName = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ");
+  // Reconcile invoice jobs against Drive rows. Fuzzy match: two names are
+  // considered the same job if, after stripping common business/qualifier
+  // words, one's word-set is a non-empty subset of the other's (e.g. "shelley"
+  // matches "Shelley College", "Acme" matches "Acme Ltd").
+  const STOP_WORDS = new Set([
+    "ltd","limited","inc","co","company","corp","corporation","plc","llc","gmbh",
+    "group","holdings","services","solutions","trading","international",
+    "college","school","academy","university","institute","centre","center",
+    "uniform","uniforms","clothing","branded","branding","apparel",
+    "the","and","of","&",
+  ]);
+  const tokenise = (s: string): string[] =>
+    s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(t => t && !STOP_WORDS.has(t));
   const reconciliation = (() => {
     if (!data) return null;
-    const invoiceMap = new Map<string, { total: number; hasPOA: boolean; display: string }>();
+    type Bucket = {
+      key: string;
+      display: string;
+      tokens: Set<string>;
+      invoiceTotal: number;
+      hasInvoice: boolean;
+      hasPOA: boolean;
+      driveTotal: number;
+      hasDrive: boolean;
+      rowIndices: number[];
+    };
+    const buckets: Bucket[] = [];
+    const findBucket = (toks: Set<string>): Bucket | null => {
+      if (toks.size === 0) return null;
+      for (const b of buckets) {
+        if (b.tokens.size === 0) continue;
+        const [small, large] = b.tokens.size <= toks.size ? [b.tokens, toks] : [toks, b.tokens];
+        let isSubset = true;
+        for (const t of Array.from(small)) {
+          if (!large.has(t)) { isSubset = false; break; }
+        }
+        if (isSubset) return b;
+      }
+      return null;
+    };
+
     for (const j of invoiceJobs) {
-      const k = normName(j.name);
-      const prev = invoiceMap.get(k) ?? { total: 0, hasPOA: false, display: j.name };
-      if (j.total === "POA") prev.hasPOA = true;
-      else if (typeof j.total === "number") prev.total += j.total;
-      invoiceMap.set(k, prev);
+      const toks = new Set(tokenise(j.name));
+      let b = findBucket(toks);
+      if (!b) {
+        b = {
+          key: j.name.toLowerCase().trim(),
+          display: j.name,
+          tokens: toks,
+          invoiceTotal: 0,
+          hasInvoice: false,
+          hasPOA: false,
+          driveTotal: 0,
+          hasDrive: false,
+          rowIndices: [],
+        };
+        buckets.push(b);
+      } else {
+        // prefer longer (more specific) display name
+        if (j.name.length > b.display.length) b.display = j.name;
+        toks.forEach(t => b!.tokens.add(t));
+      }
+      b.hasInvoice = true;
+      if (j.total === "POA") b.hasPOA = true;
+      else if (typeof j.total === "number") b.invoiceTotal += j.total;
     }
-    const driveMap = new Map<string, { total: number; display: string; rowIndices: number[] }>();
     for (const r of data.rows) {
-      const k = normName(r.name);
+      const toks = new Set(tokenise(r.name));
+      let b = findBucket(toks);
+      if (!b) {
+        b = {
+          key: r.name.toLowerCase().trim(),
+          display: r.name,
+          tokens: toks,
+          invoiceTotal: 0,
+          hasInvoice: false,
+          hasPOA: false,
+          driveTotal: 0,
+          hasDrive: false,
+          rowIndices: [],
+        };
+        buckets.push(b);
+      } else {
+        if (r.name.length > b.display.length) b.display = r.name;
+        toks.forEach(t => b!.tokens.add(t));
+      }
+      b.hasDrive = true;
       const n = parseFloat((r.total || "").replace(/[£,]/g, "")) || 0;
-      const prev = driveMap.get(k) ?? { total: 0, display: r.name, rowIndices: [] };
-      prev.total += n;
-      prev.rowIndices.push(r.rowIndex);
-      driveMap.set(k, prev);
+      b.driveTotal += n;
+      b.rowIndices.push(r.rowIndex);
     }
-    const keys = new Set([...Array.from(invoiceMap.keys()), ...Array.from(driveMap.keys())]);
+
     type Mismatch = { name: string; invoice: number | "POA" | null; drive: number | null; kind: "diff" | "missing_drive" | "missing_invoice" };
     const mismatches: Mismatch[] = [];
-    for (const k of Array.from(keys)) {
-      const inv = invoiceMap.get(k);
-      const drv = driveMap.get(k);
-      const display = drv?.display ?? inv?.display ?? k;
-      if (inv && !drv) {
-        mismatches.push({ name: display, invoice: inv.hasPOA ? "POA" : inv.total, drive: null, kind: "missing_drive" });
-      } else if (drv && !inv) {
-        mismatches.push({ name: display, invoice: null, drive: drv.total, kind: "missing_invoice" });
-      } else if (inv && drv) {
-        if (inv.hasPOA) continue; // can't compare POA numerically
-        if (Math.abs(inv.total - drv.total) > 0.01) {
-          mismatches.push({ name: display, invoice: inv.total, drive: drv.total, kind: "diff" });
+    let invoiceCount = 0;
+    let driveCount = 0;
+    for (const b of buckets) {
+      if (b.hasInvoice) invoiceCount++;
+      if (b.hasDrive) driveCount++;
+      if (b.hasInvoice && !b.hasDrive) {
+        mismatches.push({ name: b.display, invoice: b.hasPOA ? "POA" : b.invoiceTotal, drive: null, kind: "missing_drive" });
+      } else if (b.hasDrive && !b.hasInvoice) {
+        mismatches.push({ name: b.display, invoice: null, drive: b.driveTotal, kind: "missing_invoice" });
+      } else if (b.hasInvoice && b.hasDrive) {
+        if (b.hasPOA) continue;
+        if (Math.abs(b.invoiceTotal - b.driveTotal) > 0.01) {
+          mismatches.push({ name: b.display, invoice: b.invoiceTotal, drive: b.driveTotal, kind: "diff" });
         }
       }
     }
-    return { mismatches, invoiceCount: invoiceMap.size, driveCount: driveMap.size };
+    return { mismatches, invoiceCount, driveCount };
   })();
 
   const allMatch = !!reconciliation && reconciliation.mismatches.length === 0 && (reconciliation.invoiceCount > 0 || reconciliation.driveCount > 0);
