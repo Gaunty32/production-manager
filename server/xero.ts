@@ -587,23 +587,28 @@ export class XeroService {
       return { success: false, error: "Payment amount must be positive" };
     }
 
-    let bankAccountCode: string | null = null;
+    let bankAccountIdentifier: string | null = null;
     try {
-      bankAccountCode = await storage.getAppSetting("xero_bank_account_code");
+      bankAccountIdentifier = await storage.getAppSetting("xero_bank_account_code");
     } catch {}
-    if (!bankAccountCode) bankAccountCode = process.env.XERO_BANK_ACCOUNT_CODE || null;
-    if (!bankAccountCode) {
-      return { success: false, error: "Xero bank account code is not configured (set xero_bank_account_code app setting or XERO_BANK_ACCOUNT_CODE env var)" };
+    if (!bankAccountIdentifier) bankAccountIdentifier = process.env.XERO_BANK_ACCOUNT_CODE || null;
+    if (!bankAccountIdentifier) {
+      return { success: false, error: "Xero bank account is not configured (set xero_bank_account_code app setting — accepts either an account Code or an AccountID UUID)" };
     }
 
     try {
       const token = await this.getAccessToken();
       const tenantId = this.getTenantId();
 
+      // Xero accepts either a short Code or an AccountID UUID on the Account
+      // object. We treat any value matching a UUID shape as an AccountID.
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bankAccountIdentifier.trim());
+      const accountRef = isUuid ? { AccountID: bankAccountIdentifier.trim() } : { Code: bankAccountIdentifier.trim() };
+
       const body = {
         Payments: [{
           Invoice: { InvoiceID: invoiceId },
-          Account: { Code: bankAccountCode },
+          Account: accountRef,
           Date: paymentDate.toISOString().split("T")[0],
           Amount: Number(amount.toFixed(2)),
           Reference: reference,
