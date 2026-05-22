@@ -6,7 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff, GripVertical, CheckCircle2, Circle } from "lucide-react";
+import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff, GripVertical, CheckCircle2, Circle, Printer } from "lucide-react";
+import { CustomerPickingSlip } from "@/components/CustomerPickingSlip";
+import type { JobLineItem } from "@shared/schema";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -567,6 +569,7 @@ export default function InvoicingQueue() {
   const [mergingShipping, setMergingShipping] = useState<MergeShippingState | null>(null);
   const [mergePackageCount, setMergePackageCount] = useState<number | undefined>(undefined);
   const [mergePackageType, setMergePackageType] = useState<"boxes" | "bags">("boxes");
+  const [pickingSlipCustomerId, setPickingSlipCustomerId] = useState<string | null>(null);
 
   const updateLineItemMutation = useMutation({
     mutationFn: async (data: { lineItemId: string; stitchCount: number }) => {
@@ -1468,6 +1471,16 @@ export default function InvoicingQueue() {
                             </p>
                           </div>
                         )}
+                        {customerJobs.length > 0 && (
+                          <Button
+                            variant="outline"
+                            onClick={() => setPickingSlipCustomerId(customerId)}
+                            data-testid={`button-print-picking-slip-${customerId}`}
+                          >
+                            <Printer className="h-4 w-4 mr-2" />
+                            Print Picking Slip
+                          </Button>
+                        )}
                         <Button
                           onClick={() => handleCreateInvoice(customerId)}
                           disabled={(selectedCount === 0 && !canInvoiceLogoSetupsOnly) || creatingInvoice === customerId}
@@ -2315,6 +2328,31 @@ export default function InvoicingQueue() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {pickingSlipCustomerId && (() => {
+        const slipCustomer = customers.find(c => c.id === pickingSlipCustomerId);
+        const allCustomerJobs = (jobsByCustomer[pickingSlipCustomerId] ?? []) as Job[];
+        const anySelected = allCustomerJobs.some(j => selectedJobs.has(j.id));
+        const slipJobs = anySelected
+          ? allCustomerJobs.filter(j => selectedJobs.has(j.id))
+          : allCustomerJobs;
+        const ordered = (jobOrders[pickingSlipCustomerId] || slipJobs.map(j => j.id))
+          .map(id => slipJobs.find(j => j.id === id))
+          .filter(Boolean) as Job[];
+        const lineItemsByJob: Record<string, JobLineItem[]> = {};
+        ordered.forEach(j => {
+          lineItemsByJob[j.id] = getJobLineItems(j.id) as unknown as JobLineItem[];
+        });
+        if (!slipCustomer || ordered.length === 0) return null;
+        return (
+          <CustomerPickingSlip
+            customer={slipCustomer}
+            jobs={ordered}
+            lineItemsByJob={lineItemsByJob}
+            onClose={() => setPickingSlipCustomerId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
