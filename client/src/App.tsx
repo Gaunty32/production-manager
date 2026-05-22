@@ -46,6 +46,7 @@ import DemoPortal from "@/pages/DemoPortal";
 import DemoAccess from "@/pages/DemoAccess";
 import MachineManagement from "@/pages/MachineManagement";
 import CustomerPaymentMethods from "@/pages/CustomerPaymentMethods";
+import CustomerDeliveryAddress from "@/pages/CustomerDeliveryAddress";
 import ThreadColourChart from "@/pages/ThreadColourChart";
 import PortalPreview from "@/pages/PortalPreview";
 import FeatureRequests from "@/pages/FeatureRequests";
@@ -194,6 +195,7 @@ function CustomerPortalApp() {
       <Route path="/customer/invoices" component={CustomerInvoices} />
       <Route path="/customer/samples" component={CustomerSamples} />
       <Route path="/customer/payment-methods" component={CustomerPaymentMethods} />
+      <Route path="/customer/delivery-address" component={CustomerDeliveryAddress} />
       <Route path="/customer/thread-library">{() => <ThreadColourChart customerView />}</Route>
       <Route path="/customer/dashboard" component={CustomerDashboard} />
       <Route path="/customer" component={CustomerDashboard} />

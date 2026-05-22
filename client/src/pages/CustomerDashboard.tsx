@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart, Phone, Mail, MessageCircle, Headphones, Lightbulb } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart, Phone, Mail, MessageCircle, Headphones, Lightbulb, MapPin } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import sbsLogo from "@assets/logo_transparent.png";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -652,6 +652,10 @@ export default function CustomerDashboard() {
                       <CreditCard className="h-4 w-4" />
                       Payment Cards
                     </Button>
+                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/delivery-address")} data-testid="menu-delivery-address">
+                      <MapPin className="h-4 w-4" />
+                      Delivery Address
+                    </Button>
                     <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setFeatureDialogOpen(true)} data-testid="menu-suggest-feature">
                       <Lightbulb className="h-4 w-4" />
                       Suggest a Feature
@@ -861,6 +865,14 @@ export default function CustomerDashboard() {
             >
               <CreditCard className="h-4 w-4 mr-2" />
               Payment Cards
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/customer/delivery-address")}
+              data-testid="button-view-delivery-address"
+            >
+              <MapPin className="h-4 w-4 mr-2" />
+              Delivery Address
             </Button>
             <Button
               variant="outline"
