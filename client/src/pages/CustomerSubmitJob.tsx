@@ -133,7 +133,7 @@ export default function CustomerSubmitJob() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const defaultDispatchDate = format(addWorkingDays(new Date(), 7), "yyyy-MM-dd");
+  const [pendingDispatchWorkingDays, setPendingDispatchWorkingDays] = useState<number>(0);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -143,27 +143,32 @@ export default function CustomerSubmitJob() {
       quantity: undefined,
       notes: "",
       deliveryAddress: "",
-      requiredDispatchDate: defaultDispatchDate,
+      requiredDispatchDate: "",
       logoType: "repeat_logo" as const,
     },
   });
 
   const handleDispatchDateChange = (dateStr: string, onChange: (value: string) => void) => {
+    if (!dateStr) {
+      onChange("");
+      return;
+    }
     const selectedDate = new Date(dateStr);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const workingDaysFromNow = getWorkingDaysBetween(today, selectedDate);
-    if (workingDaysFromNow === 2) {
-      setPendingDispatchDate(dateStr);
-      setShowExpressDialog(true);
-      return;
-    }
-    if (workingDaysFromNow < 2) {
+    if (workingDaysFromNow < 0) {
       toast({
         title: "Invalid date",
-        description: "Minimum dispatch time is 2 working days (with express surcharge)",
+        description: "Dispatch date cannot be in the past.",
         variant: "destructive",
       });
+      return;
+    }
+    if (workingDaysFromNow < 3) {
+      setPendingDispatchDate(dateStr);
+      setPendingDispatchWorkingDays(workingDaysFromNow);
+      setShowExpressDialog(true);
       return;
     }
     onChange(dateStr);
@@ -674,7 +679,7 @@ export default function CustomerSubmitJob() {
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               <p>
-                You have requested our express delivery service with a dispatch date of 2 working days.
+                You have requested our express delivery service with a dispatch date of {pendingDispatchWorkingDays} working day{pendingDispatchWorkingDays === 1 ? "" : "s"}.
               </p>
               <p className="font-semibold text-foreground">
                 This will incur a 100% surcharge on your order total.
