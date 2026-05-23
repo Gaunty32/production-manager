@@ -929,18 +929,35 @@ export default function Dashboard() {
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            className="bg-orange-600 text-white"
-                            disabled={isPending}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              markPaymentReceivedMutation.mutate(job.id);
-                            }}
-                            data-testid={`button-mark-paid-${job.id}`}
-                          >
-                            {isPending ? "Confirming…" : "Mark as Paid"}
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              className="bg-orange-600 text-white"
+                              disabled={isPending}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markPaymentReceivedMutation.mutate(job.id);
+                              }}
+                              data-testid={`button-mark-paid-${job.id}`}
+                            >
+                              {isPending ? "Confirming…" : "Mark as Paid"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-destructive"
+                              disabled={deleteJobMutation.isPending && (deleteJobMutation.variables as string) === job.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Delete this job: ${job.jobName}? This cannot be undone.`)) {
+                                  deleteJobMutation.mutate(job.id);
+                                }
+                              }}
+                              data-testid={`button-delete-awaiting-${job.id}`}
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
