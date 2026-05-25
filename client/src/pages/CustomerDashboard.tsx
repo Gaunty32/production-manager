@@ -1008,6 +1008,24 @@ export default function CustomerDashboard() {
           );
         })()}
 
+        {/* Not-yet-booked notice — jobs without a confirmed dispatch date or line items */}
+        {(() => {
+          const pendingJobs = (statusFilter === "completed" ? [] : filteredJobs).filter(
+            j => !j.completed && (!j.requiredDispatchDate || !(j.lineItems && j.lineItems.length > 0))
+          );
+          if (pendingJobs.length === 0) return null;
+          return (
+            <div className="mb-4 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3" data-testid="banner-not-booked">
+              <p className="font-semibold text-amber-900 dark:text-amber-100 text-sm">
+                {pendingJobs.length} order{pendingJobs.length !== 1 ? 's' : ''} not yet booked into production
+              </p>
+              <p className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+                {pendingJobs.map(j => j.jobName).join(', ')} {pendingJobs.length !== 1 ? 'are' : 'is'} currently being reviewed by our team and will be scheduled with a confirmed production date shortly. We'll be in touch if we need anything from you.
+              </p>
+            </div>
+          );
+        })()}
+
         {filteredJobs.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
@@ -1043,11 +1061,15 @@ export default function CustomerDashboard() {
                       <div className="pb-3 border-b">
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Production Date</p>
-                          <p className="text-sm font-medium">
-                            {job.requiredDispatchDate
-                              ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
-                              : "Not set"}
-                          </p>
+                          {job.requiredDispatchDate && lineItems.length > 0 ? (
+                            <p className="text-sm font-medium">
+                              {format(new Date(job.requiredDispatchDate), "MMM d, yyyy")}
+                            </p>
+                          ) : (
+                            <p className="text-sm font-medium text-amber-600" data-testid={`text-not-booked-mobile-${job.id}`}>
+                              Not yet booked in
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -1246,9 +1268,9 @@ export default function CustomerDashboard() {
                           <TableCell className="text-right">{job.quantity}</TableCell>
                           <TableCell className="text-right"><EstimatedCostCell price={null} /></TableCell>
                           <TableCell data-testid={`text-dispatch-${job.id}`}>
-                            {job.requiredDispatchDate
-                              ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
-                              : "Not set"}
+                            <span className="text-amber-600 font-medium" data-testid={`text-not-booked-${job.id}`}>
+                              Not yet booked in
+                            </span>
                           </TableCell>
                           <TableCell>{getStatusBadge(job)}</TableCell>
                           <TableCell>
@@ -1322,7 +1344,7 @@ export default function CustomerDashboard() {
                         <TableCell data-testid={`text-dispatch-${job.id}-${index}`}>
                           {job.requiredDispatchDate
                             ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
-                            : <span className="text-muted-foreground">Not set</span>
+                            : <span className="text-amber-600 font-medium" data-testid={`text-not-booked-${job.id}-${index}`}>Not yet booked in</span>
                           }
                         </TableCell>
                         <TableCell>

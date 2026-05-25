@@ -558,7 +558,7 @@ export default function Dashboard() {
   })();
 
   // Apply active filter to production jobs
-  const displayedJobs = (() => {
+  const allDisplayedJobs = (() => {
     if (!activeFilter) return allProductionJobs;
     
     switch (activeFilter) {
@@ -576,6 +576,16 @@ export default function Dashboard() {
         return allProductionJobs;
     }
   })();
+
+  // Separate jobs that have no line items yet — these are NOT in the schedule
+  // and have no due date. Show them in a dedicated panel so it's obvious they
+  // still need attention before they can be booked in.
+  const unscheduledJobs = allDisplayedJobs.filter(
+    j => !j.lineItems || j.lineItems.length === 0
+  );
+  const displayedJobs = allDisplayedJobs.filter(
+    j => j.lineItems && j.lineItems.length > 0
+  );
 
   const pageTitle = machineId 
     ? `${getMachineName(machineId)} Orders` 
@@ -964,6 +974,78 @@ export default function Dashboard() {
                   })}
                 </TableBody>
               </Table>
+            </div>
+          </div>
+        )}
+
+        {/* Awaiting line items — jobs not yet booked into the schedule */}
+        {viewMode === 'production' && unscheduledJobs.length > 0 && (
+          <div className="mb-6">
+            <div className="mb-3">
+              <h2 className="text-xl font-semibold text-foreground">
+                Awaiting Line Items — Not Yet Booked In
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                These {unscheduledJobs.length} job{unscheduledJobs.length !== 1 ? 's' : ''} have no line items yet, so {unscheduledJobs.length !== 1 ? 'they are' : 'it is'} not on the production schedule and {unscheduledJobs.length !== 1 ? 'have' : 'has'} no due date. Edit each job to add line items.
+              </p>
+            </div>
+            <div className="border border-amber-200 dark:border-amber-900 rounded-md bg-amber-50/50 dark:bg-amber-950/20 overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-amber-100/60 dark:bg-amber-900/30">
+                    <TableRow className="text-xs text-muted-foreground uppercase tracking-wider">
+                      <TableHead className="py-3 px-3">Customer</TableHead>
+                      <TableHead className="py-3 px-3">Job</TableHead>
+                      <TableHead className="py-3 px-3">Job #</TableHead>
+                      <TableHead className="py-3 px-3">PO #</TableHead>
+                      <TableHead className="py-3 px-3">Qty</TableHead>
+                      <TableHead className="py-3 px-3">Date Required</TableHead>
+                      <TableHead className="py-3 px-3">Submitted</TableHead>
+                      <TableHead className="py-3 px-3">Status</TableHead>
+                      <TableHead className="py-3 px-3 w-10">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {unscheduledJobs.map(job => (
+                      <TableRow key={`unsched-${job.id}`} data-testid={`row-unscheduled-${job.id}`}>
+                        <TableCell className="py-2 px-3"><DemoText className="font-medium">{job.customerName}</DemoText></TableCell>
+                        <TableCell className="py-2 px-3 font-medium"><DemoText>{job.jobName}</DemoText></TableCell>
+                        <TableCell className="py-2 px-3">
+                          <span className="text-xs font-mono">{job.jobNumber || '-'}</span>
+                        </TableCell>
+                        <TableCell className="py-2 px-3">{job.poNumber || '-'}</TableCell>
+                        <TableCell className="py-2 px-3 text-center">{job.quantity || 0}</TableCell>
+                        <TableCell className="py-2 px-3">
+                          {job.requiredDispatchDate
+                            ? format(new Date(job.requiredDispatchDate), 'dd/MM/yy')
+                            : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="py-2 px-3 whitespace-nowrap">
+                          {job.submittedAt ? (
+                            <div className="flex flex-col">
+                              <span className="text-xs font-mono">{format(new Date(job.submittedAt), 'd MMM yy')}</span>
+                              <span className="text-[10px] text-muted-foreground">{format(new Date(job.submittedAt), 'HH:mm')}</span>
+                            </div>
+                          ) : <span className="text-muted-foreground text-xs">—</span>}
+                        </TableCell>
+                        <TableCell className="py-2 px-3">
+                          <span className="text-amber-600 text-xs font-medium">Needs line items</span>
+                        </TableCell>
+                        <TableCell className="py-2 px-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(job.id)}
+                            data-testid={`button-edit-unscheduled-${job.id}`}
+                          >
+                            Add line items
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
         )}
