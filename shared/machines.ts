@@ -70,41 +70,42 @@ export function formatTimeDisplay(minutes: number): string {
   return `${hours}h ${remainingMinutes}m`;
 }
 
+// Allocation rule (per line item):
+//   quantity  > 40  -> Barudan 8 (id 1)
+//   quantity <= 40  -> Barudan 6 1 (id 2) or Barudan 6 2 (id 5)
+// SWF machines (ids 3, 4) are never auto-suggested. Staff can still pick them
+// manually if they re-activate them.
+export const BARUDAN_8_ID = 1;
+export const BARUDAN_6_IDS = [2, 5];
+export const LARGE_JOB_THRESHOLD = 40;
+
 export function suggestMachine(quantity: number, jobType: string, stitchCount?: number): number | null {
   if (jobType !== "Embroidery" && jobType !== "Embroidery Initials/Name") {
     return null;
   }
-  
   if (quantity <= 0) {
     return null;
   }
-  
-  // If stitch count is provided, use production time-based selection for better efficiency
+  if (quantity > LARGE_JOB_THRESHOLD) {
+    return BARUDAN_8_ID;
+  }
+  // For ≤40, prefer the 6-head machine with the shortest estimated runtime
+  // when a stitch count is provided; otherwise default to Barudan 6 1.
   if (stitchCount && stitchCount > 0) {
-    // Calculate production time for each candidate machine
-    const candidates = [
-      { machineId: 1, metrics: calculateProductionMetrics(quantity, stitchCount, 1) }, // Barudan 8
-      { machineId: 2, metrics: calculateProductionMetrics(quantity, stitchCount, 2) }, // Barudan 6 1
-      { machineId: 3, metrics: calculateProductionMetrics(quantity, stitchCount, 3) }, // SWF 6 1
-    ];
-    
-    // Find machine with shortest production time
-    let bestMachine = candidates[0];
-    for (const candidate of candidates) {
-      if (candidate.metrics && (!bestMachine.metrics || candidate.metrics.totalTimeMinutes < bestMachine.metrics.totalTimeMinutes)) {
-        bestMachine = candidate;
+    let best: { machineId: number; minutes: number } | null = null;
+    for (const id of BARUDAN_6_IDS) {
+      const m = calculateProductionMetrics(quantity, stitchCount, id);
+      if (m && (!best || m.totalTimeMinutes < best.minutes)) {
+        best = { machineId: id, minutes: m.totalTimeMinutes };
       }
     }
-    
-    return bestMachine.machineId;
+    if (best) return best.machineId;
   }
-  
-  // Fallback to quantity-based thresholds if no stitch count provided
-  if (quantity > 75) {
-    return 1; // Barudan 8
-  } else if (quantity >= 26 && quantity <= 75) {
-    return 3; // SWF 6 1
-  } else {
-    return 2; // Barudan 6 1
-  }
+  return BARUDAN_6_IDS[0];
+}
+
+export function getCandidateMachineIds(quantity: number): number[] {
+  if (quantity <= 0) return [];
+  if (quantity > LARGE_JOB_THRESHOLD) return [BARUDAN_8_ID];
+  return [...BARUDAN_6_IDS];
 }

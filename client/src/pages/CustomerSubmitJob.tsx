@@ -148,6 +148,31 @@ export default function CustomerSubmitJob() {
     },
   });
 
+  const watchedQuantity = form.watch("quantity");
+  const watchedDispatch = form.watch("requiredDispatchDate");
+
+  const { data: capacityInfo } = useQuery<{ earliestDate: string | null; quantity: number }>({
+    queryKey: ["/api/scheduling/earliest-dispatch", Number(watchedQuantity) || 0],
+    queryFn: async () => {
+      const qty = Number(watchedQuantity) || 0;
+      if (qty <= 0) return { earliestDate: null, quantity: 0 };
+      const res = await fetch(`/api/scheduling/earliest-dispatch?quantity=${qty}`, { credentials: "include" });
+      if (!res.ok) return { earliestDate: null, quantity: qty };
+      return res.json();
+    },
+    enabled: Number(watchedQuantity) > 0,
+    staleTime: 60 * 1000,
+  });
+
+  const dispatchCapacityWarning = (() => {
+    if (!capacityInfo?.earliestDate || !watchedDispatch) return null;
+    const selected = new Date(watchedDispatch as string);
+    const earliest = new Date(capacityInfo.earliestDate);
+    selected.setHours(0, 0, 0, 0);
+    earliest.setHours(0, 0, 0, 0);
+    return selected < earliest ? capacityInfo.earliestDate : null;
+  })();
+
   const handleDispatchDateChange = (dateStr: string, onChange: (value: string) => void) => {
     if (!dateStr) {
       onChange("");
@@ -522,6 +547,32 @@ export default function CustomerSubmitJob() {
                         <span className="block">Standard delivery: 3+ working days from when production begins. Express (2 days) incurs 100% surcharge.</span>
                         <span className="block font-medium text-foreground">Please note: production time only begins once all garments have been received and all logos have been approved. We will always work towards your required dispatch date, however this is not a guaranteed date.</span>
                       </FormDescription>
+                      {dispatchCapacityWarning && (
+                        <div
+                          className="mt-2 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 flex items-start gap-3"
+                          data-testid="warning-capacity"
+                        >
+                          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700 dark:text-amber-400" />
+                          <div className="flex-1 text-sm">
+                            <p className="font-medium text-amber-900 dark:text-amber-200">
+                              Selected date may be too soon for current production capacity
+                            </p>
+                            <p className="text-amber-800 dark:text-amber-300 mt-0.5">
+                              Based on current machine load and staff shifts, the earliest realistic dispatch date is <strong>{format(new Date(dispatchCapacityWarning), "EEE d MMM yyyy")}</strong>. You can still keep your chosen date — we'll do our best, but it may not be guaranteed.
+                            </p>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-2"
+                              onClick={() => form.setValue("requiredDispatchDate", dispatchCapacityWarning, { shouldValidate: true })}
+                              data-testid="button-use-suggested-date"
+                            >
+                              Use suggested date
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

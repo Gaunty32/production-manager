@@ -8,6 +8,7 @@ import { minutesToTime } from "@shared/scheduling";
 import { getPrice, getPrintPrice, formatPrice, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -44,7 +45,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon, Plus, Trash2, Info, ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { CalendarIcon, Plus, Trash2, Info, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { QuackingDuckDialog } from "@/components/QuackingDuckDialog";
@@ -192,6 +193,41 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const goodsReceived = form.watch("goodsReceived");
   const isOverdue = requiredDispatchDate && isPast(new Date(requiredDispatchDate)) && !isToday(new Date(requiredDispatchDate));
   const isDueToday = requiredDispatchDate && isToday(new Date(requiredDispatchDate));
+
+  // Capacity-aware date warning: compares the chosen dispatch date against the
+  // earliest realistic date the production team can hit, given current shifts
+  // and machine load. Use the embroidery line item with the largest quantity
+  // (and its OWN stitch count, not a max across line items) as the
+  // representative workload for the warning.
+  const capacityRefLine = lineItems
+    .filter(li => (li.jobType || '').toLowerCase().includes('embroidery'))
+    .reduce<typeof lineItems[number] | null>((biggest, li) =>
+      (!biggest || (li.quantity || 0) > (biggest.quantity || 0)) ? li : biggest, null);
+  const capacityQuantity = capacityRefLine?.quantity || 0;
+  const capacityStitchCount = capacityRefLine?.stitchCount || 0;
+
+  const { data: capacityInfo } = useQuery<{ earliestDate: string | null }>({
+    queryKey: ['/api/scheduling/earliest-dispatch', capacityQuantity, capacityStitchCount],
+    queryFn: async () => {
+      if (capacityQuantity <= 0) return { earliestDate: null };
+      const params = new URLSearchParams({ quantity: String(capacityQuantity) });
+      if (capacityStitchCount > 0) params.set('stitchCount', String(capacityStitchCount));
+      const res = await fetch(`/api/scheduling/earliest-dispatch?${params}`, { credentials: 'include' });
+      if (!res.ok) return { earliestDate: null };
+      return res.json();
+    },
+    enabled: capacityQuantity > 0,
+    staleTime: 60 * 1000,
+  });
+
+  const dispatchCapacityWarning = (() => {
+    if (!capacityInfo?.earliestDate || !requiredDispatchDate) return null;
+    const selected = new Date(requiredDispatchDate);
+    const earliest = new Date(capacityInfo.earliestDate);
+    selected.setHours(0, 0, 0, 0);
+    earliest.setHours(0, 0, 0, 0);
+    return selected < earliest ? capacityInfo.earliestDate : null;
+  })();
   
   // Calculate Production Time (days between goods received and required dispatch date)
   const productionTime = goodsReceived && requiredDispatchDate 
@@ -684,6 +720,32 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             />
                           </PopoverContent>
                         </Popover>
+                        {dispatchCapacityWarning && (
+                          <div
+                            className="mt-2 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 flex items-start gap-3"
+                            data-testid="warning-capacity"
+                          >
+                            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700 dark:text-amber-400" />
+                            <div className="flex-1 text-sm">
+                              <p className="font-medium text-amber-900 dark:text-amber-200">
+                                May be too soon for current capacity
+                              </p>
+                              <p className="text-amber-800 dark:text-amber-300 mt-0.5">
+                                Earliest realistic dispatch is <strong>{format(new Date(dispatchCapacityWarning), "EEE d MMM yyyy")}</strong> based on shifts and machine load.
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="mt-2"
+                                onClick={() => form.setValue("requiredDispatchDate", new Date(dispatchCapacityWarning).toISOString(), { shouldValidate: true })}
+                                data-testid="button-use-suggested-date"
+                              >
+                                Use suggested date
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}

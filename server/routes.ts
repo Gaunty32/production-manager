@@ -5784,6 +5784,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Earliest realistic dispatch date for a given quantity (+ optional stitch count).
+  // Used by the customer submission form and the internal job form to warn when
+  // a chosen due date is earlier than what current capacity can support.
+  // Public-ish: any authenticated user (staff OR customer) can hit this — it
+  // returns only a date, no scheduling internals.
+  app.get("/api/scheduling/earliest-dispatch", async (req: any, res) => {
+    try {
+      const isStaff = !!(req.session as any)?.userId;
+      const isCustomer = !!(req.session as any)?.customerUserId;
+      if (!isStaff && !isCustomer) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const quantity = parseInt(req.query.quantity as string);
+      if (!quantity || quantity <= 0) {
+        return res.status(400).json({ error: "quantity required" });
+      }
+      const stitchCount = req.query.stitchCount
+        ? parseInt(req.query.stitchCount as string)
+        : 8000; // sensible default for a typical embroidered logo
+
+      const { getCandidateMachineIds } = await import("@shared/machines");
+      const { findAvailableSlots } = await import("@shared/scheduling");
+
+      const candidateIds = getCandidateMachineIds(quantity);
+      if (candidateIds.length === 0) {
+        return res.json({ earliestDate: null });
+      }
+
+      const [
+        allMachines,
+        staffMembers,
+        staffShifts,
+        machineBlocks,
+        jobSchedules,
+        staffMachineAllocations,
+        staffHolidays,
+        bankHolidays,
+      ] = await Promise.all([
+        storage.getMachines(),
+        storage.getStaff(),
+        storage.getStaffShifts(),
+        storage.getMachineScheduleBlocks(),
+        storage.getJobSchedules(),
+        storage.getStaffMachineAllocations(),
+        storage.getStaffHolidays(),
+        storage.getBankHolidays(),
+      ]);
+
+      const machines = allMachines.filter(
+        (m) => m.isActive && candidateIds.includes(m.id)
+      );
+      if (machines.length === 0) {
+        return res.json({ earliestDate: null });
+      }
+
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      const horizon = new Date(startDate);
+      horizon.setDate(horizon.getDate() + 60);
+
+      // For each candidate machine, walk forward day-by-day and accumulate
+      // the per-day machine-with-operator capacity (max single-staff available
+      // minutes — conservative; avoids double-counting overlapping shifts).
+      // findAvailableSlots already applies per-date staff/machine allocation
+      // rules, so we iterate ALL active staff and trust it to filter.
+      let earliestCompletion: Date | null = null;
+      let earliestMachineId: number | null = null;
+
+      for (const machine of machines) {
+        const runs = Math.ceil(quantity / machine.heads);
+        const rawMin = runs * (stitchCount / machine.stitchesPerMinute + machine.changeoverTimeMinutes);
+        const multiplier = (machine as any).schedulingMultiplier ?? 1;
+        const duration = Math.ceil((rawMin * multiplier) / 10) * 10;
+        if (duration === 0) continue;
+
+        let remaining = duration;
+        const current = new Date(startDate);
+        let completion: Date | null = null;
+
+        while (current <= horizon && remaining > 0) {
+          let dayCapacity = 0;
+          for (const staffMember of staffMembers) {
+            const slots = findAvailableSlots(
+              current,
+              machine.id,
+              staffMember.id,
+              machineBlocks,
+              staffShifts,
+              jobSchedules,
+              staffMachineAllocations,
+              staffHolidays,
+              bankHolidays
+            );
+            const totalMin = slots.reduce((s, sl) => s + (sl.endTime - sl.startTime), 0);
+            if (totalMin > dayCapacity) dayCapacity = totalMin;
+          }
+          if (dayCapacity > 0) {
+            remaining -= dayCapacity;
+            if (remaining <= 0) {
+              completion = new Date(current);
+              break;
+            }
+          }
+          current.setDate(current.getDate() + 1);
+        }
+
+        if (completion && (!earliestCompletion || completion < earliestCompletion)) {
+          earliestCompletion = completion;
+          earliestMachineId = machine.id;
+        }
+      }
+
+      // Add 1 working day after production completion for finishing/dispatch
+      const earliestDispatch = earliestCompletion ? new Date(earliestCompletion) : null;
+      if (earliestDispatch) {
+        let added = 0;
+        while (added < 1) {
+          earliestDispatch.setDate(earliestDispatch.getDate() + 1);
+          const dow = earliestDispatch.getDay();
+          const ymd = earliestDispatch.toISOString().split("T")[0];
+          const isBank = bankHolidays.some((bh: any) => {
+            const bhDate = new Date(bh.date).toISOString().split("T")[0];
+            return bhDate === ymd;
+          });
+          if (dow !== 0 && dow !== 6 && !isBank) added++;
+        }
+      }
+
+      const earliestDateStr = earliestDispatch ? earliestDispatch.toISOString().split("T")[0] : null;
+
+      // Customers only get the date. Staff get richer detail for debugging.
+      if (isCustomer && !isStaff) {
+        return res.json({ earliestDate: earliestDateStr });
+      }
+      res.json({
+        earliestDate: earliestDateStr,
+        productionCompleteDate: earliestCompletion ? earliestCompletion.toISOString().split("T")[0] : null,
+        machineId: earliestMachineId,
+        quantity,
+        assumedStitchCount: stitchCount,
+      });
+    } catch (error) {
+      console.error("Error computing earliest dispatch:", error);
+      res.status(500).json({ error: "Failed to compute earliest dispatch" });
+    }
+  });
+
   // Staff machine allocation routes
   app.get("/api/staff-machine-allocations", isStaffAuthenticated, async (req, res) => {
     try {
