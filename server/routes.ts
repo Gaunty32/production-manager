@@ -2883,6 +2883,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const message = await storage.createJobMessage(messageData);
+
+      // Email staff who have notifications enabled (fire-and-forget).
+      // Mirrors the notification logic on /messages/send so customers messaging
+      // from the job detail page also alert staff.
+      (async () => {
+        try {
+          const allCustomers = await storage.getCustomers();
+          const customer = allCustomers.find(c => c.id === customerUser.customerId);
+          const allStaff = await storage.getAllUsers();
+          const staffEmailsToNotify = allStaff
+            .filter(u => u.role !== 'customer' && u.active && u.emailNotificationsMessages && u.email)
+            .map(u => u.email as string);
+          if (staffEmailsToNotify.length > 0 && customer && shouldSendStaffNotification(`job:${job.id}`)) {
+            const { sendCustomerMessageNotificationEmail } = await import('./emailService.js');
+            await sendCustomerMessageNotificationEmail(staffEmailsToNotify, {
+              customerName: customer.name,
+              jobName: job.jobName,
+              jobId: job.id,
+              message: req.body.message,
+            });
+          }
+        } catch (emailErr) {
+          console.error("Failed to send staff message notification email (job detail route):", emailErr);
+        }
+      })();
+
       res.json(message);
     } catch (error) {
       console.error("Error sending message:", error);
