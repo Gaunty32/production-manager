@@ -174,29 +174,33 @@ function formatMinutes(minutes: number): string {
 
 function getPresetDateRange(preset: DatePreset): DateRange {
   const today = new Date();
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
-  
+  // Weeks start Monday. The current week is incomplete and is excluded from
+  // multi-week ranges so figures reflect only complete weeks.
+  const lastCompleteWeekRef = subWeeks(today, 1);
+  const lastCompleteWeekStart = startOfWeek(lastCompleteWeekRef, { weekStartsOn: 1 });
+  const lastCompleteWeekEnd = endOfWeek(lastCompleteWeekRef, { weekStartsOn: 1 });
+
   switch (preset) {
     case "this-week":
       return {
-        from: weekStart,
+        from: startOfWeek(today, { weekStartsOn: 1 }),
         to: endOfWeek(today, { weekStartsOn: 1 })
       };
     case "last-week":
       return {
-        from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
-        to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 })
+        from: lastCompleteWeekStart,
+        to: lastCompleteWeekEnd
       };
     case "last-4-weeks":
       return {
-        from: startOfWeek(subWeeks(today, 3), { weekStartsOn: 1 }),
-        to: endOfWeek(today, { weekStartsOn: 1 })
+        from: startOfWeek(subWeeks(lastCompleteWeekRef, 3), { weekStartsOn: 1 }),
+        to: lastCompleteWeekEnd
       };
     case "last-12-weeks":
     default:
       return {
-        from: startOfWeek(subWeeks(today, 11), { weekStartsOn: 1 }),
-        to: endOfWeek(today, { weekStartsOn: 1 })
+        from: startOfWeek(subWeeks(lastCompleteWeekRef, 11), { weekStartsOn: 1 }),
+        to: lastCompleteWeekEnd
       };
   }
 }
