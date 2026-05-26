@@ -479,7 +479,10 @@ export const updateJobSchema = z.object({
     z.union([z.number().int().min(1).max(4), z.null()]).optional()
   ),
   status: z.string().optional(),
-  notes: z.string().optional(),
+  notes: z.preprocess(
+    (val) => val === "" ? null : val,
+    z.string().nullable().optional()
+  ),
   completedById: z.preprocess(
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
