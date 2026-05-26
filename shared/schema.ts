@@ -955,7 +955,19 @@ export const customerJobSubmissionSchema = z.object({
   quantity: z.number().int().min(1).optional().nullable(),
   notes: z.string().optional(),
   deliveryAddress: z.string().optional(),
-  requiredDispatchDate: z.string().min(1, "Dispatch date is required"),
+  requiredDispatchDate: z.string().min(1, "Dispatch date is required").refine(
+    (val) => {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const minDate = new Date(today);
+      minDate.setDate(minDate.getDate() + 7);
+      d.setHours(0, 0, 0, 0);
+      return d >= minDate;
+    },
+    { message: "Dispatch date must be at least 7 days from today" }
+  ),
   logoType: z.enum(["repeat_logo", "new_logo", "new_logo_files_supplied"]).default("repeat_logo"),
 });
 

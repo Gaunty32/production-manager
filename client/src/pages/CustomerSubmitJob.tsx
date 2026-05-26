@@ -179,21 +179,17 @@ export default function CustomerSubmitJob() {
       return;
     }
     const selectedDate = new Date(dateStr);
+    selectedDate.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const workingDaysFromNow = getWorkingDaysBetween(today, selectedDate);
-    if (workingDaysFromNow < 0) {
+    const minDate = new Date(today);
+    minDate.setDate(minDate.getDate() + 7);
+    if (selectedDate < minDate) {
       toast({
-        title: "Invalid date",
-        description: "Dispatch date cannot be in the past.",
+        title: "Lead time too short",
+        description: "Required dispatch date must be at least 7 days from today.",
         variant: "destructive",
       });
-      return;
-    }
-    if (workingDaysFromNow < 3) {
-      setPendingDispatchDate(dateStr);
-      setPendingDispatchWorkingDays(workingDaysFromNow);
-      setShowExpressDialog(true);
       return;
     }
     onChange(dateStr);
@@ -539,12 +535,12 @@ export default function CustomerSubmitJob() {
                           type="date"
                           value={field.value}
                           onChange={(e) => handleDispatchDateChange(e.target.value, field.onChange)}
-                          min={format(addWorkingDays(new Date(), 2), "yyyy-MM-dd")}
+                          min={format(addDays(new Date(), 7), "yyyy-MM-dd")}
                           data-testid="input-dispatch-date"
                         />
                       </FormControl>
                       <FormDescription className="space-y-1">
-                        <span className="block">Standard delivery: 3+ working days from when production begins. Express (2 days) incurs 100% surcharge.</span>
+                        <span className="block">Minimum lead time: 7 days from today.</span>
                         <span className="block font-medium text-foreground">Please note: production time only begins once all garments have been received and all logos have been approved. We will always work towards your required dispatch date, however this is not a guaranteed date.</span>
                       </FormDescription>
                       {dispatchCapacityWarning && (

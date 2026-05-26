@@ -716,10 +716,20 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                               mode="single"
                               selected={field.value ? new Date(field.value) : undefined}
                               onSelect={(date) => field.onChange(date?.toISOString())}
+                              disabled={(date) => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const min = new Date(today);
+                                min.setDate(min.getDate() + 7);
+                                return date < min;
+                              }}
                               initialFocus
                             />
                           </PopoverContent>
                         </Popover>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Minimum 7-day lead time. Production starts only once all garments are received and all logos approved.
+                        </p>
                         {dispatchCapacityWarning && (
                           <div
                             className="mt-2 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 flex items-start gap-3"

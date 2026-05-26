@@ -602,10 +602,20 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                           mode="single"
                           selected={field.value ? new Date(field.value) : undefined}
                           onSelect={(date) => field.onChange(date?.toISOString() || null)}
+                          disabled={(date) => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const min = new Date(today);
+                            min.setDate(min.getDate() + 7);
+                            return date < min;
+                          }}
                           initialFocus
                         />
                       </PopoverContent>
                     </Popover>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Minimum 7-day lead time from today. Production starts only once all garments are received and all logos approved.
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}
