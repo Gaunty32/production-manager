@@ -295,6 +295,7 @@ export default function WeeklyReports() {
       week: format(new Date(week.weekStart), "MMM d"),
       output: week.completedQuantity,
       invoiceValue: week.invoicedTotal,
+      activeCustomers: week.totalActiveCustomers,
     }));
   }, [weeklyTrendData]);
 
@@ -876,6 +877,11 @@ export default function WeeklyReports() {
                       tickFormatter={(value) => `£${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
                       label={{ value: 'Invoice Value (£)', angle: 90, position: 'insideRight', style: { fontSize: 12 } }}
                     />
+                    <YAxis
+                      yAxisId="customers"
+                      orientation="right"
+                      hide
+                    />
                     <Tooltip 
                       contentStyle={{ 
                         backgroundColor: 'hsl(var(--background))', 
@@ -883,8 +889,8 @@ export default function WeeklyReports() {
                         borderRadius: '6px'
                       }}
                       formatter={(value: number, name: string) => {
-                        if (name === 'invoiceValue') return [`£${formatNumber(value)}`, 'Invoice Value'];
-                        return [formatNumber(value), 'Output'];
+                        if (name === 'Invoice Value (£)') return [`£${formatNumber(value)}`, name];
+                        return [formatNumber(value), name];
                       }}
                       labelFormatter={(label) => `Week of ${label}`}
                     />
@@ -909,6 +915,17 @@ export default function WeeklyReports() {
                       dot={{ r: 4, fill: 'hsl(142.1, 76.2%, 36.3%)' }}
                       activeDot={{ r: 6 }}
                     />
+                    <Line
+                      yAxisId="customers"
+                      type="monotone"
+                      dataKey="activeCustomers"
+                      name="Active Customers"
+                      stroke="hsl(221.2, 83.2%, 53.3%)"
+                      strokeWidth={2}
+                      strokeDasharray="5 4"
+                      dot={{ r: 3, fill: 'hsl(221.2, 83.2%, 53.3%)' }}
+                      activeDot={{ r: 5 }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
@@ -919,43 +936,6 @@ export default function WeeklyReports() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Weekly Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Week</TableHead>
-                    <TableHead className="text-right">Output (Items)</TableHead>
-                    <TableHead className="text-right">Invoice Value</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {weeklyTrendData?.length ? (
-                    weeklyTrendData.map((week, index) => (
-                      <TableRow key={index} data-testid={`row-weekly-trend-${index}`}>
-                        <TableCell className="font-medium">
-                          {format(new Date(week.weekStart), "MMM d")} - {format(new Date(week.weekEnd), "MMM d, yyyy")}
-                        </TableCell>
-                        <TableCell className="text-right">{formatNumber(week.completedQuantity)}</TableCell>
-                        <TableCell className="text-right text-green-600 dark:text-green-400">
-                          £{formatNumber(Math.round(week.invoicedTotal))}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                        No weekly data available
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* Customers Tab */}
@@ -1035,50 +1015,6 @@ export default function WeeklyReports() {
                   </CardContent>
                 </Card>
               </div>
-
-              {/* Week-by-week customer breakdown */}
-              {weeklyTrendData && weeklyTrendData.some(w => w.newCustomers > 0 || w.totalActiveCustomers > 0) && (
-                <Card data-testid="card-customer-growth">
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-primary" />
-                      Customer Growth by Week
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Week</TableHead>
-                          <TableHead className="text-right">New Customers</TableHead>
-                          <TableHead className="text-right">Total Active</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {[...weeklyTrendData].reverse().map((week) => (
-                          <TableRow key={week.weekStart} data-testid={`row-customer-week-${week.weekStart}`}>
-                            <TableCell className="text-muted-foreground">
-                              {format(new Date(week.weekStart), "MMM d")} – {format(new Date(week.weekEnd), "MMM d, yyyy")}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {week.newCustomers > 0 ? (
-                                <Badge variant="secondary" className="text-green-700 dark:text-green-400" data-testid={`badge-new-${week.weekStart}`}>
-                                  +{week.newCustomers}
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {week.totalActiveCustomers}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              )}
 
               {/* Top 5 by volume */}
               <Card data-testid="card-top-customers">
