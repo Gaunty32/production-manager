@@ -11,7 +11,7 @@ import { useVersionCheck } from "@/hooks/use-version-check";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LogOut, RefreshCw } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { StaffImpersonationBanner } from "@/components/StaffImpersonationBanner";
 import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
@@ -107,7 +107,7 @@ function StaffRouter() {
 }
 
 function AppRouter() {
-  const { updateAvailable, applyUpdate } = useVersionCheck();
+  useVersionCheck();
 
   // Always prevent the browser's default file-open behaviour during drag operations.
   // Drop zones handle their own files; this just stops the browser navigating away.
@@ -127,22 +127,6 @@ function AppRouter() {
 
   return (
     <>
-      {updateAvailable && (
-        <div className="fixed top-0 left-0 right-0 z-[9999] flex items-center justify-between gap-3 bg-primary text-primary-foreground px-4 py-2.5 shadow-lg">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <RefreshCw className="h-4 w-4 flex-shrink-0" />
-            A new version of Production Planner is available.
-          </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={applyUpdate}
-            data-testid="button-apply-update"
-          >
-            Reload now
-          </Button>
-        </div>
-      )}
       <Switch>
         {/* Public Routes - No Authentication Required */}
         <Route path="/portal-preview" component={PortalPreview} />

@@ -1,48 +1,50 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
-const VERSION_KEY = "app_server_version";
 const LAST_RELOAD_KEY = "app_last_reload";
-const CHECK_INTERVAL_MS = 30_000;
-const FORCE_RELOAD_AFTER_MS = 24 * 60 * 60 * 1000; // 24 hours
+const DAILY_RELOAD_HOUR = 22; // 10pm local time
 
+// Compute the timestamp of today's 10pm; if it's already past, return tomorrow's.
+function nextReloadAt(now: Date): Date {
+  const target = new Date(now);
+  target.setHours(DAILY_RELOAD_HOUR, 0, 0, 0);
+  if (now >= target) target.setDate(target.getDate() + 1);
+  return target;
+}
+
+// Silently push the latest build to every client at 10pm local time each day.
+// No banners, no "update available" prompts — the page just refreshes once a
+// day during off-hours. Users can always force-refresh themselves at any time.
 export function useVersionCheck() {
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-
   useEffect(() => {
-    // Force a reload if the app has been open for more than 24 hours
+    const now = new Date();
+    const todayReloadCutoff = new Date(now);
+    todayReloadCutoff.setHours(DAILY_RELOAD_HOUR, 0, 0, 0);
+
     const lastReload = parseInt(localStorage.getItem(LAST_RELOAD_KEY) ?? "0", 10);
-    if (Date.now() - lastReload > FORCE_RELOAD_AFTER_MS) {
+
+    // If we're past today's 10pm and haven't reloaded since 10pm, do it now.
+    if (now >= todayReloadCutoff && lastReload < todayReloadCutoff.getTime()) {
       localStorage.setItem(LAST_RELOAD_KEY, Date.now().toString());
       window.location.reload();
       return;
     }
 
-    const check = async () => {
-      try {
-        const res = await fetch("/api/version", { cache: "no-store" });
-        if (!res.ok) return;
-        const { version } = await res.json() as { version: string };
-        const stored = localStorage.getItem(VERSION_KEY);
-        if (!stored) {
-          localStorage.setItem(VERSION_KEY, version);
-        } else if (stored !== version) {
-          localStorage.setItem(VERSION_KEY, version);
-          setUpdateAvailable(true);
-        }
-      } catch {
-        // Network error — silently ignore
-      }
-    };
+    // Otherwise schedule the next 10pm reload.
+    const next = nextReloadAt(now);
+    const delay = next.getTime() - now.getTime();
+    const timer = window.setTimeout(() => {
+      localStorage.setItem(LAST_RELOAD_KEY, Date.now().toString());
+      window.location.reload();
+    }, delay);
 
-    check();
-    const timer = setInterval(check, CHECK_INTERVAL_MS);
-    return () => clearInterval(timer);
+    return () => window.clearTimeout(timer);
   }, []);
 
+  // Kept for backwards compatibility — manual reload trigger.
   const applyUpdate = () => {
     localStorage.setItem(LAST_RELOAD_KEY, Date.now().toString());
     window.location.reload();
   };
 
-  return { updateAvailable, applyUpdate };
+  return { updateAvailable: false, applyUpdate };
 }
