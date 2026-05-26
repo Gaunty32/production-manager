@@ -222,6 +222,15 @@ export interface IStorage {
     totalActiveCustomers: number;
   }>>;
 
+  getAllCustomersWeeklyTrend(params: { weeks?: number; endDate?: Date; timezone?: string; topN?: number }): Promise<{
+    weeks: Array<{ weekStart: string; weekEnd: string }>;
+    customers: Array<{
+      customerId: string;
+      customerName: string;
+      totalInvoiced: number;
+      weekly: Array<{ weekStart: string; invoicedTotal: number }>;
+    }>;
+  }>;
   getCustomerWeeklyTrend(params: { customerId: string; weeks?: number; endDate?: Date; timezone?: string }): Promise<Array<{
     weekStart: string;
     weekEnd: string;
@@ -1810,6 +1819,90 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getAllCustomersWeeklyTrend(params: { weeks?: number; endDate?: Date; timezone?: string; topN?: number }): Promise<{
+    weeks: Array<{ weekStart: string; weekEnd: string }>;
+    customers: Array<{
+      customerId: string;
+      customerName: string;
+      totalInvoiced: number;
+      weekly: Array<{ weekStart: string; invoicedTotal: number }>;
+    }>;
+  }> {
+    const { weeks = 52, endDate = new Date(), timezone = 'Europe/London', topN = 15 } = params;
+
+    const result = await db.execute(sql`
+      WITH base_week AS (
+        SELECT date_trunc('week', ${endDate}::timestamp AT TIME ZONE ${timezone}) AS week_end
+      ),
+      week_series AS (
+        SELECT
+          date_trunc('week',
+            (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval + (n || ' weeks')::interval
+          ) AS week_start
+        FROM generate_series(0, ${weeks} - 1) AS n
+      ),
+      weeks_with_end AS (
+        SELECT week_start::date, (week_start + '6 days'::interval)::date AS week_end
+        FROM week_series
+      ),
+      invoiced AS (
+        SELECT
+          j.customer_id,
+          date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone})::date AS week_start,
+          SUM(j.invoice_total) AS total_invoiced
+        FROM jobs j
+        WHERE j.invoiced_at IS NOT NULL
+          AND j.invoice_total IS NOT NULL
+          AND date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone}) >=
+              (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval
+          AND date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone}) <=
+              (SELECT week_end FROM base_week)
+        GROUP BY j.customer_id, 2
+      )
+      SELECT
+        c.id AS customer_id,
+        c.name AS customer_name,
+        w.week_start::text AS week_start,
+        w.week_end::text AS week_end,
+        COALESCE(i.total_invoiced, 0) AS invoiced_total
+      FROM weeks_with_end w
+      CROSS JOIN customers c
+      LEFT JOIN invoiced i ON i.customer_id = c.id AND i.week_start = w.week_start
+      WHERE c.active = true
+      ORDER BY c.name, w.week_start
+    `);
+
+    const weekMap = new Map<string, { weekStart: string; weekEnd: string }>();
+    const customerMap = new Map<string, {
+      customerId: string;
+      customerName: string;
+      totalInvoiced: number;
+      weekly: Array<{ weekStart: string; invoicedTotal: number }>;
+    }>();
+
+    for (const row of result.rows as any[]) {
+      if (!weekMap.has(row.week_start)) {
+        weekMap.set(row.week_start, { weekStart: row.week_start, weekEnd: row.week_end });
+      }
+      let c = customerMap.get(row.customer_id);
+      if (!c) {
+        c = { customerId: row.customer_id, customerName: row.customer_name, totalInvoiced: 0, weekly: [] };
+        customerMap.set(row.customer_id, c);
+      }
+      const invoiced = parseFloat(row.invoiced_total) || 0;
+      c.weekly.push({ weekStart: row.week_start, invoicedTotal: invoiced });
+      c.totalInvoiced += invoiced;
+    }
+
+    const weeksArr = Array.from(weekMap.values()).sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+    const customers = Array.from(customerMap.values())
+      .filter(c => c.totalInvoiced > 0)
+      .sort((a, b) => b.totalInvoiced - a.totalInvoiced)
+      .slice(0, topN);
+
+    return { weeks: weeksArr, customers };
+  }
+
   async getCustomerWeeklyTrend(params: { customerId: string; weeks?: number; endDate?: Date; timezone?: string }): Promise<Array<{
     weekStart: string;
     weekEnd: string;
@@ -2115,7 +2208,6 @@ export class DatabaseStorage implements IStorage {
         FROM jobs j
         INNER JOIN job_line_items jli ON jli.job_id = j.id
         WHERE j.completed = true
-          AND j.invoice_status IN ('ready', 'invoiced')
           AND jli.completed_at IS NOT NULL
         GROUP BY j.id, j.completed_by_id, j.completed_on_time
       )

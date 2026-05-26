@@ -208,7 +208,7 @@ function getPresetDateRange(preset: DatePreset): DateRange {
 export default function WeeklyReports() {
   const { toast } = useToast();
   const [selectedPreset, setSelectedPreset] = useState<DatePreset>("last-12-weeks");
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("all");
   const [customDateRange, setCustomDateRange] = useState<DateRange | null>(null);
 
   const syncMutation = useMutation({
@@ -301,8 +301,49 @@ export default function WeeklyReports() {
       if (!res.ok) throw new Error('Failed to load customer spend');
       return res.json();
     },
-    enabled: !!selectedCustomerId,
+    enabled: !!selectedCustomerId && selectedCustomerId !== "all",
   });
+
+  const { data: allCustomersTrend, isLoading: isLoadingAllCustomersTrend, isError: isAllCustomersTrendError, refetch: refetchAllCustomersTrend } = useQuery<{
+    weeks: Array<{ weekStart: string; weekEnd: string }>;
+    customers: Array<{
+      customerId: string;
+      customerName: string;
+      totalInvoiced: number;
+      weekly: Array<{ weekStart: string; invoicedTotal: number }>;
+    }>;
+  }>({
+    queryKey: ['/api/reports/all-customers-weekly-trend', trendWeeks],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/all-customers-weekly-trend?weeks=${trendWeeks}&topN=15`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load all customers trend');
+      return res.json();
+    },
+    enabled: selectedCustomerId === "all",
+  });
+
+  const allCustomersChartData = useMemo(() => {
+    if (!allCustomersTrend) return [];
+    return allCustomersTrend.weeks.map(w => {
+      const row: Record<string, any> = { week: format(new Date(w.weekStart), "d MMM") };
+      for (const c of allCustomersTrend.customers) {
+        const match = c.weekly.find(x => x.weekStart === w.weekStart);
+        row[c.customerName] = match ? Math.round(match.invoicedTotal) : 0;
+      }
+      return row;
+    });
+  }, [allCustomersTrend]);
+
+  const allCustomersTotals = useMemo(() => {
+    if (!allCustomersTrend) return { totalSpend: 0, customerCount: 0, avgPerCustomer: 0 };
+    const totalSpend = allCustomersTrend.customers.reduce((s, c) => s + c.totalInvoiced, 0);
+    const customerCount = allCustomersTrend.customers.length;
+    return {
+      totalSpend,
+      customerCount,
+      avgPerCustomer: customerCount > 0 ? totalSpend / customerCount : 0,
+    };
+  }, [allCustomersTrend]);
 
   const customerSpendChartData = useMemo(() => {
     if (!customerSpendTrend) return [];
@@ -1008,7 +1049,9 @@ export default function WeeklyReports() {
                     <div>
                       <CardTitle className="text-base">Customer Activity & Spend</CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        Weekly output and invoice value for a single customer
+                        {selectedCustomerId === "all"
+                          ? "Weekly invoice value per customer (top 15 by spend)"
+                          : "Weekly output and invoice value for the selected customer"}
                       </p>
                     </div>
                   </div>
@@ -1018,6 +1061,7 @@ export default function WeeklyReports() {
                         <SelectValue placeholder="Select a customer…" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="all" data-testid="option-customer-all">All customers</SelectItem>
                         {[...(allCustomersList ?? [])]
                           .filter(c => c.active)
                           .sort((a, b) => a.name.localeCompare(b.name))
@@ -1042,7 +1086,84 @@ export default function WeeklyReports() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {!selectedCustomerId ? (
+                  {selectedCustomerId === "all" ? (
+                    isLoadingAllCustomersTrend ? (
+                      <Skeleton className="h-[360px] w-full" />
+                    ) : isAllCustomersTrendError ? (
+                      <div className="flex flex-col items-center justify-center h-[280px] gap-3 text-sm text-muted-foreground">
+                        <span>Couldn't load customer trends.</span>
+                        <Button variant="outline" size="sm" onClick={() => refetchAllCustomersTrend()} data-testid="button-retry-all-customers">
+                          <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
+                        </Button>
+                      </div>
+                    ) : !allCustomersTrend || allCustomersTrend.customers.length === 0 ? (
+                      <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+                        No invoiced activity in the selected period.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="rounded-md border p-3" data-testid="text-all-total-spend">
+                            <p className="text-xs text-muted-foreground">Total spend (top 15)</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                              <DemoAmount value={`£${Math.round(allCustomersTotals.totalSpend).toLocaleString()}`} />
+                            </p>
+                          </div>
+                          <div className="rounded-md border p-3" data-testid="text-all-customer-count">
+                            <p className="text-xs text-muted-foreground">Customers shown</p>
+                            <p className="text-2xl font-bold">{allCustomersTotals.customerCount}</p>
+                          </div>
+                          <div className="rounded-md border p-3" data-testid="text-all-avg-per-customer">
+                            <p className="text-xs text-muted-foreground">Avg spend / customer</p>
+                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                              <DemoAmount value={`£${Math.round(allCustomersTotals.avgPerCustomer).toLocaleString()}`} />
+                            </p>
+                          </div>
+                        </div>
+                        <ResponsiveContainer width="100%" height={400}>
+                          <LineChart data={allCustomersChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="week" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                            <YAxis
+                              tick={{ fontSize: 12 }}
+                              className="text-muted-foreground"
+                              tickFormatter={(value) => `£${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: 'hsl(var(--background))',
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '6px',
+                              }}
+                              formatter={(value: number, name: string) => [`£${Math.round(value).toLocaleString()}`, name]}
+                              labelFormatter={(label) => `Week of ${label}`}
+                            />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            {allCustomersTrend.customers.map((c, idx) => {
+                              const palette = [
+                                'hsl(220, 70%, 50%)', 'hsl(142, 76%, 36%)', 'hsl(0, 84%, 60%)',
+                                'hsl(38, 92%, 50%)', 'hsl(280, 65%, 55%)', 'hsl(189, 94%, 43%)',
+                                'hsl(340, 82%, 52%)', 'hsl(160, 60%, 40%)', 'hsl(45, 100%, 45%)',
+                                'hsl(260, 60%, 60%)', 'hsl(15, 80%, 55%)', 'hsl(200, 80%, 45%)',
+                                'hsl(120, 50%, 45%)', 'hsl(310, 70%, 50%)', 'hsl(25, 90%, 50%)',
+                              ];
+                              return (
+                                <Line
+                                  key={c.customerId}
+                                  type="monotone"
+                                  dataKey={c.customerName}
+                                  stroke={palette[idx % palette.length]}
+                                  strokeWidth={2}
+                                  dot={{ r: 2 }}
+                                  activeDot={{ r: 4 }}
+                                />
+                              );
+                            })}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )
+                  ) : !selectedCustomerId ? (
                     <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
                       Pick a customer above to see their annual spend and weekly activity.
                     </div>
