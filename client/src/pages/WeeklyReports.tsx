@@ -617,7 +617,7 @@ export default function WeeklyReports() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent forceMount value="performance" className="space-y-4">
+        <TabsContent value="performance" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Individual Staff Performance</CardTitle>
@@ -670,7 +670,7 @@ export default function WeeklyReports() {
           </Card>
         </TabsContent>
 
-        <TabsContent forceMount value="errors" className="space-y-4">
+        <TabsContent value="errors" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
@@ -762,7 +762,7 @@ export default function WeeklyReports() {
           </Card>
         </TabsContent>
 
-        <TabsContent forceMount value="production" className="space-y-4">
+        <TabsContent value="production" className="space-y-4">
           {/* Staff Totals Summary */}
           <Card>
             <CardHeader>
@@ -898,7 +898,7 @@ export default function WeeklyReports() {
           </div>
         </TabsContent>
 
-        <TabsContent forceMount value="trends" className="space-y-4">
+        <TabsContent value="trends" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
@@ -1050,7 +1050,7 @@ export default function WeeklyReports() {
         </TabsContent>
 
         {/* Customers Tab */}
-        <TabsContent forceMount value="customers" className="space-y-6">
+        <TabsContent value="customers" className="space-y-6">
           {isLoadingCustomers ? (
             <div className="space-y-4">
               <Skeleton className="h-32 w-full" />
@@ -1431,7 +1431,7 @@ export default function WeeklyReports() {
           )}
         </TabsContent>
         {/* Accuracy Tab */}
-        <TabsContent forceMount value="accuracy" className="space-y-6">
+        <TabsContent value="accuracy" className="space-y-6">
           {isLoadingAccuracy ? (
             <div className="space-y-4">
               <div className="grid gap-4 grid-cols-3">
