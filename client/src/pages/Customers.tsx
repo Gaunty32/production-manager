@@ -709,7 +709,7 @@ export default function Customers() {
         <Sheet open={selectedCustomer !== null} onOpenChange={(open) => !open && setSelectedCustomer(null)}>
           <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
             {selectedCustomer && (() => {
-              const customer = selectedCustomer;
+              const customer = allCustomers.find(c => c.id === selectedCustomer.id) ?? selectedCustomer;
               const isInactive = customer.active === false;
               const portalUsers = customerUsersMap.get(customer.id) || [];
               const hasPortalLogin = portalUsers.length > 0;
