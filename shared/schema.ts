@@ -962,11 +962,11 @@ export const customerJobSubmissionSchema = z.object({
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const minDate = new Date(today);
-      minDate.setDate(minDate.getDate() + 7);
+      minDate.setDate(minDate.getDate() + 3);
       d.setHours(0, 0, 0, 0);
       return d >= minDate;
     },
-    { message: "Dispatch date must be at least 7 days from today" }
+    { message: "Dispatch date must be at least 3 days from today (express service)" }
   ),
   logoType: z.enum(["repeat_logo", "new_logo", "new_logo_files_supplied"]).default("repeat_logo"),
 });

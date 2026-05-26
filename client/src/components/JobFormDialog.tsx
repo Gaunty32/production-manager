@@ -479,29 +479,22 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
     }
   };
 
-  // Helper to check if express service is required
+  // Helper to check if express service is required.
+  // Express = dispatch is between 3 and 6 calendar days from today (inclusive).
+  // < 3 days is blocked by the calendar; >= 7 days is standard service.
   const requiresExpressService = (dispatchDateStr: string | null | undefined) => {
     if (!dispatchDateStr) return false;
     const totalQuantity = getTotalQuantity();
     if (totalQuantity <= 0 || totalQuantity >= 300) return false;
-    
+
     const dispatchDate = new Date(dispatchDateStr);
+    dispatchDate.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    // Calculate working days between today and dispatch date
-    let workingDays = 0;
-    const checkDate = new Date(today);
-    while (checkDate < dispatchDate) {
-      checkDate.setDate(checkDate.getDate() + 1);
-      const dayOfWeek = checkDate.getDay();
-      // Count weekdays (Mon-Fri) as working days
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        workingDays++;
-      }
-    }
-    
-    return workingDays < 3;
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysFromNow = Math.round((dispatchDate.getTime() - today.getTime()) / msPerDay);
+
+    return daysFromNow >= 3 && daysFromNow < 7;
   };
 
   // Validation chain with explicit confirmation flags passed as parameters
@@ -720,7 +713,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                                 const today = new Date();
                                 today.setHours(0, 0, 0, 0);
                                 const min = new Date(today);
-                                min.setDate(min.getDate() + 7);
+                                min.setDate(min.getDate() + 3);
                                 return date < min;
                               }}
                               initialFocus
@@ -728,7 +721,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                           </PopoverContent>
                         </Popover>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Minimum 7-day lead time. Production starts only once all garments are received and all logos approved.
+                          Standard lead time: 7+ days. Express (3–6 days) adds 100% surcharge. Production starts only once all garments are received and all logos approved.
                         </p>
                         {dispatchCapacityWarning && (
                           <div

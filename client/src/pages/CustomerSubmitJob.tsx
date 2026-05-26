@@ -182,14 +182,22 @@ export default function CustomerSubmitJob() {
     selectedDate.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const minDate = new Date(today);
-    minDate.setDate(minDate.getDate() + 7);
-    if (selectedDate < minDate) {
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysFromNow = Math.round((selectedDate.getTime() - today.getTime()) / msPerDay);
+    // Hard floor: 3 days (express service minimum)
+    if (daysFromNow < 3) {
       toast({
         title: "Lead time too short",
-        description: "Required dispatch date must be at least 7 days from today.",
+        description: "Required dispatch date must be at least 3 days from today.",
         variant: "destructive",
       });
+      return;
+    }
+    // 3–6 days = express service: confirm 100% surcharge
+    if (daysFromNow < 7) {
+      setPendingDispatchDate(dateStr);
+      setPendingDispatchWorkingDays(daysFromNow);
+      setShowExpressDialog(true);
       return;
     }
     onChange(dateStr);
@@ -535,12 +543,12 @@ export default function CustomerSubmitJob() {
                           type="date"
                           value={field.value}
                           onChange={(e) => handleDispatchDateChange(e.target.value, field.onChange)}
-                          min={format(addDays(new Date(), 7), "yyyy-MM-dd")}
+                          min={format(addDays(new Date(), 3), "yyyy-MM-dd")}
                           data-testid="input-dispatch-date"
                         />
                       </FormControl>
                       <FormDescription className="space-y-1">
-                        <span className="block">Minimum lead time: 7 days from today.</span>
+                        <span className="block">Standard lead time: 7+ days from today. Express service (3–6 days) incurs a 100% surcharge.</span>
                         <span className="block font-medium text-foreground">Please note: production time only begins once all garments have been received and all logos have been approved. We will always work towards your required dispatch date, however this is not a guaranteed date.</span>
                       </FormDescription>
                       {dispatchCapacityWarning && (
@@ -726,13 +734,13 @@ export default function CustomerSubmitJob() {
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               <p>
-                You have requested our express delivery service with a dispatch date of {pendingDispatchWorkingDays} working day{pendingDispatchWorkingDays === 1 ? "" : "s"}.
+                You have requested our express delivery service with a dispatch date of {pendingDispatchWorkingDays} day{pendingDispatchWorkingDays === 1 ? "" : "s"} from today.
               </p>
               <p className="font-semibold text-foreground">
                 This will incur a 100% surcharge on your order total.
               </p>
               <p className="text-sm text-muted-foreground">
-                Standard delivery (3+ working days) has no additional charges.
+                Standard delivery (7+ days lead time) has no additional charges.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
