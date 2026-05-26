@@ -229,12 +229,6 @@ export interface IStorage {
     completedQuantity: number;
   }>>;
 
-  getCustomersWithSpend(params: { weeks?: number; endDate?: Date; timezone?: string }): Promise<Array<{
-    customerId: string;
-    customerName: string;
-    invoicedTotal: number;
-  }>>;
-  
   // Production Time Analysis
   getProductionTimeAnalysis(params: { weeks?: number; endDate?: Date }): Promise<Array<{
     staffName: string;
