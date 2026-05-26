@@ -1,5 +1,8 @@
-import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail, Send, Clock, ChevronDown, ChevronUp, RefreshCw, Smartphone } from "lucide-react";
-import { DemoText } from "@/components/DemoText";
+import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail, Send, Clock, ChevronDown, ChevronUp, RefreshCw, Smartphone, TrendingUp } from "lucide-react";
+import { DemoText, DemoAmount } from "@/components/DemoText";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +49,9 @@ function tileColor(name: string) {
 
 export default function Customers() {
   const { toast } = useToast();
-  const { canImpersonateCustomers, canDeactivateCustomers } = usePermissions();
+  const { canImpersonateCustomers, canDeactivateCustomers, canViewPrices } = usePermissions();
+  const [trendCustomerId, setTrendCustomerId] = useState<string>("");
+  const [trendWeeks, setTrendWeeks] = useState<number>(52);
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -117,6 +122,41 @@ export default function Customers() {
 
   // Sort customers alphabetically by name
   const allCustomers = [...customersData].sort((a, b) => a.name.localeCompare(b.name));
+
+  // ─── Per-customer trend chart data ────────────────────────────────────────
+  const { data: customerTrendData, isLoading: isLoadingTrend, isError: isTrendError, refetch: refetchTrend } = useQuery<Array<{
+    weekStart: string;
+    weekEnd: string;
+    invoicedTotal: number;
+    completedQuantity: number;
+  }>>({
+    queryKey: ['/api/reports/customer-weekly-trend', trendCustomerId, trendWeeks],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/customer-weekly-trend?customerId=${trendCustomerId}&weeks=${trendWeeks}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load trend');
+      return res.json();
+    },
+    enabled: canViewPrices && !!trendCustomerId,
+  });
+
+  const trendChartData = useMemo(() => {
+    if (!customerTrendData) return [];
+    return customerTrendData.map(w => ({
+      week: format(new Date(w.weekStart), 'd MMM'),
+      output: w.completedQuantity,
+      invoiceValue: Math.round(w.invoicedTotal),
+    }));
+  }, [customerTrendData]);
+
+  const trendTotals = useMemo(() => {
+    const data = customerTrendData ?? [];
+    const totalOutput = data.reduce((s, w) => s + w.completedQuantity, 0);
+    const totalSpend = data.reduce((s, w) => s + w.invoicedTotal, 0);
+    const weeksWithActivity = data.filter(w => w.completedQuantity > 0 || w.invoicedTotal > 0).length;
+    const avgWeeklySpend = weeksWithActivity > 0 ? totalSpend / weeksWithActivity : 0;
+    return { totalOutput, totalSpend, avgWeeklySpend, weeksWithActivity };
+  }, [customerTrendData]);
+  // ──────────────────────────────────────────────────────────────────────────
   
   // Active/inactive counts (across all customers, unaffected by other filters)
   const activeStats = useMemo(() => {
@@ -457,7 +497,145 @@ export default function Customers() {
             />
             </div>
           </div>
-          
+
+          {/* ─── Per-Customer Activity & Spend Trend ───────────────────── */}
+          {canViewPrices && (
+            <Card data-testid="card-customer-trend">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <CardTitle className="text-base">Customer Activity & Spend</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Weekly output and invoice value for a single customer
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select value={trendCustomerId} onValueChange={setTrendCustomerId}>
+                    <SelectTrigger className="w-[260px]" data-testid="select-trend-customer">
+                      <SelectValue placeholder="Select a customer…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allCustomers.filter(c => c.active !== false).map(c => (
+                        <SelectItem key={c.id} value={c.id} data-testid={`select-trend-customer-${c.id}`}>
+                          <DemoText>{c.name}</DemoText>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={String(trendWeeks)} onValueChange={(v) => setTrendWeeks(parseInt(v))}>
+                    <SelectTrigger className="w-[140px]" data-testid="select-trend-weeks">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="12">Last 12 weeks</SelectItem>
+                      <SelectItem value="26">Last 26 weeks</SelectItem>
+                      <SelectItem value="52">Last 52 weeks</SelectItem>
+                      <SelectItem value="104">Last 2 years</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!trendCustomerId ? (
+                  <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+                    Pick a customer above to see their annual spend and weekly activity.
+                  </div>
+                ) : isLoadingTrend ? (
+                  <Skeleton className="h-[320px] w-full" />
+                ) : isTrendError ? (
+                  <div className="flex flex-col items-center justify-center h-[280px] gap-3 text-sm text-muted-foreground" data-testid="text-trend-error">
+                    <span>Couldn't load this customer's trend data.</span>
+                    <Button variant="outline" size="sm" onClick={() => refetchTrend()} data-testid="button-retry-trend">
+                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-md border p-3" data-testid="text-trend-total-spend">
+                        <p className="text-xs text-muted-foreground">Total spend</p>
+                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                          <DemoAmount value={`£${Math.round(trendTotals.totalSpend).toLocaleString()}`} />
+                        </p>
+                      </div>
+                      <div className="rounded-md border p-3" data-testid="text-trend-total-output">
+                        <p className="text-xs text-muted-foreground">Items completed</p>
+                        <p className="text-2xl font-bold">{trendTotals.totalOutput.toLocaleString()}</p>
+                      </div>
+                      <div className="rounded-md border p-3" data-testid="text-trend-avg-weekly">
+                        <p className="text-xs text-muted-foreground">Avg weekly spend ({trendTotals.weeksWithActivity} active wks)</p>
+                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                          <DemoAmount value={`£${Math.round(trendTotals.avgWeeklySpend).toLocaleString()}`} />
+                        </p>
+                      </div>
+                    </div>
+                    {trendChartData.some(d => d.output > 0 || d.invoiceValue > 0) ? (
+                      <ResponsiveContainer width="100%" height={320}>
+                        <LineChart data={trendChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                          <XAxis dataKey="week" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                          <YAxis
+                            yAxisId="left"
+                            tick={{ fontSize: 12 }}
+                            className="text-muted-foreground"
+                            label={{ value: 'Items', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
+                          />
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            tick={{ fontSize: 12 }}
+                            className="text-muted-foreground"
+                            tickFormatter={(value) => `£${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
+                            label={{ value: 'Invoice Value (£)', angle: 90, position: 'insideRight', style: { fontSize: 12 } }}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: 'hsl(var(--background))',
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '6px',
+                            }}
+                            formatter={(value: number, name: string) => {
+                              if (name === 'Invoice Value (£)') return [`£${value.toLocaleString()}`, name];
+                              return [value.toLocaleString(), name];
+                            }}
+                            labelFormatter={(label) => `Week of ${label}`}
+                          />
+                          <Legend />
+                          <Line
+                            yAxisId="left"
+                            type="monotone"
+                            dataKey="output"
+                            name="Output (Items)"
+                            stroke="hsl(var(--primary))"
+                            strokeWidth={3}
+                            dot={{ r: 3, fill: 'hsl(var(--primary))' }}
+                            activeDot={{ r: 5 }}
+                          />
+                          <Line
+                            yAxisId="right"
+                            type="monotone"
+                            dataKey="invoiceValue"
+                            name="Invoice Value (£)"
+                            stroke="hsl(142.1, 76.2%, 36.3%)"
+                            strokeWidth={3}
+                            dot={{ r: 3, fill: 'hsl(142.1, 76.2%, 36.3%)' }}
+                            activeDot={{ r: 5 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+                        No invoiced or completed activity for this customer in the selected period.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Search and Filter */}
           <div className="flex flex-col gap-3">
             {/* Search input — full width */}

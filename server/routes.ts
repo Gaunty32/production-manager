@@ -1240,6 +1240,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer-specific weekly trend (output + invoiced value) — used by Customers page chart
+  app.get("/api/reports/customer-weekly-trend", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !canViewPrices(user.role)) {
+        return res.status(403).json({ error: "You do not have permission to view pricing reports" });
+      }
+
+      const querySchema = z.object({
+        customerId: z.string().min(1),
+        weeks: z.string().optional().transform((val) => {
+          if (!val) return 52;
+          const num = parseInt(val);
+          if (isNaN(num) || num < 1 || num > 104) return 52;
+          return num;
+        }),
+        endDate: z.string().optional().transform((val) => {
+          if (!val) return new Date();
+          const date = new Date(val);
+          return isNaN(date.getTime()) ? new Date() : date;
+        }),
+      });
+
+      const params = querySchema.parse(req.query);
+      const data = await storage.getCustomerWeeklyTrend({
+        customerId: params.customerId,
+        weeks: params.weeks,
+        endDate: params.endDate,
+        timezone: 'Europe/London',
+      });
+      res.json(data);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching customer weekly trend:", error);
+      res.status(500).json({ error: "Failed to fetch customer weekly trend" });
+    }
+  });
+
   // Production Time Analysis API (requires staff authentication)
   app.get("/api/reports/production-time-analysis", isStaffAuthenticated, async (req: any, res) => {
     try {
