@@ -405,7 +405,22 @@ export default function WeeklyReports() {
   };
 
   return (
-    <div className="p-6 space-y-6 overflow-auto h-full">
+    <div className="p-6 space-y-6 overflow-auto h-full print-report-root">
+      <style>{`
+        @media print {
+          @page { size: A4 landscape; margin: 12mm; }
+          html, body { background: white !important; }
+          body * { visibility: hidden !important; }
+          .print-report-root, .print-report-root * { visibility: visible !important; }
+          .print-report-root { position: absolute; left: 0; top: 0; width: 100%; height: auto !important; overflow: visible !important; padding: 0 !important; }
+          .no-print { display: none !important; }
+          [role="tablist"] { display: none !important; }
+          [role="tabpanel"] { display: block !important; opacity: 1 !important; }
+          .recharts-wrapper, .recharts-surface { overflow: visible !important; }
+          .recharts-tooltip-wrapper { display: none !important; }
+          .card, [class*="card"] { break-inside: avoid; page-break-inside: avoid; }
+        }
+      `}</style>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-page-title">Weekly Performance Report</h1>
@@ -414,7 +429,16 @@ export default function WeeklyReports() {
           </p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 no-print">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+            data-testid="button-print-report"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </Button>
           <Button
             variant={selectedPreset === "this-week" ? "default" : "outline"}
             size="sm"
@@ -593,7 +617,7 @@ export default function WeeklyReports() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="performance" className="space-y-4">
+        <TabsContent forceMount value="performance" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Individual Staff Performance</CardTitle>
@@ -646,7 +670,7 @@ export default function WeeklyReports() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="errors" className="space-y-4">
+        <TabsContent forceMount value="errors" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
@@ -738,7 +762,7 @@ export default function WeeklyReports() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="production" className="space-y-4">
+        <TabsContent forceMount value="production" className="space-y-4">
           {/* Staff Totals Summary */}
           <Card>
             <CardHeader>
@@ -874,7 +898,7 @@ export default function WeeklyReports() {
           </div>
         </TabsContent>
 
-        <TabsContent value="trends" className="space-y-4">
+        <TabsContent forceMount value="trends" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
@@ -1026,7 +1050,7 @@ export default function WeeklyReports() {
         </TabsContent>
 
         {/* Customers Tab */}
-        <TabsContent value="customers" className="space-y-6">
+        <TabsContent forceMount value="customers" className="space-y-6">
           {isLoadingCustomers ? (
             <div className="space-y-4">
               <Skeleton className="h-32 w-full" />
@@ -1407,7 +1431,7 @@ export default function WeeklyReports() {
           )}
         </TabsContent>
         {/* Accuracy Tab */}
-        <TabsContent value="accuracy" className="space-y-6">
+        <TabsContent forceMount value="accuracy" className="space-y-6">
           {isLoadingAccuracy ? (
             <div className="space-y-4">
               <div className="grid gap-4 grid-cols-3">
