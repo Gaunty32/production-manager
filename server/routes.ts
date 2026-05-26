@@ -1531,10 +1531,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getAllJobLineItems(),
       ]);
 
-      // Jobs in the selected date range (by createdAt) — use Number() coercion throughout
+      // Jobs table has no createdAt — use approvedAt → submittedAt → completedAt → invoicedAt
+      const jobDate = (j: any): Date | null => {
+        const raw = j.approvedAt ?? j.submittedAt ?? j.completedAt ?? j.invoicedAt;
+        if (!raw) return null;
+        const d = new Date(raw);
+        return isNaN(d.getTime()) ? null : d;
+      };
+
+      // Jobs in the selected date range — use Number() coercion throughout
       const rangeJobs = allJobs.filter(j => {
-        const d = new Date(j.createdAt);
-        return d >= startDate && d <= endDate;
+        const d = jobDate(j);
+        return d !== null && d >= startDate && d <= endDate;
       });
 
       // Active customers in range (use string keys to avoid type mismatches)
@@ -1576,7 +1584,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Dormant customers: have had jobs before, but none in the last 28 days
       const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
       const recentJobCustomerKeys = new Set(
-        allJobs.filter(j => new Date(j.createdAt) >= fourWeeksAgo).map(j => String(j.customerId))
+        allJobs
+          .filter(j => {
+            const d = jobDate(j);
+            return d !== null && d >= fourWeeksAgo;
+          })
+          .map(j => String(j.customerId))
       );
       const everActiveCustomerKeys = new Set(allJobs.map(j => String(j.customerId)));
 
@@ -1584,20 +1597,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .filter(c => everActiveCustomerKeys.has(String(c.id)) && !recentJobCustomerKeys.has(String(c.id)))
         .map(c => {
           const customerJobs = allJobs.filter(j => String(j.customerId) === String(c.id));
-          const lastJob = [...customerJobs].sort((a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          )[0];
-          const daysSinceLastOrder = lastJob?.createdAt
-            ? Math.floor((Date.now() - new Date(lastJob.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+          const datedJobs = customerJobs
+            .map(j => ({ job: j, d: jobDate(j) }))
+            .filter((x): x is { job: any; d: Date } => x.d !== null)
+            .sort((a, b) => b.d.getTime() - a.d.getTime());
+          const lastDate = datedJobs[0]?.d ?? null;
+          const daysSinceLastOrder = lastDate
+            ? Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
             : null;
           return {
             customerId: c.id,
             customerName: c.name,
-            lastOrderDate: lastJob?.createdAt ?? null,
+            lastOrderDate: lastDate ? lastDate.toISOString() : null,
             daysSinceLastOrder,
           };
         })
-        .sort((a, b) => (b.daysSinceLastOrder || 0) - (a.daysSinceLastOrder || 0));
+        .sort((a, b) => (b.daysSinceLastOrder ?? -1) - (a.daysSinceLastOrder ?? -1));
 
       res.json({ activeCustomerCount, topCustomers, dormantCustomers });
     } catch (error) {
