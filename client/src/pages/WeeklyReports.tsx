@@ -9,6 +9,8 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DemoAmount } from "@/components/DemoText";
 import { Calendar } from "@/components/ui/calendar";
 import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw, Gauge } from "lucide-react";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
@@ -202,6 +204,7 @@ function getPresetDateRange(preset: DatePreset): DateRange {
 export default function WeeklyReports() {
   const { toast } = useToast();
   const [selectedPreset, setSelectedPreset] = useState<DatePreset>("last-12-weeks");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [customDateRange, setCustomDateRange] = useState<DateRange | null>(null);
 
   const syncMutation = useMutation({
@@ -275,6 +278,39 @@ export default function WeeklyReports() {
       return res.json();
     },
   });
+
+  const { data: allCustomersList } = useQuery<Array<{ id: string; name: string; active: boolean }>>({
+    queryKey: ["/api/customers"],
+  });
+
+  const { data: customerSpendTrend, isLoading: isLoadingCustomerTrend, isError: isCustomerTrendError, refetch: refetchCustomerTrend } = useQuery<Array<{
+    weekStart: string;
+    weekEnd: string;
+    invoicedTotal: number;
+    completedQuantity: number;
+  }>>({
+    queryKey: ['/api/reports/customer-weekly-trend', selectedCustomerId, 12],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/customer-weekly-trend?customerId=${selectedCustomerId}&weeks=12`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load customer spend');
+      return res.json();
+    },
+    enabled: !!selectedCustomerId,
+  });
+
+  const customerSpendChartData = useMemo(() => {
+    if (!customerSpendTrend) return [];
+    return customerSpendTrend.map(w => ({
+      week: format(new Date(w.weekStart), "MMM d"),
+      spend: w.invoicedTotal,
+      items: w.completedQuantity,
+    }));
+  }, [customerSpendTrend]);
+
+  const customerSpendTotal = useMemo(
+    () => customerSpendTrend?.reduce((s, w) => s + w.invoicedTotal, 0) ?? 0,
+    [customerSpendTrend]
+  );
 
   const { data: customerInsights, isLoading: isLoadingCustomers, error: customersError } = useQuery<CustomerInsightsData>({
     queryKey: ['/api/reports/customer-insights', dateRange.from.toISOString(), dateRange.to.toISOString()],
@@ -954,6 +990,98 @@ export default function WeeklyReports() {
             </Card>
           ) : (
             <>
+              {/* Per-customer rolling 12-week spend */}
+              <Card data-testid="card-customer-spend-trend">
+                <CardHeader>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-primary" />
+                        Customer Spend — Rolling 12 Weeks
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Pick a customer to see their weekly invoice value over the last 12 weeks.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {selectedCustomerId && customerSpendTrend && customerSpendTrend.length > 0 && (
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">12-week total</p>
+                          <p className="text-lg font-semibold" data-testid="text-customer-spend-total">
+                            <DemoAmount value={`£${formatNumber(Math.round(customerSpendTotal))}`} />
+                          </p>
+                        </div>
+                      )}
+                      <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                        <SelectTrigger className="w-[240px]" data-testid="select-customer-spend">
+                          <SelectValue placeholder="Choose a customer…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[...(allCustomersList ?? [])]
+                            .filter(c => c.active)
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(c => (
+                              <SelectItem key={c.id} value={c.id} data-testid={`option-customer-${c.id}`}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!selectedCustomerId ? (
+                    <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+                      Pick a customer above to see their rolling 12-week spend.
+                    </div>
+                  ) : isLoadingCustomerTrend ? (
+                    <Skeleton className="h-[280px] w-full" />
+                  ) : isCustomerTrendError ? (
+                    <div className="flex flex-col items-center justify-center h-[280px] gap-3 text-sm text-muted-foreground">
+                      <span>Couldn't load this customer's spend.</span>
+                      <Button variant="outline" size="sm" onClick={() => refetchCustomerTrend()} data-testid="button-retry-customer-spend">
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
+                      </Button>
+                    </div>
+                  ) : customerSpendChartData.every(d => d.spend === 0 && d.items === 0) ? (
+                    <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+                      No invoiced activity for this customer in the last 12 weeks.
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={customerSpendChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis dataKey="week" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                        <YAxis
+                          tick={{ fontSize: 12 }}
+                          className="text-muted-foreground"
+                          tickFormatter={(value) => `£${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--background))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '6px',
+                          }}
+                          formatter={(value: number) => [`£${formatNumber(Math.round(value))}`, 'Invoice Value']}
+                          labelFormatter={(label) => `Week of ${label}`}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="spend"
+                          name="Invoice Value (£)"
+                          stroke="hsl(142.1, 76.2%, 36.3%)"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: 'hsl(142.1, 76.2%, 36.3%)' }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* KPI cards */}
               <div className="grid gap-4 md:grid-cols-3">
                 <Card data-testid="card-active-customers">
