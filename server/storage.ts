@@ -2117,8 +2117,9 @@ export class DatabaseStorage implements IStorage {
       INNER JOIN staff s ON j.completed_by_id = s.id
       WHERE j.completed = true
         AND j.invoice_status IN ('ready', 'invoiced')
-        AND j.goods_received >= ${startDate}
-        AND j.goods_received <= ${endDate}
+        AND j.completed_at IS NOT NULL
+        AND j.completed_at >= ${startDate}
+        AND j.completed_at <= ${endDate}
       GROUP BY s.id, s.name
       ORDER BY COUNT(j.id) DESC
     `);
