@@ -1772,6 +1772,18 @@ export class DatabaseStorage implements IStorage {
           AND date_trunc('week', c.created_at AT TIME ZONE ${timezone}) <=
               (SELECT week_end FROM base_week)
         GROUP BY 1
+      ),
+      active_customers_by_week AS (
+        SELECT
+          date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone})::date AS week_start,
+          COUNT(DISTINCT j.customer_id) AS active_count
+        FROM jobs j
+        WHERE j.invoiced_at IS NOT NULL
+          AND date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone}) >=
+              (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval
+          AND date_trunc('week', j.invoiced_at AT TIME ZONE ${timezone}) <=
+              (SELECT week_end FROM base_week)
+        GROUP BY 1
       )
       SELECT
         w.week_start::text,
@@ -1779,11 +1791,12 @@ export class DatabaseStorage implements IStorage {
         COALESCE(ib.total_invoiced, 0) AS invoiced_total,
         COALESCE(cb.total_quantity, 0) AS completed_quantity,
         COALESCE(nc.new_count, 0) AS new_customers,
-        (SELECT COUNT(*) FROM customers WHERE active = true AND created_at <= w.week_end + '6 days'::interval) AS total_active_customers
+        COALESCE(ac.active_count, 0) AS total_active_customers
       FROM weeks_with_end w
       LEFT JOIN invoiced_by_week ib ON w.week_start = ib.week_start
       LEFT JOIN completed_by_week cb ON w.week_start = cb.week_start
       LEFT JOIN new_customers_by_week nc ON w.week_start = nc.week_start
+      LEFT JOIN active_customers_by_week ac ON w.week_start = ac.week_start
       ORDER BY w.week_start
     `);
 

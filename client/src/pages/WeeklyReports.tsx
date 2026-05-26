@@ -959,7 +959,7 @@ export default function WeeklyReports() {
                       yAxisId="customers"
                       type="monotone"
                       dataKey="activeCustomers"
-                      name="Customers on Books"
+                      name="Active Customers"
                       stroke="hsl(221.2, 83.2%, 53.3%)"
                       strokeWidth={2}
                       strokeDasharray="5 4"
