@@ -4418,6 +4418,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
             invoiceStatus: "ready",
             conversationArchivedByStaff: true, // Auto-archive chat when job moves to invoicing
           } as any);
+
+          // Push the job to the customer's Drive Calculations sheet so the
+          // job name lands there verbatim. This eliminates the fuzzy
+          // name-matching mismatches in the Drive Verification panel.
+          // Fire-and-forget — failures (no folder, no sheet, network) must
+          // never block the completion flow.
+          (async () => {
+            try {
+              const customer = await storage.getCustomer(job.customerId);
+              if (!customer) return;
+              const totalQty = allLineItems.reduce((s, li) => s + (li.quantity || 0), 0);
+              const biggest = allLineItems.reduce<typeof allLineItems[number] | null>(
+                (b, li) => (!b || (li.quantity || 0) > (b.quantity || 0)) ? li : b, null
+              );
+              const today = new Date();
+              const dd = String(today.getDate()).padStart(2, "0");
+              const mm = String(today.getMonth() + 1).padStart(2, "0");
+              const yyyy = today.getFullYear();
+              const { appendJobRowToCustomerSheet } = await import("./googleService.js");
+              const pushed = await appendJobRowToCustomerSheet(customer.name, {
+                jobName: job.jobName,
+                quantity: totalQty || undefined,
+                stitches: biggest?.stitchCount || undefined,
+                dateCompleted: `${dd}/${mm}/${yyyy}`,
+              });
+              if (pushed) {
+                console.log(`[Drive] Appended job "${job.jobName}" to ${customer.name} Calculations sheet`);
+              }
+            } catch (err) {
+              console.error("[Drive] Failed to push job to customer sheet:", err);
+            }
+          })();
         } else if (anyIncomplete && job.invoiceStatus === "ready") {
           // If any line item is incomplete and job is only at 'ready' status (not yet invoiced),
           // reset job completion status. Don't downgrade jobs that have been sent/paid.

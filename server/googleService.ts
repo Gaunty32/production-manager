@@ -134,6 +134,50 @@ export async function getCustomerDriveRows(customerName: string): Promise<Custom
   return { rows, spreadsheetId: sheet.spreadsheetId, folderName: folder.folderName, sheetNumericId };
 }
 
+// Append a single row to a customer's Calculations sheet. Used when a job
+// completes so the system-side job name lands on the Drive sheet verbatim
+// (avoids fuzzy-name reconciliation mismatches). Returns false if the
+// customer folder or spreadsheet can't be found — caller should treat that
+// as a silent skip (not all customers have a Drive folder).
+export async function appendJobRowToCustomerSheet(
+  customerName: string,
+  row: { jobName: string; quantity?: number | string; stitches?: number | string; dateCompleted?: string; notes?: string }
+): Promise<boolean> {
+  const folder = await findCustomerFolderId(customerName);
+  if (!folder) return false;
+  const sheet = await findSpreadsheetInFolder(folder.folderId);
+  if (!sheet) return false;
+
+  // Columns A..K — leave id (A) blank so the sheet owner can fill it, and only
+  // populate the fields we know. The verification logic only matches on name.
+  const values = [[
+    "",                                      // A: id
+    row.jobName,                             // B: name
+    row.stitches != null ? String(row.stitches) : "", // C: stitches
+    row.quantity != null ? String(row.quantity) : "", // D: quantity
+    row.dateCompleted || "",                 // E: dateCompleted
+    "",                                      // F: carriageCost
+    "",                                      // G: embCost
+    "",                                      // H: total
+    "",                                      // I: setUp
+    "",                                      // J: processTime
+    row.notes || "",                         // K: notes
+  ]];
+
+  const res = await connectors.proxy(
+    "google-sheet",
+    `/v4/spreadsheets/${sheet.spreadsheetId}/values/${CALCULATIONS_SHEET_NAME}!A:K:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    {
+      method: "POST",
+      body: JSON.stringify({ values }),
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+  const data = await res.json();
+  if (data.error) throw new Error(`Sheets append error: ${data.error.message}`);
+  return true;
+}
+
 // Hide specific rows in the Calculations sheet (rowIndices are 0-based)
 export async function hideDriveRows(spreadsheetId: string, sheetNumericId: number, rowIndices: number[]): Promise<void> {
   if (rowIndices.length === 0) return;
