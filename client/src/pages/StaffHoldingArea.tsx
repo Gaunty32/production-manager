@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Clock, FileText, MessageSquare, CheckCircle, XCircle, Eye, Plus, X, StickyNote, Pencil, Check } from "lucide-react";
+import { Clock, FileText, MessageSquare, CheckCircle, XCircle, Eye, Plus, X, StickyNote, Pencil, Check, Search } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import {
   Accordion,
@@ -89,6 +90,32 @@ export default function StaffHoldingArea() {
   });
 
   const activeCustomers = customers.filter(c => c.active !== false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [customerFilter, setCustomerFilter] = useState<string>("all");
+
+  const filteredPendingJobs = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return pendingJobs.filter(j => {
+      if (customerFilter !== "all" && j.customerId !== customerFilter) return false;
+      if (!q) return true;
+      return (
+        j.jobName?.toLowerCase().includes(q) ||
+        j.customerName?.toLowerCase().includes(q) ||
+        (j.poNumber ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [pendingJobs, searchQuery, customerFilter]);
+
+  const submittingCustomers = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const j of pendingJobs) {
+      if (j.customerId && !seen.has(j.customerId)) seen.set(j.customerId, j.customerName);
+    }
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [pendingJobs]);
 
   // Track which card is most visible using IntersectionObserver
   useEffect(() => {
@@ -304,7 +331,8 @@ export default function StaffHoldingArea() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">Customer Job Submissions</h1>
           <p className="text-sm text-muted-foreground">
-            Review and approve customer job requests ({pendingJobs.length} pending)
+            Review and approve customer job requests ({filteredPendingJobs.length}
+            {filteredPendingJobs.length !== pendingJobs.length ? ` of ${pendingJobs.length}` : ""} pending)
           </p>
         </div>
         <div className="flex-shrink-0">
@@ -337,9 +365,51 @@ export default function StaffHoldingArea() {
         </div>
       ) : (
         <>
+          <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[220px] max-w-md">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search by job name, customer, or PO…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+                data-testid="input-holding-search"
+              />
+            </div>
+            <Select value={customerFilter} onValueChange={setCustomerFilter}>
+              <SelectTrigger className="w-[220px]" data-testid="select-holding-customer">
+                <SelectValue placeholder="All customers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All customers</SelectItem>
+                {submittingCustomers.map(c => (
+                  <SelectItem key={c.id} value={c.id} data-testid={`option-holding-customer-${c.id}`}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(searchQuery || customerFilter !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setSearchQuery(""); setCustomerFilter("all"); }}
+                data-testid="button-holding-clear-filters"
+              >
+                <X className="h-3.5 w-3.5 mr-1" /> Clear
+              </Button>
+            )}
+          </div>
           <div className="px-4 pb-24 md:pb-4">
+            {filteredPendingJobs.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground" data-testid="text-holding-no-matches">
+                  No submissions match your filters.
+                </CardContent>
+              </Card>
+            ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {pendingJobs.map((job, index) => (
+            {filteredPendingJobs.map((job, index) => (
               <Card 
                 key={job.id}
                 ref={(el) => cardRefs.current[job.id] = el}
@@ -628,6 +698,7 @@ export default function StaffHoldingArea() {
             </Card>
             ))}
             </div>
+            )}
           </div>
 
           {/* Mobile: Sticky action bar - targets currently visible job */}
