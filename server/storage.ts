@@ -2107,21 +2107,30 @@ export class DatabaseStorage implements IStorage {
     startDate.setDate(startDate.getDate() - (weeks * 7));
 
     const result = await db.execute(sql`
+      WITH job_completion AS (
+        SELECT j.id AS job_id,
+               j.completed_by_id,
+               j.completed_on_time,
+               MAX(jli.completed_at) AS completed_at
+        FROM jobs j
+        INNER JOIN job_line_items jli ON jli.job_id = j.id
+        WHERE j.completed = true
+          AND j.invoice_status IN ('ready', 'invoiced')
+          AND jli.completed_at IS NOT NULL
+        GROUP BY j.id, j.completed_by_id, j.completed_on_time
+      )
       SELECT 
         s.id as staff_id,
         s.name as staff_name,
-        COUNT(CASE WHEN j.completed_on_time = true THEN 1 END) as on_time_count,
-        COUNT(CASE WHEN j.completed_on_time = false THEN 1 END) as late_count,
-        COUNT(j.id) as total_completed
-      FROM jobs j
-      INNER JOIN staff s ON j.completed_by_id = s.id
-      WHERE j.completed = true
-        AND j.invoice_status IN ('ready', 'invoiced')
-        AND j.completed_at IS NOT NULL
-        AND j.completed_at >= ${startDate}
-        AND j.completed_at <= ${endDate}
+        COUNT(CASE WHEN jc.completed_on_time = true THEN 1 END) as on_time_count,
+        COUNT(CASE WHEN jc.completed_on_time = false THEN 1 END) as late_count,
+        COUNT(jc.job_id) as total_completed
+      FROM job_completion jc
+      INNER JOIN staff s ON jc.completed_by_id = s.id
+      WHERE jc.completed_at >= ${startDate}
+        AND jc.completed_at <= ${endDate}
       GROUP BY s.id, s.name
-      ORDER BY COUNT(j.id) DESC
+      ORDER BY COUNT(jc.job_id) DESC
     `);
 
     const staffMetrics = (result.rows as any[]).map(row => ({
