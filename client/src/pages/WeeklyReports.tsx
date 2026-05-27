@@ -378,26 +378,25 @@ export default function WeeklyReports() {
 
   const staffWeeklyChartData = useMemo(() => {
     const rows = weeklyProductionData?.weeklyData;
-    if (!rows || rows.length === 0) return { data: [], staff: [] as Array<{ id: string; name: string }> };
-    const weekMap = new Map<string, { week: string; weekStart: string; [k: string]: any }>();
+    if (!rows || rows.length === 0) return { itemsData: [], stitchesData: [], staff: [] as Array<{ id: string; name: string }> };
+    const itemsMap = new Map<string, { week: string; weekStart: string; [k: string]: any }>();
+    const stitchesMap = new Map<string, { week: string; weekStart: string; [k: string]: any }>();
     const staffSet = new Map<string, string>();
     for (const r of rows) {
       const key = r.weekStart;
-      if (!weekMap.has(key)) {
-        weekMap.set(key, {
-          week: format(new Date(r.weekStart), "MMM d"),
-          weekStart: r.weekStart,
-        });
-      }
-      const row = weekMap.get(key)!;
-      row[r.staffName] = (row[r.staffName] || 0) + (r.totalItems || 0);
+      const weekLabel = format(new Date(r.weekStart), "MMM d");
+      if (!itemsMap.has(key)) itemsMap.set(key, { week: weekLabel, weekStart: r.weekStart });
+      if (!stitchesMap.has(key)) stitchesMap.set(key, { week: weekLabel, weekStart: r.weekStart });
+      itemsMap.get(key)![r.staffName] = r.avgDailyItems || 0;
+      stitchesMap.get(key)![r.staffName] = r.avgDailyStitches || 0;
       staffSet.set(r.staffId, r.staffName);
     }
-    const data = Array.from(weekMap.values()).sort((a, b) =>
-      new Date(a.weekStart).getTime() - new Date(b.weekStart).getTime()
-    );
-    const staff = Array.from(staffSet.entries()).map(([id, name]) => ({ id, name }));
-    return { data, staff };
+    const sortByWeek = (a: any, b: any) => new Date(a.weekStart).getTime() - new Date(b.weekStart).getTime();
+    return {
+      itemsData: Array.from(itemsMap.values()).sort(sortByWeek),
+      stitchesData: Array.from(stitchesMap.values()).sort(sortByWeek),
+      staff: Array.from(staffSet.entries()).map(([id, name]) => ({ id, name })),
+    };
   }, [weeklyProductionData]);
 
   const chartData = useMemo(() => {
@@ -848,29 +847,25 @@ export default function WeeklyReports() {
           {/* Weekly Items Trend per Staff */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Weekly Items Completed per Staff</CardTitle>
-              <p className="text-sm text-muted-foreground">Total items each staff member completed each week across the selected period</p>
+              <CardTitle className="text-base">Avg Daily Items per Staff</CardTitle>
+              <p className="text-sm text-muted-foreground">Average items completed per working day, by staff member, each week</p>
             </CardHeader>
             <CardContent>
               {isLoadingWeekly ? (
                 <Skeleton className="h-[360px] w-full" />
-              ) : staffWeeklyChartData.data.length === 0 ? (
+              ) : staffWeeklyChartData.itemsData.length === 0 ? (
                 <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
                   No weekly production data for this period.
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={360}>
-                  <LineChart data={staffWeeklyChartData.data} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                  <LineChart data={staffWeeklyChartData.itemsData} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="week" tick={{ fontSize: 12 }} className="text-muted-foreground" />
                     <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" tickFormatter={(v) => v.toLocaleString()} />
                     <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'hsl(var(--background))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '6px',
-                      }}
-                      formatter={(value: number, name: string) => [`${value.toLocaleString()} items`, name]}
+                      contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '6px' }}
+                      formatter={(value: number, name: string) => [`${Math.round(value).toLocaleString()} items/day`, name]}
                       labelFormatter={(label) => `Week of ${label}`}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -882,15 +877,53 @@ export default function WeeklyReports() {
                         'hsl(260, 60%, 60%)',
                       ];
                       return (
-                        <Line
-                          key={s.id}
-                          type="monotone"
-                          dataKey={s.name}
-                          stroke={palette[idx % palette.length]}
-                          strokeWidth={2}
-                          dot={{ r: 3 }}
-                          activeDot={{ r: 5 }}
-                        />
+                        <Line key={s.id} type="monotone" dataKey={s.name} stroke={palette[idx % palette.length]} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                      );
+                    })}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Weekly Stitches Trend per Staff */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Avg Daily Stitches per Staff</CardTitle>
+              <p className="text-sm text-muted-foreground">Average stitches per working day, by staff member, each week</p>
+            </CardHeader>
+            <CardContent>
+              {isLoadingWeekly ? (
+                <Skeleton className="h-[360px] w-full" />
+              ) : staffWeeklyChartData.stitchesData.length === 0 ? (
+                <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+                  No weekly production data for this period.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={360}>
+                  <LineChart data={staffWeeklyChartData.stitchesData} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="week" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      className="text-muted-foreground"
+                      tickFormatter={(v) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v.toLocaleString()}
+                    />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '6px' }}
+                      formatter={(value: number, name: string) => [`${Math.round(value).toLocaleString()} stitches/day`, name]}
+                      labelFormatter={(label) => `Week of ${label}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {staffWeeklyChartData.staff.map((s, idx) => {
+                      const palette = [
+                        'hsl(220, 70%, 50%)', 'hsl(142, 76%, 36%)', 'hsl(25, 95%, 53%)',
+                        'hsl(280, 65%, 55%)', 'hsl(0, 84%, 60%)', 'hsl(189, 94%, 43%)',
+                        'hsl(340, 82%, 52%)', 'hsl(45, 100%, 45%)', 'hsl(160, 60%, 40%)',
+                        'hsl(260, 60%, 60%)',
+                      ];
+                      return (
+                        <Line key={s.id} type="monotone" dataKey={s.name} stroke={palette[idx % palette.length]} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                       );
                     })}
                   </LineChart>
