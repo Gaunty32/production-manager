@@ -1254,24 +1254,26 @@ export default function WeeklyReports() {
                       </div>
                     ) : (
                       <div className="space-y-4">
+                        <TooltipProvider delayDuration={150}>
                         <div className="grid gap-3 sm:grid-cols-3">
                           <div className="rounded-md border p-3" data-testid="text-all-total-spend">
-                            <p className="text-xs text-muted-foreground">Total spend (top 15)</p>
+                            <p className="text-xs text-muted-foreground"><HeaderHint label="Total spend (top 15)" hint="Combined invoice value (ex VAT) for the top 15 customers by spend in the selected period." /></p>
                             <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                               <DemoAmount value={`£${Math.round(allCustomersTotals.totalSpend).toLocaleString()}`} />
                             </p>
                           </div>
                           <div className="rounded-md border p-3" data-testid="text-all-customer-count">
-                            <p className="text-xs text-muted-foreground">Customers shown</p>
+                            <p className="text-xs text-muted-foreground"><HeaderHint label="Customers shown" hint="Number of customers plotted on the chart (capped at the top 15 by spend)." /></p>
                             <p className="text-2xl font-bold">{allCustomersTotals.customerCount}</p>
                           </div>
                           <div className="rounded-md border p-3" data-testid="text-all-avg-per-customer">
-                            <p className="text-xs text-muted-foreground">Avg spend / customer</p>
+                            <p className="text-xs text-muted-foreground"><HeaderHint label="Avg spend / customer" hint="Total spend divided by the number of customers shown — average revenue per top-15 customer in the period." /></p>
                             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                               <DemoAmount value={`£${Math.round(allCustomersTotals.avgPerCustomer).toLocaleString()}`} />
                             </p>
                           </div>
                         </div>
+                        </TooltipProvider>
                         <ResponsiveContainer width="100%" height={400}>
                           <LineChart data={allCustomersChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -1330,24 +1332,26 @@ export default function WeeklyReports() {
                     </div>
                   ) : (
                     <div className="space-y-4">
+                      <TooltipProvider delayDuration={150}>
                       <div className="grid gap-3 sm:grid-cols-3">
                         <div className="rounded-md border p-3" data-testid="text-trend-total-spend">
-                          <p className="text-xs text-muted-foreground">Total spend</p>
+                          <p className="text-xs text-muted-foreground"><HeaderHint label="Total spend" hint="Total invoice value (ex VAT) for this customer across the selected period." /></p>
                           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                             <DemoAmount value={`£${Math.round(customerSpendTotals.totalSpend).toLocaleString()}`} />
                           </p>
                         </div>
                         <div className="rounded-md border p-3" data-testid="text-trend-total-output">
-                          <p className="text-xs text-muted-foreground">Items completed</p>
+                          <p className="text-xs text-muted-foreground"><HeaderHint label="Items completed" hint="Total quantity of garments completed for this customer in the period (sum of all completed line item quantities)." /></p>
                           <p className="text-2xl font-bold">{customerSpendTotals.totalOutput.toLocaleString()}</p>
                         </div>
                         <div className="rounded-md border p-3" data-testid="text-trend-avg-weekly">
-                          <p className="text-xs text-muted-foreground">Avg weekly spend ({customerSpendTotals.weeksWithActivity} active wks)</p>
+                          <p className="text-xs text-muted-foreground"><HeaderHint label={`Avg weekly spend (${customerSpendTotals.weeksWithActivity} active wks)`} hint="Total spend divided by the number of weeks this customer was actually invoiced in. Weeks with zero invoices are excluded so quiet periods don't drag the average down." /></p>
                           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                             <DemoAmount value={`£${Math.round(customerSpendTotals.avgWeeklySpend).toLocaleString()}`} />
                           </p>
                         </div>
                       </div>
+                      </TooltipProvider>
                       {customerSpendChartData.some(d => d.output > 0 || d.invoiceValue > 0) ? (
                         <ResponsiveContainer width="100%" height={320}>
                           <LineChart data={customerSpendChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
