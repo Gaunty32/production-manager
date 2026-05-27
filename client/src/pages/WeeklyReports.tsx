@@ -1031,10 +1031,10 @@ export default function WeeklyReports() {
                       type="monotone"
                       dataKey="activeCustomers"
                       name="Active Customers"
-                      stroke="hsl(221.2, 83.2%, 53.3%)"
+                      stroke="hsl(25, 95%, 53%)"
                       strokeWidth={2}
                       strokeDasharray="5 4"
-                      dot={{ r: 3, fill: 'hsl(221.2, 83.2%, 53.3%)' }}
+                      dot={{ r: 3, fill: 'hsl(25, 95%, 53%)' }}
                       activeDot={{ r: 5 }}
                     />
                   </LineChart>
