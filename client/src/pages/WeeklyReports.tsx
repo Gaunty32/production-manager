@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DemoAmount } from "@/components/DemoText";
 import { Calendar } from "@/components/ui/calendar";
 import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw, Gauge, Printer } from "lucide-react";
@@ -410,6 +411,17 @@ export default function WeeklyReports() {
   }, [weeklyTrendData]);
 
   const formatNumber = (value: number) => value.toLocaleString();
+
+  const HeaderHint = ({ label, hint, align = "left" }: { label: string; hint: string; align?: "left" | "right" }) => (
+    <UITooltip>
+      <TooltipTrigger asChild>
+        <span className={`cursor-help underline decoration-dotted decoration-muted-foreground/50 underline-offset-4 ${align === "right" ? "ml-auto" : ""}`}>{label}</span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs text-xs">
+        {hint}
+      </TooltipContent>
+    </UITooltip>
+  );
   
   const handlePresetChange = (preset: DatePreset) => {
     setSelectedPreset(preset);
@@ -795,20 +807,22 @@ export default function WeeklyReports() {
               {isLoadingWeekly ? (
                 <Skeleton className="h-[200px] w-full" />
               ) : (
+                <TooltipProvider delayDuration={150}>
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Staff Member</TableHead>
-                      <TableHead className="text-right">Avg Daily Stitches</TableHead>
-                      <TableHead className="text-right">Avg Daily Items</TableHead>
-                      <TableHead className="text-right">Total Stitches</TableHead>
-                      <TableHead className="text-right">Total Items</TableHead>
-                      <TableHead className="text-right">Actual Time</TableHead>
-                      <TableHead className="text-right">Est. Time</TableHead>
-                      <TableHead className="text-right">Efficiency</TableHead>
+                      <TableHead className="text-right"><HeaderHint align="right" label="Avg Daily Stitches" hint="Average stitches stitched per working day: total stitches divided by the number of days they completed at least one item." /></TableHead>
+                      <TableHead className="text-right"><HeaderHint align="right" label="Avg Daily Items" hint="Average physical items (garments) completed per working day in the period." /></TableHead>
+                      <TableHead className="text-right"><HeaderHint align="right" label="Total Stitches" hint="Sum of quantity × stitch count across every line item this person completed in the period." /></TableHead>
+                      <TableHead className="text-right"><HeaderHint align="right" label="Total Items" hint="Total quantity of items (garments) this person completed in the period." /></TableHead>
+                      <TableHead className="text-right"><HeaderHint align="right" label="Actual Time" hint="Sum of actual production minutes logged against each completed line item." /></TableHead>
+                      <TableHead className="text-right"><HeaderHint align="right" label="Est. Time" hint="System estimate based on (quantity × stitch count) ÷ 1000 stitches per minute. Ignores hooping, trims and changeovers, so will be much lower than actual." /></TableHead>
+                      <TableHead className="text-right"><HeaderHint align="right" label="Efficiency" hint="Actual Time ÷ Estimated Time. 1.00 = exactly on estimate. Green 0.9–1.2, amber 1.2–2.0, red >2.0. Useful as a relative comparison between staff." /></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {/* table body wrapped */}
                     {weeklyProductionData?.staffTotals?.length ? (
                       weeklyProductionData.staffTotals.map((staff, index) => (
                         <TableRow key={staff.staffId} data-testid={`row-staff-total-${index}`}>
@@ -840,6 +854,7 @@ export default function WeeklyReports() {
                     )}
                   </TableBody>
                 </Table>
+                </TooltipProvider>
               )}
             </CardContent>
           </Card>
@@ -941,19 +956,20 @@ export default function WeeklyReports() {
               {isLoadingWeekly ? (
                 <Skeleton className="h-[300px] w-full" />
               ) : (
+                <TooltipProvider delayDuration={150}>
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Week</TableHead>
                         <TableHead>Staff Member</TableHead>
-                        <TableHead className="text-right">Avg Daily Stitches</TableHead>
-                        <TableHead className="text-right">Avg Daily Items</TableHead>
-                        <TableHead className="text-right">Total Stitches</TableHead>
-                        <TableHead className="text-right">Total Items</TableHead>
-                        <TableHead className="text-right">Actual Time</TableHead>
-                        <TableHead className="text-right">Est. Time</TableHead>
-                        <TableHead className="text-right">Efficiency</TableHead>
+                        <TableHead className="text-right"><HeaderHint align="right" label="Avg Daily Stitches" hint="Average stitches per working day this week: total stitches ÷ days they completed at least one item." /></TableHead>
+                        <TableHead className="text-right"><HeaderHint align="right" label="Avg Daily Items" hint="Average garments completed per working day this week." /></TableHead>
+                        <TableHead className="text-right"><HeaderHint align="right" label="Total Stitches" hint="Sum of quantity × stitch count across every line item completed in this week." /></TableHead>
+                        <TableHead className="text-right"><HeaderHint align="right" label="Total Items" hint="Total quantity of garments completed this week." /></TableHead>
+                        <TableHead className="text-right"><HeaderHint align="right" label="Actual Time" hint="Sum of actual production minutes logged against completed line items this week." /></TableHead>
+                        <TableHead className="text-right"><HeaderHint align="right" label="Est. Time" hint="System estimate: (quantity × stitch count) ÷ 1000 stitches/min. Excludes hooping, trims and changeovers." /></TableHead>
+                        <TableHead className="text-right"><HeaderHint align="right" label="Efficiency" hint="Actual ÷ Estimated. 1.00 = on estimate. Green 0.9–1.2, amber 1.2–2.0, red >2.0. Best read as a relative comparison." /></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -995,6 +1011,7 @@ export default function WeeklyReports() {
                     </TableBody>
                   </Table>
                 </div>
+                </TooltipProvider>
               )}
             </CardContent>
           </Card>
