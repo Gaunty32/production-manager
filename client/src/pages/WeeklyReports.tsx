@@ -1139,9 +1139,9 @@ export default function WeeklyReports() {
                       type="monotone" 
                       dataKey="output" 
                       name="Output (Items)"
-                      stroke="hsl(var(--primary))" 
+                      stroke="hsl(25, 95%, 53%)" 
                       strokeWidth={3}
-                      dot={{ r: 4, fill: 'hsl(var(--primary))' }}
+                      dot={{ r: 4, fill: 'hsl(25, 95%, 53%)' }}
                       activeDot={{ r: 6 }}
                     />
                     <Line 
@@ -1159,10 +1159,10 @@ export default function WeeklyReports() {
                       type="monotone"
                       dataKey="activeCustomers"
                       name="Active Customers"
-                      stroke="hsl(25, 95%, 53%)"
+                      stroke="hsl(221, 83%, 53%)"
                       strokeWidth={2}
                       strokeDasharray="5 4"
-                      dot={{ r: 3, fill: 'hsl(25, 95%, 53%)' }}
+                      dot={{ r: 3, fill: 'hsl(221, 83%, 53%)' }}
                       activeDot={{ r: 5 }}
                     />
                   </LineChart>
