@@ -2339,7 +2339,7 @@ export class DatabaseStorage implements IStorage {
         COALESCE(SUM(jli.quantity * COALESCE(jli.stitch_count, 0)), 0) as total_stitches,
         COALESCE(SUM(jli.quantity), 0) as total_items,
         COALESCE(SUM(jli.actual_production_time_minutes), 0) as actual_minutes,
-        COALESCE(SUM(CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60)), 0) as estimated_minutes
+        COALESCE(SUM(CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000)), 0) as estimated_minutes
       FROM job_line_items jli
       INNER JOIN staff s ON jli.completed_by_id = s.id
       WHERE jli.completed = true
@@ -2370,7 +2370,7 @@ export class DatabaseStorage implements IStorage {
           COALESCE(SUM(jli.quantity * COALESCE(jli.stitch_count, 0)), 0) as daily_stitches,
           COALESCE(SUM(jli.quantity), 0) as daily_items,
           COALESCE(SUM(jli.actual_production_time_minutes), 0) as daily_actual,
-          COALESCE(SUM(CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60)), 0) as daily_estimated
+          COALESCE(SUM(CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000)), 0) as daily_estimated
         FROM job_line_items jli
         INNER JOIN staff s ON jli.completed_by_id = s.id
         WHERE jli.completed = true
@@ -2458,7 +2458,7 @@ export class DatabaseStorage implements IStorage {
           pe.quantity_completed * COALESCE(jli.stitch_count, 0) as stitches,
           pe.quantity_completed as items,
           pe.production_time_minutes as actual_minutes,
-          CEIL((pe.quantity_completed::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60) as estimated_minutes
+          CEIL((pe.quantity_completed::numeric * COALESCE(jli.stitch_count, 0)) / 1000) as estimated_minutes
         FROM production_entries pe
         INNER JOIN staff s ON pe.staff_id = s.id
         INNER JOIN job_line_items jli ON pe.line_item_id = jli.id
@@ -2475,7 +2475,7 @@ export class DatabaseStorage implements IStorage {
           jli.quantity * COALESCE(jli.stitch_count, 0) as stitches,
           jli.quantity as items,
           COALESCE(jli.actual_production_time_minutes, 0) as actual_minutes,
-          CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60) as estimated_minutes
+          CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000) as estimated_minutes
         FROM job_line_items jli
         INNER JOIN staff s ON jli.completed_by_id = s.id
         WHERE jli.completed = true
@@ -2561,7 +2561,7 @@ export class DatabaseStorage implements IStorage {
           pe.quantity_completed * COALESCE(jli.stitch_count, 0) as stitches,
           pe.quantity_completed as items,
           pe.production_time_minutes as actual_minutes,
-          CEIL((pe.quantity_completed::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60) as estimated_minutes
+          CEIL((pe.quantity_completed::numeric * COALESCE(jli.stitch_count, 0)) / 1000) as estimated_minutes
         FROM production_entries pe
         INNER JOIN staff s ON pe.staff_id = s.id
         INNER JOIN job_line_items jli ON pe.line_item_id = jli.id
@@ -2576,7 +2576,7 @@ export class DatabaseStorage implements IStorage {
           jli.quantity * COALESCE(jli.stitch_count, 0) as stitches,
           jli.quantity as items,
           COALESCE(jli.actual_production_time_minutes, 0) as actual_minutes,
-          CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000 / 60) as estimated_minutes
+          CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000) as estimated_minutes
         FROM job_line_items jli
         INNER JOIN staff s ON jli.completed_by_id = s.id
         WHERE jli.completed = true
