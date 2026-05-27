@@ -289,6 +289,7 @@ export default function WeeklyReports() {
   });
 
   const [trendWeeks, setTrendWeeks] = useState<number>(52);
+  const [avgWeeklyMode, setAvgWeeklyMode] = useState<"value" | "quantity">("value");
 
   const { data: customerSpendTrend, isLoading: isLoadingCustomerTrend, isError: isCustomerTrendError, refetch: refetchCustomerTrend } = useQuery<Array<{
     weekStart: string;
@@ -1027,7 +1028,7 @@ export default function WeeklyReports() {
         </TabsContent>
 
         <TabsContent value="trends" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Total Output</CardTitle>
@@ -1048,6 +1049,57 @@ export default function WeeklyReports() {
                   £{formatNumber(Math.round(weeklyTrendData?.reduce((sum, w) => sum + w.invoicedTotal, 0) ?? 0))}
                 </div>
                 <p className="text-xs text-muted-foreground">Invoiced in period</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Average Weekly Output</CardTitle>
+                <div className="inline-flex rounded-md border p-0.5" role="group">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={avgWeeklyMode === "value" ? "default" : "ghost"}
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setAvgWeeklyMode("value")}
+                    data-testid="button-avg-weekly-value"
+                  >
+                    £
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={avgWeeklyMode === "quantity" ? "default" : "ghost"}
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setAvgWeeklyMode("quantity")}
+                    data-testid="button-avg-weekly-quantity"
+                  >
+                    Qty
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const weekCount = weeklyTrendData?.length ?? 0;
+                  const totalOutput = weeklyTrendData?.reduce((sum, w) => sum + w.completedQuantity, 0) ?? 0;
+                  const totalValue = weeklyTrendData?.reduce((sum, w) => sum + w.invoicedTotal, 0) ?? 0;
+                  const avgQty = weekCount > 0 ? Math.round(totalOutput / weekCount) : 0;
+                  const avgValue = weekCount > 0 ? totalValue / weekCount : 0;
+                  return avgWeeklyMode === "value" ? (
+                    <>
+                      <div className="text-3xl font-bold text-green-600 dark:text-green-400" data-testid="text-avg-weekly-value">
+                        £{formatNumber(Math.round(avgValue))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Invoiced per week ({weekCount} wks)</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-3xl font-bold" data-testid="text-avg-weekly-quantity">
+                        {formatNumber(avgQty)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Items per week ({weekCount} wks)</p>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
             <Card>
