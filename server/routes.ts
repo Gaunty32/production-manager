@@ -3615,7 +3615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           senderName,
           sessionUserId,
           `${job.jobName}`,
-          `${baseUrl}/messages`,
+          `${baseUrl}/messages?jobId=${job.id}`,
         );
       }
 
@@ -7243,7 +7243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           senderName,
           sessionUserId,
           convo.subject || 'Direct Message',
-          `${baseUrl}/messages`,
+          `${baseUrl}/messages?conversationId=${req.params.id}`,
         );
       }
 

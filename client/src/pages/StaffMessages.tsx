@@ -179,12 +179,19 @@ export default function StaffMessages() {
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState<Tab>("job");
 
-  // Pre-select a job from ?jobId= URL param
-  const urlJobId = (() => {
-    try { return new URLSearchParams(window.location.search).get("jobId"); } catch { return null; }
+  // Pre-select a job or direct conversation from URL params
+  const { urlJobId, urlConversationId } = (() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return { urlJobId: p.get("jobId"), urlConversationId: p.get("conversationId") };
+    } catch { return { urlJobId: null, urlConversationId: null }; }
   })();
   const [selected, setSelected] = useState<Selected>(
-    urlJobId ? { type: "job", jobId: urlJobId } : null
+    urlConversationId
+      ? { type: "direct", conversationId: urlConversationId }
+      : urlJobId
+        ? { type: "job", jobId: urlJobId }
+        : null
   );
   const [newMessage, setNewMessage] = useState("");
   const [isInternal, setIsInternal] = useState(false);
