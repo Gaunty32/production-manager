@@ -1032,14 +1032,30 @@ export default function Dashboard() {
                           <span className="text-amber-600 text-xs font-medium">Needs line items</span>
                         </TableCell>
                         <TableCell className="py-2 px-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(job.id)}
-                            data-testid={`button-edit-unscheduled-${job.id}`}
-                          >
-                            Add line items
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(job.id)}
+                              data-testid={`button-edit-unscheduled-${job.id}`}
+                            >
+                              Add line items
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-destructive"
+                              disabled={deleteJobMutation.isPending && (deleteJobMutation.variables as string) === job.id}
+                              onClick={() => {
+                                if (window.confirm(`Delete this job: ${job.jobName}? This cannot be undone.`)) {
+                                  deleteJobMutation.mutate(job.id);
+                                }
+                              }}
+                              data-testid={`button-delete-unscheduled-${job.id}`}
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
