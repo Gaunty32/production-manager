@@ -433,8 +433,22 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           await apiRequest("DELETE", `/api/job-line-items/${id}`);
         }
 
+        // Don't persist a brand-new line item that's still in its untouched
+        // default state. This prevents editing a job's details (e.g. just the
+        // name) from silently creating a line item and moving the job out of
+        // the "Awaiting Line Items" list into the production queue.
+        const isPristineDefault = (item: LineItem) =>
+          !item.id &&
+          item.jobType === "Embroidery" &&
+          (!item.stitchCount || item.stitchCount === 0) &&
+          !(item.description && item.description.trim()) &&
+          !item.machineId &&
+          !item.completed &&
+          !item.logoApproved;
+        const itemsToPersist = lineItems.filter((item) => !isPristineDefault(item));
+
         // Create or update line items
-        for (const item of lineItems) {
+        for (const item of itemsToPersist) {
           if (item.id) {
             // Update existing line item
             await apiRequest("PATCH", `/api/job-line-items/${item.id}`, {
