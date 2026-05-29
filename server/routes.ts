@@ -325,7 +325,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { ObjectStorageService } = await import("./objectStorage");
       const svc = new ObjectStorageService();
       // req.path is e.g. /api/img/uploads/uuid → translate to /objects/uploads/uuid
-      const suffix = req.path.replace("/api/img", "");
+      // Collapse any repeated /api/img prefixes (legacy stored URLs were sometimes
+      // double-prefixed, producing /api/img/api/img/uploads/...).
+      let suffix = req.path.replace(/^(\/api\/img)+/, "");
       const objectPath = `/objects${suffix}`;
       const file = await svc.getObjectEntityFile(objectPath);
 
@@ -834,11 +836,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Normalise stored object-storage paths: old /objects/ prefix → /api/img/
+  // Normalise stored object-storage paths to a single /api/img/ prefix.
+  // Handles legacy /objects/ paths and collapses any accidental double prefixes.
   function normalizeImgUrl(url: string | null | undefined): string | null {
     if (!url) return null;
-    if (url.startsWith("/objects/")) return url.replace("/objects/", "/api/img/");
-    return url;
+    // Collapse repeated /api/img prefixes (legacy double-prefixed URLs).
+    let normalized = url.replace(/^(\/api\/img)+/, "/api/img");
+    if (normalized.startsWith("/objects/")) return normalized.replace("/objects/", "/api/img/");
+    return normalized;
   }
 
   // User management routes - protected for super admins only

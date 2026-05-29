@@ -156,7 +156,7 @@ export default function CustomerTeam() {
       const uploadRes = await apiRequest("POST", "/api/customer-portal/objects/upload", {});
       const { url, key } = await uploadRes.json();
       await fetch(url, { method: "PUT", body: blob, headers: { "Content-Type": "image/jpeg" } });
-      const normalizedKey = `/api/img${key.replace("/objects", "")}`;
+      const normalizedKey = key.startsWith("/api/img") ? key : `/api/img${key.replace("/objects", "")}`;
       const isOwnPic = !uploadingForId || uploadingForId === me?.id;
       if (isOwnPic) {
         await apiRequest("PUT", "/api/customer-portal/me/profile-picture", { profileImageUrl: normalizedKey });
