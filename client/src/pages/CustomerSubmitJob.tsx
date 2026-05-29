@@ -118,6 +118,30 @@ export default function CustomerSubmitJob() {
     queryKey: ["/api/customer-auth/user"],
   });
 
+  const { data: overdueData } = useQuery<{
+    overdueInvoices: Array<{
+      invoiceNumber: string;
+      date: string;
+      dueDate: string;
+      amountDue: number;
+      total: number;
+      daysOld: number;
+    }>;
+    hasOverdue: boolean;
+    xeroConnected: boolean;
+  }>({
+    queryKey: ["/api/customer-portal/overdue-invoices"],
+  });
+
+  const [showOverdueDialog, setShowOverdueDialog] = useState(false);
+  const [overdueAcknowledged, setOverdueAcknowledged] = useState(false);
+
+  useEffect(() => {
+    if (overdueData?.hasOverdue && !overdueAcknowledged) {
+      setShowOverdueDialog(true);
+    }
+  }, [overdueData?.hasOverdue, overdueAcknowledged]);
+
   const { data: previousJobNames = [] } = useQuery<PreviousJobName[]>({
     queryKey: ["/api/customer-portal/jobs/previous-names"],
     staleTime: 5 * 60 * 1000,
@@ -724,6 +748,54 @@ export default function CustomerSubmitJob() {
           </CardContent>
         </Card>
       </main>
+
+      <AlertDialog open={showOverdueDialog} onOpenChange={setShowOverdueDialog}>
+        <AlertDialogContent data-testid="dialog-overdue-invoices">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Unpaid Invoice Reminder
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                Our records show you have {overdueData?.overdueInvoices?.length === 1 ? "an invoice" : `${overdueData?.overdueInvoices?.length} invoices`} that {overdueData?.overdueInvoices?.length === 1 ? "is" : "are"} more than 30 days old and still unpaid.
+              </p>
+              <p className="font-semibold text-foreground">
+                We may not be able to process this order until your outstanding invoices are paid.
+              </p>
+              {overdueData?.overdueInvoices && overdueData.overdueInvoices.length > 0 && (
+                <div className="rounded-md border bg-muted/20 px-3 py-2 space-y-1.5">
+                  {overdueData.overdueInvoices.map((inv) => (
+                    <div
+                      key={inv.invoiceNumber}
+                      className="flex items-center justify-between gap-3 text-sm"
+                      data-testid={`row-overdue-invoice-${inv.invoiceNumber}`}
+                    >
+                      <span className="font-medium text-foreground">{inv.invoiceNumber || "Invoice"}</span>
+                      <span className="text-muted-foreground">{inv.daysOld} days old</span>
+                      <span className="font-medium text-foreground">£{inv.amountDue.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-sm text-muted-foreground">
+                If you have already paid, please disregard this message. For any queries, please get in touch with our team.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => {
+                setOverdueAcknowledged(true);
+                setShowOverdueDialog(false);
+              }}
+              data-testid="button-overdue-acknowledge"
+            >
+              I understand, continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={showExpressDialog} onOpenChange={setShowExpressDialog}>
         <AlertDialogContent data-testid="dialog-express-delivery">
