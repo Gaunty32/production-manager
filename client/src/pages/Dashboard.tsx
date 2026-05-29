@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { DemoText, DemoAmount } from "@/components/DemoText";
-import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText, MessageSquare, Paperclip, Download, ExternalLink } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText, MessageSquare, Paperclip, Download, ExternalLink, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -1037,9 +1037,18 @@ export default function Dashboard() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleEdit(job.id)}
-                              data-testid={`button-edit-unscheduled-${job.id}`}
+                              data-testid={`button-add-line-items-unscheduled-${job.id}`}
                             >
                               Add line items
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(job.id)}
+                              data-testid={`button-edit-unscheduled-${job.id}`}
+                            >
+                              <Pencil className="h-4 w-4 mr-1" />
+                              Edit
                             </Button>
                             <Button
                               variant="outline"
