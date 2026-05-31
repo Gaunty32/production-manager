@@ -1492,6 +1492,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Daily Output Log API - per-day, per-staff embroidery output (garments + stitches)
+  app.get("/api/reports/daily-output", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const querySchema = z.object({
+        days: z.string().optional().transform((val) => {
+          if (!val) return 30;
+          const num = parseInt(val);
+          if (isNaN(num) || num < 1 || num > 365) return 30;
+          return num;
+        }),
+        endDate: z.string().optional().transform((val) => {
+          if (!val) return new Date();
+          const date = new Date(val);
+          return isNaN(date.getTime()) ? new Date() : date;
+        }),
+      });
+
+      const params = querySchema.parse(req.query);
+      const data = await storage.getDailyOutputByStaff({
+        days: params.days,
+        endDate: params.endDate,
+      });
+
+      res.json(data);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching daily output:", error);
+      res.status(500).json({ error: "Failed to fetch daily output data" });
+    }
+  });
+
   // Sync historical invoice totals from Xero
   app.post("/api/reports/sync-invoice-totals", isStaffAuthenticated, async (req: any, res) => {
     try {

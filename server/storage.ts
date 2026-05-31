@@ -2641,6 +2641,90 @@ export class DatabaseStorage implements IStorage {
     return { weeklyData, staffTotals };
   }
 
+  async getDailyOutputByStaff(options: { days?: number; endDate?: Date } = {}): Promise<{
+    dailyData: Array<{
+      workDate: string;
+      staffId: string;
+      staffName: string;
+      totalStitches: number;
+      totalItems: number;
+    }>;
+  }> {
+    const numDays = options.days || 30;
+    const endDate = options.endDate || new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - numDays);
+
+    // Per-day, per-staff embroidery output. Combines production_entries (partial
+    // daily work) with completed line items that have no production entries.
+    // Mirrors getWeeklyProductionByStaff but keeps daily granularity (no weekly
+    // averaging) and filters to embroidery only.
+    const result = await db.execute(sql`
+      WITH production_entry_data AS (
+        SELECT
+          pe.staff_id,
+          s.name as staff_name,
+          DATE(pe.work_date) as work_date,
+          pe.quantity_completed * COALESCE(jli.stitch_count, 0) as stitches,
+          pe.quantity_completed as items
+        FROM production_entries pe
+        INNER JOIN staff s ON pe.staff_id = s.id
+        INNER JOIN job_line_items jli ON pe.line_item_id = jli.id
+        WHERE pe.work_date >= ${startDate}
+          AND pe.work_date <= ${endDate}
+          AND LOWER(jli.job_type) = 'embroidery'
+      ),
+      completed_line_item_data AS (
+        SELECT
+          jli.completed_by_id as staff_id,
+          s.name as staff_name,
+          DATE(jli.completed_at) as work_date,
+          jli.quantity * COALESCE(jli.stitch_count, 0) as stitches,
+          jli.quantity as items
+        FROM job_line_items jli
+        INNER JOIN staff s ON jli.completed_by_id = s.id
+        WHERE jli.completed = true
+          AND jli.completed_at >= ${startDate}
+          AND jli.completed_at <= ${endDate}
+          AND jli.completed_by_id IS NOT NULL
+          AND LOWER(jli.job_type) = 'embroidery'
+          AND NOT EXISTS (
+            SELECT 1 FROM production_entries pe WHERE pe.line_item_id = jli.id
+          )
+      ),
+      all_work AS (
+        SELECT * FROM production_entry_data
+        UNION ALL
+        SELECT * FROM completed_line_item_data
+      )
+      SELECT
+        staff_id,
+        staff_name,
+        work_date,
+        SUM(stitches) as total_stitches,
+        SUM(items) as total_items
+      FROM all_work
+      GROUP BY staff_id, staff_name, work_date
+      ORDER BY work_date ASC, staff_name
+    `);
+
+    const dailyData = (result.rows as any[]).map((row) => {
+      const wd = row.work_date;
+      const workDate = wd instanceof Date
+        ? wd.toISOString().split('T')[0]
+        : String(wd).split('T')[0];
+      return {
+        workDate,
+        staffId: row.staff_id,
+        staffName: row.staff_name,
+        totalStitches: parseInt(row.total_stitches) || 0,
+        totalItems: parseInt(row.total_items) || 0,
+      };
+    });
+
+    return { dailyData };
+  }
+
   // Customer documents methods
   async getCustomerDocuments(): Promise<CustomerDocument[]> {
     return await db

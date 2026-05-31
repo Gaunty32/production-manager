@@ -290,6 +290,50 @@ export default function WeeklyReports() {
 
   const [trendWeeks, setTrendWeeks] = useState<number>(52);
   const [avgWeeklyMode, setAvgWeeklyMode] = useState<"value" | "quantity">("value");
+  const [dailyOutputDays, setDailyOutputDays] = useState<number>(30);
+  const [dailyOutputMeasure, setDailyOutputMeasure] = useState<"items" | "stitches">("items");
+
+  const { data: dailyOutputData, isLoading: isLoadingDailyOutput } = useQuery<{
+    dailyData: Array<{
+      workDate: string;
+      staffId: string;
+      staffName: string;
+      totalStitches: number;
+      totalItems: number;
+    }>;
+  }>({
+    queryKey: ['/api/reports/daily-output', dailyOutputDays],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/daily-output?days=${dailyOutputDays}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch daily output');
+      return res.json();
+    },
+  });
+
+  const dailyOutputChartData = useMemo(() => {
+    const rows = dailyOutputData?.dailyData;
+    if (!rows || rows.length === 0) return { data: [] as Array<Record<string, any>>, staff: [] as Array<{ id: string; name: string }> };
+    const dayMap = new Map<string, Record<string, any>>();
+    const staffSet = new Map<string, string>();
+    for (const r of rows) {
+      if (!dayMap.has(r.workDate)) {
+        dayMap.set(r.workDate, { dateKey: r.workDate, date: format(new Date(r.workDate), "d MMM") });
+      }
+      const value = dailyOutputMeasure === "items" ? r.totalItems : r.totalStitches;
+      // Only set a value when there is actual work so days with no work leave a gap.
+      if (value > 0) {
+        dayMap.get(r.workDate)![r.staffName] = value;
+      }
+      staffSet.set(r.staffId, r.staffName);
+    }
+    const data = Array.from(dayMap.values()).sort(
+      (a, b) => new Date(a.dateKey).getTime() - new Date(b.dateKey).getTime()
+    );
+    return {
+      data,
+      staff: Array.from(staffSet.entries()).map(([id, name]) => ({ id, name })),
+    };
+  }, [dailyOutputData, dailyOutputMeasure]);
 
   const { data: customerSpendTrend, isLoading: isLoadingCustomerTrend, isError: isCustomerTrendError, refetch: refetchCustomerTrend } = useQuery<Array<{
     weekStart: string;
@@ -638,6 +682,10 @@ export default function WeeklyReports() {
           <TabsTrigger value="production" data-testid="tab-production">
             <TrendingUp className="h-4 w-4 mr-2" />
             Daily Production
+          </TabsTrigger>
+          <TabsTrigger value="daily-output" data-testid="tab-daily-output">
+            <LineChartIcon className="h-4 w-4 mr-2" />
+            Daily Output
           </TabsTrigger>
           <TabsTrigger value="trends" data-testid="tab-trends">
             <LineChartIcon className="h-4 w-4 mr-2" />
@@ -1025,6 +1073,104 @@ export default function WeeklyReports() {
               <span className="text-red-600 dark:text-red-400 font-semibold">&gt;2.0</span> = Needs attention (took 2x+ longer)
             </p>
           </div>
+        </TabsContent>
+
+        <TabsContent value="daily-output" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+              <div>
+                <CardTitle className="text-base">Daily Output Log</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Day-by-day embroidery output per staff member. One line per person, one point per day worked.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 rounded-md border p-1" data-testid="toggle-daily-output-measure">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={dailyOutputMeasure === "items" ? "default" : "ghost"}
+                    onClick={() => setDailyOutputMeasure("items")}
+                    data-testid="button-measure-items"
+                  >
+                    Garments
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={dailyOutputMeasure === "stitches" ? "default" : "ghost"}
+                    onClick={() => setDailyOutputMeasure("stitches")}
+                    data-testid="button-measure-stitches"
+                  >
+                    Stitches
+                  </Button>
+                </div>
+                <Select value={String(dailyOutputDays)} onValueChange={(v) => setDailyOutputDays(parseInt(v))}>
+                  <SelectTrigger className="w-[150px]" data-testid="select-daily-output-range">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">Last 7 days</SelectItem>
+                    <SelectItem value="14">Last 14 days</SelectItem>
+                    <SelectItem value="30">Last 30 days</SelectItem>
+                    <SelectItem value="60">Last 60 days</SelectItem>
+                    <SelectItem value="90">Last 90 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingDailyOutput ? (
+                <Skeleton className="h-[420px] w-full" />
+              ) : dailyOutputChartData.data.length === 0 ? (
+                <div className="flex items-center justify-center h-[420px] text-sm text-muted-foreground">
+                  No embroidery output recorded in this period.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={420}>
+                  <LineChart data={dailyOutputChartData.data} margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      className="text-muted-foreground"
+                      tickFormatter={(v) => dailyOutputMeasure === "stitches"
+                        ? (v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v.toLocaleString())
+                        : v.toLocaleString()}
+                    />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '6px' }}
+                      formatter={(value: number, name: string) => [
+                        `${Math.round(value).toLocaleString()} ${dailyOutputMeasure === "stitches" ? "stitches" : "garments"}`,
+                        name,
+                      ]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {dailyOutputChartData.staff.map((s, idx) => {
+                      const palette = [
+                        'hsl(220, 70%, 50%)', 'hsl(142, 76%, 36%)', 'hsl(25, 95%, 53%)',
+                        'hsl(280, 65%, 55%)', 'hsl(0, 84%, 60%)', 'hsl(189, 94%, 43%)',
+                        'hsl(340, 82%, 52%)', 'hsl(45, 100%, 45%)', 'hsl(160, 60%, 40%)',
+                        'hsl(260, 60%, 60%)',
+                      ];
+                      return (
+                        <Line
+                          key={s.id}
+                          type="monotone"
+                          dataKey={s.name}
+                          stroke={palette[idx % palette.length]}
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                          activeDot={{ r: 5 }}
+                          connectNulls={false}
+                        />
+                      );
+                    })}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="trends" className="space-y-4">
