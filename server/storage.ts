@@ -699,6 +699,7 @@ export class DatabaseStorage implements IStorage {
       .values({
         ...insertLineItem,
         completedAt: insertLineItem.completedAt ? new Date(insertLineItem.completedAt) : null,
+        logoApprovedAt: insertLineItem.logoApproved ? new Date() : null,
       })
       .returning();
     return lineItem;
@@ -706,12 +707,29 @@ export class DatabaseStorage implements IStorage {
 
   async updateJobLineItem(id: string, updates: Partial<JobLineItem>): Promise<JobLineItem> {
     // Handle date conversion for completedAt if it's a string
-    const processedUpdates = {
+    const processedUpdates: Partial<JobLineItem> = {
       ...updates,
       ...(updates.completedAt && typeof updates.completedAt === 'string' 
         ? { completedAt: new Date(updates.completedAt) } 
         : {}),
     };
+
+    // Auto-manage the logo-approval timestamp so we can measure when a job
+    // genuinely joined the production queue. Stamp the moment the logo is
+    // approved (if not already stamped); clear it if the approval is removed.
+    if (updates.logoApproved !== undefined && updates.logoApprovedAt === undefined) {
+      if (updates.logoApproved === true) {
+        const [existing] = await db
+          .select({ logoApprovedAt: jobLineItems.logoApprovedAt })
+          .from(jobLineItems)
+          .where(eq(jobLineItems.id, id));
+        if (!existing?.logoApprovedAt) {
+          processedUpdates.logoApprovedAt = new Date();
+        }
+      } else {
+        processedUpdates.logoApprovedAt = null;
+      }
+    }
     
     const [lineItem] = await db
       .update(jobLineItems)
@@ -2723,6 +2741,144 @@ export class DatabaseStorage implements IStorage {
     });
 
     return { dailyData };
+  }
+
+  // Production lead-time metrics: measures how long jobs take, in working days
+  // (excluding weekends and bank holidays). Returns two measures per completed
+  // job:
+  //   - bookingToDispatch: working days from when the customer submitted the
+  //     job to when it was completed/dispatched.
+  //   - productionWindow: working days from when the job genuinely joined the
+  //     queue (the LATER of goods received and logo approved) to completion.
+  // Jobs missing the required start dates are excluded from that measure's
+  // average (older jobs have no logo-approval date, so their production window
+  // cannot be calculated reliably).
+  async getProductionTimeMetrics(options: { days?: number; endDate?: Date } = {}): Promise<{
+    summary: {
+      bookingToDispatch: { avgDays: number | null; jobCount: number };
+      productionWindow: { avgDays: number | null; jobCount: number };
+    };
+    jobs: Array<{
+      jobId: string;
+      jobNumber: number | null;
+      jobName: string;
+      customerName: string;
+      submittedAt: string | null;
+      queueJoinDate: string | null;
+      completedAt: string | null;
+      bookingDays: number | null;
+      productionDays: number | null;
+    }>;
+  }> {
+    const numDays = options.days || 90;
+    const endDate = options.endDate || new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - numDays);
+
+    // All business dates are computed in the UK timezone. The date columns are
+    // `timestamp` (no zone) holding UTC instants, so we re-interpret each value
+    // as UTC then convert to Europe/London before truncating to a calendar date.
+    // This avoids late-night timestamps being attributed to the wrong day (and
+    // therefore the wrong weekday / bank-holiday classification).
+    const ukDate = (col: any) =>
+      sql`to_char((${col} AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/London')::date, 'YYYY-MM-DD')`;
+
+    const result = await db.execute(sql`
+      SELECT
+        j.id,
+        j.job_number,
+        j.job_name,
+        c.name AS customer_name,
+        ${ukDate(sql`j.submitted_at`)} AS submitted_date,
+        ${ukDate(sql`j.goods_received`)} AS goods_received_date,
+        ${ukDate(sql`MAX(jli.completed_at)`)} AS completed_date,
+        ${ukDate(sql`MAX(jli.logo_approved_at)`)} AS logo_approved_date,
+        BOOL_AND(jli.logo_approved AND jli.logo_approved_at IS NOT NULL) AS all_logos_approved
+      FROM jobs j
+      INNER JOIN job_line_items jli ON jli.job_id = j.id
+      INNER JOIN customers c ON c.id = j.customer_id
+      WHERE j.completed = true
+      GROUP BY j.id, c.name
+      HAVING MAX(jli.completed_at) >= ${startDate}
+        AND MAX(jli.completed_at) <= ${endDate}
+      ORDER BY MAX(jli.completed_at) DESC
+    `);
+
+    const holidayResult = await db.execute(
+      sql`SELECT ${ukDate(sql`date`)} AS d FROM bank_holidays`
+    );
+    const holidaySet = new Set<string>(
+      (holidayResult.rows as any[]).map((r) => r.d).filter((d): d is string => !!d)
+    );
+
+    // Parse a 'YYYY-MM-DD' string into a timezone-safe UTC-midnight anchor.
+    const parseDate = (value: any): Date | null => {
+      if (!value || typeof value !== 'string') return null;
+      const d = new Date(`${value}T00:00:00Z`);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    // Count working days in the interval (start, end]: each calendar day after
+    // the start, up to and including the end, that is not a weekend or bank
+    // holiday. Same-day start/end yields 0.
+    const countWorkingDays = (start: Date | null, end: Date | null): number | null => {
+      if (!start || !end) return null;
+      if (end.getTime() <= start.getTime()) return 0;
+      let count = 0;
+      const cursor = new Date(start.getTime());
+      while (cursor.getTime() < end.getTime()) {
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        const dow = cursor.getUTCDay();
+        const ymd = cursor.toISOString().split('T')[0];
+        if (dow !== 0 && dow !== 6 && !holidaySet.has(ymd)) count++;
+      }
+      return count;
+    };
+
+    const jobs = (result.rows as any[]).map((row) => {
+      const submittedAt = parseDate(row.submitted_date);
+      const goodsReceived = parseDate(row.goods_received_date);
+      const logoApprovedAt = parseDate(row.logo_approved_date);
+      const completedAt = parseDate(row.completed_date);
+      const allLogosApproved = row.all_logos_approved === true;
+
+      // Queue-join = the later of goods received and logo approved. The window
+      // is only measurable when goods are in AND every line item's logo is
+      // approved with a recorded date (older jobs lack that date, so they are
+      // excluded rather than measured inaccurately).
+      let queueJoin: Date | null = null;
+      if (goodsReceived && logoApprovedAt && allLogosApproved) {
+        queueJoin = goodsReceived.getTime() >= logoApprovedAt.getTime() ? goodsReceived : logoApprovedAt;
+      }
+
+      const bookingDays = countWorkingDays(submittedAt, completedAt);
+      const productionDays = countWorkingDays(queueJoin, completedAt);
+
+      return {
+        jobId: row.id as string,
+        jobNumber: row.job_number != null ? Number(row.job_number) : null,
+        jobName: row.job_name as string,
+        customerName: row.customer_name as string,
+        submittedAt: row.submitted_date ?? null,
+        queueJoinDate: queueJoin ? queueJoin.toISOString().split('T')[0] : null,
+        completedAt: row.completed_date ?? null,
+        bookingDays,
+        productionDays,
+      };
+    });
+
+    const bookingValues = jobs.map((j) => j.bookingDays).filter((d): d is number => d !== null);
+    const productionValues = jobs.map((j) => j.productionDays).filter((d): d is number => d !== null);
+    const avg = (arr: number[]): number | null =>
+      arr.length ? Math.round((arr.reduce((s, n) => s + n, 0) / arr.length) * 10) / 10 : null;
+
+    return {
+      summary: {
+        bookingToDispatch: { avgDays: avg(bookingValues), jobCount: bookingValues.length },
+        productionWindow: { avgDays: avg(productionValues), jobCount: productionValues.length },
+      },
+      jobs,
+    };
   }
 
   // Customer documents methods

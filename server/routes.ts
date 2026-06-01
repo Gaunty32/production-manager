@@ -1525,6 +1525,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/reports/production-time", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const querySchema = z.object({
+        days: z.string().optional().transform((val) => {
+          if (!val) return 90;
+          const num = parseInt(val);
+          if (isNaN(num) || num < 1 || num > 730) return 90;
+          return num;
+        }),
+        endDate: z.string().optional().transform((val) => {
+          if (!val) return new Date();
+          const date = new Date(val);
+          return isNaN(date.getTime()) ? new Date() : date;
+        }),
+      });
+
+      const params = querySchema.parse(req.query);
+      const data = await storage.getProductionTimeMetrics({
+        days: params.days,
+        endDate: params.endDate,
+      });
+
+      res.json(data);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching production time metrics:", error);
+      res.status(500).json({ error: "Failed to fetch production time metrics" });
+    }
+  });
+
   // Sync historical invoice totals from Xero
   app.post("/api/reports/sync-invoice-totals", isStaffAuthenticated, async (req: any, res) => {
     try {

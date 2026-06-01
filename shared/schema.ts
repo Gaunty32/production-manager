@@ -147,6 +147,7 @@ export const jobLineItems = pgTable("job_line_items", {
   description: text("description"),
   stitchCount: integer("stitch_count").notNull(),
   logoApproved: boolean("logo_approved").notNull().default(false),
+  logoApprovedAt: timestamp("logo_approved_at"),
   completed: boolean("completed").notNull().default(false),
   completedById: varchar("completed_by_id").references(() => staff.id),
   completedAt: timestamp("completed_at"),

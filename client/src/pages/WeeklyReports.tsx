@@ -335,6 +335,33 @@ export default function WeeklyReports() {
     };
   }, [dailyOutputData, dailyOutputMeasure]);
 
+  const [leadTimeDays, setLeadTimeDays] = useState<number>(90);
+
+  const { data: productionTimeData, isLoading: isLoadingProductionTime } = useQuery<{
+    summary: {
+      bookingToDispatch: { avgDays: number | null; jobCount: number };
+      productionWindow: { avgDays: number | null; jobCount: number };
+    };
+    jobs: Array<{
+      jobId: string;
+      jobNumber: number | null;
+      jobName: string;
+      customerName: string;
+      submittedAt: string | null;
+      queueJoinDate: string | null;
+      completedAt: string | null;
+      bookingDays: number | null;
+      productionDays: number | null;
+    }>;
+  }>({
+    queryKey: ['/api/reports/production-time', leadTimeDays],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/production-time?days=${leadTimeDays}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch production time metrics');
+      return res.json();
+    },
+  });
+
   const { data: customerSpendTrend, isLoading: isLoadingCustomerTrend, isError: isCustomerTrendError, refetch: refetchCustomerTrend } = useQuery<Array<{
     weekStart: string;
     weekEnd: string;
@@ -698,6 +725,10 @@ export default function WeeklyReports() {
           <TabsTrigger value="accuracy" data-testid="tab-accuracy">
             <Gauge className="h-4 w-4 mr-2" />
             Accuracy
+          </TabsTrigger>
+          <TabsTrigger value="lead-times" data-testid="tab-lead-times">
+            <Clock className="h-4 w-4 mr-2" />
+            Lead Times
           </TabsTrigger>
         </TabsList>
 
@@ -1941,6 +1972,138 @@ export default function WeeklyReports() {
               </div>
             </>
           )}
+        </TabsContent>
+
+        <TabsContent value="lead-times" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+              <div>
+                <CardTitle className="text-base">Production Lead Times</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  How long jobs take, measured in working days (weekends and bank holidays excluded).
+                </p>
+              </div>
+              <Select value={String(leadTimeDays)} onValueChange={(v) => setLeadTimeDays(parseInt(v))}>
+                <SelectTrigger className="w-[160px]" data-testid="select-lead-time-range">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                  <SelectItem value="60">Last 60 days</SelectItem>
+                  <SelectItem value="90">Last 90 days</SelectItem>
+                  <SelectItem value="180">Last 180 days</SelectItem>
+                  <SelectItem value="365">Last 12 months</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardHeader>
+            <CardContent>
+              {isLoadingProductionTime ? (
+                <Skeleton className="h-[120px] w-full" />
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Booking → Dispatch
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-3xl font-bold" data-testid="text-avg-booking-days">
+                        {productionTimeData?.summary.bookingToDispatch.avgDays != null
+                          ? `${productionTimeData.summary.bookingToDispatch.avgDays} days`
+                          : "—"}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Avg working days from job submitted to completed
+                        {" · "}
+                        {productionTimeData?.summary.bookingToDispatch.jobCount ?? 0} job(s)
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Production Window
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-3xl font-bold" data-testid="text-avg-production-days">
+                        {productionTimeData?.summary.productionWindow.avgDays != null
+                          ? `${productionTimeData.summary.productionWindow.avgDays} days`
+                          : "—"}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Avg working days from joining the queue (goods in + logo approved) to completed
+                        {" · "}
+                        {productionTimeData?.summary.productionWindow.jobCount ?? 0} job(s)
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Completed Jobs Breakdown</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Per-job lead times. Production window is blank for older jobs with no recorded logo-approval date.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {isLoadingProductionTime ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Job</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead>Joined Queue</TableHead>
+                      <TableHead>Completed</TableHead>
+                      <TableHead className="text-right">Booking → Dispatch</TableHead>
+                      <TableHead className="text-right">Production Window</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {productionTimeData?.jobs?.length ? (
+                      productionTimeData.jobs.map((job) => (
+                        <TableRow key={job.jobId} data-testid={`row-lead-time-${job.jobId}`}>
+                          <TableCell className="font-medium">
+                            {job.jobNumber != null ? `#${job.jobNumber} ` : ""}{job.jobName}
+                          </TableCell>
+                          <TableCell><DemoText>{job.customerName}</DemoText></TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {job.submittedAt ? format(new Date(job.submittedAt), "d MMM yyyy") : "—"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {job.queueJoinDate ? format(new Date(job.queueJoinDate), "d MMM yyyy") : "—"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {job.completedAt ? format(new Date(job.completedAt), "d MMM yyyy") : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {job.bookingDays != null ? `${job.bookingDays} day(s)` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {job.productionDays != null ? `${job.productionDays} day(s)` : "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                          No completed jobs in this period.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
