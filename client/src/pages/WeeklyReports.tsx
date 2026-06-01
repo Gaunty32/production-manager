@@ -362,6 +362,38 @@ export default function WeeklyReports() {
     },
   });
 
+  const dailyOutputSummary = useMemo(() => {
+    const rows = dailyOutputData?.dailyData;
+    if (!rows || rows.length === 0) return [] as Array<{
+      staffId: string;
+      staffName: string;
+      totalItems: number;
+      totalStitches: number;
+      daysWorked: number;
+      avgItemsPerDay: number;
+      avgStitchesPerDay: number;
+    }>;
+    const map = new Map<string, { staffId: string; staffName: string; totalItems: number; totalStitches: number; daysWorked: number }>();
+    for (const r of rows) {
+      const hasWork = r.totalItems > 0 || r.totalStitches > 0;
+      let entry = map.get(r.staffId);
+      if (!entry) {
+        entry = { staffId: r.staffId, staffName: r.staffName, totalItems: 0, totalStitches: 0, daysWorked: 0 };
+        map.set(r.staffId, entry);
+      }
+      entry.totalItems += r.totalItems;
+      entry.totalStitches += r.totalStitches;
+      if (hasWork) entry.daysWorked += 1;
+    }
+    return Array.from(map.values())
+      .map((e) => ({
+        ...e,
+        avgItemsPerDay: e.daysWorked > 0 ? Math.round(e.totalItems / e.daysWorked) : 0,
+        avgStitchesPerDay: e.daysWorked > 0 ? Math.round(e.totalStitches / e.daysWorked) : 0,
+      }))
+      .sort((a, b) => b.totalStitches - a.totalStitches);
+  }, [dailyOutputData]);
+
   const { data: customerSpendTrend, isLoading: isLoadingCustomerTrend, isError: isCustomerTrendError, refetch: refetchCustomerTrend } = useQuery<Array<{
     weekStart: string;
     weekEnd: string;
@@ -1199,6 +1231,55 @@ export default function WeeklyReports() {
                     })}
                   </LineChart>
                 </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Daily Output Summary</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Per-staff totals and per-working-day averages over the selected range.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {isLoadingDailyOutput ? (
+                <Skeleton className="h-[200px] w-full" />
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Staff Member</TableHead>
+                        <TableHead className="text-right">Total Garments</TableHead>
+                        <TableHead className="text-right">Total Stitches</TableHead>
+                        <TableHead className="text-right">Days Worked</TableHead>
+                        <TableHead className="text-right">Avg Garments / Day</TableHead>
+                        <TableHead className="text-right">Avg Stitches / Day</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dailyOutputSummary.length ? (
+                        dailyOutputSummary.map((row, index) => (
+                          <TableRow key={row.staffId} data-testid={`row-daily-output-summary-${index}`}>
+                            <TableCell className="font-medium">{row.staffName}</TableCell>
+                            <TableCell className="text-right" data-testid={`text-summary-total-items-${index}`}>{formatNumber(row.totalItems)}</TableCell>
+                            <TableCell className="text-right" data-testid={`text-summary-total-stitches-${index}`}>{formatNumber(row.totalStitches)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(row.daysWorked)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(row.avgItemsPerDay)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(row.avgStitchesPerDay)}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                            No embroidery output recorded in this period.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
