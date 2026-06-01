@@ -2484,25 +2484,30 @@ export class DatabaseStorage implements IStorage {
           AND pe.work_date <= ${endDate}
       ),
       completed_line_item_data AS (
-        -- For line items without production entries, use completed line item data
+        -- Credit the completer ONLY the quantity not already logged via
+        -- production entries by colleagues. (e.g. if Ella logged 200 of 300 and
+        -- Dave completes, Dave is credited the remaining 100, not the full 300.)
         SELECT 
           jli.completed_by_id as staff_id,
           s.name as staff_name,
           DATE(jli.completed_at) as work_date,
           DATE_TRUNC('week', jli.completed_at) as week_start,
-          jli.quantity * COALESCE(jli.stitch_count, 0) as stitches,
-          jli.quantity as items,
+          (jli.quantity - COALESCE(pe_sum.total, 0)) * COALESCE(jli.stitch_count, 0) as stitches,
+          (jli.quantity - COALESCE(pe_sum.total, 0)) as items,
           COALESCE(jli.actual_production_time_minutes, 0) as actual_minutes,
-          CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000) as estimated_minutes
+          CEIL(((jli.quantity - COALESCE(pe_sum.total, 0))::numeric * COALESCE(jli.stitch_count, 0)) / 1000) as estimated_minutes
         FROM job_line_items jli
         INNER JOIN staff s ON jli.completed_by_id = s.id
+        LEFT JOIN (
+          SELECT line_item_id, SUM(quantity_completed) as total
+          FROM production_entries
+          GROUP BY line_item_id
+        ) pe_sum ON pe_sum.line_item_id = jli.id
         WHERE jli.completed = true
           AND jli.completed_at >= ${startDate}
           AND jli.completed_at <= ${endDate}
           AND jli.completed_by_id IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM production_entries pe WHERE pe.line_item_id = jli.id
-          )
+          AND jli.quantity > COALESCE(pe_sum.total, 0)
       ),
       all_work AS (
         SELECT * FROM production_entry_data
@@ -2587,23 +2592,29 @@ export class DatabaseStorage implements IStorage {
           AND pe.work_date <= ${endDate}
       ),
       completed_line_item_data AS (
+        -- Credit the completer ONLY the quantity not already logged via
+        -- production entries by colleagues (the remainder), to avoid double
+        -- counting partial work that other staff already recorded.
         SELECT 
           jli.completed_by_id as staff_id,
           s.name as staff_name,
           DATE(jli.completed_at) as work_date,
-          jli.quantity * COALESCE(jli.stitch_count, 0) as stitches,
-          jli.quantity as items,
+          (jli.quantity - COALESCE(pe_sum.total, 0)) * COALESCE(jli.stitch_count, 0) as stitches,
+          (jli.quantity - COALESCE(pe_sum.total, 0)) as items,
           COALESCE(jli.actual_production_time_minutes, 0) as actual_minutes,
-          CEIL((jli.quantity::numeric * COALESCE(jli.stitch_count, 0)) / 1000) as estimated_minutes
+          CEIL(((jli.quantity - COALESCE(pe_sum.total, 0))::numeric * COALESCE(jli.stitch_count, 0)) / 1000) as estimated_minutes
         FROM job_line_items jli
         INNER JOIN staff s ON jli.completed_by_id = s.id
+        LEFT JOIN (
+          SELECT line_item_id, SUM(quantity_completed) as total
+          FROM production_entries
+          GROUP BY line_item_id
+        ) pe_sum ON pe_sum.line_item_id = jli.id
         WHERE jli.completed = true
           AND jli.completed_at >= ${startDate}
           AND jli.completed_at <= ${endDate}
           AND jli.completed_by_id IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM production_entries pe WHERE pe.line_item_id = jli.id
-          )
+          AND jli.quantity > COALESCE(pe_sum.total, 0)
       ),
       all_work AS (
         SELECT * FROM production_entry_data
@@ -2693,22 +2704,27 @@ export class DatabaseStorage implements IStorage {
           AND LOWER(jli.job_type) = 'embroidery'
       ),
       completed_line_item_data AS (
+        -- Credit the completer ONLY the remaining quantity not already logged
+        -- via production entries by colleagues, to avoid double counting.
         SELECT
           jli.completed_by_id as staff_id,
           s.name as staff_name,
           DATE(jli.completed_at) as work_date,
-          jli.quantity * COALESCE(jli.stitch_count, 0) as stitches,
-          jli.quantity as items
+          (jli.quantity - COALESCE(pe_sum.total, 0)) * COALESCE(jli.stitch_count, 0) as stitches,
+          (jli.quantity - COALESCE(pe_sum.total, 0)) as items
         FROM job_line_items jli
         INNER JOIN staff s ON jli.completed_by_id = s.id
+        LEFT JOIN (
+          SELECT line_item_id, SUM(quantity_completed) as total
+          FROM production_entries
+          GROUP BY line_item_id
+        ) pe_sum ON pe_sum.line_item_id = jli.id
         WHERE jli.completed = true
           AND jli.completed_at >= ${startDate}
           AND jli.completed_at <= ${endDate}
           AND jli.completed_by_id IS NOT NULL
           AND LOWER(jli.job_type) = 'embroidery'
-          AND NOT EXISTS (
-            SELECT 1 FROM production_entries pe WHERE pe.line_item_id = jli.id
-          )
+          AND jli.quantity > COALESCE(pe_sum.total, 0)
       ),
       all_work AS (
         SELECT * FROM production_entry_data
