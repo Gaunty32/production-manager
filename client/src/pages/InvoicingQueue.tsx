@@ -202,8 +202,20 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
     "uniform","uniforms","clothing","branded","branding","apparel",
     "the","and","of","&",
   ]);
-  const tokenise = (s: string): string[] =>
-    s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(t => t && !STOP_WORDS.has(t));
+  const tokenise = (s: string): string[] => {
+    const raw = s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(t => t && !STOP_WORDS.has(t));
+    // Glue consecutive single-character tokens back together so dotted/spaced
+    // initialisms reconcile with their compact form ("C.C." / "C C" -> "cc").
+    const merged: string[] = [];
+    let acc = "";
+    for (const t of raw) {
+      if (t.length === 1) { acc += t; continue; }
+      if (acc) { merged.push(acc); acc = ""; }
+      merged.push(t);
+    }
+    if (acc) merged.push(acc);
+    return merged;
+  };
   const reconciliation = (() => {
     if (!data) return null;
     type Bucket = {
