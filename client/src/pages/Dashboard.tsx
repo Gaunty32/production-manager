@@ -1750,9 +1750,23 @@ export default function Dashboard() {
                           <TableCell className="py-1 px-2 text-muted-foreground">
                             #{job.jobNumber}
                           </TableCell>
-                          <TableCell className="py-1 px-2 truncate max-w-[200px]">
-                            <DemoText>{job.jobName}</DemoText>
-                            {job.poNumber && <span className="text-muted-foreground ml-1">({job.poNumber})</span>}
+                          <TableCell className="py-1 px-2 max-w-[220px]">
+                            <div className="flex items-center gap-1">
+                              <span className="truncate">
+                                <DemoText>{job.jobName}</DemoText>
+                                {job.poNumber && <span className="text-muted-foreground ml-1">({job.poNumber})</span>}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 shrink-0"
+                                onClick={() => handleEdit(job.id)}
+                                data-testid={`button-edit-completed-${job.id}`}
+                                title="Edit job"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </TableCell>
                           <TableCell className="py-1 px-2 text-right">{totalQty}</TableCell>
                           <TableCell className="py-1 px-2 text-xs text-muted-foreground">
