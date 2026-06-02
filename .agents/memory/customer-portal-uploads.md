@@ -1,31 +1,50 @@
 ---
-name: Customer portal file uploads
-description: Why customer job-attachment uploads can "hang forever" and how the upload flow is guarded.
+name: File uploads (customer + staff)
+description: Why uploads hang/fail in the published app and the deploy-safe upload pattern to use.
 ---
 
-# Customer portal attachment uploads
+# File uploads — the deploy-time 32MB ceiling
 
-Customer attachments upload via `fetch` POST to `/api/customer-portal/upload-file`
-(raw binary body), which server-side uses `express.raw({ limit: "50mb" })`. The
-attach-to-job step (`/jobs/:id/files`) runs separately after job creation.
+This app deploys on **Replit Autoscale = Google Cloud Run**, which enforces a
+**hard ~32MB request body limit** that you cannot raise. Any upload routed
+*through the Express server* (a server proxy route that receives the file bytes,
+e.g. `express.raw`) is capped by this, regardless of the `express.raw({ limit })`
+value. Files over ~32MB are rejected by the Cloud Run proxy **before reaching
+Express**.
 
-## The "spinning wheel of doom"
-**Symptom:** dropzone spinner (`isUploading`) spins forever; nothing appears in
-deployment logs.
+## Why it's so hard to diagnose
+**No server-side error is logged** for the failed upload, because the request
+never reaches the Express handler — so there is no "Error uploading" 500 and no
+completion log line. An *absent* upload log during a reported failure is itself
+the signal that the request died at the infrastructure layer (Cloud Run), not in
+your code. Symptoms differ by client: an old `fetch` with no error path **hangs**
+(customer "spinning wheel of doom"); a client that throws on network failure
+shows a generic **"Failed to upload" toast** (staff chat).
 
-**Why:** Express only logs a request line when the response *finishes*. If a file
-exceeds the 50MB `express.raw` limit, the server stops reading the stream and tries
-to respond while the browser is still uploading — the connection stalls, `fetch`
-never settles, and no completion log is emitted. So an absent log line is itself a
-signal of a hung (never-completed) request, not a missing one.
+## The fix / the pattern to always use
+**Never proxy file bytes through the server. Upload the browser → object storage
+directly via a presigned PUT URL.** This bypasses Cloud Run entirely and supports
+large files. This pattern is the norm across this codebase (profile pics,
+`StaffJobFileUpload.tsx`, samples):
 
-## Guard (must keep in lockstep)
-The client `MAX_UPLOAD_BYTES` size check **must match** the server `express.raw`
-limit. If you change one, change the other. Oversized files are rejected client-side
-with a toast *before* any upload starts, so the doomed-upload stall never happens.
-A per-file `AbortController` timeout (currently 15 min) is only a last-resort safety
-net — keep it generous so large files on slow/mobile connections still succeed; it
-is not the primary safeguard.
+1. `POST /api/customer-portal/objects/upload` → `{ url, key }`
+   (staff: `POST /api/staff/objects/upload` → `{ uploadURL, url, key }`).
+   These call `ObjectStorageService.getObjectEntityUploadURLWithKey()`.
+2. `fetch(url, { method: "PUT", body: file, headers: { "Content-Type": ... } })`
+   straight to `storage.googleapis.com`.
+3. Persist/normalize the returned `key` (`/objects/...`). For inline display it's
+   converted to `/api/img/...` (strip `/objects` prefix).
 
-**Why generous:** a short hard timeout (e.g. 2 min) aborts legitimate large uploads
-on mobile/slow upstream — a real regression.
+**Why:** direct-to-GCS has no ~32MB ceiling and CORS works fine on Replit buckets
+(this pattern is already live in production here). Old code comments claiming
+"upload through server to avoid CORS issues" are misleading — direct PUT works.
+
+## Gotchas
+- `apiRequest` throws on non-2xx, so it can't surface a 401 for session-expiry.
+  In customer flows use a **raw `fetch`** to the `objects/upload` route so you can
+  check `status === 401` and route to login.
+- The legacy server-proxy routes still exist: `/api/customer-portal/upload-file`
+  and `/api/staff/upload-file` (`express.raw`). They are Cloud-Run-capped — do not
+  reuse them for new upload flows; prefer the presigned routes above.
+- A per-file `AbortController` timeout (~15 min) on the PUT is only a last-resort
+  net; keep it generous so big files on slow/mobile connections still finish.

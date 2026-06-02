@@ -245,7 +245,7 @@ export default function CustomerSubmitJob() {
     setLocation("/customer/login");
   };
 
-  const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB — matches the server upload limit
+  const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB — generous cap; files upload directly to object storage
   const UPLOAD_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes — safety net so the spinner can never hang forever, but generous enough for large files on slow/mobile connections
 
   const uploadFiles = async (files: FileList | File[]) => {
@@ -259,7 +259,7 @@ export default function CustomerSubmitJob() {
     if (tooBig.length > 0) {
       toast({
         title: "File too large",
-        description: `${tooBig.map((f) => f.name).join(", ")} ${tooBig.length === 1 ? "is" : "are"} over the 50MB limit. Please upload a smaller file.`,
+        description: `${tooBig.map((f) => f.name).join(", ")} ${tooBig.length === 1 ? "is" : "are"} over the 100MB limit. Please upload a smaller file.`,
         variant: "destructive",
       });
     }
@@ -271,31 +271,42 @@ export default function CustomerSubmitJob() {
     setIsUploading(true);
     try {
       for (const file of okFiles) {
-        // Upload through our server to avoid CORS issues with object storage
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
         try {
-          const res = await fetch("/api/customer-portal/upload-file", {
+          // Upload directly to object storage via a presigned URL. Routing the
+          // file through our server hits the deployment's ~32MB request body
+          // limit, which silently stalls/fails large uploads.
+          const urlRes = await fetch("/api/customer-portal/objects/upload", {
             method: "POST",
-            headers: {
-              "Content-Type": file.type || "application/octet-stream",
-              "X-File-Name": encodeURIComponent(file.name),
-              "X-File-Type": file.type || "application/octet-stream",
-            },
-            body: file,
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
             credentials: "include",
-            signal: controller.signal,
           });
-          if (res.status === 401) {
+          if (urlRes.status === 401) {
             handleSessionExpired();
             return;
           }
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err?.error || `Upload failed with status ${res.status}`);
+          if (!urlRes.ok) {
+            const err = await urlRes.json().catch(() => ({}));
+            throw new Error(err?.error || `Upload failed with status ${urlRes.status}`);
           }
-          const { key, fileName, fileSize, fileType } = await res.json();
-          setUploadedFiles(prev => [...prev, { objectKey: key, fileName, fileSize, fileType }]);
+          const { url, key } = await urlRes.json();
+          const putRes = await fetch(url, {
+            method: "PUT",
+            body: file,
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            signal: controller.signal,
+          });
+          if (!putRes.ok) {
+            throw new Error(`Upload failed with status ${putRes.status}`);
+          }
+          setUploadedFiles(prev => [...prev, {
+            objectKey: key,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type || "application/octet-stream",
+          }]);
         } catch (err: any) {
           if (err?.name === "AbortError") {
             throw new Error(`"${file.name}" took too long to upload. Please check your connection and try again.`);

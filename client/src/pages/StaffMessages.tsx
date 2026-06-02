@@ -763,19 +763,14 @@ export default function StaffMessages() {
         const isImage = IMAGE_MIME_TYPES.has(file.type);
         const previewUrl = isImage ? URL.createObjectURL(file) : null;
         const contentType = file.type || "application/octet-stream";
-        const arrayBuffer = await file.arrayBuffer();
-        const uploadRes = await fetch("/api/staff/upload-file", {
-          method: "POST",
-          headers: {
-            "Content-Type": contentType,
-            "x-file-name": encodeURIComponent(file.name),
-            "x-file-type": contentType,
-          },
-          body: arrayBuffer,
-          credentials: "include",
+        const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
+        const { url, key } = await uploadRes.json();
+        const putRes = await fetch(url, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": contentType },
         });
-        if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.statusText}`);
-        const { key } = await uploadRes.json();
+        if (!putRes.ok) throw new Error(`Upload failed: ${putRes.statusText}`);
         const normalizedKey = key.startsWith("/objects/") ? `/api/img${key.replace("/objects", "")}` : key;
         return { key: normalizedKey, preview: previewUrl, fileName: file.name, isImage };
       }));
