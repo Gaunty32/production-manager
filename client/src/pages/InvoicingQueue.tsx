@@ -216,6 +216,18 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
     if (acc) merged.push(acc);
     return merged;
   };
+  // Parse a cell into a money value, or null if it isn't a clean number
+  // (handles "£62.00", "1,200" but rejects blanks and junk like "1 box").
+  const parseMoney = (s: string | undefined | null): number | null => {
+    const cleaned = (s || "").replace(/[£,\s]/g, "");
+    if (!cleaned || !/^\d+(\.\d+)?$/.test(cleaned)) return null;
+    return parseFloat(cleaned);
+  };
+  // Customer sheets are inconsistent: some record the order value in the
+  // "total" column, others leave it blank and put it in "embCost". Use total
+  // when it's a clean money value, otherwise fall back to embCost.
+  const driveAmount = (r: DriveSheetRow): number =>
+    parseMoney(r.total) ?? parseMoney(r.embCost) ?? 0;
   const reconciliation = (() => {
     if (!data) return null;
     type Bucket = {
@@ -290,8 +302,7 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
         toks.forEach(t => b!.tokens.add(t));
       }
       b.hasDrive = true;
-      const n = parseFloat((r.total || "").replace(/[£,]/g, "")) || 0;
-      b.driveTotal += n;
+      b.driveTotal += driveAmount(r);
       b.rowIndices.push(r.rowIndex);
     }
 
@@ -300,13 +311,15 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
     const matchedRowIndices: number[] = [];
     let invoiceCount = 0;
     let driveCount = 0;
+    const invoiceOnly: Bucket[] = [];
+    const driveOnly: Bucket[] = [];
     for (const b of buckets) {
       if (b.hasInvoice) invoiceCount++;
       if (b.hasDrive) driveCount++;
       if (b.hasInvoice && !b.hasDrive) {
-        mismatches.push({ name: b.display, invoice: b.hasPOA ? "POA" : b.invoiceTotal, drive: null, kind: "missing_drive" });
+        invoiceOnly.push(b);
       } else if (b.hasDrive && !b.hasInvoice) {
-        mismatches.push({ name: b.display, invoice: null, drive: b.driveTotal, kind: "missing_invoice" });
+        driveOnly.push(b);
       } else if (b.hasInvoice && b.hasDrive) {
         if (b.hasPOA) {
           matchedRowIndices.push(...b.rowIndices);
@@ -318,6 +331,43 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
           matchedRowIndices.push(...b.rowIndices);
         }
       }
+    }
+
+    // Amount-based fallback: a Drive row is sometimes logged under the
+    // end-client's name (e.g. "Furniture Outlet") instead of the job code, so
+    // it never matches by name. Pair a leftover invoice job with a leftover
+    // Drive job whose totals are equal — the amounts adding up is strong
+    // evidence they're the same order even when the names differ.
+    // Only auto-match on amount when that amount is unique on BOTH sides, so an
+    // ambiguous total shared by several jobs is never silently reconciled.
+    const cents = (n: number) => Math.round(n * 100);
+    const invCounts = new Map<number, number>();
+    for (const b of invoiceOnly) if (!b.hasPOA && b.invoiceTotal > 0) invCounts.set(cents(b.invoiceTotal), (invCounts.get(cents(b.invoiceTotal)) || 0) + 1);
+    const drvCounts = new Map<number, number>();
+    for (const b of driveOnly) if (b.driveTotal > 0) drvCounts.set(cents(b.driveTotal), (drvCounts.get(cents(b.driveTotal)) || 0) + 1);
+
+    const usedDrive = new Set<number>();
+    for (const inv of invoiceOnly) {
+      if (inv.hasPOA) {
+        mismatches.push({ name: inv.display, invoice: "POA", drive: null, kind: "missing_drive" });
+        continue;
+      }
+      const amountIsUnique = inv.invoiceTotal > 0
+        && invCounts.get(cents(inv.invoiceTotal)) === 1
+        && drvCounts.get(cents(inv.invoiceTotal)) === 1;
+      const matchIdx = !amountIsUnique ? -1 : driveOnly.findIndex((d, i) =>
+        !usedDrive.has(i) && Math.abs(d.driveTotal - inv.invoiceTotal) <= 0.01
+      );
+      if (matchIdx >= 0) {
+        usedDrive.add(matchIdx);
+        matchedRowIndices.push(...driveOnly[matchIdx].rowIndices);
+      } else {
+        mismatches.push({ name: inv.display, invoice: inv.invoiceTotal, drive: null, kind: "missing_drive" });
+      }
+    }
+    for (let i = 0; i < driveOnly.length; i++) {
+      if (usedDrive.has(i)) continue;
+      mismatches.push({ name: driveOnly[i].display, invoice: null, drive: driveOnly[i].driveTotal, kind: "missing_invoice" });
     }
     return { mismatches, invoiceCount, driveCount, matchedRowIndices };
   })();

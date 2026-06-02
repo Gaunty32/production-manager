@@ -23,3 +23,24 @@ text variations.
 
 **How to apply:** when reconciliation produces false mismatches from name variations,
 fix the tokeniser/matching, not the data. Don't tighten matching to exact strings.
+
+## Customer sheets are structurally inconsistent (two more failure modes)
+
+Customer-maintained Calculations sheets do NOT share a layout or naming convention:
+
+- **Price column varies.** Some sheets put the order value in the `total` column (H);
+  others leave `total` blank or full of junk (e.g. `"1 box"`) and put the real value in
+  `embCost` (G). Read the amount as `parseMoney(total) ?? parseMoney(embCost) ?? 0`, where
+  `parseMoney` only accepts a clean numeric cell (rejects `""` and `"1 box"` — plain
+  `parseFloat("1 box")` wrongly yields `1`).
+- **Rows can be named by the END-CLIENT, not the job code.** e.g. invoice job `PB-ESS3-21`
+  appears on the sheet as two lines named `"Furniture Outlet"`. No token overlap is
+  possible, so name matching can never link them.
+
+**Amount-based fallback:** after name bucketing, pair a leftover invoice-only bucket with a
+leftover drive-only bucket whose totals are equal (≤ £0.01). The amounts summing to the
+invoice total is the only reliable signal when names differ.
+**Guard against false positives:** only auto-match when that amount is **unique on both
+sides** (count totals in each leftover set; require exactly 1 each). Exclude POA invoices
+from amount matching. **Why:** two unrelated orders with the same total must not silently
+reconcile and hide a real discrepancy on a money/invoicing screen.
