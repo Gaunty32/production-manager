@@ -245,33 +245,65 @@ export default function CustomerSubmitJob() {
     setLocation("/customer/login");
   };
 
+  const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB — matches the server upload limit
+  const UPLOAD_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes — safety net so the spinner can never hang forever, but generous enough for large files on slow/mobile connections
+
   const uploadFiles = async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
     if (fileArray.length === 0) return;
+
+    // Reject oversized files up front. Without this, an over-limit upload stalls
+    // the connection server-side and the spinner appears to hang indefinitely.
+    const tooBig = fileArray.filter((f) => f.size > MAX_UPLOAD_BYTES);
+    const okFiles = fileArray.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+    if (tooBig.length > 0) {
+      toast({
+        title: "File too large",
+        description: `${tooBig.map((f) => f.name).join(", ")} ${tooBig.length === 1 ? "is" : "are"} over the 50MB limit. Please upload a smaller file.`,
+        variant: "destructive",
+      });
+    }
+    if (okFiles.length === 0) {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     setIsUploading(true);
     try {
-      for (const file of fileArray) {
+      for (const file of okFiles) {
         // Upload through our server to avoid CORS issues with object storage
-        const res = await fetch("/api/customer-portal/upload-file", {
-          method: "POST",
-          headers: {
-            "Content-Type": file.type || "application/octet-stream",
-            "X-File-Name": encodeURIComponent(file.name),
-            "X-File-Type": file.type || "application/octet-stream",
-          },
-          body: file,
-          credentials: "include",
-        });
-        if (res.status === 401) {
-          handleSessionExpired();
-          return;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+        try {
+          const res = await fetch("/api/customer-portal/upload-file", {
+            method: "POST",
+            headers: {
+              "Content-Type": file.type || "application/octet-stream",
+              "X-File-Name": encodeURIComponent(file.name),
+              "X-File-Type": file.type || "application/octet-stream",
+            },
+            body: file,
+            credentials: "include",
+            signal: controller.signal,
+          });
+          if (res.status === 401) {
+            handleSessionExpired();
+            return;
+          }
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err?.error || `Upload failed with status ${res.status}`);
+          }
+          const { key, fileName, fileSize, fileType } = await res.json();
+          setUploadedFiles(prev => [...prev, { objectKey: key, fileName, fileSize, fileType }]);
+        } catch (err: any) {
+          if (err?.name === "AbortError") {
+            throw new Error(`"${file.name}" took too long to upload. Please check your connection and try again.`);
+          }
+          throw err;
+        } finally {
+          clearTimeout(timeoutId);
         }
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err?.error || `Upload failed with status ${res.status}`);
-        }
-        const { key, fileName, fileSize, fileType } = await res.json();
-        setUploadedFiles(prev => [...prev, { objectKey: key, fileName, fileSize, fileType }]);
       }
     } catch (err: any) {
       console.error("Upload error:", err);
