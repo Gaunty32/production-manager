@@ -2297,6 +2297,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/customer-users/:id/notification-settings", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { emailNotificationsMessages } = z.object({
+        emailNotificationsMessages: z.boolean(),
+      }).parse(req.body);
+
+      await storage.updateCustomerNotificationSettings(id, { emailNotificationsMessages });
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to update notification settings" });
+      }
+    }
+  });
+
   app.post("/api/customer-users/:id/reset-password", isStaffAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;

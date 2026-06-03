@@ -1,4 +1,4 @@
-import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail, Send, Clock, ChevronDown, ChevronUp, RefreshCw, Smartphone, TrendingUp } from "lucide-react";
+import { Plus, Trash2, Pencil, UserPlus, CheckCircle2, XCircle, AlertCircle, Key, Eye, Search, X, Mail, Send, Clock, ChevronDown, ChevronUp, RefreshCw, Smartphone, TrendingUp, Bell, BellOff } from "lucide-react";
 import { DemoText, DemoAmount } from "@/components/DemoText";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -340,6 +340,27 @@ export default function Customers() {
       toast({
         title: "Error",
         description: error.message || "Failed to update portal access",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleEmailNotificationsMutation = useMutation({
+    mutationFn: async ({ id, emailNotificationsMessages }: { id: string; emailNotificationsMessages: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/customer-users/${id}/notification-settings`, { emailNotificationsMessages });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-users/all"] });
+      toast({
+        title: "Success",
+        description: "Email notifications updated",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update email notifications",
         variant: "destructive",
       });
     },
@@ -886,6 +907,18 @@ export default function Customers() {
                                     data-testid={`switch-portal-user-${portalUser.id}`}
                                   />
                                 </div>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {portalUser.emailNotificationsMessages !== false
+                                  ? <Bell className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                  : <BellOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                                <span className="text-xs text-muted-foreground">Email me new messages</span>
+                                <Switch
+                                  className="ml-auto"
+                                  checked={portalUser.emailNotificationsMessages !== false}
+                                  onCheckedChange={(checked) => toggleEmailNotificationsMutation.mutate({ id: portalUser.id, emailNotificationsMessages: checked })}
+                                  data-testid={`switch-portal-notifications-${portalUser.id}`}
+                                />
                               </div>
                             </div>
                           );
