@@ -628,7 +628,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                       </PopoverContent>
                     </Popover>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Standard lead time: 7+ days. Express (3–6 days) adds 100% surcharge. Production starts only once all garments are received and all logos approved.
+                      Most orders are despatched within 3–4 working days, starting once all garments are received and all artwork is approved. Orders of up to 100 units needing despatch within 2 working days may use the Priority Production Service (100% surcharge, subject to capacity).
                     </p>
                     <FormMessage />
                   </FormItem>

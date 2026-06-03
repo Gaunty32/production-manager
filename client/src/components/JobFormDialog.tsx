@@ -139,7 +139,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       poNumber: "",
       quantity: 1,
       goodsReceived: "",
-      requiredDispatchDate: "",
+      requiredDispatchDate: (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 7); return d.toISOString(); })(),
       status: "pending",
       completed: false,
       completedById: null,
@@ -721,7 +721,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                           </PopoverContent>
                         </Popover>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Standard lead time: 7+ days. Express (3–6 days) adds 100% surcharge. Production starts only once all garments are received and all logos approved.
+                          Most orders are despatched within 3–4 working days, starting once all garments are received and all artwork is approved. Orders of up to 100 units needing despatch within 2 working days may use the Priority Production Service (100% surcharge, subject to capacity).
                         </p>
                         {dispatchCapacityWarning && (
                           <div
@@ -1522,10 +1522,10 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className="text-amber-500">48-Hour Express Service</span>
+              <span className="text-amber-500">Priority Production Service</span>
             </DialogTitle>
             <DialogDescription>
-              Based on the dispatch date and quantity, this order qualifies for our express production service.
+              Based on the dispatch date and quantity, this order qualifies for our Priority Production Service.
             </DialogDescription>
           </DialogHeader>
           <div className="my-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
@@ -1533,10 +1533,10 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
               <div className="text-3xl">&#9889;</div>
               <div>
                 <p className="font-semibold text-amber-800 dark:text-amber-200 mb-1">
-                  Express Service with 100% Surcharge
+                  Priority Production Service — 100% Surcharge
                 </p>
                 <p className="text-sm text-amber-700 dark:text-amber-300">
-                  Orders under 300 items with less than 3 working days until dispatch will be booked onto our 48-hour express production service. This incurs a 100% surcharge on the standard embroidery price.
+                  This order has a short lead time and will be booked onto our Priority Production Service. This incurs a 100% production surcharge on the standard embroidery price, and is subject to capacity.
                 </p>
               </div>
             </div>

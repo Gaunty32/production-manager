@@ -167,7 +167,7 @@ export default function CustomerSubmitJob() {
       quantity: undefined,
       notes: "",
       deliveryAddress: "",
-      requiredDispatchDate: "",
+      requiredDispatchDate: format(addDays(new Date(), 7), "yyyy-MM-dd"),
       logoType: "repeat_logo" as const,
     },
   });
@@ -217,7 +217,7 @@ export default function CustomerSubmitJob() {
       });
       return;
     }
-    // 3–6 days = express service: confirm 100% surcharge
+    // 3–6 days = Priority Production Service: confirm 100% surcharge
     if (daysFromNow < 7) {
       setPendingDispatchDate(dateStr);
       setPendingDispatchWorkingDays(daysFromNow);
@@ -231,8 +231,8 @@ export default function CustomerSubmitJob() {
     form.setValue("requiredDispatchDate", pendingDispatchDate);
     setShowExpressDialog(false);
     toast({
-      title: "Express delivery selected",
-      description: "A 100% surcharge will apply to this order",
+      title: "Priority Production Service selected",
+      description: "A 100% production surcharge will apply to this order",
     });
   };
 
@@ -614,9 +614,14 @@ export default function CustomerSubmitJob() {
                           data-testid="input-dispatch-date"
                         />
                       </FormControl>
-                      <FormDescription className="space-y-1">
-                        <span className="block">Standard lead time: 7+ days from today. Express service (3–6 days) incurs a 100% surcharge.</span>
-                        <span className="block font-medium text-foreground">Please note: production time only begins once all garments have been received and all logos have been approved. We will always work towards your required dispatch date, however this is not a guaranteed date.</span>
+                      <FormDescription className="space-y-2">
+                        <span className="block">Please tell us when you need us to despatch the order.</span>
+                        <span className="block">We will always schedule production to meet your requested despatch date wherever possible.</span>
+                        <span className="block">Please remember that production time begins once all garments have been received and all artwork has been approved.</span>
+                        <span className="block">Most orders are completed within 3–4 working days; however, larger, specialist, or incomplete orders may require additional time.</span>
+                        <span className="block font-medium text-foreground pt-1">Priority Production Service Available</span>
+                        <span className="block">Need it urgently? Orders of up to 100 units may be eligible for our Priority Production Service, with despatch within 2 working days of garments being received and artwork approval.</span>
+                        <span className="block">A 100% production surcharge applies, and the service is subject to capacity. Please contact us before submitting your order to confirm availability.</span>
                       </FormDescription>
                       {dispatchCapacityWarning && (
                         <div
@@ -845,17 +850,17 @@ export default function CustomerSubmitJob() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Express Delivery Service
+              Priority Production Service
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               <p>
-                You have requested our express delivery service with a dispatch date of {pendingDispatchWorkingDays} day{pendingDispatchWorkingDays === 1 ? "" : "s"} from today.
+                You have requested a despatch date of {pendingDispatchWorkingDays} day{pendingDispatchWorkingDays === 1 ? "" : "s"} from today, which requires our Priority Production Service.
               </p>
               <p className="font-semibold text-foreground">
-                This will incur a 100% surcharge on your order total.
+                This will incur a 100% production surcharge on your order total.
               </p>
               <p className="text-sm text-muted-foreground">
-                Standard delivery (7+ days lead time) has no additional charges.
+                Standard production (7+ days lead time) has no additional charges. This service is subject to capacity.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -864,7 +869,7 @@ export default function CustomerSubmitJob() {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleExpressConfirm} data-testid="button-express-confirm">
-              Confirm Express Delivery
+              Confirm Priority Production
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
