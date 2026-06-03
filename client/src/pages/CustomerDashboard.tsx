@@ -169,6 +169,8 @@ type Job = {
   status: string;
   notes: string | null;
   invoiceStatus: string;
+  invoiceTotal?: number | null;
+  invoicedAt?: string | null;
   dhlTrackingNumber: string | null;
   lineItems: LineItem[];
   paymentReceived?: boolean;
@@ -779,12 +781,47 @@ export default function CustomerDashboard() {
         {customerUser && (() => {
           const card = getWelcomeCard(customerUser.firstName);
           const lastLogin = customerUser.lastLoginAt ? new Date(customerUser.lastLoginAt) : null;
+
+          // "Did you know" — average cost per logo (per garment) over the last 12 weeks.
+          // Counts garments on logo-bearing line items (embroidery / print) across jobs
+          // invoiced within the window, divided into total invoiced spend (ex VAT).
+          const twelveWeeksAgo = Date.now() - 12 * 7 * 24 * 60 * 60 * 1000;
+          const recentInvoiced = jobs.filter((j) => {
+            const ts = j.invoicedAt ? Date.parse(j.invoicedAt) : NaN;
+            return (
+              Number.isFinite(ts) &&
+              ts >= twelveWeeksAgo &&
+              typeof j.invoiceTotal === "number" &&
+              (j.invoiceTotal as number) > 0
+            );
+          });
+          const totalSpend = recentInvoiced.reduce((sum, j) => sum + (j.invoiceTotal as number), 0);
+          const totalLogos = recentInvoiced.reduce((sum, j) => {
+            const logoGarments = (j.lineItems || [])
+              .filter((li) => {
+                const t = (li.jobType || "").toLowerCase();
+                return t.includes("embroid") || t.includes("print");
+              })
+              .reduce((ls, li) => ls + (li.quantity || 0), 0);
+            return sum + logoGarments;
+          }, 0);
+          const avgCostPerLogo = totalLogos > 0 ? totalSpend / totalLogos : null;
+
           return (
             <div className="flex items-start gap-4 rounded-xl bg-muted/50 border border-border p-4 mb-6" data-testid="card-welcome-greeting">
               <span className="text-3xl leading-none mt-0.5 shrink-0" role="img" aria-label="greeting icon">{card.emoji}</span>
               <div className="min-w-0">
                 <p className="font-semibold text-foreground text-base leading-tight">{card.greeting}</p>
                 <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{card.fact}</p>
+                {avgCostPerLogo !== null && (
+                  <p className="text-sm text-foreground mt-2 leading-relaxed flex items-start gap-1.5" data-testid="text-avg-cost-per-logo">
+                    <Lightbulb className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                    <span>
+                      Did you know? Your average cost per logo over the last 12 weeks was just{" "}
+                      <span className="font-semibold">£{avgCostPerLogo.toFixed(2)}</span>.
+                    </span>
+                  </p>
+                )}
                 {lastLogin && (
                   <p className="text-xs text-muted-foreground/70 mt-2" data-testid="text-last-login">
                     Last signed in {formatDistanceToNow(lastLogin, { addSuffix: true })}
