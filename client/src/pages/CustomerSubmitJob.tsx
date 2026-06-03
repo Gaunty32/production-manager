@@ -206,21 +206,20 @@ export default function CustomerSubmitJob() {
     selectedDate.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const msPerDay = 1000 * 60 * 60 * 24;
-    const daysFromNow = Math.round((selectedDate.getTime() - today.getTime()) / msPerDay);
-    // Hard floor: 3 days (express service minimum)
-    if (daysFromNow < 3) {
+    const workingDaysAway = getWorkingDaysBetween(today, selectedDate);
+    // Floor: at least the next working day
+    if (workingDaysAway < 1) {
       toast({
         title: "Lead time too short",
-        description: "Required dispatch date must be at least 3 days from today.",
+        description: "Required despatch date must be at least the next working day.",
         variant: "destructive",
       });
       return;
     }
-    // 3–6 days = Priority Production Service: confirm 100% surcharge
-    if (daysFromNow < 7) {
+    // Within 2 working days = Priority Production Service: confirm 100% surcharge
+    if (workingDaysAway <= 2) {
       setPendingDispatchDate(dateStr);
-      setPendingDispatchWorkingDays(daysFromNow);
+      setPendingDispatchWorkingDays(workingDaysAway);
       setShowExpressDialog(true);
       return;
     }
@@ -610,7 +609,7 @@ export default function CustomerSubmitJob() {
                           type="date"
                           value={field.value}
                           onChange={(e) => handleDispatchDateChange(e.target.value, field.onChange)}
-                          min={format(addDays(new Date(), 3), "yyyy-MM-dd")}
+                          min={format(addWorkingDays(new Date(), 1), "yyyy-MM-dd")}
                           data-testid="input-dispatch-date"
                         />
                       </FormControl>
@@ -854,13 +853,13 @@ export default function CustomerSubmitJob() {
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               <p>
-                You have requested a despatch date of {pendingDispatchWorkingDays} day{pendingDispatchWorkingDays === 1 ? "" : "s"} from today, which requires our Priority Production Service.
+                You have requested a despatch date {pendingDispatchWorkingDays} working day{pendingDispatchWorkingDays === 1 ? "" : "s"} from today, which requires our Priority Production Service.
               </p>
               <p className="font-semibold text-foreground">
                 This will incur a 100% production surcharge on your order total.
               </p>
               <p className="text-sm text-muted-foreground">
-                Standard production (7+ days lead time) has no additional charges. This service is subject to capacity.
+                Standard production (3 or more working days' notice) has no additional charges. This service is subject to capacity.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>

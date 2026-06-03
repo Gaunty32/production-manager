@@ -959,18 +959,18 @@ export const customerJobSubmissionSchema = z.object({
   quantity: z.number().int().min(1).optional().nullable(),
   notes: z.string().optional(),
   deliveryAddress: z.string().optional(),
-  requiredDispatchDate: z.string().min(1, "Dispatch date is required").refine(
+  requiredDispatchDate: z.string().min(1, "Despatch date is required").refine(
     (val) => {
       const d = new Date(val);
       if (isNaN(d.getTime())) return false;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const minDate = new Date(today);
-      minDate.setDate(minDate.getDate() + 3);
+      minDate.setDate(minDate.getDate() + 1);
       d.setHours(0, 0, 0, 0);
       return d >= minDate;
     },
-    { message: "Dispatch date must be at least 3 days from today (express service)" }
+    { message: "Despatch date must be in the future" }
   ),
   logoType: z.enum(["repeat_logo", "new_logo", "new_logo_files_supplied"]).default("repeat_logo"),
 });
