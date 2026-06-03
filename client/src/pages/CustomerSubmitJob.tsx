@@ -167,7 +167,11 @@ export default function CustomerSubmitJob() {
       quantity: undefined,
       notes: "",
       deliveryAddress: "",
-      requiredDispatchDate: format(addDays(new Date(), 7), "yyyy-MM-dd"),
+      requiredDispatchDate: (() => {
+        let d = addDays(new Date(), 7);
+        while (!isWorkingDay(d)) d = addDays(d, 1);
+        return format(d, "yyyy-MM-dd");
+      })(),
       logoType: "repeat_logo" as const,
     },
   });
@@ -206,6 +210,14 @@ export default function CustomerSubmitJob() {
     selectedDate.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    if (!isWorkingDay(selectedDate)) {
+      toast({
+        title: "We despatch Monday to Friday",
+        description: "Please choose a weekday for despatch. We send orders on a standard DPD 24 Hour service.",
+        variant: "destructive",
+      });
+      return;
+    }
     const workingDaysAway = getWorkingDaysBetween(today, selectedDate);
     // Floor: at least the next working day
     if (workingDaysAway < 1) {
@@ -616,6 +628,7 @@ export default function CustomerSubmitJob() {
                       <FormDescription className="space-y-2">
                         <span className="block">Please tell us when you need us to despatch the order.</span>
                         <span className="block">We will always schedule production to meet your requested despatch date wherever possible.</span>
+                        <span className="block">We despatch Monday to Friday on a standard DPD 24 Hour service.</span>
                         <span className="block">Please remember that production time begins once all garments have been received and all artwork has been approved.</span>
                         <span className="block">Most orders are completed within 3–4 working days; however, larger, specialist, or incomplete orders may require additional time.</span>
                         <span className="block font-medium text-foreground pt-1">Priority Production Service Available</span>
