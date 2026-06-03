@@ -125,6 +125,18 @@ export default function CustomerInbox() {
     }
   }, []);
 
+  // Hide the floating live chat widget on the Messages page so its bubble
+  // doesn't overlap the Send button (customers already have in-app messaging here).
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.setAttribute("data-hide-chat-widget", "true");
+    style.textContent = `chat-widget, [id^="leadconnector"], [class*="leadconnector"], [class*="lc_text-widget"] { display: none !important; }`;
+    document.head.appendChild(style);
+    return () => {
+      style.remove();
+    };
+  }, []);
+
   // New conversation dialog (direct messages)
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
