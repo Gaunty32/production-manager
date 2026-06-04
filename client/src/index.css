@@ -418,3 +418,27 @@
     break-inside: avoid;
   }
 }
+/* Live chat widget (LeadConnector): keep it pinned bottom-right and let page
+   clicks pass through its invisible wrapper, while the bubble/iframe stays clickable.
+   Without this, the widget's full-area container swallows clicks on page buttons. */
+chat-widget,
+[id*="leadconnector"],
+[class*="leadconnector"],
+.lc_text-widget {
+  pointer-events: none !important;
+}
+
+chat-widget iframe,
+chat-widget button,
+chat-widget a,
+[id*="leadconnector"] iframe,
+[id*="leadconnector"] button,
+[id*="leadconnector"] a,
+[class*="leadconnector"] iframe,
+[class*="leadconnector"] button,
+[class*="leadconnector"] a,
+.lc_text-widget iframe,
+.lc_text-widget button,
+.lc_text-widget a {
+  pointer-events: auto !important;
+}
