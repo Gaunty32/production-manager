@@ -518,35 +518,53 @@ export default function CustomerInbox() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
+  const MAX_CHAT_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB — generous cap; files upload directly to object storage
+  const CHAT_UPLOAD_TIMEOUT_MS = 15 * 60 * 1000; // 15 min safety net so the spinner can never hang forever
+
   const processFile = async (file: File) => {
-    if (file.size > 20 * 1024 * 1024) {
-      toast({ title: "File too large", description: "Maximum file size is 20 MB", variant: "destructive" });
+    if (file.size > MAX_CHAT_UPLOAD_BYTES) {
+      toast({ title: "File too large", description: "Maximum file size is 100 MB. Please attach a smaller file.", variant: "destructive" });
       return;
     }
     setIsUploadingChatImage(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CHAT_UPLOAD_TIMEOUT_MS);
     try {
       const contentType = file.type || "application/octet-stream";
       const isImage = IMAGE_MIME_TYPES.has(file.type);
-      const arrayBuffer = await file.arrayBuffer();
-      const res = await fetch("/api/customer-portal/upload-file", {
+      // Upload directly to object storage via a presigned URL. Routing the file
+      // bytes through our server hits the deployment's ~32MB request body limit,
+      // which silently stalls/fails larger uploads (especially phone photos).
+      const urlRes = await fetch("/api/customer-portal/objects/upload", {
         method: "POST",
-        headers: {
-          "Content-Type": contentType,
-          "x-file-name": encodeURIComponent(file.name),
-          "x-file-type": contentType,
-        },
-        body: arrayBuffer,
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Upload failed");
-      const { key } = await res.json();
+      if (urlRes.status === 401) {
+        toast({ title: "Session expired", description: "Please log in again to attach files.", variant: "destructive" });
+        return;
+      }
+      if (!urlRes.ok) throw new Error("Could not start upload");
+      const { url, key } = await urlRes.json();
+      const putRes = await fetch(url, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": contentType },
+        signal: controller.signal,
+      });
+      if (!putRes.ok) throw new Error(`Upload failed with status ${putRes.status}`);
       // Normalize key for serving via /api/img route
       const normalizedKey = key.startsWith("/objects/") ? `/api/img${key.replace("/objects", "")}` : key;
       const previewUrl = isImage ? URL.createObjectURL(file) : null;
       setChatImage({ key: normalizedKey, previewUrl, isImage, fileName: file.name });
-    } catch {
-      toast({ title: "Upload failed", description: "Could not upload the file. Please try again.", variant: "destructive" });
+    } catch (err: any) {
+      const description = err?.name === "AbortError"
+        ? "The upload took too long. Please check your connection and try again."
+        : "Could not upload the file. Please try again.";
+      toast({ title: "Upload failed", description, variant: "destructive" });
     } finally {
+      clearTimeout(timeoutId);
       setIsUploadingChatImage(false);
     }
   };
