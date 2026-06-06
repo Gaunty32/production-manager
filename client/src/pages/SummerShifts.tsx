@@ -19,7 +19,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { minutesToTime } from "@shared/scheduling";
 import { format } from "date-fns";
-import { Sun, Copy, Send, Trash2, Sparkles, Users, CalendarClock, CheckCircle2 } from "lucide-react";
+import { Sun, Copy, Send, Trash2, Sparkles, Users, CalendarClock, CheckCircle2, Pencil } from "lucide-react";
 
 interface CasualStaffRow {
   id: string;
@@ -82,6 +82,15 @@ function ShiftsTab() {
   const [minHours, setMinHours] = useState(2);
   const [includeSaturday, setIncludeSaturday] = useState(true);
   const [includeSunday, setIncludeSunday] = useState(false);
+  const [editShift, setEditShift] = useState<ShiftRow | null>(null);
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+
+  const openEdit = (s: ShiftRow) => {
+    setEditShift(s);
+    setEditStart(s.startLabel);
+    setEditEnd(s.endLabel);
+  };
 
   const { data: suggested = [], isLoading: suggLoading } = useQuery<ShiftRow[]>({
     queryKey: ["/api/shifts", { status: "suggested" }],
@@ -122,6 +131,18 @@ function ShiftsTab() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/shifts/${id}`); },
     onSuccess: refreshShifts,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      if (!editShift) return;
+      await apiRequest("PATCH", `/api/shifts/${editShift.id}`, {
+        startTime: minutesFromTimeStr(editStart),
+        endTime: minutesFromTimeStr(editEnd),
+      });
+    },
+    onSuccess: () => { toast({ title: "Shift updated" }); setEditShift(null); refreshShifts(); },
+    onError: (err: any) => toast({ title: "Couldn't update", description: err.message, variant: "destructive" }),
   });
 
   const discardAllMutation = useMutation({
@@ -205,9 +226,14 @@ function ShiftsTab() {
                   {rows.map((s) => (
                     <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border p-2.5" data-testid={`row-suggested-${s.id}`}>
                       <span className="text-sm">{s.startLabel}–{s.endLabel} · <span className="text-muted-foreground">{s.machineName}</span></span>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(s.id)} data-testid={`button-delete-suggested-${s.id}`}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(s)} data-testid={`button-edit-suggested-${s.id}`}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(s.id)} data-testid={`button-delete-suggested-${s.id}`}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -242,6 +268,11 @@ function ShiftsTab() {
                         ) : (
                           <Badge>Available</Badge>
                         )}
+                        {s.status !== "claimed" && (
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(s)} data-testid={`button-edit-published-${s.id}`}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(s.id)} data-testid={`button-delete-published-${s.id}`}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -255,6 +286,39 @@ function ShiftsTab() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!editShift} onOpenChange={(o) => !o && setEditShift(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit shift</DialogTitle>
+            <DialogDescription>
+              {editShift && (
+                <>{format(new Date(editShift.date), "EEEE d MMM")} · {editShift.machineName}</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-start">Start</Label>
+              <Input id="edit-start" type="time" value={editStart} onChange={(e) => setEditStart(e.target.value)} data-testid="input-edit-start" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-end">End</Label>
+              <Input id="edit-end" type="time" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} data-testid="input-edit-end" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditShift(null)} data-testid="button-cancel-edit">Cancel</Button>
+            <Button
+              onClick={() => updateMutation.mutate()}
+              disabled={updateMutation.isPending || minutesFromTimeStr(editEnd) <= minutesFromTimeStr(editStart)}
+              data-testid="button-save-edit"
+            >
+              {updateMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
