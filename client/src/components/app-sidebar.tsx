@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -39,6 +39,7 @@ const menuItems = [
   { title: "Weekly Reports", url: "/reports/weekly", icon: BarChart3 },
   { title: "Customers", url: "/customers", icon: Users },
   { title: "Staff", url: "/staff", icon: UserCog },
+  { title: "Summer Shifts", url: "/summer-shifts", icon: Sun },
 ];
 
 export function AppSidebar() {

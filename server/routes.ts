@@ -40,6 +40,7 @@ import { dpdService } from "./dpd";
 import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
+import { registerCasualShiftRoutes } from "./casualShiftRoutes";
 import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, updateMachineSchema, insertTaskSchema, type Job } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
@@ -314,6 +315,9 @@ async function recalculateJobProductionTime(jobId: string): Promise<void> {
 const SERVER_START_VERSION = Date.now().toString();
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Casual / summer staff shift system routes
+  registerCasualShiftRoutes(app);
+
   // Version endpoint — used by client to detect deployments and auto-reload
   app.get("/api/version", (_req, res) => {
     res.json({ version: SERVER_START_VERSION });

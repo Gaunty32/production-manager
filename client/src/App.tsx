@@ -51,6 +51,10 @@ import ThreadColourChart from "@/pages/ThreadColourChart";
 import PortalPreview from "@/pages/PortalPreview";
 import FeatureRequests from "@/pages/FeatureRequests";
 import Tasks from "@/pages/Tasks";
+import SummerShifts from "@/pages/SummerShifts";
+import CasualLogin from "@/pages/CasualLogin";
+import CasualSetPin from "@/pages/CasualSetPin";
+import CasualDashboard from "@/pages/CasualDashboard";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -98,6 +102,7 @@ function StaffRouter() {
       <Route path="/machine/:id"><Dashboard /></Route>
       <Route path="/feature-requests"><FeatureRequests /></Route>
       <Route path="/tasks"><Tasks /></Route>
+      <Route path="/summer-shifts"><SummerShifts /></Route>
       <Route path="/thread-library"><ThreadColourChart /></Route>
       {/* Customer portal paths — render without staff chrome */}
       <Route path="/customer/:rest*"><CustomerPortalApp /></Route>
@@ -135,7 +140,12 @@ function AppRouter() {
         <Route path="/forgot-password" component={ForgotPassword} />
         <Route path="/reset-password" component={ResetPassword} />
         <Route path="/customer/invite" component={CustomerInviteAccept} />
-        
+
+        {/* Casual / Summer Staff Portal Routes - mobile, public */}
+        <Route path="/casual/login" component={CasualLogin} />
+        <Route path="/casual/set-pin" component={CasualSetPin} />
+        <Route path="/casual" component={CasualDashboard} />
+
         {/* Customer Portal Routes */}
         <Route path="/customer/:rest*">
           <CustomerPortalApp />

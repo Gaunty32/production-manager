@@ -1280,3 +1280,101 @@ export const threadColours = pgTable("thread_colours", {
 export const insertThreadColourSchema = createInsertSchema(threadColours).omit({ id: true, createdAt: true });
 export type InsertThreadColour = z.infer<typeof insertThreadColourSchema>;
 export type ThreadColour = typeof threadColours.$inferSelect;
+
+// ============================================================
+// Casual / Summer Staff Shift System
+// ============================================================
+
+// Casual (summer) staff — log in with a mobile number + PIN
+export const casualStaff = pgTable("casual_staff", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  firstName: varchar("first_name").notNull(),
+  lastName: varchar("last_name"),
+  mobileNumber: varchar("mobile_number").notNull().unique(),
+  pinHash: varchar("pin_hash"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastLoginAt: timestamp("last_login_at"),
+  inviteSentAt: timestamp("invite_sent_at"),
+});
+
+// One-time invite tokens for casual staff to set their PIN
+export const casualStaffInviteTokens = pgTable("casual_staff_invite_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  casualStaffId: varchar("casual_staff_id").notNull().references(() => casualStaff.id, { onDelete: "cascade" }),
+  token: varchar("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  used: boolean("used").notNull().default(false),
+});
+
+// Shifts offered to casual staff. One contiguous window per machine/date.
+// status: 'suggested' (draft, not visible to staff) | 'available' (claimable) | 'claimed'
+export const shifts = pgTable("shifts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  machineId: integer("machine_id").notNull(),
+  date: timestamp("date").notNull(),
+  startTime: integer("start_time").notNull(), // minutes from midnight
+  endTime: integer("end_time").notNull(),     // minutes from midnight
+  status: text("status").notNull().default("available"),
+  claimedById: varchar("claimed_by_id").references(() => casualStaff.id, { onDelete: "set null" }),
+  claimedAt: timestamp("claimed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("shifts_status_date_idx").on(table.status, table.date),
+  index("shifts_machine_date_idx").on(table.machineId, table.date),
+  index("shifts_claimed_by_idx").on(table.claimedById),
+]);
+
+export const insertCasualStaffSchema = createInsertSchema(casualStaff).omit({
+  id: true,
+  pinHash: true,
+  active: true,
+  createdAt: true,
+  lastLoginAt: true,
+  inviteSentAt: true,
+}).extend({
+  firstName: z.string().min(1, "First name is required"),
+  mobileNumber: z.string().min(6, "A valid mobile number is required"),
+});
+
+export const insertShiftSchema = createInsertSchema(shifts).omit({
+  id: true,
+  status: true,
+  claimedById: true,
+  claimedAt: true,
+  createdAt: true,
+});
+
+export const casualLoginSchema = z.object({
+  mobileNumber: z.string().min(6, "Enter your mobile number"),
+  pin: z.string().min(4, "Enter your PIN"),
+});
+
+export const casualSetPinSchema = z.object({
+  token: z.string().min(1),
+  pin: z.string().min(4, "PIN must be at least 4 digits").max(8, "PIN must be 8 digits or fewer"),
+});
+
+export const generateShiftsSchema = z.object({
+  weeks: z.number().int().min(1).max(8).default(8),
+  dailyStartTime: z.number().int().min(0).max(1439).default(420),  // 07:00
+  dailyEndTime: z.number().int().min(1).max(1440).default(1080),   // 18:00
+  minShiftMinutes: z.number().int().min(30).max(720).default(120), // 2h
+  includeSaturday: z.boolean().default(true),
+  includeSunday: z.boolean().default(false),
+});
+
+export const claimShiftSchema = z.object({
+  startTime: z.number().int().min(0).max(1440),
+  endTime: z.number().int().min(0).max(1440),
+});
+
+export type InsertCasualStaff = z.infer<typeof insertCasualStaffSchema>;
+export type CasualStaff = typeof casualStaff.$inferSelect;
+export type CasualStaffInviteToken = typeof casualStaffInviteTokens.$inferSelect;
+export type InsertShift = z.infer<typeof insertShiftSchema>;
+export type Shift = typeof shifts.$inferSelect;
+export type CasualLogin = z.infer<typeof casualLoginSchema>;
+export type GenerateShiftsInput = z.infer<typeof generateShiftsSchema>;
+export type ClaimShiftInput = z.infer<typeof claimShiftSchema>;

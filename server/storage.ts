@@ -81,6 +81,14 @@ import {
   tasks,
   type Task,
   type InsertTask,
+  casualStaff,
+  casualStaffInviteTokens,
+  shifts,
+  type CasualStaff,
+  type InsertCasualStaff,
+  type CasualStaffInviteToken,
+  type Shift,
+  type InsertShift,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql, isNull, isNotNull, desc, inArray } from "drizzle-orm";
@@ -3205,6 +3213,261 @@ export class DatabaseStorage implements IStorage {
 
   async clearThreadColours(): Promise<void> {
     await db.delete(threadColours);
+  }
+
+  // ===================== Casual / Summer Staff =====================
+
+  async createCasualStaff(data: InsertCasualStaff): Promise<CasualStaff> {
+    const [row] = await db.insert(casualStaff).values(data).returning();
+    return row;
+  }
+
+  async getCasualStaffById(id: string): Promise<CasualStaff | undefined> {
+    const [row] = await db.select().from(casualStaff).where(eq(casualStaff.id, id));
+    return row;
+  }
+
+  async getCasualStaffByMobile(mobileNumber: string): Promise<CasualStaff | undefined> {
+    const normalized = mobileNumber.replace(/\s+/g, "");
+    const [row] = await db
+      .select()
+      .from(casualStaff)
+      .where(sql`REPLACE(${casualStaff.mobileNumber}, ' ', '') = ${normalized}`);
+    return row;
+  }
+
+  async listCasualStaff(): Promise<CasualStaff[]> {
+    return db.select().from(casualStaff).orderBy(desc(casualStaff.createdAt));
+  }
+
+  async updateCasualStaff(
+    id: string,
+    updates: Partial<Pick<CasualStaff, "firstName" | "lastName" | "mobileNumber" | "pinHash" | "active" | "lastLoginAt" | "inviteSentAt">>
+  ): Promise<CasualStaff> {
+    const [row] = await db.update(casualStaff).set(updates).where(eq(casualStaff.id, id)).returning();
+    return row;
+  }
+
+  async deleteCasualStaff(id: string): Promise<void> {
+    await db.delete(casualStaff).where(eq(casualStaff.id, id));
+  }
+
+  async createCasualInviteToken(data: { casualStaffId: string; token: string; expiresAt: Date }): Promise<CasualStaffInviteToken> {
+    const [row] = await db.insert(casualStaffInviteTokens).values(data).returning();
+    return row;
+  }
+
+  async getCasualInviteToken(token: string): Promise<CasualStaffInviteToken | undefined> {
+    const [row] = await db
+      .select()
+      .from(casualStaffInviteTokens)
+      .where(eq(casualStaffInviteTokens.token, token));
+    return row;
+  }
+
+  async markCasualInviteTokenUsed(id: string): Promise<void> {
+    await db.update(casualStaffInviteTokens).set({ used: true }).where(eq(casualStaffInviteTokens.id, id));
+  }
+
+  // ===================== Shifts =====================
+
+  async createShift(data: InsertShift & { status?: string }): Promise<Shift> {
+    const [row] = await db.insert(shifts).values(data).returning();
+    return row;
+  }
+
+  async createShiftsBulk(rows: Array<InsertShift & { status?: string }>): Promise<number> {
+    if (rows.length === 0) return 0;
+    const inserted = await db.insert(shifts).values(rows).returning({ id: shifts.id });
+    return inserted.length;
+  }
+
+  async getShift(id: string): Promise<Shift | undefined> {
+    const [row] = await db.select().from(shifts).where(eq(shifts.id, id));
+    return row;
+  }
+
+  async listShifts(filters: { status?: string; machineId?: number; from?: Date; to?: Date } = {}): Promise<Shift[]> {
+    const conds: any[] = [];
+    if (filters.status) conds.push(eq(shifts.status, filters.status));
+    if (filters.machineId != null) conds.push(eq(shifts.machineId, filters.machineId));
+    if (filters.from) conds.push(gte(shifts.date, filters.from));
+    if (filters.to) conds.push(lte(shifts.date, filters.to));
+    const where = conds.length ? and(...conds) : undefined;
+    return db.select().from(shifts).where(where as any).orderBy(shifts.date, shifts.startTime);
+  }
+
+  async getShiftsByMachineAndDate(machineId: number, date: Date): Promise<Shift[]> {
+    const start = new Date(date); start.setHours(0, 0, 0, 0);
+    const end = new Date(date); end.setHours(23, 59, 59, 999);
+    return db
+      .select()
+      .from(shifts)
+      .where(and(eq(shifts.machineId, machineId), gte(shifts.date, start), lte(shifts.date, end)))
+      .orderBy(shifts.startTime);
+  }
+
+  async getShiftsClaimedBy(casualStaffId: string): Promise<Shift[]> {
+    return db
+      .select()
+      .from(shifts)
+      .where(and(eq(shifts.claimedById, casualStaffId), eq(shifts.status, "claimed")))
+      .orderBy(shifts.date, shifts.startTime);
+  }
+
+  async updateShift(id: string, updates: Partial<Shift>): Promise<Shift> {
+    const [row] = await db.update(shifts).set(updates).where(eq(shifts.id, id)).returning();
+    return row;
+  }
+
+  // Atomically claim (optionally part of) an available shift. Runs inside a
+  // transaction with a row lock so two staff can't claim the same window and the
+  // weekly limit can't be exceeded by concurrent requests. Throws Error with a
+  // `code` of UNAVAILABLE | PAST | OUT_OF_RANGE | TOO_SHORT | WEEKLY_LIMIT.
+  async claimShiftAtomic(params: {
+    shiftId: string;
+    casualStaffId: string;
+    start?: number;
+    end?: number;
+    weeklyLimit: number;
+    weekFrom: Date;
+    weekTo: Date;
+    minMinutes: number;
+    fragmentMinMinutes: number;
+  }): Promise<Shift> {
+    const fail = (code: string, message: string) => {
+      const err: any = new Error(message);
+      err.code = code;
+      return err;
+    };
+    return db.transaction(async (tx) => {
+      const [shift] = await tx
+        .select()
+        .from(shifts)
+        .where(eq(shifts.id, params.shiftId))
+        .for("update");
+      if (!shift || shift.status !== "available") {
+        throw fail("UNAVAILABLE", "Sorry, that shift is no longer available.");
+      }
+
+      const dayStart = new Date(shift.date); dayStart.setHours(0, 0, 0, 0);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      if (dayStart < today) throw fail("PAST", "That shift is in the past.");
+
+      const s = params.start ?? shift.startTime;
+      const e = params.end ?? shift.endTime;
+      if (e <= s || s < shift.startTime || e > shift.endTime) {
+        throw fail("OUT_OF_RANGE", "Pick a time inside the shift window.");
+      }
+      if (e - s < params.minMinutes) {
+        throw fail("TOO_SHORT", `Shifts must be at least ${params.minMinutes} minutes.`);
+      }
+
+      const claimedRows = await tx
+        .select({ id: shifts.id })
+        .from(shifts)
+        .where(and(
+          eq(shifts.claimedById, params.casualStaffId),
+          eq(shifts.status, "claimed"),
+          gte(shifts.date, params.weekFrom),
+          lte(shifts.date, params.weekTo),
+        ));
+      if (claimedRows.length >= params.weeklyLimit) {
+        throw fail("WEEKLY_LIMIT", `You can only book ${params.weeklyLimit} shifts per week.`);
+      }
+
+      const [claimed] = await tx
+        .update(shifts)
+        .set({ startTime: s, endTime: e, status: "claimed", claimedById: params.casualStaffId, claimedAt: new Date() })
+        .where(and(eq(shifts.id, params.shiftId), eq(shifts.status, "available")))
+        .returning();
+      if (!claimed) throw fail("UNAVAILABLE", "Sorry, that shift is no longer available.");
+
+      const fragments: Array<InsertShift & { status?: string }> = [];
+      if (s - shift.startTime >= params.fragmentMinMinutes) {
+        fragments.push({ machineId: shift.machineId, date: dayStart, startTime: shift.startTime, endTime: s, status: "available" });
+      }
+      if (shift.endTime - e >= params.fragmentMinMinutes) {
+        fragments.push({ machineId: shift.machineId, date: dayStart, startTime: e, endTime: shift.endTime, status: "available" });
+      }
+      if (fragments.length) await tx.insert(shifts).values(fragments);
+
+      return claimed;
+    });
+  }
+
+  async deleteShift(id: string): Promise<void> {
+    await db.delete(shifts).where(eq(shifts.id, id));
+  }
+
+  // Merge contiguous/overlapping AVAILABLE shift rows for one machine+date into
+  // the fewest rows. Runs in a transaction with row locks and only ever touches
+  // rows that are still 'available', so a concurrent claim can't have a freshly
+  // claimed row deleted out from under it.
+  async mergeAvailableShiftsAtomic(machineId: number, date: Date): Promise<void> {
+    const start = new Date(date); start.setHours(0, 0, 0, 0);
+    const end = new Date(date); end.setHours(23, 59, 59, 999);
+    const dayStart = new Date(date); dayStart.setHours(0, 0, 0, 0);
+    await db.transaction(async (tx) => {
+      const available = (await tx
+        .select()
+        .from(shifts)
+        .where(and(eq(shifts.machineId, machineId), eq(shifts.status, "available"), gte(shifts.date, start), lte(shifts.date, end)))
+        .for("update"))
+        .sort((a, b) => a.startTime - b.startTime);
+      if (available.length < 2) return;
+
+      const merged: Array<{ startTime: number; endTime: number }> = [];
+      let current = { startTime: available[0].startTime, endTime: available[0].endTime };
+      for (let i = 1; i < available.length; i++) {
+        const next = available[i];
+        if (next.startTime <= current.endTime) {
+          current.endTime = Math.max(current.endTime, next.endTime);
+        } else {
+          merged.push({ ...current });
+          current = { startTime: next.startTime, endTime: next.endTime };
+        }
+      }
+      merged.push({ ...current });
+      if (merged.length === available.length) return;
+
+      await tx.delete(shifts).where(and(
+        inArray(shifts.id, available.map((s) => s.id)),
+        eq(shifts.status, "available"),
+      ));
+      await tx.insert(shifts).values(merged.map((m) => ({
+        machineId,
+        date: dayStart,
+        startTime: m.startTime,
+        endTime: m.endTime,
+        status: "available",
+      })));
+    });
+  }
+
+  async deleteSuggestedShifts(): Promise<void> {
+    await db.delete(shifts).where(eq(shifts.status, "suggested"));
+  }
+
+  async publishShifts(ids?: string[]): Promise<number> {
+    const cond = ids && ids.length
+      ? and(eq(shifts.status, "suggested"), inArray(shifts.id, ids))
+      : eq(shifts.status, "suggested");
+    const updated = await db.update(shifts).set({ status: "available" }).where(cond as any).returning({ id: shifts.id });
+    return updated.length;
+  }
+
+  async countClaimedShiftsInRange(casualStaffId: string, from: Date, to: Date): Promise<number> {
+    const rows = await db
+      .select({ id: shifts.id })
+      .from(shifts)
+      .where(and(
+        eq(shifts.claimedById, casualStaffId),
+        eq(shifts.status, "claimed"),
+        gte(shifts.date, from),
+        lte(shifts.date, to),
+      ));
+    return rows.length;
   }
 
 }
