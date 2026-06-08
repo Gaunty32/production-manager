@@ -59,6 +59,7 @@ import {
   Clock,
   Bell,
   CheckSquare,
+  Briefcase,
 } from "lucide-react";
 import {
   Popover,
@@ -1380,8 +1381,8 @@ export default function StaffMessages() {
       {selected ? (
         <div className="flex-1 flex flex-col min-h-0">
           {/* Chat header */}
-          <div className="px-4 py-3 border-b bg-card/40 flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setSelected(null)}>
+          <div className="px-3 sm:px-4 py-3 border-b bg-card/40 flex items-center gap-1.5 sm:gap-3">
+            <Button variant="ghost" size="icon" className="sm:hidden shrink-0" onClick={() => setSelected(null)}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             {selected.type === "job" ? (
@@ -1396,12 +1397,14 @@ export default function StaffMessages() {
                   <p className="text-sm font-semibold truncate">{selectedJobConvo?.jobName}</p>
                   <p className="text-xs text-muted-foreground">{selectedJobConvo?.customerName ? <DemoText>{selectedJobConvo.customerName}</DemoText> : null}</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setLocation(`/staff/job/${selectedJobConvo?.jobId}`)} data-testid="button-view-job">
-                  View Job
+                <Button variant="outline" size="sm" className="shrink-0 px-2 sm:px-3" onClick={() => setLocation(`/staff/job/${selectedJobConvo?.jobId}`)} data-testid="button-view-job">
+                  <Briefcase className="h-3.5 w-3.5 sm:mr-1.5" />
+                  <span className="hidden sm:inline">View Job</span>
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
+                  className="shrink-0 px-2 sm:px-3"
                   title={selectedJobConvo?.isArchivedByStaff ? "Restore conversation to active list" : "Archive this conversation"}
                   onClick={() => {
                     if (selectedJobConvo?.isArchivedByStaff) {
@@ -1414,8 +1417,8 @@ export default function StaffMessages() {
                   data-testid="button-archive-job-convo"
                 >
                   {selectedJobConvo?.isArchivedByStaff
-                    ? <><ArchiveX className="h-3.5 w-3.5 mr-1.5" />Restore</>
-                    : <><Archive className="h-3.5 w-3.5 mr-1.5" />Archive</>}
+                    ? <><ArchiveX className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Restore</span></>
+                    : <><Archive className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Archive</span></>}
                 </Button>
                 <Button
                   variant="ghost"
@@ -1449,11 +1452,12 @@ export default function StaffMessages() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="shrink-0 px-2 sm:px-3"
                   title="Archive this conversation"
                   onClick={() => archiveConvoMutation.mutate(selectedDirectConvo!.id)}
                   data-testid="button-archive-convo"
                 >
-                  <Archive className="h-3.5 w-3.5 mr-1.5" />Archive
+                  <Archive className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Archive</span>
                 </Button>
                 <Button
                   variant="ghost"
