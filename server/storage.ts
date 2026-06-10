@@ -1656,14 +1656,16 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
-    // Count unread staff direct-conversation messages
+    // Count unread staff direct-conversation messages — excluding staff-archived conversations
     const unreadDirectMsgs = await db
       .select({ id: conversationMessages.id })
       .from(conversationMessages)
+      .innerJoin(conversations, eq(conversationMessages.conversationId, conversations.id))
       .where(
         and(
           eq(conversationMessages.senderType, 'customer'),
-          eq(conversationMessages.readByStaff, false)
+          eq(conversationMessages.readByStaff, false),
+          eq(conversations.archivedByStaff, false)
         )
       );
 

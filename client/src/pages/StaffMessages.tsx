@@ -95,6 +95,7 @@ type DirectConversation = {
   recipientType: "customer" | "staff";
   subject: string;
   status: string;
+  archivedByStaff?: boolean;
   unreadCount: number;
   latestMessage: { message: string; senderType: "customer" | "staff"; createdAt: string } | null;
   updatedAt: string;
@@ -415,8 +416,11 @@ export default function StaffMessages() {
 
   // Auto-select first conversation per tab on load
   useEffect(() => {
-    if (tab === "direct" && directConversations.length > 0 && !directId) {
-      setSelected({ type: "direct", conversationId: directConversations[0].id });
+    if (tab === "direct" && !directId) {
+      const firstActive = directConversations.find(c => !c.archivedByStaff);
+      if (firstActive) {
+        setSelected({ type: "direct", conversationId: firstActive.id });
+      }
     }
   }, [tab, directConversations, directId]);
 
@@ -713,7 +717,7 @@ export default function StaffMessages() {
 
   const archiveConvoMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest("PATCH", `/api/staff/direct-conversations/${id}`, { status: "archived" });
+      await apiRequest("PATCH", `/api/staff/direct-conversations/${id}`, { archivedByStaff: true });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/direct-conversations"] });
@@ -963,7 +967,7 @@ export default function StaffMessages() {
     const effective = c.unreadCount > 0 ? c.unreadCount : (flags.isManuallyUnread(`job:${c.jobId}`) ? 1 : 0);
     return s + effective;
   }, 0);
-  const directUnread = directConversations.reduce((s, c) => {
+  const directUnread = directConversations.filter(c => !c.archivedByStaff).reduce((s, c) => {
     const effective = c.unreadCount > 0 ? c.unreadCount : (flags.isManuallyUnread(`direct:${c.id}`) ? 1 : 0);
     return s + effective;
   }, 0);
@@ -1355,10 +1359,10 @@ export default function StaffMessages() {
             // ── Direct messages list ─────────────────────────────────────────
             isLoadingDirectConvos ? (
               <LoadingSpinner />
-            ) : directConversations.filter(c => c.status === "open").length === 0 ? (
+            ) : directConversations.filter(c => !c.archivedByStaff).length === 0 ? (
               <EmptyState label="No general chats" sublabel="Start a general conversation with a customer" />
             ) : (
-              directConversations.filter(c => c.status === "open").map(c => (
+              directConversations.filter(c => !c.archivedByStaff).map(c => (
                 <ConvoRow
                   key={c.id}
                   isActive={selected?.type === "direct" && selected.conversationId === c.id}

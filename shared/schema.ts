@@ -304,7 +304,8 @@ export const conversations = pgTable("conversations", {
   customerId: varchar("customer_id").references(() => customers.id, { onDelete: "cascade" }), // null when staffRecipientId is set
   staffRecipientId: varchar("staff_recipient_id").references(() => staff.id, { onDelete: "cascade" }), // null when customerId is set
   subject: varchar("subject").notNull(),
-  status: varchar("status").notNull().default("open"), // 'open' | 'archived'
+  status: varchar("status").notNull().default("open"), // customer-side status: 'open' | 'archived' | 'deleted' (does NOT affect staff visibility)
+  archivedByStaff: boolean("archived_by_staff").notNull().default(false), // staff-side archive, independent of customer status
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
