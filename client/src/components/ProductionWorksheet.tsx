@@ -56,7 +56,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
       <div className="max-w-4xl mx-auto p-8 print:p-0">
         <div className="bg-white text-black">
           {/* Header Section - Top Quarter of Page */}
-          <div className="border-b-4 border-black pb-6 mb-6 min-h-[25vh] print:min-h-0">
+          <div className="border-b-4 border-black pb-6 mb-6 min-h-[25vh] print:min-h-0 print:pb-3 print:mb-3">
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
                 <h1 className="text-5xl font-bold text-red-600 mb-4 print:text-3xl print:mb-2">
@@ -68,6 +68,42 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
               <div className="text-right">
                 <p className="text-sm text-gray-600">Job Number</p>
                 <p className="text-4xl font-bold print:text-2xl">#{job.jobNumber || "N/A"}</p>
+
+                {/* Production Time box - kept on page 1 under the job number */}
+                {((totalProductionMetrics && totalProductionMetrics.totalMinutes > 0) ||
+                  (job.actualProductionTime !== null && job.actualProductionTime !== undefined)) && (
+                  <div className="mt-3 inline-block text-left border-2 border-black p-3 min-w-[220px]">
+                    <h3 className="font-semibold text-xs uppercase text-gray-600 mb-2 pb-1 border-b border-gray-300">
+                      Production Time
+                    </h3>
+                    {totalProductionMetrics && totalProductionMetrics.totalMinutes > 0 && (
+                      <>
+                        <div className="flex justify-between gap-6 text-sm">
+                          <span className="text-gray-600">Estimated:</span>
+                          <span className="font-bold">{formatTimeDisplay(totalProductionMetrics.totalMinutes)}</span>
+                        </div>
+                        <div className="flex justify-between gap-6 text-sm">
+                          <span className="text-gray-600">Total Runs:</span>
+                          <span className="font-bold">{totalProductionMetrics.totalRuns}</span>
+                        </div>
+                      </>
+                    )}
+                    {job.actualProductionTime !== null && job.actualProductionTime !== undefined && (
+                      <div className="flex justify-between gap-6 text-sm">
+                        <span className="text-gray-600">Actual:</span>
+                        <span className="font-bold text-blue-600 print:text-black">
+                          {(() => {
+                            const hours = Math.floor(job.actualProductionTime);
+                            const minutes = Math.round((job.actualProductionTime - hours) * 60);
+                            if (hours === 0) return `${minutes}m`;
+                            if (minutes === 0) return `${hours}h`;
+                            return `${hours}h ${minutes}m`;
+                          })()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             {job.poNumber && (
@@ -76,7 +112,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
           </div>
 
           {/* Job Details Section */}
-          <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-2 gap-6 mb-6 print:mb-3">
             <div>
               <h3 className="font-semibold text-sm uppercase text-gray-600 mb-2">Order Information</h3>
               <table className="w-full text-sm">
@@ -139,7 +175,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
           </div>
 
           {/* Shipping/Delivery Information */}
-          <div className="mb-6 p-4 border-2 border-gray-300 bg-gray-50 print:bg-white">
+          <div className="mb-6 p-4 border-2 border-gray-300 bg-gray-50 print:bg-white print:mb-3 print:p-2">
             <h3 className="font-semibold text-sm uppercase text-gray-600 mb-2">Shipping & Delivery</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
@@ -179,7 +215,7 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
           </div>
 
           {/* Line Items Section */}
-          <div className="mb-6">
+          <div className="mb-6 print:mb-3">
             <h3 className="font-semibold text-sm uppercase text-gray-600 mb-3 pb-2 border-b-2 border-black">
               Production Line Items
             </h3>
@@ -200,31 +236,31 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
                   const itemMetrics = calculateProductionMetrics(item.quantity, item.stitchCount, item.machineId);
                   return (
                     <tr key={item.id} className="border-b">
-                      <td className="py-3 px-2">
+                      <td className="py-3 px-2 print:py-1.5">
                         {item.jobType}
                         {item.description && (
                           <div className="text-xs text-gray-600 mt-1">{item.description}</div>
                         )}
                       </td>
-                      <td className="text-center py-3 px-2 font-semibold">{item.quantity}</td>
-                      <td className="text-center py-3 px-2">
+                      <td className="text-center py-3 px-2 font-semibold print:py-1.5">{item.quantity}</td>
+                      <td className="text-center py-3 px-2 print:py-1.5">
                         {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" 
                           ? item.stitchCount.toLocaleString()
                           : "—"
                         }
                       </td>
-                      <td className="text-center py-3 px-2">
+                      <td className="text-center py-3 px-2 print:py-1.5">
                         <span className={item.logoApproved ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
                           {item.logoApproved ? "✓" : "✗"}
                         </span>
                       </td>
-                      <td className="text-center py-3 px-2">
+                      <td className="text-center py-3 px-2 print:py-1.5">
                         {item.machineId ? getMachineName(item.machineId) : "—"}
                       </td>
-                      <td className="text-center py-3 px-2 font-semibold">
+                      <td className="text-center py-3 px-2 font-semibold print:py-1.5">
                         {itemMetrics ? formatTimeDisplay(itemMetrics.totalTimeMinutes) : "—"}
                       </td>
-                      <td className="text-center py-3 px-2">
+                      <td className="text-center py-3 px-2 print:py-1.5">
                         <div className="w-6 h-6 border-2 border-black inline-block"></div>
                       </td>
                     </tr>
@@ -236,14 +272,14 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
 
           {/* Notes Section */}
           {job.notes && (
-            <div className="mb-6 p-4 border-2 border-black">
+            <div className="mb-6 p-4 border-2 border-black print:mb-3 print:p-2">
               <h3 className="font-semibold text-sm uppercase text-gray-600 mb-2">Production Notes</h3>
               <p className="text-sm whitespace-pre-wrap">{job.notes}</p>
             </div>
           )}
 
           {/* Sign-off Section */}
-          <div className="grid grid-cols-2 gap-6 mt-8 pt-6 border-t-2 border-black">
+          <div className="grid grid-cols-2 gap-6 mt-8 pt-6 border-t-2 border-black print:mt-4 print:pt-3">
             <div>
               <p className="text-sm font-medium mb-2">Completed By:</p>
               <div className="border-b-2 border-black h-12"></div>
@@ -255,50 +291,6 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
               <p className="text-xs text-gray-600 mt-1">Date</p>
             </div>
           </div>
-
-          {/* Production Metrics Section */}
-          {totalProductionMetrics && totalProductionMetrics.totalMinutes > 0 && (
-            <div className="mt-6 p-4 bg-gray-50 border-2 border-gray-300 print:bg-white">
-              <h3 className="font-semibold text-sm uppercase text-gray-600 mb-3">
-                Estimated Production Time
-              </h3>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-gray-600 mb-1">Total Runs:</p>
-                  <p className="text-2xl font-bold">{totalProductionMetrics.totalRuns}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600 mb-1">Total Time:</p>
-                  <p className="text-2xl font-bold">{formatTimeDisplay(totalProductionMetrics.totalMinutes)}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Actual Production Time Section */}
-          {job.actualProductionTime !== null && job.actualProductionTime !== undefined && (
-            <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-300 print:bg-white print:border-black">
-              <h3 className="font-semibold text-sm uppercase text-gray-600 mb-3">
-                Actual Production Time
-              </h3>
-              <div className="text-sm">
-                <p className="text-gray-600 mb-1">Time Taken:</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {(() => {
-                    const hours = Math.floor(job.actualProductionTime);
-                    const minutes = Math.round((job.actualProductionTime - hours) * 60);
-                    if (hours === 0) {
-                      return `${minutes}m`;
-                    } else if (minutes === 0) {
-                      return `${hours}h`;
-                    } else {
-                      return `${hours}h ${minutes}m`;
-                    }
-                  })()}
-                </p>
-              </div>
-            </div>
-          )}
 
         </div>
       </div>
