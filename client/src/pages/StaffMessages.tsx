@@ -722,7 +722,20 @@ export default function StaffMessages() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff/direct-conversations"] });
       setSelected(null);
+      toast({ title: "Chat archived" });
     },
+    onError: () => toast({ title: "Failed to archive chat", variant: "destructive" }),
+  });
+
+  const unarchiveConvoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("PATCH", `/api/staff/direct-conversations/${id}`, { archivedByStaff: false });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff/direct-conversations"] });
+      toast({ title: "Chat restored" });
+    },
+    onError: () => toast({ title: "Failed to restore chat", variant: "destructive" }),
   });
 
   const handleSend = async () => {
@@ -1359,24 +1372,40 @@ export default function StaffMessages() {
             // ── Direct messages list ─────────────────────────────────────────
             isLoadingDirectConvos ? (
               <LoadingSpinner />
-            ) : directConversations.filter(c => !c.archivedByStaff).length === 0 ? (
-              <EmptyState label="No general chats" sublabel="Start a general conversation with a customer" />
-            ) : (
-              directConversations.filter(c => !c.archivedByStaff).map(c => (
-                <ConvoRow
-                  key={c.id}
-                  isActive={selected?.type === "direct" && selected.conversationId === c.id}
-                  title={c.customerName}
-                  subtitle={c.subject}
-                  unread={c.unreadCount > 0 ? c.unreadCount : (flags.isManuallyUnread(`direct:${c.id}`) ? 1 : 0)}
-                  latest={c.latestMessage}
-                  senderLabel={c.customerName}
-                  onClick={() => setSelected({ type: "direct", conversationId: c.id })}
-                  testId={`direct-convo-${c.id}`}
-                  hasReminder={flags.hasReminder(`direct:${c.id}`)}
-                />
-              ))
-            )
+            ) : (() => {
+              const activeDirect = directConversations.filter(c => !c.archivedByStaff);
+              const archivedDirect = directConversations.filter(c => c.archivedByStaff);
+              return (
+                <>
+                  {activeDirect.length === 0 ? (
+                    <EmptyState label="No general chats" sublabel="Start a general conversation with a customer" />
+                  ) : (
+                    activeDirect.map(c => (
+                      <ConvoRow
+                        key={c.id}
+                        isActive={selected?.type === "direct" && selected.conversationId === c.id}
+                        title={c.customerName}
+                        subtitle={c.subject}
+                        unread={c.unreadCount > 0 ? c.unreadCount : (flags.isManuallyUnread(`direct:${c.id}`) ? 1 : 0)}
+                        latest={c.latestMessage}
+                        senderLabel={c.customerName}
+                        onClick={() => setSelected({ type: "direct", conversationId: c.id })}
+                        testId={`direct-convo-${c.id}`}
+                        hasReminder={flags.hasReminder(`direct:${c.id}`)}
+                      />
+                    ))
+                  )}
+                  {archivedDirect.length > 0 && (
+                    <ArchivedDirectSection
+                      conversations={archivedDirect}
+                      selectedId={selected?.type === "direct" ? selected.conversationId : null}
+                      onSelect={(id) => setSelected({ type: "direct", conversationId: id })}
+                      onUnarchive={(id) => unarchiveConvoMutation.mutate(id)}
+                    />
+                  )}
+                </>
+              );
+            })()
           )}
         </div>
       </div>
@@ -2457,6 +2486,62 @@ function ArchivedSection({ conversations, selected, onSelect, onUnarchive, expan
                 onClick={e => { e.stopPropagation(); onUnarchive(c.jobId); }}
                 className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-muted-foreground border border-border/60 hover-elevate"
                 data-testid={`button-unarchive-${c.jobId}`}
+              >
+                <ArchiveX className="h-3 w-3" />
+                Restore
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type ArchivedDirectSectionProps = {
+  conversations: DirectConversation[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onUnarchive: (id: string) => void;
+};
+
+function ArchivedDirectSection({ conversations, selectedId, onSelect, onUnarchive }: ArchivedDirectSectionProps) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border-t bg-muted/20">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-muted-foreground hover-elevate"
+        data-testid="button-toggle-archived-direct"
+      >
+        <Archive className="h-3.5 w-3.5 shrink-0" />
+        <span className="flex-1 text-left">Archived Chats</span>
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{conversations.length}</Badge>
+        <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`} />
+      </button>
+      {expanded && (
+        <div className="border-t divide-y divide-border/40">
+          {conversations.map(c => (
+            <div
+              key={c.id}
+              className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer hover-elevate ${selectedId === c.id ? "bg-primary/8" : ""}`}
+              onClick={() => onSelect(c.id)}
+              data-testid={`archived-direct-convo-${c.id}`}
+            >
+              <MessageSquare className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate text-muted-foreground"><DemoText>{c.customerName}</DemoText></p>
+                <p className="text-[10px] text-muted-foreground/60 truncate">{c.subject}</p>
+              </div>
+              {c.unreadCount > 0 && (
+                <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px]">{c.unreadCount}</Badge>
+              )}
+              <button
+                type="button"
+                title="Restore to active chats"
+                onClick={e => { e.stopPropagation(); onUnarchive(c.id); }}
+                className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-muted-foreground border border-border/60 hover-elevate"
+                data-testid={`button-unarchive-direct-${c.id}`}
               >
                 <ArchiveX className="h-3 w-3" />
                 Restore
