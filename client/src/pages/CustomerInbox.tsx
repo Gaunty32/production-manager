@@ -118,6 +118,20 @@ export default function CustomerInbox() {
   const [newMessageBanner, setNewMessageBanner] = useState(false);
   const [globalNewMessageConvo, setGlobalNewMessageConvo] = useState<string | null>(null);
 
+  // Desktop = two-pane layout (list + chat side by side). Matches the Tailwind
+  // `sm` breakpoint (640px) used to show/hide the panels below. We only
+  // auto-select the first conversation on desktop; on mobile the list must
+  // stay visible so the back button can return to it.
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 640px)").matches : true
+  );
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 640px)");
+    const onChange = () => setIsDesktop(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
   // Request browser notification permission once on mount
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -242,8 +256,10 @@ export default function CustomerInbox() {
     }
   };
 
-  // Auto-select first conversation per tab
+  // Auto-select first conversation per tab (desktop two-pane only — on mobile
+  // the list must stay visible so the back button can return to it).
   useEffect(() => {
+    if (!isDesktop) return;
     if (tab === "job" && jobConversations.length > 0 && !jobId) {
       const active = jobConversations.find(c => !c.isArchived);
       if (active) {
@@ -257,7 +273,7 @@ export default function CustomerInbox() {
     if (tab === "direct" && directConversations.length > 0 && !directId) {
       setSelected({ type: "direct", conversationId: directConversations[0].id });
     }
-  }, [tab, jobConversations, directConversations, jobId, directId]);
+  }, [tab, jobConversations, directConversations, jobId, directId, isDesktop]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
