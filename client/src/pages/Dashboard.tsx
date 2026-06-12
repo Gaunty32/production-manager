@@ -378,11 +378,21 @@ export default function Dashboard() {
   const filteredJobs = jobsWithCustomers.filter((job) => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
+    const lineItems = (job as JobWithLineItems).lineItems ?? [];
+    const matchesMachine = lineItems.some((li) =>
+      li.machineId ? getMachineName(li.machineId).toLowerCase().includes(searchLower) : false
+    );
+    const matchesStaff = lineItems.some((li) => {
+      const op = getOperatorName(li);
+      return op ? op.toLowerCase().includes(searchLower) : false;
+    });
     return (
       job.customerName.toLowerCase().includes(searchLower) ||
       job.jobName.toLowerCase().includes(searchLower) ||
       (job.poNumber && job.poNumber.toLowerCase().includes(searchLower)) ||
-      (job.jobNumber !== null && job.jobNumber.toString().toLowerCase().includes(searchLower))
+      (job.jobNumber !== null && job.jobNumber.toString().toLowerCase().includes(searchLower)) ||
+      matchesMachine ||
+      matchesStaff
     );
   });
 
@@ -1600,6 +1610,7 @@ export default function Dashboard() {
                       <TableHead className="py-3 px-3">PO #</TableHead>
                       <TableHead className="py-3 px-3">Qty</TableHead>
                       <TableHead className="py-3 px-3">Machine</TableHead>
+                      <TableHead className="py-3 px-3">Staff</TableHead>
                       <TableHead className="py-3 px-3">Production</TableHead>
                       {canViewPrices(currentUser?.role) && (
                         <TableHead className="py-3 px-3">Price</TableHead>
@@ -1671,6 +1682,7 @@ export default function Dashboard() {
                             </TableCell>
                             <TableCell className="py-2 px-3">{job.poNumber || '-'}</TableCell>
                             <TableCell className="py-2 px-3 text-center">{job.quantity || 0}</TableCell>
+                            <TableCell className="py-2 px-3 text-center">-</TableCell>
                             <TableCell className="py-2 px-3 text-center">-</TableCell>
                             {canViewPrices(currentUser?.role) && <TableCell className="py-2 px-3">-</TableCell>}
                             <TableCell className="py-2 px-3">

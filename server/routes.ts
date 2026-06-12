@@ -5613,14 +5613,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Used by the printable "pill view" handouts on the main screen.
   app.get("/api/scheduling/machine-sheet", isStaffAuthenticated, async (req, res) => {
     try {
-      const days = Math.min(Math.max(parseInt(req.query.days as string) || 5, 1), 30);
+      // `days=all` shows every scheduled job from today onward (no upper bound);
+      // otherwise show a bounded window of 1-30 calendar days (default 5).
+      const showAll = (req.query.days as string) === "all";
+      const days = showAll ? null : Math.min(Math.max(parseInt(req.query.days as string) || 5, 1), 30);
 
       const startDate = new Date();
       startDate.setHours(0, 0, 0, 0);
       // Inclusive window: today plus the following (days - 1) dates = exactly `days` calendar days.
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + (days - 1));
-      endDate.setHours(23, 59, 59, 999);
+      // When showing all, leave endDate undefined so every future schedule is returned.
+      let endDate: Date | undefined;
+      if (!showAll && days) {
+        endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + (days - 1));
+        endDate.setHours(23, 59, 59, 999);
+      }
 
       const [allMachines, allStaff, schedules, allLineItems, allJobs, customers, allocations] = await Promise.all([
         storage.getMachines(),
@@ -5641,8 +5648,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // yyyy-MM-dd keys the frontend derives from each job's date).
       const ymd = (d: Date) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // When showing all, the window runs from today to the last day that has a
+      // scheduled job (min 1 day); otherwise it's the fixed `days` window.
+      let numDays = days ?? 1;
+      if (showAll) {
+        let maxTime = startDate.getTime();
+        for (const s of schedules) {
+          const t = new Date(s.scheduledDate).setHours(0, 0, 0, 0);
+          if (t > maxTime) maxTime = t;
+        }
+        numDays = Math.max(1, Math.round((maxTime - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+      }
       const windowDays: { key: string; date: Date }[] = [];
-      for (let i = 0; i < days; i++) {
+      for (let i = 0; i < numDays; i++) {
         const d = new Date(startDate);
         d.setDate(startDate.getDate() + i);
         windowDays.push({ key: ymd(d), date: d });
@@ -5728,10 +5746,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         });
 
+      const lastDay = windowDays[windowDays.length - 1]?.date ?? startDate;
       res.json({
-        days,
+        days: numDays,
+        showAll,
         startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
+        endDate: (endDate ?? lastDay).toISOString(),
         dateKeys: windowDays.map(d => d.key),
         machines: machinesOut,
       });

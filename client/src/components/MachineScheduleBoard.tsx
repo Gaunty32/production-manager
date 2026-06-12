@@ -75,7 +75,8 @@ function buildDays(
   });
 }
 
-const DAYS = 5;
+// Show every scheduled job for each machine (no upper day limit).
+const DAYS_PARAM = "all";
 
 function minutesToLabel(mins: number): string {
   const h = Math.floor(mins / 60);
@@ -154,7 +155,7 @@ function buildMachineSection(machine: MachineSheet, data: MachineSheetResponse):
           </div>`;
         })
         .join("")
-    : `<p class="empty">No scheduled jobs in the next ${data.days} days.</p>`;
+    : `<p class="empty">No scheduled jobs.</p>`;
 
   return `<section class="machine">
     <div class="machine-header">
@@ -219,9 +220,9 @@ function openPrintWindow(html: string): void {
 
 export function MachineScheduleBoard() {
   const { data, isLoading } = useQuery<MachineSheetResponse>({
-    queryKey: ["/api/scheduling/machine-sheet", DAYS],
+    queryKey: ["/api/scheduling/machine-sheet", DAYS_PARAM],
     queryFn: async () => {
-      const res = await fetch(`/api/scheduling/machine-sheet?days=${DAYS}`, {
+      const res = await fetch(`/api/scheduling/machine-sheet?days=${DAYS_PARAM}`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to load machine schedule");
@@ -257,14 +258,14 @@ export function MachineScheduleBoard() {
   const handlePrintAll = () => {
     if (!data) return;
     openPrintWindow(
-      buildPrintDocument(data.machines, data, `Machine Schedule — Next ${data.days} Days`),
+      buildPrintDocument(data.machines, data, `Machine Schedule — All Jobs`),
     );
   };
 
   const handlePrintMachine = (machine: MachineSheet) => {
     if (!data) return;
     openPrintWindow(
-      buildPrintDocument([machine], data, `${machine.machineName} — Next ${data.days} Days`),
+      buildPrintDocument([machine], data, `${machine.machineName} — All Jobs`),
     );
   };
 
@@ -273,7 +274,7 @@ export function MachineScheduleBoard() {
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Cog className="h-5 w-5" />
-          Machine Schedule — Next {DAYS} Days
+          Machine Schedule — All Jobs
         </CardTitle>
         <Button
           size="sm"
