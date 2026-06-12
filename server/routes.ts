@@ -5650,6 +5650,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         days,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
+        dateKeys: windowDays.map(d => d.key),
         machines: machinesOut,
       });
     } catch (error) {

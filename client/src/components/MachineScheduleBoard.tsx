@@ -44,7 +44,22 @@ interface MachineSheetResponse {
   days: number;
   startDate: string;
   endDate: string;
+  dateKeys: string[];
   machines: MachineSheet[];
+}
+
+// Build one entry per day in the window, attaching that day's jobs. Days are
+// shown even with no jobs so the allocated operator is always visible.
+function buildDays(
+  machine: MachineSheet,
+  dateKeys: string[],
+): { date: string; jobs: MachineSheetJob[]; hasOperator: boolean }[] {
+  return dateKeys.map((key) => {
+    const jobs = machine.jobs.filter((j) => j.dateKey === key);
+    const hasOperator =
+      (machine.operatorsByDate?.[key]?.length ?? 0) > 0 || !!machine.defaultOperatorName;
+    return { date: key, jobs, hasOperator };
+  });
 }
 
 const DAYS = 5;
@@ -53,18 +68,6 @@ function minutesToLabel(mins: number): string {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-}
-
-function groupByDate(jobs: MachineSheetJob[]): { date: string; jobs: MachineSheetJob[] }[] {
-  const map = new Map<string, MachineSheetJob[]>();
-  for (const job of jobs) {
-    const key = job.dateKey;
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(job);
-  }
-  return Array.from(map.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([date, jobs]) => ({ date, jobs }));
 }
 
 // Parse a yyyy-MM-dd key as a local date (avoids UTC-shift from new Date("yyyy-MM-dd")).
@@ -83,17 +86,27 @@ function escapeHtml(value: string): string {
 function buildPrintHtml(data: MachineSheetResponse): string {
   const sections = data.machines
     .map((machine) => {
-      const operator = machine.defaultOperatorName
-        ? escapeHtml(machine.defaultOperatorName)
-        : "No default operator (fallback)";
+      const todayOperator = escapeHtml(
+        data.dateKeys.length
+          ? operatorsForDay(machine, data.dateKeys[0])
+          : machine.defaultOperatorName ?? "No operator",
+      );
 
-      const groups = groupByDate(machine.jobs);
+      const groups = buildDays(machine, data.dateKeys).filter(
+        (d) => d.jobs.length > 0 || d.hasOperator,
+      );
 
       const body = groups.length
         ? groups
             .map((group) => {
               const dayLabel = format(parseDateKey(group.date), "EEEE d MMM yyyy");
               const dayOperator = escapeHtml(operatorsForDay(machine, group.date));
+              if (group.jobs.length === 0) {
+                return `<div class="day">
+                  <h3>${dayLabel} <span class="day-operator">· Operator: ${dayOperator}</span></h3>
+                  <p class="empty">No jobs scheduled</p>
+                </div>`;
+              }
               const rows = group.jobs
                 .map((job) => {
                   const desc = [job.position, job.description]
@@ -131,7 +144,7 @@ function buildPrintHtml(data: MachineSheetResponse): string {
       return `<section class="machine">
         <div class="machine-header">
           <h2>${escapeHtml(machine.machineName)}</h2>
-          <span class="operator">Default operator: ${operator}</span>
+          <span class="operator">Today: ${todayOperator}</span>
         </div>
         ${body}
       </section>`;
@@ -229,7 +242,12 @@ export function MachineScheduleBoard() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {data.machines.map((machine) => {
-              const groups = groupByDate(machine.jobs);
+              const groups = buildDays(machine, data.dateKeys).filter(
+                (d) => d.jobs.length > 0 || d.hasOperator,
+              );
+              const todayOperator = data.dateKeys.length
+                ? operatorsForDay(machine, data.dateKeys[0])
+                : machine.defaultOperatorName ?? "No operator";
               return (
                 <Card
                   key={machine.machineId}
@@ -247,7 +265,7 @@ export function MachineScheduleBoard() {
                         data-testid={`badge-operator-${machine.machineId}`}
                       >
                         <User className="h-3 w-3 mr-1" />
-                        Default: {machine.defaultOperatorName ?? "None"}
+                        Today: {todayOperator}
                       </Badge>
                     </CardTitle>
                   </CardHeader>
@@ -272,6 +290,11 @@ export function MachineScheduleBoard() {
                                 {operatorsForDay(machine, group.date)}
                               </span>
                             </div>
+                            {group.jobs.length === 0 ? (
+                              <p className="text-xs text-muted-foreground italic pl-1">
+                                No jobs scheduled
+                              </p>
+                            ) : (
                             <ul className="space-y-1">
                               {group.jobs.map((job) => (
                                 <li
@@ -304,6 +327,7 @@ export function MachineScheduleBoard() {
                                 </li>
                               ))}
                             </ul>
+                            )}
                           </div>
                         ))}
                       </div>

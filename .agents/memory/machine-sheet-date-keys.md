@@ -21,6 +21,17 @@ match each other.
 `new Date(`${key}T00:00:00`)` (local) for labels — never `new Date(key)` (UTC, shifts
 the day in negative-offset zones).
 
+## Board shows every window day, not just days with jobs
+The response also carries a top-level `dateKeys: string[]` (ordered window days).
+The board iterates `dateKeys` (via `buildDays`), not `groupByDate(jobs)`, so an
+allocated-but-idle machine (e.g. operator assigned, nothing scheduled) STILL shows
+its per-day operator. A day row renders if it has jobs OR an operator; days with
+neither are hidden (avoids "No operator / No jobs" noise). Card/print header shows
+**Today's** operator (`operatorsForDay(machine, dateKeys[0])`), not the raw default.
+
+**Why:** the prior board only rendered job day-groups, so machines with allocations
+but no jobs showed "Default: None / Nothing scheduled" — the exact bug users hit.
+
 ## Per-day operator resolution (Staff Allocations as source of truth)
 Operator for a machine on a day = whoever is in `staffMachineAllocations` for that
 machine+day; `machine.defaultOperatorId` is ONLY a fallback when nobody is allocated.
