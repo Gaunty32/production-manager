@@ -1,9 +1,14 @@
+// Dedicated machine for Print jobs. All "Print" line items are run here and
+// assigned to the machine's default operator (Mollie).
+export const PRINT_MACHINE_ID = 6;
+
 export const MACHINE_NAMES: Record<number, string> = {
   1: "Barudan 8",
   2: "Barudan 6 1",
   3: "SWF 6 1",
   4: "SWF 6 2",
   5: "Barudan 6 2",
+  6: "Print",
 };
 
 export const MACHINE_HEADS: Record<number, number> = {
@@ -12,7 +17,13 @@ export const MACHINE_HEADS: Record<number, number> = {
   3: 6,  // SWF 6 1 - 6 heads
   4: 6,  // SWF 6 2 - 6 heads
   5: 6,  // Barudan 6 2 - 6 heads
+  6: 1,  // Print - single station
 };
+
+// True when a line item's job type is Print (case-insensitive, trimmed).
+export function isPrintJobType(jobType: string | null | undefined): boolean {
+  return (jobType || "").trim().toLowerCase() === "print";
+}
 
 export const STITCHES_PER_MINUTE = 750;
 export const CHANGEOVER_TIME_MINUTES = 3;

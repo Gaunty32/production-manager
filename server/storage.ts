@@ -309,6 +309,7 @@ export interface IStorage {
   getMachine(id: number): Promise<Machine | undefined>;
   updateMachine(id: number, data: Partial<Machine>): Promise<Machine>;
   seedMachines(): Promise<void>;
+  ensurePrintMachine(): Promise<void>;
 
   // App settings (key/value)
   getAppSetting(key: string): Promise<string | null>;
@@ -3138,6 +3139,7 @@ export class DatabaseStorage implements IStorage {
       { id: 3, name: "SWF 6 1", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
       { id: 4, name: "SWF 6 2", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
       { id: 5, name: "Barudan 6 2", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
+      { id: 6, name: "Print", heads: 1, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
     ];
 
     for (const m of defaults) {
@@ -3147,8 +3149,42 @@ export class DatabaseStorage implements IStorage {
         ON CONFLICT (id) DO NOTHING
       `);
     }
-    // Reset the serial sequence so next auto-insert starts after 5
-    await db.execute(sql`SELECT setval('machines_id_seq', 5, true)`);
+    // Reset the serial sequence so next auto-insert starts after 6
+    await db.execute(sql`SELECT setval('machines_id_seq', 6, true)`);
+  }
+
+  // Idempotently make sure the dedicated "Print" machine (id 6) exists and is
+  // assigned to operator Mollie as its default operator. Safe to call on every
+  // boot — only fills gaps, never overwrites an existing operator choice.
+  async ensurePrintMachine(): Promise<void> {
+    const PRINT_ID = 6;
+    const [mollie] = await db
+      .select()
+      .from(staff)
+      .where(sql`lower(${staff.name}) = 'mollie'`);
+    const mollieId = mollie?.id ?? null;
+
+    const [existing] = await db.select().from(machines).where(eq(machines.id, PRINT_ID));
+    if (!existing) {
+      await db.execute(sql`
+        INSERT INTO machines (id, name, heads, stitches_per_minute, changeover_time_minutes, is_active, default_operator_id)
+        VALUES (${PRINT_ID}, 'Print', 1, 750, 3, true, ${mollieId})
+        ON CONFLICT (id) DO NOTHING
+      `);
+      await db.execute(
+        sql`SELECT setval('machines_id_seq', GREATEST((SELECT MAX(id) FROM machines), ${PRINT_ID}), true)`
+      );
+    } else {
+      // Normalize an existing id-6 row so it is always the active "Print" machine,
+      // and fill in Mollie as the default operator if one is not already set.
+      const updates: Partial<Machine> = {};
+      if (existing.name !== "Print") updates.name = "Print";
+      if (!existing.isActive) updates.isActive = true;
+      if (!existing.defaultOperatorId && mollieId) updates.defaultOperatorId = mollieId;
+      if (Object.keys(updates).length > 0) {
+        await db.update(machines).set(updates).where(eq(machines.id, PRINT_ID));
+      }
+    }
   }
 
   async getAppSetting(key: string): Promise<string | null> {

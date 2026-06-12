@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerRoutes, autoScheduleLineItem } from "./routes";
+import { PRINT_MACHINE_ID, isPrintJobType } from "@shared/machines";
 import { setupVite, serveStatic, log } from "./vite";
 import { getSession } from "./replitAuth";
 import { storage } from "./storage";
@@ -73,6 +74,34 @@ app.use((req, res, next) => {
   }
 
   await storage.seedMachines();
+  await storage.ensurePrintMachine();
+
+  // Backfill: make every Print line item compliant — assigned to the dedicated
+  // Print machine and its default operator (Mollie). Idempotent: only items that
+  // are not already compliant are touched; uncompleted ones are then scheduled so
+  // they appear on the Machine Schedule.
+  try {
+    const printMachine = await storage.getMachine(PRINT_MACHINE_ID);
+    const operatorId = printMachine?.defaultOperatorId ?? null;
+    const printItems = (await storage.getAllJobLineItems()).filter(
+      (li) =>
+        isPrintJobType(li.jobType) &&
+        (li.machineId !== PRINT_MACHINE_ID || (!!operatorId && li.operatorId !== operatorId)),
+    );
+    if (printItems.length > 0) {
+      for (const li of printItems) {
+        await storage.updateJobLineItem(li.id, {
+          machineId: PRINT_MACHINE_ID,
+          ...(operatorId ? { operatorId } : {}),
+        });
+        if (!li.completed) await autoScheduleLineItem(li.id);
+      }
+      log(`Backfilled ${printItems.length} Print line item(s) onto the Print machine`);
+    }
+  } catch (e) {
+    log(`Print backfill skipped: ${e}`);
+  }
+
   await xeroService.loadTokensFromDb();
   scheduleDailyReEngagementCheck();
   scheduleFortnightlyRecalibration();

@@ -2,6 +2,7 @@ import express from "express";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { PRINT_MACHINE_ID, isPrintJobType } from "@shared/machines";
 import bcrypt from "bcrypt";
 import { 
   insertCustomerSchema, 
@@ -124,7 +125,7 @@ async function notifyMentionedStaff(
 let autoScheduleInProgress = false;
 
 // Helper function to auto-schedule a line item when it has a machine assigned
-async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
+export async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
   try {
     const { findAvailableSlots, minutesToTime } = await import("@shared/scheduling");
     
@@ -4569,8 +4570,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { jobId } = req.params;
       const data = insertJobLineItemSchema.parse({ ...req.body, jobId });
 
-      // Default the operator from the machine's default operator when none was chosen
-      if (!data.operatorId && data.machineId) {
+      // Print jobs always run on the dedicated "Print" machine (operator Mollie)
+      const isPrintItem = isPrintJobType(data.jobType);
+      if (isPrintItem) {
+        data.machineId = PRINT_MACHINE_ID;
+      }
+
+      // Default the operator from the machine's default operator when none was
+      // chosen. For Print items the operator is always forced to the Print
+      // machine's default operator (Mollie), overriding any incoming value.
+      if (data.machineId && (isPrintItem || !data.operatorId)) {
         const machine = await storage.getMachine(data.machineId);
         if (machine?.defaultOperatorId) {
           data.operatorId = machine.defaultOperatorId;
@@ -4658,9 +4667,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existingBeforeUpdate = await storage.getJobLineItem(req.params.id);
       const previousMachineId = existingBeforeUpdate?.machineId;
 
+      // Print jobs always run on the dedicated "Print" machine (operator Mollie).
+      // Use the incoming job type when present, otherwise the saved one.
+      const isPrintItem = isPrintJobType(data.jobType ?? existingBeforeUpdate?.jobType);
+      if (isPrintItem) {
+        data.machineId = PRINT_MACHINE_ID;
+      }
+
       // Default the operator from the machine's default operator when a machine
       // is assigned/changed but no operator was provided (parity with create).
-      if (!data.operatorId && data.machineId) {
+      // For Print items the operator is always forced to Mollie, overriding any
+      // incoming value.
+      if (data.machineId && (isPrintItem || !data.operatorId)) {
         const machine = await storage.getMachine(data.machineId);
         if (machine?.defaultOperatorId) {
           data.operatorId = machine.defaultOperatorId;
