@@ -16,6 +16,7 @@ interface Suggestion {
   earliestDate: string;
   startTimeFormatted: string;
   endTimeFormatted: string;
+  staffId: string | null;
   staffName: string | null;
   canMeetDeadline: boolean;
   daysUntilAvailable: number;
@@ -28,7 +29,7 @@ interface MachineSuggestionsProps {
   jobType: string;
   dispatchDate?: string | null;
   currentMachineId: number | null;
-  onSelect: (machineId: number) => void;
+  onSelect: (machineId: number, staffId?: string | null) => void;
 }
 
 const EMBROIDERY_TYPES = ["Embroidery", "Embroidery Initials/Name"];
@@ -112,7 +113,7 @@ export function MachineSuggestions({
               <button
                 key={s.machineId}
                 type="button"
-                onClick={() => onSelect(s.machineId)}
+                onClick={() => onSelect(s.machineId, s.staffId)}
                 data-testid={`machine-suggestion-${s.machineId}`}
                 className={cn(
                   "text-left rounded-md border px-3 py-2 text-xs transition-colors hover-elevate active-elevate-2",
@@ -149,6 +150,11 @@ export function MachineSuggestions({
                   Est. {formatTimeDisplay(s.estimatedDuration)}
                   {" · "}{s.estimatedRuns} run{s.estimatedRuns !== 1 ? "s" : ""}
                 </div>
+                {s.staffName && (
+                  <div className="text-muted-foreground mt-0.5">
+                    Operator: {s.staffName}
+                  </div>
+                )}
               </button>
             );
           })}

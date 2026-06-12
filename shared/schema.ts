@@ -152,6 +152,7 @@ export const jobLineItems = pgTable("job_line_items", {
   completedById: varchar("completed_by_id").references(() => staff.id),
   completedAt: timestamp("completed_at"),
   machineId: integer("machine_id"),
+  operatorId: varchar("operator_id").references(() => staff.id),
   actualProductionTimeMinutes: integer("actual_production_time_minutes"),
 });
 
@@ -718,6 +719,7 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
     },
     z.union([z.number().int().min(1).max(5), z.null()])
   ).optional(),
+  operatorId: z.string().nullable().optional(),
 });
 
 export const updateJobLineItemSchema = z.object({
@@ -740,6 +742,7 @@ export const updateJobLineItemSchema = z.object({
     },
     z.union([z.number().int().min(1).max(5), z.null()]).optional()
   ),
+  operatorId: z.string().nullable().optional(),
 }).refine(
   (data) => {
     // If completed is true and this is an embroidery job, require machineId, completedById, and actualProductionTime

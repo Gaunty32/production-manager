@@ -61,6 +61,7 @@ type LineItem = {
   completedById: string | null;
   completedAt: string | null;
   machineId: number | null;
+  operatorId?: string | null;
   scheduleSuggestion?: {
     staffId: string;
     staffName: string;
@@ -119,7 +120,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const { machines: dbMachines } = useMachines();
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, position: null, positionOther: null }]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, operatorId: null, position: null, positionOther: null }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDuckDialog, setShowDuckDialog] = useState(false);
   const [duckConfirmed, setDuckConfirmed] = useState(false);
@@ -151,7 +152,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   });
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, position: null, positionOther: null }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, operatorId: null, position: null, positionOther: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -163,6 +164,22 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean | null) => {
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
+    setLineItems(updated);
+  };
+
+  // Assign a machine and, if no operator is set yet, default to that machine's
+  // default operator. Both remain editable afterwards.
+  const assignMachine = (index: number, machineId: number | null, operatorId?: string | null) => {
+    const updated = [...lineItems];
+    const current = updated[index];
+    let nextOperator = current.operatorId ?? null;
+    if (operatorId !== undefined) {
+      nextOperator = operatorId;
+    } else if (machineId && !nextOperator) {
+      const machine = dbMachines.find((m) => m.id === machineId);
+      nextOperator = machine?.defaultOperatorId ?? null;
+    }
+    updated[index] = { ...current, machineId, operatorId: nextOperator };
     setLineItems(updated);
   };
 
@@ -447,6 +464,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
             completedById: lineItem.completedById || null,
             completedAt: lineItem.completedAt || null,
             machineId: lineItem.machineId || null,
+            operatorId: lineItem.operatorId || null,
             position: lineItem.position || null,
             positionOther: lineItem.positionOther || null,
           });
@@ -462,7 +480,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       setOpen(false);
       form.reset();
       setCurrentStep(1);
-      setLineItems([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, position: null, positionOther: null }]);
+      setLineItems([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, operatorId: null, position: null, positionOther: null }]);
       
       // Open the production worksheet after job creation
       if (onJobCreated) {
@@ -1195,7 +1213,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             <label className="text-xs text-muted-foreground font-medium">Machine</label>
                             <Select 
                               value={item.machineId?.toString() || "unassigned"}
-                              onValueChange={(value) => updateLineItem(index, 'machineId', value === "unassigned" ? null : parseInt(value))}
+                              onValueChange={(value) => assignMachine(index, value === "unassigned" ? null : parseInt(value))}
                             >
                               <SelectTrigger className="mt-1" data-testid={`select-line-item-machine-${index}`}>
                                 <SelectValue placeholder="Select machine" />
@@ -1205,6 +1223,27 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                                 {dbMachines.map((m) => (
                                   <SelectItem key={m.id} value={m.id.toString()} disabled={!m.isActive}>
                                     {m.name}{!m.isActive ? " (Offline)" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
+                          <div className="flex-1">
+                            <label className="text-xs text-muted-foreground font-medium">Operator</label>
+                            <Select 
+                              value={item.operatorId || "unassigned"}
+                              onValueChange={(value) => updateLineItem(index, 'operatorId', value === "unassigned" ? null : value)}
+                            >
+                              <SelectTrigger className="mt-1" data-testid={`select-line-item-operator-${index}`}>
+                                <SelectValue placeholder="Select operator" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unassigned">Not assigned</SelectItem>
+                                {staff.map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>
+                                    {s.name}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1240,7 +1279,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                         jobType={item.jobType}
                         dispatchDate={requiredDispatchDate}
                         currentMachineId={item.machineId}
-                        onSelect={(machineId) => updateLineItem(index, 'machineId', machineId)}
+                        onSelect={(machineId, staffId) => assignMachine(index, machineId, staffId ?? undefined)}
                       />
 
                       <div>

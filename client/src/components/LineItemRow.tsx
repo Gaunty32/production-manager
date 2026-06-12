@@ -46,6 +46,7 @@ interface LineItemRowProps {
   hasUnreadMessages?: boolean;
   isCompleted?: boolean;
   dhlTrackingNumber?: string | null;
+  operatorName?: string | null;
   errorsSlot?: React.ReactNode;
 }
 
@@ -79,6 +80,7 @@ export function LineItemRow({
   hasUnreadMessages = false,
   isCompleted = false,
   dhlTrackingNumber,
+  operatorName,
   errorsSlot,
 }: LineItemRowProps) {
   const isOverdue = requiredDispatchDate && isPast(requiredDispatchDate) && !isToday(requiredDispatchDate);
@@ -262,7 +264,14 @@ export function LineItemRow({
 
       {/* Machine - per line item */}
       <td className="py-2 px-3">
-        <MachineBadge machineId={lineItem.machineId} />
+        <div className="flex flex-col gap-0.5">
+          <MachineBadge machineId={lineItem.machineId} />
+          {operatorName && (
+            <span className="text-xs text-muted-foreground" data-testid={`text-operator-${lineItem.id}`}>
+              {operatorName}
+            </span>
+          )}
+        </div>
       </td>
 
       {/* Production - per line item */}

@@ -45,8 +45,10 @@ import { JobFilesDialog } from "@/components/JobFilesDialog";
 import { RecordProductionDialog } from "@/components/RecordProductionDialog";
 import { MachineScheduleBoard } from "@/components/MachineScheduleBoard";
 import { CustomerDocumentsManager } from "@/components/CustomerDocumentsManager";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useMachines } from "@/hooks/useMachines";
 import { getMachineName } from "@shared/machines";
 import type { Customer, Job, JobWithLineItems, JobLineItem, Staff, LogoSetup, User } from "@shared/schema";
 import { canViewPrices } from "@shared/schema";
@@ -76,6 +78,8 @@ export default function Dashboard() {
   const [dpdBookingJob, setDpdBookingJob] = useState<JobWithLineItems | null>(null);
   const [recordingProductionItem, setRecordingProductionItem] = useState<{ lineItem: JobLineItem; jobName: string } | null>(null);
   const [filesDialogJob, setFilesDialogJob] = useState<{ id: string; jobName: string; jobNumber: number } | null>(null);
+  const [machineFilter, setMachineFilter] = useState<string>("all");
+  const [operatorFilter, setOperatorFilter] = useState<string>("all");
 
   // Fetch current user
   const { data: currentUser } = useQuery<{ id: string; username?: string; email: string; firstName?: string; lastName?: string; role?: string }>({
@@ -98,6 +102,30 @@ export default function Dashboard() {
 
   // Sort staff alphabetically by name
   const staff = [...staffData].sort((a, b) => a.name.localeCompare(b.name));
+
+  const { machines: dbMachines } = useMachines();
+  const staffById = new Map(staff.map((s) => [s.id, s.name]));
+
+  // Resolve the operator name for a line item: explicit operator first, then
+  // fall back to the assigned machine's default operator.
+  const getOperatorName = (lineItem: JobLineItem): string | null => {
+    if (lineItem.operatorId) return staffById.get(lineItem.operatorId) || null;
+    if (lineItem.machineId) {
+      const machine = dbMachines.find((m) => m.id === lineItem.machineId);
+      if (machine?.defaultOperatorId) return staffById.get(machine.defaultOperatorId) || null;
+    }
+    return null;
+  };
+
+  // Resolve the effective operator id for a line item (used for filtering).
+  const getOperatorId = (lineItem: JobLineItem): string | null => {
+    if (lineItem.operatorId) return lineItem.operatorId;
+    if (lineItem.machineId) {
+      const machine = dbMachines.find((m) => m.id === lineItem.machineId);
+      return machine?.defaultOperatorId ?? null;
+    }
+    return null;
+  };
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithLineItems[]>({
     queryKey: machineId ? ["/api/jobs", `?machineId=${machineId}`] : ["/api/jobs"],
@@ -619,9 +647,21 @@ export default function Dashboard() {
   const unscheduledJobs = allDisplayedJobs.filter(
     j => !j.lineItems || j.lineItems.length === 0
   );
-  const displayedJobs = allDisplayedJobs.filter(
-    j => j.lineItems && j.lineItems.length > 0
-  );
+  const lineItemMatchesFilter = (li: JobLineItem): boolean => {
+    const machineOk = machineFilter === "all" || li.machineId === parseInt(machineFilter);
+    const operatorOk = operatorFilter === "all" || getOperatorId(li) === operatorFilter;
+    return machineOk && operatorOk;
+  };
+
+  const matchesMachineOperatorFilter = (job: JobWithLineItems): boolean => {
+    if (machineFilter === "all" && operatorFilter === "all") return true;
+    if (!job.lineItems || job.lineItems.length === 0) return false;
+    return job.lineItems.some(lineItemMatchesFilter);
+  };
+
+  const displayedJobs = allDisplayedJobs
+    .filter(j => j.lineItems && j.lineItems.length > 0)
+    .filter(matchesMachineOperatorFilter);
 
   // When a KPI scorecard filter is active, always show the Production Queue tab
   // (the filter narrows the queue), regardless of which pill was last selected.
@@ -1240,6 +1280,43 @@ export default function Dashboard() {
                     : `Delete ${selectedJobIds.size} Selected`}
                 </Button>
               )}
+              <Select value={machineFilter} onValueChange={setMachineFilter}>
+                <SelectTrigger className="w-[150px] h-9" data-testid="select-filter-machine">
+                  <SelectValue placeholder="All machines" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All machines</SelectItem>
+                  {dbMachines.map((m) => (
+                    <SelectItem key={m.id} value={m.id.toString()}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={operatorFilter} onValueChange={setOperatorFilter}>
+                <SelectTrigger className="w-[150px] h-9" data-testid="select-filter-operator">
+                  <SelectValue placeholder="All operators" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All operators</SelectItem>
+                  {staff.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(machineFilter !== "all" || operatorFilter !== "all") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setMachineFilter("all"); setOperatorFilter("all"); }}
+                  data-testid="button-clear-machine-operator-filter"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Clear
+                </Button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" data-testid="button-sort-order">
@@ -1375,13 +1452,18 @@ export default function Dashboard() {
                         
                         {job.lineItems && job.lineItems.length > 0 ? (
                           <div className="pt-2 border-t space-y-1">
-                            {job.lineItems.map((lineItem, idx) => (
-                              <div key={lineItem.id} className="flex items-center justify-between text-xs">
+                            {job.lineItems.filter(lineItemMatchesFilter).map((lineItem, idx) => (
+                              <div key={lineItem.id} className="flex items-center justify-between gap-2 text-xs">
                                 <span className="text-muted-foreground">
                                   Line {idx + 1}: {lineItem.quantity} items
                                 </span>
-                                <span className="font-medium">
+                                <span className="font-medium text-right">
                                   {lineItem.machineId ? getMachineName(lineItem.machineId) : 'Not assigned'}
+                                  {getOperatorName(lineItem) && (
+                                    <span className="block text-muted-foreground font-normal">
+                                      {getOperatorName(lineItem)}
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                             ))}
@@ -1614,8 +1696,9 @@ export default function Dashboard() {
                         );
                       }
                       
-                      // Render a row for each line item
-                      return job.lineItems.map((lineItem, index) => (
+                      // Render a row for each line item that matches the active
+                      // machine/operator filter (so only matching rows show).
+                      return job.lineItems.filter(lineItemMatchesFilter).map((lineItem, index) => (
                         <LineItemRow
                           key={lineItem.id}
                           jobId={job.id}
@@ -1660,6 +1743,7 @@ export default function Dashboard() {
                           }}
                           onOpenMessages={() => setLocation(`/messages?jobId=${job.id}`)}
                           hasUnreadMessages={!!(unreadByJobId[job.id] && unreadByJobId[job.id] > 0)}
+                          operatorName={getOperatorName(lineItem)}
                           onRecordProduction={(li) => {
                             setRecordingProductionItem({ lineItem: li, jobName: job.jobName });
                           }}

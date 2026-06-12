@@ -10,4 +10,6 @@
 
 - [Deleting jobs (FK behavior)](deleting-jobs-fk.md) — job_messages & samples are onDelete:set-null (orphan, not delete); line items/schedules/files/errors/production cascade. Delete chat rows explicitly when purging jobs.
 
+- [Line item operator](line-item-operator.md) — operatorId falls back to machine.defaultOperatorId; keep create+update routes in parity; queue filters apply per-line-item (one row per line item).
+
 - [Machine-sheet day keys & operators](machine-sheet-date-keys.md) — server owns the yyyy-MM-dd dateKey (never recompute client-side: UTC vs local diverges); per-day operator = Staff Allocations, defaultOperatorId only a fallback.

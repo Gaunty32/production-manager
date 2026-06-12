@@ -4565,6 +4565,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { jobId } = req.params;
       const data = insertJobLineItemSchema.parse({ ...req.body, jobId });
+
+      // Default the operator from the machine's default operator when none was chosen
+      if (!data.operatorId && data.machineId) {
+        const machine = await storage.getMachine(data.machineId);
+        if (machine?.defaultOperatorId) {
+          data.operatorId = machine.defaultOperatorId;
+        }
+      }
+
       const lineItem = await storage.createJobLineItem(data);
       
       // Recalculate job's total actual production time
@@ -4645,7 +4654,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get existing line item to check if machine is newly assigned
       const existingBeforeUpdate = await storage.getJobLineItem(req.params.id);
       const previousMachineId = existingBeforeUpdate?.machineId;
-      
+
+      // Default the operator from the machine's default operator when a machine
+      // is assigned/changed but no operator was provided (parity with create).
+      if (!data.operatorId && data.machineId) {
+        const machine = await storage.getMachine(data.machineId);
+        if (machine?.defaultOperatorId) {
+          data.operatorId = machine.defaultOperatorId;
+        }
+      }
+
       const updates = Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );

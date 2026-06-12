@@ -63,6 +63,7 @@ type LineItem = {
   completedAt: string | null;
   actualProductionTimeMinutes: number | null;
   machineId: number | null;
+  operatorId?: string | null;
   scheduleSuggestion?: {
     staffId: string;
     staffName: string;
@@ -193,6 +194,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     completedAt: string | null;
     actualProductionTimeMinutes: number | null;
     machineId: number | null;
+    operatorId: string | null;
   }>>({
     queryKey: ['/api/jobs', job?.id, 'line-items'],
     enabled: !!job?.id && open,
@@ -235,6 +237,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completedAt: item.completedAt || null,
           actualProductionTimeMinutes: item.actualProductionTimeMinutes || null,
           machineId: item.machineId || null,
+          operatorId: item.operatorId || null,
         })));
       } else if (job && job.quantity > 0) {
         // Old job without line items - create a default line item from job quantity
@@ -251,6 +254,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completedAt: null,
           actualProductionTimeMinutes: null,
           machineId: null,
+          operatorId: null,
         }]);
       } else {
         // No line items and no quantity
@@ -267,6 +271,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completedAt: null,
           actualProductionTimeMinutes: null,
           machineId: null,
+          operatorId: null,
         }]);
       }
       setDeletedLineItemIds([]);
@@ -274,7 +279,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }, [fetchedLineItems, open, job]);
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", position: null, positionOther: null, quantity: 1, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, actualProductionTimeMinutes: null, machineId: null }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", position: null, positionOther: null, quantity: 1, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, actualProductionTimeMinutes: null, machineId: null, operatorId: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -283,6 +288,22 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       setDeletedLineItemIds([...deletedLineItemIds, item.id]);
     }
     setLineItems(lineItems.filter((_, i) => i !== index));
+  };
+
+  // Assign a machine and, if no operator is set yet, default to that machine's
+  // default operator. Both remain editable afterwards.
+  const assignMachine = (index: number, machineId: number | null, operatorId?: string | null) => {
+    const updated = [...lineItems];
+    const current = updated[index];
+    let nextOperator = current.operatorId ?? null;
+    if (operatorId !== undefined) {
+      nextOperator = operatorId;
+    } else if (machineId && !nextOperator) {
+      const machine = dbMachines.find((m) => m.id === machineId);
+      nextOperator = machine?.defaultOperatorId ?? null;
+    }
+    updated[index] = { ...current, machineId, operatorId: nextOperator };
+    setLineItems(updated);
   };
 
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean | null) => {
@@ -461,6 +482,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               completedById: item.completedById || null,
               completedAt: item.completedAt || null,
               machineId: item.machineId || null,
+              operatorId: item.operatorId || null,
               actualProductionTimeMinutes: item.actualProductionTimeMinutes,
             });
           } else {
@@ -475,6 +497,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               completedById: item.completedById || null,
               completedAt: item.completedAt || null,
               machineId: item.machineId || null,
+              operatorId: item.operatorId || null,
               actualProductionTimeMinutes: item.actualProductionTimeMinutes,
             });
           }
@@ -900,7 +923,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             </label>
                             <Select 
                               value={item.machineId?.toString() || "unassigned"}
-                              onValueChange={(value) => updateLineItem(index, 'machineId', value === "unassigned" ? null : parseInt(value))}
+                              onValueChange={(value) => assignMachine(index, value === "unassigned" ? null : parseInt(value))}
                             >
                               <SelectTrigger className="mt-1" data-testid={`select-edit-line-item-machine-${index}`}>
                                 <SelectValue placeholder="Select machine" />
@@ -910,6 +933,27 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                                 {dbMachines.map((m) => (
                                   <SelectItem key={m.id} value={m.id.toString()} disabled={!m.isActive}>
                                     {m.name}{!m.isActive ? " (Offline)" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
+                          <div className="flex-1">
+                            <label className="text-xs text-muted-foreground">Operator</label>
+                            <Select 
+                              value={item.operatorId || "unassigned"}
+                              onValueChange={(value) => updateLineItem(index, 'operatorId', value === "unassigned" ? null : value)}
+                            >
+                              <SelectTrigger className="mt-1" data-testid={`select-edit-line-item-operator-${index}`}>
+                                <SelectValue placeholder="Select operator" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unassigned">Not assigned</SelectItem>
+                                {staff.map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>
+                                    {s.name}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -956,7 +1000,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                         jobType={item.jobType}
                         dispatchDate={form.watch("requiredDispatchDate")}
                         currentMachineId={item.machineId}
-                        onSelect={(machineId) => updateLineItem(index, 'machineId', machineId)}
+                        onSelect={(machineId, staffId) => assignMachine(index, machineId, staffId ?? undefined)}
                       />
 
                       <div>
