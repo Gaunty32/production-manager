@@ -120,6 +120,9 @@ async function notifyMentionedStaff(
   }
 }
 
+// Single-flight guard for the bulk auto-schedule endpoint (see usage for rationale)
+let autoScheduleInProgress = false;
+
 // Helper function to auto-schedule a line item when it has a machine assigned
 async function autoScheduleLineItem(lineItemId: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -5294,6 +5297,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Auto-schedule all unscheduled jobs
   app.post("/api/scheduling/auto-schedule", isStaffAuthenticated, async (req, res) => {
+    // Single-flight lock: prevents two overlapping runs (e.g. the Machine Schedule
+    // board auto-filling while a staff member clicks "Auto-Schedule All") from
+    // double-booking the same line item, since schedules are computed from a snapshot.
+    if (autoScheduleInProgress) {
+      return res.json({
+        success: true,
+        scheduledCount: 0,
+        failedCount: 0,
+        message: "Auto-scheduling already in progress",
+        scheduled: [],
+        failed: [],
+      });
+    }
+    autoScheduleInProgress = true;
     try {
       const { findAvailableSlots, calculateJobDuration, minutesToTime } = await import("@shared/scheduling");
       
@@ -5302,6 +5319,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allLineItems = await storage.getAllJobLineItems();
       const existingSchedules = await storage.getJobSchedules();
       const staff = await storage.getStaff();
+      const customersForSchedule = await storage.getCustomers();
+      const customerMapForSchedule = new Map(customersForSchedule.map(c => [c.id, c]));
       
       // Find line items that have machine assignments but no schedules
       const scheduledLineItemIds = new Set(existingSchedules.map(s => s.lineItemId).filter(Boolean));
@@ -5356,6 +5375,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const lineItem of sortedLineItems) {
         const job = allJobs.find(j => j.id === lineItem.jobId);
         if (!job) continue;
+
+        // Skip jobs that are no longer active production work
+        if (job.completed || job.status === 'completed') continue;
+        if (job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready' || job.invoicedAt) continue;
+
+        // Skip jobs awaiting advance payment — they aren't released to production yet
+        const custForJob = job.customerId ? customerMapForSchedule.get(job.customerId) : null;
+        if (custForJob?.requiresAdvancePayment && !job.paymentReceived) continue;
         
         const duration = calculateJobDuration(lineItem.quantity, lineItem.stitchCount, lineItem.machineId!);
         if (duration === 0) {
@@ -5553,6 +5580,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: error instanceof Error ? error.message : "Failed to auto-schedule jobs" 
       });
+    } finally {
+      autoScheduleInProgress = false;
     }
   });
 

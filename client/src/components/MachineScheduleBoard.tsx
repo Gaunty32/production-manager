@@ -1,4 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -227,6 +229,30 @@ export function MachineScheduleBoard() {
     },
     refetchInterval: 60000,
   });
+
+  // Autofill production days: when the board opens, automatically book the most
+  // efficient slot for any job assigned to a machine that has no production day
+  // yet (awaiting-payment / invoiced jobs are skipped server-side). Runs once.
+  const autoFillMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/scheduling/auto-schedule", {});
+      return res.json();
+    },
+    onSuccess: (result: any) => {
+      if (result?.scheduledCount > 0) {
+        queryClient.invalidateQueries({ queryKey: ["/api/scheduling/machine-sheet"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/job-schedules"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/scheduling/health"] });
+      }
+    },
+  });
+
+  const hasAutoFilled = useRef(false);
+  useEffect(() => {
+    if (hasAutoFilled.current) return;
+    hasAutoFilled.current = true;
+    autoFillMutation.mutate();
+  }, []);
 
   const handlePrintAll = () => {
     if (!data) return;
