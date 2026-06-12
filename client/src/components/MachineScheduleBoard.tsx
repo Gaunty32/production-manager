@@ -9,6 +9,7 @@ import { format } from "date-fns";
 interface MachineSheetJob {
   scheduleId: string;
   date: string;
+  dateKey: string;
   startTime: number;
   endTime: number;
   operatorId: string;
@@ -29,7 +30,14 @@ interface MachineSheet {
   machineName: string;
   defaultOperatorId: string | null;
   defaultOperatorName: string | null;
+  operatorsByDate: Record<string, string[]>;
   jobs: MachineSheetJob[];
+}
+
+function operatorsForDay(machine: MachineSheet, date: string): string {
+  const ops = machine.operatorsByDate?.[date];
+  if (ops && ops.length > 0) return ops.join(", ");
+  return machine.defaultOperatorName ?? "No operator";
 }
 
 interface MachineSheetResponse {
@@ -50,13 +58,18 @@ function minutesToLabel(mins: number): string {
 function groupByDate(jobs: MachineSheetJob[]): { date: string; jobs: MachineSheetJob[] }[] {
   const map = new Map<string, MachineSheetJob[]>();
   for (const job of jobs) {
-    const key = format(new Date(job.date), "yyyy-MM-dd");
+    const key = job.dateKey;
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(job);
   }
   return Array.from(map.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([date, jobs]) => ({ date, jobs }));
+}
+
+// Parse a yyyy-MM-dd key as a local date (avoids UTC-shift from new Date("yyyy-MM-dd")).
+function parseDateKey(key: string): Date {
+  return new Date(`${key}T00:00:00`);
 }
 
 function escapeHtml(value: string): string {
@@ -72,14 +85,15 @@ function buildPrintHtml(data: MachineSheetResponse): string {
     .map((machine) => {
       const operator = machine.defaultOperatorName
         ? escapeHtml(machine.defaultOperatorName)
-        : "No default operator";
+        : "No default operator (fallback)";
 
       const groups = groupByDate(machine.jobs);
 
       const body = groups.length
         ? groups
             .map((group) => {
-              const dayLabel = format(new Date(group.date), "EEEE d MMM yyyy");
+              const dayLabel = format(parseDateKey(group.date), "EEEE d MMM yyyy");
+              const dayOperator = escapeHtml(operatorsForDay(machine, group.date));
               const rows = group.jobs
                 .map((job) => {
                   const desc = [job.position, job.description]
@@ -99,7 +113,7 @@ function buildPrintHtml(data: MachineSheetResponse): string {
                 })
                 .join("");
               return `<div class="day">
-                <h3>${dayLabel}</h3>
+                <h3>${dayLabel} <span class="day-operator">· Operator: ${dayOperator}</span></h3>
                 <table>
                   <thead>
                     <tr>
@@ -117,7 +131,7 @@ function buildPrintHtml(data: MachineSheetResponse): string {
       return `<section class="machine">
         <div class="machine-header">
           <h2>${escapeHtml(machine.machineName)}</h2>
-          <span class="operator">Operator: ${operator}</span>
+          <span class="operator">Default operator: ${operator}</span>
         </div>
         ${body}
       </section>`;
@@ -144,6 +158,7 @@ function buildPrintHtml(data: MachineSheetResponse): string {
   .operator { font-size: 14px; font-weight: bold; }
   .day { margin-bottom: 14px; }
   .day h3 { font-size: 13px; margin: 0 0 4px; background: #f0f0f0; padding: 4px 8px; }
+  .day-operator { font-weight: normal; color: #555; }
   table { width: 100%; border-collapse: collapse; font-size: 11px; }
   th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; vertical-align: top; }
   th { background: #fafafa; }
@@ -232,7 +247,7 @@ export function MachineScheduleBoard() {
                         data-testid={`badge-operator-${machine.machineId}`}
                       >
                         <User className="h-3 w-3 mr-1" />
-                        {machine.defaultOperatorName ?? "No operator"}
+                        Default: {machine.defaultOperatorName ?? "None"}
                       </Badge>
                     </CardTitle>
                   </CardHeader>
@@ -245,9 +260,18 @@ export function MachineScheduleBoard() {
                       <div className="space-y-3">
                         {groups.map((group) => (
                           <div key={group.date} className="space-y-1">
-                            <p className="text-xs font-semibold text-muted-foreground">
-                              {format(new Date(group.date), "EEE d MMM")}
-                            </p>
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <p className="text-xs font-semibold text-muted-foreground">
+                                {format(parseDateKey(group.date), "EEE d MMM")}
+                              </p>
+                              <span
+                                className="text-xs text-muted-foreground flex items-center gap-1"
+                                data-testid={`text-day-operator-${machine.machineId}-${group.date}`}
+                              >
+                                <User className="h-3 w-3" />
+                                {operatorsForDay(machine, group.date)}
+                              </span>
+                            </div>
                             <ul className="space-y-1">
                               {group.jobs.map((job) => (
                                 <li

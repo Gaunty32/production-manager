@@ -5540,13 +5540,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       endDate.setDate(endDate.getDate() + (days - 1));
       endDate.setHours(23, 59, 59, 999);
 
-      const [allMachines, allStaff, schedules, allLineItems, allJobs, customers] = await Promise.all([
+      const [allMachines, allStaff, schedules, allLineItems, allJobs, customers, allocations] = await Promise.all([
         storage.getMachines(),
         storage.getStaff(),
         storage.getJobSchedules(undefined, undefined, undefined, startDate, endDate),
         storage.getAllJobLineItems(),
         storage.getJobs(),
         storage.getCustomers(),
+        storage.getStaffMachineAllocations(),
       ]);
 
       const staffById = new Map(allStaff.map(s => [s.id, s]));
@@ -5554,10 +5555,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobById = new Map(allJobs.map(j => [j.id, j]));
       const customerById = new Map(customers.map(c => [c.id, c]));
 
+      // Build the list of calendar days in the window (local time, matching the
+      // yyyy-MM-dd keys the frontend derives from each job's date).
+      const ymd = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const windowDays: { key: string; date: Date }[] = [];
+      for (let i = 0; i < days; i++) {
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + i);
+        windowDays.push({ key: ymd(d), date: d });
+      }
+
+      // Who is allocated to a given machine on a given date — uses the same
+      // matching rules as the scheduler (specific-date match OR recurring
+      // day-of-week match). Returns de-duplicated operator names.
+      const operatorsForMachineOnDate = (machineId: number, date: Date): string[] => {
+        const seen = new Set<string>();
+        const names: string[] = [];
+        for (const a of allocations) {
+          if (a.machineId !== machineId) continue;
+          const ad = new Date(a.date);
+          const matches =
+            ad.toDateString() === date.toDateString() ||
+            (a.isRecurring && a.recurringDaysOfWeek?.includes(date.getDay()));
+          if (!matches) continue;
+          if (seen.has(a.staffId)) continue;
+          seen.add(a.staffId);
+          names.push(staffById.get(a.staffId)?.name ?? "Unknown");
+        }
+        return names;
+      };
+
       const machinesOut = allMachines
         .filter(m => m.isActive)
         .map(machine => {
           const operator = machine.defaultOperatorId ? staffById.get(machine.defaultOperatorId) : undefined;
+
+          // Per-day operators from the Staff Allocations table; falls back to the
+          // machine's default operator on days with no specific allocation.
+          const operatorsByDate: Record<string, string[]> = {};
+          for (const { key, date } of windowDays) {
+            const allocated = operatorsForMachineOnDate(machine.id, date);
+            if (allocated.length > 0) {
+              operatorsByDate[key] = allocated;
+            } else if (operator) {
+              operatorsByDate[key] = [operator.name];
+            }
+          }
 
           const jobsForMachine = schedules
             .filter(s => s.machineId === machine.id)
@@ -5569,6 +5613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               return {
                 scheduleId: s.id,
                 date: s.scheduledDate,
+                dateKey: ymd(new Date(s.scheduledDate)),
                 startTime: s.startTime,
                 endTime: s.endTime,
                 operatorId: s.staffId,
@@ -5596,6 +5641,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             machineName: machine.name,
             defaultOperatorId: machine.defaultOperatorId ?? null,
             defaultOperatorName: operator?.name ?? null,
+            operatorsByDate,
             jobs: jobsForMachine,
           };
         });
