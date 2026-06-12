@@ -137,7 +137,6 @@ function buildMachineSection(machine: MachineSheet, data: MachineSheetResponse):
                 <td>${escapeHtml(formatDue(job.requiredDispatchDate))}</td>
                 <td class="num">${job.quantity ?? "—"}</td>
                 <td class="num">${job.stitchCount != null ? job.stitchCount.toLocaleString() : "—"}</td>
-                <td>${escapeHtml(job.operatorName)}</td>
               </tr>`;
             })
             .join("");
@@ -147,7 +146,7 @@ function buildMachineSection(machine: MachineSheet, data: MachineSheetResponse):
               <thead>
                 <tr>
                   <th>Time</th><th>Job #</th><th>Customer</th><th>Job</th>
-                  <th>Due</th><th class="num">Qty</th><th class="num">Stitches</th><th>Operator</th>
+                  <th>Due</th><th class="num">Qty</th><th class="num">Stitches</th>
                 </tr>
               </thead>
               <tbody>${rows}</tbody>
@@ -395,11 +394,6 @@ export function MachineScheduleBoard() {
                                       ? ` · ${job.stitchCount.toLocaleString()} st`
                                       : ""}
                                   </div>
-                                  {job.operatorName && job.operatorName !== machine.defaultOperatorName && (
-                                    <div className="text-muted-foreground italic">
-                                      Op: {job.operatorName}
-                                    </div>
-                                  )}
                                 </li>
                               ))}
                             </ul>
