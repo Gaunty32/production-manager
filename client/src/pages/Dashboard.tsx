@@ -621,6 +621,47 @@ export default function Dashboard() {
     return { totalQuantity, totalValue };
   })();
 
+  // Calculate the amount due for a single job (sum of priced line items).
+  // Mirrors the production-queue pricing logic above. Returns the numeric total
+  // and whether any line item is price-on-application (POA).
+  const calculateJobAmountDue = (job: JobWithLineItems): { amount: number; hasPoa: boolean } => {
+    const customer = customers.find(c => c.id === job.customerId);
+    let pricingTable: PricingTable = "2026";
+    if (customer?.pricingTable2025) {
+      pricingTable = "2025";
+    } else if (customer?.pricingTable2026) {
+      pricingTable = "2026";
+    }
+
+    let amount = 0;
+    let hasPoa = false;
+    (job.lineItems ?? []).forEach(lineItem => {
+      try {
+        let itemPrice: number | "POA" | null = null;
+        if (lineItem.jobType === "Bagging") {
+          itemPrice = getBaggingPrice(lineItem.quantity, pricingTable).totalPrice;
+        } else if (lineItem.jobType === "Print Initials/Name" || lineItem.jobType === "Embroidery Initials/Name") {
+          itemPrice = getFlatRatePrice(lineItem.quantity, lineItem.jobType).totalPrice;
+        } else if (lineItem.jobType === "Print" && lineItem.stitchCount) {
+          itemPrice = getPrintPrice(lineItem.quantity, lineItem.stitchCount, pricingTable).totalPrice;
+        } else if (lineItem.stitchCount) {
+          itemPrice = getPrice(lineItem.quantity, lineItem.stitchCount, pricingTable).totalPrice;
+        }
+        if (typeof itemPrice === "number") {
+          amount += itemPrice;
+        } else {
+          // "POA" or a line item we couldn't price (e.g. print with no stitch
+          // count) — flag rather than silently treating it as £0.
+          hasPoa = true;
+        }
+      } catch (error) {
+        // Couldn't price this item (missing data, invalid params) — treat as POA
+        hasPoa = true;
+      }
+    });
+    return { amount, hasPoa };
+  };
+
   // Apply active filter to production jobs
   const allDisplayedJobs = (() => {
     if (!activeFilter) return allProductionJobs;
@@ -1025,6 +1066,7 @@ export default function Dashboard() {
                     <TableHead>Customer</TableHead>
                     <TableHead>Contents</TableHead>
                     <TableHead>Required Date</TableHead>
+                    {canViewPrices(currentUser?.role) && <TableHead className="text-right">Amount Due</TableHead>}
                     <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1064,6 +1106,18 @@ export default function Dashboard() {
                               : '—'}
                           </span>
                         </TableCell>
+                        {canViewPrices(currentUser?.role) && (
+                          <TableCell className="text-right">
+                            {(() => {
+                              const { amount, hasPoa } = calculateJobAmountDue(job as JobWithLineItems);
+                              return (
+                                <span className="text-sm font-medium tabular-nums" data-testid={`text-amount-due-${job.id}`}>
+                                  <DemoAmount value={amount} />{hasPoa ? ' + POA' : ''}
+                                </span>
+                              );
+                            })()}
+                          </TableCell>
+                        )}
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
                             <Button
