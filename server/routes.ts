@@ -218,56 +218,76 @@ async function autoScheduleLineItem(lineItemId: string): Promise<{ success: bool
     
     // Re-fetch schedules for accurate slot calculation
     const allSchedules = await storage.getJobSchedules();
-    
-    // Try to find earliest available slot across all staff
-    let bestSlot: { date: Date; startTime: number; endTime: number; staffId: string } | null = null;
-    
-    for (let dayOffset = 0; dayOffset <= 30; dayOffset++) {
-      const checkDate = new Date(startDate);
-      checkDate.setDate(checkDate.getDate() + dayOffset);
-      
-      if (checkDate > endDate && bestSlot) break;
-      
-      for (const staffMember of staff) {
-        const availableSlots = findAvailableSlots(
-          checkDate,
-          lineItem.machineId,
-          staffMember.id,
-          machineBlocks,
-          staffShifts,
-          allSchedules,
-          staffMachineAllocations,
-          staffHolidays,
-          bankHolidays
-        );
-        
-        // Find first slot that fits the duration
-        for (const slot of availableSlots) {
-          const slotDuration = slot.endTime - slot.startTime;
-          if (slotDuration >= effectiveDuration) {
-            const candidateSlot = {
-              date: new Date(checkDate),
-              startTime: slot.startTime,
-              endTime: slot.startTime + effectiveDuration,
-              staffId: staffMember.id
-            };
-            
-            // Pick earliest slot
-            if (!bestSlot || checkDate < bestSlot.date || 
-                (checkDate.toDateString() === bestSlot.date.toDateString() && slot.startTime < bestSlot.startTime)) {
-              bestSlot = candidateSlot;
+
+    // Search the earliest available slot across a given set of staff members.
+    const searchEarliestSlot = (
+      staffList: typeof staff
+    ): { date: Date; startTime: number; endTime: number; staffId: string } | null => {
+      let found: { date: Date; startTime: number; endTime: number; staffId: string } | null = null;
+      for (let dayOffset = 0; dayOffset <= 30; dayOffset++) {
+        const checkDate = new Date(startDate);
+        checkDate.setDate(checkDate.getDate() + dayOffset);
+
+        if (checkDate > endDate && found) break;
+
+        for (const staffMember of staffList) {
+          const availableSlots = findAvailableSlots(
+            checkDate,
+            lineItem.machineId!,
+            staffMember.id,
+            machineBlocks,
+            staffShifts,
+            allSchedules,
+            staffMachineAllocations,
+            staffHolidays,
+            bankHolidays
+          );
+
+          // Find first slot that fits the duration
+          for (const slot of availableSlots) {
+            const slotDuration = slot.endTime - slot.startTime;
+            if (slotDuration >= effectiveDuration) {
+              const candidateSlot = {
+                date: new Date(checkDate),
+                startTime: slot.startTime,
+                endTime: slot.startTime + effectiveDuration,
+                staffId: staffMember.id
+              };
+
+              // Pick earliest slot
+              if (!found || checkDate < found.date ||
+                  (checkDate.toDateString() === found.date.toDateString() && slot.startTime < found.startTime)) {
+                found = candidateSlot;
+              }
+              break;
             }
-            break;
           }
         }
+
+        // If we found a slot today, no need to check more days
+        if (found && found.date.toDateString() === checkDate.toDateString()) {
+          break;
+        }
       }
-      
-      // If we found a slot today, no need to check more days unless we want the absolute earliest staff slot
-      if (bestSlot && bestSlot.date.toDateString() === checkDate.toDateString()) {
-        break;
-      }
+      return found;
+    };
+
+    // Prefer the machine's default operator (using their shift pattern). Fall back to
+    // any other staff member only if the default operator has no available slot.
+    let bestSlot: { date: Date; startTime: number; endTime: number; staffId: string } | null = null;
+    const defaultOperator = machine?.defaultOperatorId
+      ? staff.find(s => s.id === machine.defaultOperatorId)
+      : undefined;
+    if (defaultOperator) {
+      bestSlot = searchEarliestSlot([defaultOperator]);
     }
-    
+    if (!bestSlot) {
+      const fallbackStaff = defaultOperator
+        ? staff.filter(s => s.id !== defaultOperator.id)
+        : staff;
+      bestSlot = searchEarliestSlot(fallbackStaff);
+    }
+
     if (!bestSlot) {
       return { success: false, error: "No available time slots found within 30 days" };
     }
@@ -1096,6 +1116,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error ensuring demo user:", error);
       res.status(500).json({ error: error.message || "Failed to ensure demo user" });
+    }
+  });
+
+  // Data cleanup (super_admin only) — permanently delete old completed & invoiced jobs.
+  // Preview the count + total value before deleting anything.
+  const parseCleanupCutoff = (raw: unknown): Date | null => {
+    if (typeof raw !== "string" || !raw.trim()) return null;
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return null;
+    // Treat the cutoff as the end of the given day so jobs invoiced on that date are included.
+    d.setHours(23, 59, 59, 999);
+    return d;
+  };
+
+  app.get("/api/admin/cleanup/old-jobs/preview", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const cutoff = parseCleanupCutoff(req.query.before);
+      if (!cutoff) {
+        return res.status(400).json({ error: "A valid 'before' date (YYYY-MM-DD) is required" });
+      }
+      const summary = await storage.getOldInvoicedJobsSummary(cutoff);
+      res.json({ before: cutoff.toISOString(), ...summary });
+    } catch (error: any) {
+      console.error("Cleanup preview error:", error);
+      res.status(500).json({ error: error.message || "Failed to preview cleanup" });
+    }
+  });
+
+  app.delete("/api/admin/cleanup/old-jobs", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const cutoff = parseCleanupCutoff(req.query.before);
+      if (!cutoff) {
+        return res.status(400).json({ error: "A valid 'before' date (YYYY-MM-DD) is required" });
+      }
+      const deletedCount = await storage.deleteOldInvoicedJobs(cutoff);
+      console.log(`[cleanup] Deleted ${deletedCount} old invoiced jobs before ${cutoff.toISOString()}`);
+      res.json({ before: cutoff.toISOString(), deletedCount });
+    } catch (error: any) {
+      console.error("Cleanup delete error:", error);
+      res.status(500).json({ error: error.message || "Failed to delete old jobs" });
     }
   });
 
@@ -5238,6 +5298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const staffMachineAllocations = await storage.getStaffMachineAllocations();
       const staffHolidays = await storage.getStaffHolidays();
       const bankHolidays = await storage.getBankHolidays();
+      const allMachines = await storage.getMachines();
       
       // Sort line items by required dispatch date (earliest first)
       // Jobs without dispatch dates go last, overdue jobs go first (most urgent)
@@ -5328,56 +5389,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
         }
-        
-        // Try each candidate staff member to find earliest available slot
-        for (const staffMember of candidateStaff) {
-          const currentDate = new Date(startDate);
-          
-          while (currentDate <= endDate) {
-            const dateSlots = findAvailableSlots(
-              currentDate,
-              lineItem.machineId!,
-              staffMember.id,
-              machineBlocks,
-              staffShifts,
-              currentSchedules,
-              staffMachineAllocations,
-              staffHolidays,
-              bankHolidays
-            );
-            
-            // Find first slot that fits
-            for (const slot of dateSlots) {
-              const slotDuration = slot.endTime - slot.startTime;
-              if (slotDuration >= duration) {
-                const proposedSlot = {
-                  date: new Date(currentDate),
-                  startTime: slot.startTime,
-                  endTime: slot.startTime + duration
-                };
-                
-                // Take the earliest slot we find (greedy algorithm)
-                if (!bestSlot || proposedSlot.date < bestSlot.date ||
-                    (proposedSlot.date.getTime() === bestSlot.date.getTime() && proposedSlot.startTime < bestSlot.startTime)) {
-                  bestSlot = proposedSlot;
-                  bestStaffId = staffMember.id;
+
+        // Find the earliest fitting slot across a given list of staff members.
+        const findEarliestForStaff = (staffList: typeof staff) => {
+          let slot: any = null;
+          let slotStaffId: string | null = null;
+          for (const staffMember of staffList) {
+            const currentDate = new Date(startDate);
+            let foundForStaff = false;
+
+            while (currentDate <= endDate) {
+              const dateSlots = findAvailableSlots(
+                currentDate,
+                lineItem.machineId!,
+                staffMember.id,
+                machineBlocks,
+                staffShifts,
+                currentSchedules,
+                staffMachineAllocations,
+                staffHolidays,
+                bankHolidays
+              );
+
+              // Find first slot that fits
+              for (const s of dateSlots) {
+                const slotDuration = s.endTime - s.startTime;
+                if (slotDuration >= duration) {
+                  const proposedSlot = {
+                    date: new Date(currentDate),
+                    startTime: s.startTime,
+                    endTime: s.startTime + duration
+                  };
+
+                  // Take the earliest slot we find (greedy algorithm)
+                  if (!slot || proposedSlot.date < slot.date ||
+                      (proposedSlot.date.getTime() === slot.date.getTime() && proposedSlot.startTime < slot.startTime)) {
+                    slot = proposedSlot;
+                    slotStaffId = staffMember.id;
+                  }
+                  foundForStaff = true;
+                  break;
                 }
-                // Once we find a slot, move to next staff member
-                break;
               }
+
+              if (foundForStaff) break;
+              currentDate.setDate(currentDate.getDate() + 1);
             }
-            
-            // If we found a slot for this staff, move to next staff
-            if (bestSlot) break;
-            
-            // Move to next day
-            currentDate.setDate(currentDate.getDate() + 1);
+
+            // If we already found the earliest possible slot (today), stop early
+            if (slot && slot.date.toDateString() === startDate.toDateString()) break;
           }
-          
-          // If we already found the earliest possible slot (today), no need to check more staff
-          if (bestSlot && bestSlot.date.toDateString() === startDate.toDateString()) {
-            break;
-          }
+          return { slot, slotStaffId };
+        };
+
+        // Prefer the machine's default operator (using their shift pattern). Fall back to
+        // the other candidate staff only if the default operator has no available slot.
+        const machineForItem = allMachines.find(m => m.id === lineItem.machineId);
+        const defaultOperator = machineForItem?.defaultOperatorId
+          ? candidateStaff.find(s => s.id === machineForItem.defaultOperatorId)
+          : undefined;
+
+        if (defaultOperator) {
+          const r = findEarliestForStaff([defaultOperator]);
+          bestSlot = r.slot;
+          bestStaffId = r.slotStaffId;
+        }
+        if (!bestSlot) {
+          const fallbackStaff = defaultOperator
+            ? candidateStaff.filter(s => s.id !== defaultOperator.id)
+            : candidateStaff;
+          const r = findEarliestForStaff(fallbackStaff);
+          bestSlot = r.slot;
+          bestStaffId = r.slotStaffId;
         }
         
         // Create schedule if we found a slot
@@ -5441,6 +5524,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: error instanceof Error ? error.message : "Failed to auto-schedule jobs" 
       });
+    }
+  });
+
+  // Machine Sheet — per-machine list of scheduled jobs + operator for the next N days
+  // Used by the printable "pill view" handouts on the main screen.
+  app.get("/api/scheduling/machine-sheet", isStaffAuthenticated, async (req, res) => {
+    try {
+      const days = Math.min(Math.max(parseInt(req.query.days as string) || 5, 1), 30);
+
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      // Inclusive window: today plus the following (days - 1) dates = exactly `days` calendar days.
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + (days - 1));
+      endDate.setHours(23, 59, 59, 999);
+
+      const [allMachines, allStaff, schedules, allLineItems, allJobs, customers] = await Promise.all([
+        storage.getMachines(),
+        storage.getStaff(),
+        storage.getJobSchedules(undefined, undefined, undefined, startDate, endDate),
+        storage.getAllJobLineItems(),
+        storage.getJobs(),
+        storage.getCustomers(),
+      ]);
+
+      const staffById = new Map(allStaff.map(s => [s.id, s]));
+      const lineItemById = new Map(allLineItems.map(li => [li.id, li]));
+      const jobById = new Map(allJobs.map(j => [j.id, j]));
+      const customerById = new Map(customers.map(c => [c.id, c]));
+
+      const machinesOut = allMachines
+        .filter(m => m.isActive)
+        .map(machine => {
+          const operator = machine.defaultOperatorId ? staffById.get(machine.defaultOperatorId) : undefined;
+
+          const jobsForMachine = schedules
+            .filter(s => s.machineId === machine.id)
+            .map(s => {
+              const lineItem = s.lineItemId ? lineItemById.get(s.lineItemId) : undefined;
+              const job = jobById.get(s.jobId);
+              const customer = job ? customerById.get(job.customerId) : undefined;
+              const sched = staffById.get(s.staffId);
+              return {
+                scheduleId: s.id,
+                date: s.scheduledDate,
+                startTime: s.startTime,
+                endTime: s.endTime,
+                operatorId: s.staffId,
+                operatorName: sched?.name ?? "Unassigned",
+                jobId: s.jobId,
+                jobNumber: job?.jobNumber ?? null,
+                jobName: job?.jobName ?? "",
+                customerName: customer?.name ?? "",
+                requiredDispatchDate: job?.requiredDispatchDate ?? null,
+                description: lineItem?.description ?? null,
+                position: lineItem?.position ?? null,
+                quantity: lineItem?.quantity ?? null,
+                stitchCount: lineItem?.stitchCount ?? null,
+              };
+            })
+            .sort((a, b) => {
+              const da = new Date(a.date).getTime();
+              const db = new Date(b.date).getTime();
+              if (da !== db) return da - db;
+              return a.startTime - b.startTime;
+            });
+
+          return {
+            machineId: machine.id,
+            machineName: machine.name,
+            defaultOperatorId: machine.defaultOperatorId ?? null,
+            defaultOperatorName: operator?.name ?? null,
+            jobs: jobsForMachine,
+          };
+        });
+
+      res.json({
+        days,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        machines: machinesOut,
+      });
+    } catch (error) {
+      console.error("Machine sheet error:", error);
+      res.status(500).json({ error: "Failed to build machine sheet" });
     }
   });
 

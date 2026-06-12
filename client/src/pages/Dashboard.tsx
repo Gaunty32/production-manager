@@ -43,6 +43,7 @@ import { JobErrorsDialog } from "@/components/JobErrorsDialog";
 import { JobErrorBadge } from "@/components/JobErrorBadge";
 import { JobFilesDialog } from "@/components/JobFilesDialog";
 import { RecordProductionDialog } from "@/components/RecordProductionDialog";
+import { MachineScheduleBoard } from "@/components/MachineScheduleBoard";
 import { CustomerDocumentsManager } from "@/components/CustomerDocumentsManager";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1072,6 +1073,13 @@ export default function Dashboard() {
                 </Table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Machine Schedule Board (printable pill view) */}
+        {viewMode === 'production' && !activeFilter && (
+          <div className="mb-6">
+            <MachineScheduleBoard />
           </div>
         )}
 

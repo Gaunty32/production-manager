@@ -1194,6 +1194,7 @@ export const machines = pgTable("machines", {
   changeoverTimeMinutes: integer("changeover_time_minutes").notNull().default(3),
   isActive: boolean("is_active").notNull().default(true),
   notes: text("notes"),
+  defaultOperatorId: varchar("default_operator_id").references(() => staff.id),
   schedulingMultiplier: real("scheduling_multiplier").notNull().default(1),
   calibrationStartedAt: timestamp("calibration_started_at").notNull().defaultNow(),
   lastRecalibratedAt: timestamp("last_recalibrated_at"),
@@ -1260,6 +1261,7 @@ export const updateMachineSchema = z.object({
   changeoverTimeMinutes: z.number().int().min(0).max(60).optional(),
   isActive: z.boolean().optional(),
   notes: z.string().optional(),
+  defaultOperatorId: z.string().nullable().optional(),
 });
 
 export type InsertMachine = z.infer<typeof insertMachineSchema>;

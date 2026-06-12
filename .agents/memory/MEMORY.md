@@ -5,3 +5,5 @@
 - [DB transactions & row locks](db-transactions-row-locks.md) — db is websocket Pool (not Neon HTTP); db.transaction + .for("update") work — use them for claim/merge concurrency.
 - [Chat null-message crash](chat-null-message-crash.md) — image/file-only chat msgs have null `message`; always `(msg.message||"")` before string ops or the whole inbox white-screens.
 - [Direct conversation archiving](direct-conversation-archive.md) — direct channels share ONE status field; customer archive/delete hides them from staff, and staff inbox shows only status==open with no archived view ("disappearing channels").
+
+- [Deleting jobs (FK behavior)](deleting-jobs-fk.md) — job_messages & samples are onDelete:set-null (orphan, not delete); line items/schedules/files/errors/production cascade. Delete chat rows explicitly when purging jobs.

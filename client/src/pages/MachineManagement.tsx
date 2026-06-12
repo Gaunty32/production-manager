@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Machine } from "@shared/schema";
+import type { Machine, Staff } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Cog, Zap, Timer, Hash, WifiOff, Wifi, TrendingUp } from "lucide-react";
+import { Cog, Zap, Timer, Hash, WifiOff, Wifi, TrendingUp, User } from "lucide-react";
 import { useState } from "react";
+
+const NO_OPERATOR = "__none__";
 
 const OPTIMAL_STITCH_COUNT = 7500;
 
@@ -109,7 +112,7 @@ function ThroughputTable({
   );
 }
 
-function MachineCard({ machine }: { machine: Machine }) {
+function MachineCard({ machine, staff }: { machine: Machine; staff: Staff[] }) {
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -118,7 +121,12 @@ function MachineCard({ machine }: { machine: Machine }) {
     stitchesPerMinute: machine.stitchesPerMinute,
     changeoverTimeMinutes: machine.changeoverTimeMinutes,
     notes: machine.notes ?? "",
+    defaultOperatorId: machine.defaultOperatorId ?? NO_OPERATOR,
   });
+
+  const operatorName = machine.defaultOperatorId
+    ? staff.find(s => s.id === machine.defaultOperatorId)?.name ?? null
+    : null;
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<Machine>) =>
@@ -144,6 +152,7 @@ function MachineCard({ machine }: { machine: Machine }) {
       stitchesPerMinute: Number(form.stitchesPerMinute),
       changeoverTimeMinutes: Number(form.changeoverTimeMinutes),
       notes: form.notes || null,
+      defaultOperatorId: form.defaultOperatorId === NO_OPERATOR ? null : form.defaultOperatorId,
     });
   };
 
@@ -154,6 +163,7 @@ function MachineCard({ machine }: { machine: Machine }) {
       stitchesPerMinute: machine.stitchesPerMinute,
       changeoverTimeMinutes: machine.changeoverTimeMinutes,
       notes: machine.notes ?? "",
+      defaultOperatorId: machine.defaultOperatorId ?? NO_OPERATOR,
     });
     setEditing(false);
   };
@@ -264,6 +274,35 @@ function MachineCard({ machine }: { machine: Machine }) {
           </div>
         </div>
 
+        {/* Default operator */}
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground flex items-center gap-1">
+            <User className="h-3 w-3" /> Default operator
+          </Label>
+          {editing ? (
+            <Select
+              value={form.defaultOperatorId}
+              onValueChange={(v) => setForm(f => ({ ...f, defaultOperatorId: v }))}
+            >
+              <SelectTrigger data-testid={`select-machine-operator-${machine.id}`}>
+                <SelectValue placeholder="No default operator" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_OPERATOR}>No default operator</SelectItem>
+                {staff.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : operatorName ? (
+            <Badge variant="secondary" className="text-xs" data-testid={`badge-machine-operator-${machine.id}`}>
+              <User className="h-3 w-3 mr-1" />{operatorName}
+            </Badge>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">No default operator set</p>
+          )}
+        </div>
+
         {/* Throughput estimates — update live when editing */}
         <ThroughputTable
           heads={previewHeads}
@@ -330,6 +369,9 @@ export default function MachineManagement() {
   const { data: machines = [], isLoading } = useQuery<Machine[]>({
     queryKey: ["/api/machines"],
   });
+  const { data: staff = [] } = useQuery<Staff[]>({
+    queryKey: ["/api/staff"],
+  });
 
   const onlineMachines = machines.filter(m => m.isActive);
   const offlineCount = machines.filter(m => !m.isActive).length;
@@ -382,7 +424,7 @@ export default function MachineManagement() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
           {machines.map(machine => (
-            <MachineCard key={machine.id} machine={machine} />
+            <MachineCard key={machine.id} machine={machine} staff={staff} />
           ))}
         </div>
       )}

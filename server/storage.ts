@@ -125,6 +125,8 @@ export interface IStorage {
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: string, job: Partial<Job>): Promise<Job>;
   deleteJob(id: string): Promise<void>;
+  getOldInvoicedJobsSummary(before: Date): Promise<{ count: number; totalValue: number }>;
+  deleteOldInvoicedJobs(before: Date): Promise<number>;
   
   getStaffShifts(staffId?: string, startDate?: Date, endDate?: Date): Promise<StaffShift[]>;
   createStaffShift(shift: InsertStaffShift): Promise<StaffShift>;
@@ -551,6 +553,46 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<void> {
     await db.delete(jobs).where(eq(jobs.id, id));
+  }
+
+  private oldInvoicedCondition(before: Date) {
+    return and(
+      eq(jobs.completed, true),
+      eq(jobs.invoiceStatus, "invoiced"),
+      isNotNull(jobs.invoicedAt),
+      lte(jobs.invoicedAt, before),
+    );
+  }
+
+  async getOldInvoicedJobsSummary(before: Date): Promise<{ count: number; totalValue: number }> {
+    const rows = await db
+      .select({
+        count: sql<number>`count(*)::int`,
+        totalValue: sql<number>`coalesce(sum(${jobs.invoiceTotal}), 0)`,
+      })
+      .from(jobs)
+      .where(this.oldInvoicedCondition(before));
+    return {
+      count: Number(rows[0]?.count ?? 0),
+      totalValue: Number(rows[0]?.totalValue ?? 0),
+    };
+  }
+
+  async deleteOldInvoicedJobs(before: Date): Promise<number> {
+    const matching = await db
+      .select({ id: jobs.id })
+      .from(jobs)
+      .where(this.oldInvoicedCondition(before));
+    const ids = matching.map(r => r.id);
+    if (ids.length === 0) return 0;
+    // job_messages.jobId is set-null on delete, so explicitly remove the chat
+    // history for these jobs rather than leaving orphaned messages behind.
+    await db.delete(jobMessages).where(inArray(jobMessages.jobId, ids));
+    const deleted = await db
+      .delete(jobs)
+      .where(inArray(jobs.id, ids))
+      .returning({ id: jobs.id });
+    return deleted.length;
   }
 
   async getStaffShifts(staffId?: string, startDate?: Date, endDate?: Date): Promise<StaffShift[]> {
