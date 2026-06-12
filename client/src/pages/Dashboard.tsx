@@ -68,6 +68,7 @@ export default function Dashboard() {
   const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'production' | 'completed' | 'setups'>('production');
   const [activeFilter, setActiveFilter] = useState<'overdue' | 'logo-setups' | '3-days' | null>(null);
+  const [prodTab, setProdTab] = useState<'queue' | 'payment' | 'lineitems' | 'schedule'>('queue');
   const [worksheetJob, setWorksheetJob] = useState<JobWithLineItems | null>(null);
   const [sortOrder, setSortOrder] = useState<'date' | 'customer' | 'jobNumber'>('date');
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
@@ -588,6 +589,10 @@ export default function Dashboard() {
     j => j.lineItems && j.lineItems.length > 0
   );
 
+  // When a KPI scorecard filter is active, always show the Production Queue tab
+  // (the filter narrows the queue), regardless of which pill was last selected.
+  const effectiveProdTab = activeFilter ? 'queue' : prodTab;
+
   const pageTitle = machineId 
     ? `${getMachineName(machineId)} Orders` 
     : "Production Queue";
@@ -879,8 +884,54 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Production sub-section pill tabs — keeps the Production Queue (main data)
+            at the top and tucks secondary panels behind pills to reduce clutter. */}
+        {viewMode === 'production' && (
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            <Button
+              variant={effectiveProdTab === 'queue' ? 'default' : 'outline'}
+              size="sm"
+              className="rounded-full"
+              onClick={() => { setActiveFilter(null); setProdTab('queue'); }}
+              data-testid="pill-tab-queue"
+            >
+              <Briefcase className="h-4 w-4 mr-2" />
+              Production Queue
+            </Button>
+            <Button
+              variant={effectiveProdTab === 'payment' ? 'default' : 'outline'}
+              size="sm"
+              className="rounded-full"
+              onClick={() => { setActiveFilter(null); setProdTab('payment'); }}
+              data-testid="pill-tab-payment"
+            >
+              Awaiting Payment ({awaitingPaymentJobs.length})
+            </Button>
+            <Button
+              variant={effectiveProdTab === 'lineitems' ? 'default' : 'outline'}
+              size="sm"
+              className="rounded-full"
+              onClick={() => { setActiveFilter(null); setProdTab('lineitems'); }}
+              data-testid="pill-tab-lineitems"
+            >
+              Awaiting Line Items ({unscheduledJobs.length})
+            </Button>
+            <Button
+              variant={effectiveProdTab === 'schedule' ? 'default' : 'outline'}
+              size="sm"
+              className="rounded-full"
+              onClick={() => { setActiveFilter(null); setProdTab('schedule'); }}
+              data-testid="pill-tab-schedule"
+            >
+              <Palette className="h-4 w-4 mr-2" />
+              Machine Schedule
+            </Button>
+          </div>
+        )}
+
         {/* Awaiting Payment Section */}
-        {viewMode === 'production' && awaitingPaymentJobs.length > 0 && (
+        {viewMode === 'production' && effectiveProdTab === 'payment' && (
+          awaitingPaymentJobs.length > 0 ? (
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-3">
               <div className="h-5 w-1 rounded-full bg-orange-500" />
@@ -977,10 +1028,16 @@ export default function Dashboard() {
               </Table>
             </div>
           </div>
+          ) : (
+            <div className="mb-6 border rounded-md p-8 text-center text-muted-foreground" data-testid="empty-awaiting-payment">
+              No jobs are awaiting payment.
+            </div>
+          )
         )}
 
         {/* Awaiting line items — jobs not yet booked into the schedule */}
-        {viewMode === 'production' && unscheduledJobs.length > 0 && (
+        {viewMode === 'production' && effectiveProdTab === 'lineitems' && (
+          unscheduledJobs.length > 0 ? (
           <div className="mb-6">
             <div className="mb-3">
               <h2 className="text-xl font-semibold text-foreground">
@@ -1074,17 +1131,22 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+          ) : (
+            <div className="mb-6 border rounded-md p-8 text-center text-muted-foreground" data-testid="empty-awaiting-lineitems">
+              No jobs are awaiting line items.
+            </div>
+          )
         )}
 
         {/* Machine Schedule Board (printable pill view) */}
-        {viewMode === 'production' && !activeFilter && (
+        {viewMode === 'production' && effectiveProdTab === 'schedule' && (
           <div className="mb-6">
             <MachineScheduleBoard />
           </div>
         )}
 
         {/* Production Queue - All Jobs (Active + Pending) */}
-        {viewMode === 'production' && (
+        {viewMode === 'production' && effectiveProdTab === 'queue' && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
