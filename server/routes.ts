@@ -5383,6 +5383,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Skip jobs awaiting advance payment — they aren't released to production yet
         const custForJob = job.customerId ? customerMapForSchedule.get(job.customerId) : null;
         if (custForJob?.requiresAdvancePayment && !job.paymentReceived) continue;
+
+        // Only schedule jobs that have actually entered the Production Queue.
+        // Mirrors the Dashboard "active jobs" gate: a job must be past customer
+        // approval, have a required dispatch date, have goods received, and have
+        // every line item's logo approved. Jobs still awaiting line items / dates /
+        // approvals must not be auto-booked onto a machine.
+        if (job.status === 'pending_customer_approval') continue;
+        if (!job.requiredDispatchDate || !job.goodsReceived) continue;
+        const jobLineItems = allLineItems.filter(li => li.jobId === job.id);
+        const allLogosApproved = jobLineItems.length > 0 && jobLineItems.every(li => li.logoApproved);
+        if (!allLogosApproved) continue;
         
         const duration = calculateJobDuration(lineItem.quantity, lineItem.stitchCount, lineItem.machineId!);
         if (duration === 0) {
