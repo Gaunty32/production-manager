@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { DemoText, DemoAmount } from "@/components/DemoText";
-import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText, MessageSquare, Paperclip, Download, ExternalLink, Pencil } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Palette, CheckCircle, X, MoreVertical, Users, Briefcase, ChevronDown, ChevronRight, Package, Coins, ArrowUpDown, Printer, Truck, FileText, MessageSquare, Paperclip, Download, ExternalLink, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -206,6 +206,40 @@ export default function Dashboard() {
       toast({
         title: "Error",
         description: error.message || "Failed to delete order",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkDeleteJobsMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      let deleted = 0;
+      const failures: string[] = [];
+      for (const id of ids) {
+        try {
+          await apiRequest("DELETE", `/api/jobs/${id}`);
+          deleted++;
+        } catch (e) {
+          failures.push(id);
+        }
+      }
+      return { deleted, failures };
+    },
+    onSuccess: ({ deleted, failures }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      setSelectedJobIds(new Set());
+      toast({
+        title: failures.length ? "Partially completed" : "Success",
+        description: failures.length
+          ? `Deleted ${deleted} job${deleted !== 1 ? 's' : ''}, ${failures.length} failed.`
+          : `Deleted ${deleted} job${deleted !== 1 ? 's' : ''} successfully.`,
+        variant: failures.length ? "destructive" : undefined,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete jobs",
         variant: "destructive",
       });
     },
@@ -1184,6 +1218,26 @@ export default function Dashboard() {
                 >
                   <Printer className="h-4 w-4 mr-2" />
                   Print {selectedJobIds.size} Worksheet{selectedJobIds.size > 1 ? 's' : ''}
+                </Button>
+              )}
+              {selectedJobIds.size > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive"
+                  disabled={bulkDeleteJobsMutation.isPending}
+                  onClick={() => {
+                    const ids = Array.from(selectedJobIds);
+                    if (window.confirm(`Permanently delete ${ids.length} selected job${ids.length !== 1 ? 's' : ''}? This removes each job and all its line items, schedule, files and chat. This cannot be undone.`)) {
+                      bulkDeleteJobsMutation.mutate(ids);
+                    }
+                  }}
+                  data-testid="button-delete-selected"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {bulkDeleteJobsMutation.isPending
+                    ? "Deleting…"
+                    : `Delete ${selectedJobIds.size} Selected`}
                 </Button>
               )}
               <DropdownMenu>
