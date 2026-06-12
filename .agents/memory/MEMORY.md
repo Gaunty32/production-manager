@@ -6,6 +6,8 @@
 - [Chat null-message crash](chat-null-message-crash.md) — image/file-only chat msgs have null `message`; always `(msg.message||"")` before string ops or the whole inbox white-screens.
 - [Direct conversation archiving](direct-conversation-archive.md) — direct channels share ONE status field; customer archive/delete hides them from staff, and staff inbox shows only status==open with no archived view ("disappearing channels").
 
+- [Deadline Alerts vs Production Queue](deadline-alerts-stale-jobs.md) — stale incomplete jobs show in alerts but are filtered out of the queue; delete via super-admin trash → /api/admin/jobs/:id.
+
 - [Deleting jobs (FK behavior)](deleting-jobs-fk.md) — job_messages & samples are onDelete:set-null (orphan, not delete); line items/schedules/files/errors/production cascade. Delete chat rows explicitly when purging jobs.
 
 - [Machine-sheet day keys & operators](machine-sheet-date-keys.md) — server owns the yyyy-MM-dd dateKey (never recompute client-side: UTC vs local diverges); per-day operator = Staff Allocations, defaultOperatorId only a fallback.

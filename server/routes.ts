@@ -4527,6 +4527,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Super-admin-only single job deletion (used by Deadline Alerts to clear stale jobs)
+  app.delete("/api/admin/jobs/:id", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteJob(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete job" });
+    }
+  });
+
   // Job line item routes
   app.get("/api/job-line-items", isStaffAuthenticated, async (req, res) => {
     try {

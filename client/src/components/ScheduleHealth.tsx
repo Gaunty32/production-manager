@@ -1,12 +1,27 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle, Clock, XCircle, CalendarOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { AlertTriangle, CheckCircle, Clock, XCircle, CalendarOff, Trash2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useState } from "react";
 import { formatTimeDisplay } from "@shared/machines";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
+import { UserRole } from "@shared/schema";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface HealthItem {
   lineItemId: string;
@@ -79,10 +94,32 @@ type FilterStatus = "all" | HealthItem["status"];
 
 export function ScheduleHealth() {
   const [filter, setFilter] = useState<FilterStatus>("all");
+  const [pendingDelete, setPendingDelete] = useState<HealthItem | null>(null);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
 
   const { data, isLoading } = useQuery<HealthData>({
     queryKey: ["/api/scheduling/health"],
     refetchInterval: 60_000,
+  });
+
+  const deleteJob = useMutation({
+    mutationFn: async (jobId: string) => {
+      await apiRequest("DELETE", `/api/admin/jobs/${jobId}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Job deleted",
+        description: "The job and all its line items were permanently removed.",
+      });
+      setPendingDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduling/health"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+    },
   });
 
   if (isLoading) {
@@ -199,11 +236,54 @@ export function ScheduleHealth() {
                     </div>
                   )}
                 </div>
+                {isSuperAdmin && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0"
+                    onClick={() => setPendingDelete(item)}
+                    title="Delete this job"
+                    data-testid={`button-delete-health-${item.lineItemId}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
               </div>
             );
           })}
         </div>
       )}
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Delete this job?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes the entire job
+              {pendingDelete ? ` "${pendingDelete.jobName}"` : ""}
+              {pendingDelete?.customerName ? ` for ${pendingDelete.customerName}` : ""}, including all
+              of its line items, schedules and chat history. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-health">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (pendingDelete) deleteJob.mutate(pendingDelete.jobId);
+              }}
+              disabled={deleteJob.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-health"
+            >
+              {deleteJob.isPending ? "Deleting..." : "Yes, delete permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
