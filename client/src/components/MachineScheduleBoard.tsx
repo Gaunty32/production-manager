@@ -55,7 +55,18 @@ function buildDays(
   dateKeys: string[],
 ): { date: string; jobs: MachineSheetJob[]; hasOperator: boolean }[] {
   return dateKeys.map((key) => {
-    const jobs = machine.jobs.filter((j) => j.dateKey === key);
+    const jobs = machine.jobs
+      .filter((j) => j.dateKey === key)
+      .sort((a, b) => {
+        const da = a.requiredDispatchDate
+          ? parseDateKey(a.requiredDispatchDate.slice(0, 10)).getTime()
+          : Infinity;
+        const db = b.requiredDispatchDate
+          ? parseDateKey(b.requiredDispatchDate.slice(0, 10)).getTime()
+          : Infinity;
+        if (da !== db) return da - db;
+        return a.startTime - b.startTime;
+      });
     const hasOperator =
       (machine.operatorsByDate?.[key]?.length ?? 0) > 0 || !!machine.defaultOperatorName;
     return { date: key, jobs, hasOperator };
@@ -75,6 +86,13 @@ function parseDateKey(key: string): Date {
   return new Date(`${key}T00:00:00`);
 }
 
+// Format a job's required dispatch (due) date for display, avoiding UTC day-shift.
+function formatDue(value: string | null): string {
+  if (!value) return "—";
+  const datePart = value.length >= 10 ? value.slice(0, 10) : value;
+  return format(parseDateKey(datePart), "d MMM");
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -83,81 +101,82 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function buildPrintHtml(data: MachineSheetResponse): string {
-  const sections = data.machines
-    .map((machine) => {
-      const todayOperator = escapeHtml(
-        data.dateKeys.length
-          ? operatorsForDay(machine, data.dateKeys[0])
-          : machine.defaultOperatorName ?? "No operator",
-      );
+// Build the printable section for a single machine (its own page).
+function buildMachineSection(machine: MachineSheet, data: MachineSheetResponse): string {
+  const todayOperator = escapeHtml(
+    data.dateKeys.length
+      ? operatorsForDay(machine, data.dateKeys[0])
+      : machine.defaultOperatorName ?? "No operator",
+  );
 
-      const groups = buildDays(machine, data.dateKeys).filter(
-        (d) => d.jobs.length > 0 || d.hasOperator,
-      );
+  const groups = buildDays(machine, data.dateKeys).filter(
+    (d) => d.jobs.length > 0 || d.hasOperator,
+  );
 
-      const body = groups.length
-        ? groups
-            .map((group) => {
-              const dayLabel = format(parseDateKey(group.date), "EEEE d MMM yyyy");
-              const dayOperator = escapeHtml(operatorsForDay(machine, group.date));
-              if (group.jobs.length === 0) {
-                return `<div class="day">
-                  <h3>${dayLabel} <span class="day-operator">· Operator: ${dayOperator}</span></h3>
-                  <p class="empty">No jobs scheduled</p>
-                </div>`;
-              }
-              const rows = group.jobs
-                .map((job) => {
-                  const desc = [job.position, job.description]
-                    .filter(Boolean)
-                    .map((v) => escapeHtml(String(v)))
-                    .join(" — ");
-                  return `<tr>
-                    <td>${minutesToLabel(job.startTime)}–${minutesToLabel(job.endTime)}</td>
-                    <td>${job.jobNumber ?? "—"}</td>
-                    <td>${escapeHtml(job.customerName)}</td>
-                    <td>${escapeHtml(job.jobName)}</td>
-                    <td>${desc || "—"}</td>
-                    <td class="num">${job.quantity ?? "—"}</td>
-                    <td class="num">${job.stitchCount != null ? job.stitchCount.toLocaleString() : "—"}</td>
-                    <td>${escapeHtml(job.operatorName)}</td>
-                  </tr>`;
-                })
-                .join("");
-              return `<div class="day">
-                <h3>${dayLabel} <span class="day-operator">· Operator: ${dayOperator}</span></h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Time</th><th>Job #</th><th>Customer</th><th>Job</th>
-                      <th>Item</th><th>Qty</th><th>Stitches</th><th>Operator</th>
-                    </tr>
-                  </thead>
-                  <tbody>${rows}</tbody>
-                </table>
-              </div>`;
+  const body = groups.length
+    ? groups
+        .map((group) => {
+          const dayLabel = format(parseDateKey(group.date), "EEEE d MMM yyyy");
+          const dayOperator = escapeHtml(operatorsForDay(machine, group.date));
+          if (group.jobs.length === 0) {
+            return `<div class="day">
+              <h3>${dayLabel} <span class="day-operator">· Operator: ${dayOperator}</span></h3>
+              <p class="empty">No jobs scheduled</p>
+            </div>`;
+          }
+          const rows = group.jobs
+            .map((job) => {
+              return `<tr>
+                <td>${minutesToLabel(job.startTime)}–${minutesToLabel(job.endTime)}</td>
+                <td>${job.jobNumber ?? "—"}</td>
+                <td>${escapeHtml(job.customerName)}</td>
+                <td>${escapeHtml(job.jobName)}</td>
+                <td>${escapeHtml(formatDue(job.requiredDispatchDate))}</td>
+                <td class="num">${job.quantity ?? "—"}</td>
+                <td class="num">${job.stitchCount != null ? job.stitchCount.toLocaleString() : "—"}</td>
+                <td>${escapeHtml(job.operatorName)}</td>
+              </tr>`;
             })
-            .join("")
-        : `<p class="empty">No scheduled jobs in the next ${data.days} days.</p>`;
+            .join("");
+          return `<div class="day">
+            <h3>${dayLabel} <span class="day-operator">· Operator: ${dayOperator}</span></h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th><th>Job #</th><th>Customer</th><th>Job</th>
+                  <th>Due</th><th class="num">Qty</th><th class="num">Stitches</th><th>Operator</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+        })
+        .join("")
+    : `<p class="empty">No scheduled jobs in the next ${data.days} days.</p>`;
 
-      return `<section class="machine">
-        <div class="machine-header">
-          <h2>${escapeHtml(machine.machineName)}</h2>
-          <span class="operator">Today: ${todayOperator}</span>
-        </div>
-        ${body}
-      </section>`;
-    })
-    .join("");
+  return `<section class="machine">
+    <div class="machine-header">
+      <h2>${escapeHtml(machine.machineName)}</h2>
+      <span class="operator">Today: ${todayOperator}</span>
+    </div>
+    ${body}
+  </section>`;
+}
 
+// Build a full printable document for the given machines (one page each).
+function buildPrintDocument(
+  machines: MachineSheet[],
+  data: MachineSheetResponse,
+  heading: string,
+): string {
+  const sections = machines.map((machine) => buildMachineSection(machine, data)).join("");
   const printedOn = format(new Date(), "EEEE d MMM yyyy, HH:mm");
 
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Machine Schedule — Next ${data.days} Days</title>
+<title>${escapeHtml(heading)}</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; padding: 24px; }
@@ -181,12 +200,19 @@ function buildPrintHtml(data: MachineSheetResponse): string {
 </style>
 </head>
 <body>
-  <h1>Machine Schedule — Next ${data.days} Days</h1>
+  <h1>${escapeHtml(heading)}</h1>
   <p class="subtitle">Printed ${printedOn}</p>
   ${sections || '<p class="empty">No active machines.</p>'}
   <script>window.onload = function () { window.print(); };</script>
 </body>
 </html>`;
+}
+
+function openPrintWindow(html: string): void {
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
 }
 
 export function MachineScheduleBoard() {
@@ -202,12 +228,18 @@ export function MachineScheduleBoard() {
     refetchInterval: 60000,
   });
 
-  const handlePrint = () => {
+  const handlePrintAll = () => {
     if (!data) return;
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(buildPrintHtml(data));
-    win.document.close();
+    openPrintWindow(
+      buildPrintDocument(data.machines, data, `Machine Schedule — Next ${data.days} Days`),
+    );
+  };
+
+  const handlePrintMachine = (machine: MachineSheet) => {
+    if (!data) return;
+    openPrintWindow(
+      buildPrintDocument([machine], data, `${machine.machineName} — Next ${data.days} Days`),
+    );
   };
 
   return (
@@ -220,12 +252,12 @@ export function MachineScheduleBoard() {
         <Button
           size="sm"
           variant="outline"
-          onClick={handlePrint}
+          onClick={handlePrintAll}
           disabled={isLoading || !data}
           data-testid="button-print-machine-sheet"
         >
           <Printer className="h-4 w-4 mr-2" />
-          Print handouts
+          Print all
         </Button>
       </CardHeader>
       <CardContent>
@@ -259,14 +291,25 @@ export function MachineScheduleBoard() {
                       <span data-testid={`text-machine-name-${machine.machineId}`}>
                         {machine.machineName}
                       </span>
-                      <Badge
-                        variant="secondary"
-                        className="text-xs"
-                        data-testid={`badge-operator-${machine.machineId}`}
-                      >
-                        <User className="h-3 w-3 mr-1" />
-                        Today: {todayOperator}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge
+                          variant="secondary"
+                          className="text-xs"
+                          data-testid={`badge-operator-${machine.machineId}`}
+                        >
+                          <User className="h-3 w-3 mr-1" />
+                          Today: {todayOperator}
+                        </Badge>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handlePrintMachine(machine)}
+                          title={`Print ${machine.machineName} handout`}
+                          data-testid={`button-print-machine-${machine.machineId}`}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="flex-1 pt-0">
@@ -312,6 +355,12 @@ export function MachineScheduleBoard() {
                                     </span>
                                   </div>
                                   <div className="text-muted-foreground">{job.jobName}</div>
+                                  <div
+                                    className="font-medium"
+                                    data-testid={`text-due-${job.scheduleId}`}
+                                  >
+                                    Due {formatDue(job.requiredDispatchDate)}
+                                  </div>
                                   <div className="text-muted-foreground">
                                     {[job.position, job.description].filter(Boolean).join(" — ")}
                                     {job.quantity != null ? ` · ${job.quantity} pcs` : ""}
