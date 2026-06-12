@@ -13,9 +13,18 @@ interface CustomerPickingSlipProps {
 export function CustomerPickingSlip({ customer, jobs, lineItemsByJob, onClose }: CustomerPickingSlipProps) {
   const handlePrint = () => window.print();
 
-  const totalLineItems = jobs.reduce((sum, j) => sum + (lineItemsByJob[j.id]?.length ?? 0), 0);
+  // Totals reflect what's actually pickable — items awaiting stock are shown on
+  // the slip (greyed out, marked "Awaiting stock") but excluded from the counts.
+  const totalLineItems = jobs.reduce(
+    (sum, j) => sum + (lineItemsByJob[j.id]?.filter(li => !li.awaitingStock).length ?? 0),
+    0,
+  );
   const totalQty = jobs.reduce(
-    (sum, j) => sum + (lineItemsByJob[j.id]?.reduce((s, li) => s + (li.quantity || 0), 0) ?? 0),
+    (sum, j) =>
+      sum +
+      (lineItemsByJob[j.id]
+        ?.filter(li => !li.awaitingStock)
+        .reduce((s, li) => s + (li.quantity || 0), 0) ?? 0),
     0,
   );
 
@@ -104,16 +113,31 @@ export function CustomerPickingSlip({ customer, jobs, lineItemsByJob, onClose }:
                       </tr>
                     </thead>
                     <tbody>
-                      {lineItems.map(item => (
-                        <tr key={item.id} className="border-b">
-                          <td className="py-2 px-2">{item.jobType}</td>
-                          <td className="py-2 px-2 text-gray-700">{item.description || "—"}</td>
-                          <td className="py-2 px-2 text-center font-semibold">{item.quantity}</td>
-                          <td className="py-2 px-2 text-center">
-                            <div className="w-5 h-5 border-2 border-black inline-block" />
-                          </td>
-                        </tr>
-                      ))}
+                      {lineItems.map(item =>
+                        item.awaitingStock ? (
+                          <tr
+                            key={item.id}
+                            className="border-b bg-gray-100 text-gray-400"
+                            data-testid={`picking-line-awaiting-${item.id}`}
+                          >
+                            <td className="py-2 px-2 line-through">{item.jobType}</td>
+                            <td className="py-2 px-2 line-through">{item.description || "—"}</td>
+                            <td className="py-2 px-2 text-center line-through">{item.quantity}</td>
+                            <td className="py-2 px-2 text-center text-xs font-semibold uppercase tracking-wide no-underline">
+                              Awaiting stock
+                            </td>
+                          </tr>
+                        ) : (
+                          <tr key={item.id} className="border-b">
+                            <td className="py-2 px-2">{item.jobType}</td>
+                            <td className="py-2 px-2 text-gray-700">{item.description || "—"}</td>
+                            <td className="py-2 px-2 text-center font-semibold">{item.quantity}</td>
+                            <td className="py-2 px-2 text-center">
+                              <div className="w-5 h-5 border-2 border-black inline-block" />
+                            </td>
+                          </tr>
+                        ),
+                      )}
                     </tbody>
                   </table>
                 )}

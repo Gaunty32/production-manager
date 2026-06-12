@@ -58,6 +58,7 @@ type LineItem = {
   description: string;
   stitchCount: number;
   logoApproved: boolean;
+  awaitingStock: boolean;
   completed: boolean;
   completedById: string | null;
   completedAt: string | null;
@@ -189,6 +190,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     description: string | null;
     stitchCount: number;
     logoApproved: boolean;
+    awaitingStock: boolean;
     completed: boolean;
     completedById: string | null;
     completedAt: string | null;
@@ -232,6 +234,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           description: item.description || "",
           stitchCount: item.stitchCount,
           logoApproved: item.logoApproved,
+          awaitingStock: item.awaitingStock,
           completed: item.completed,
           completedById: item.completedById || null,
           completedAt: item.completedAt || null,
@@ -249,6 +252,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           description: "",
           stitchCount: 0,
           logoApproved: false,
+          awaitingStock: false,
           completed: false,
           completedById: null,
           completedAt: null,
@@ -266,6 +270,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           description: "",
           stitchCount: 0,
           logoApproved: false,
+          awaitingStock: false,
           completed: false,
           completedById: null,
           completedAt: null,
@@ -279,7 +284,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }, [fetchedLineItems, open, job]);
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { jobType: "Embroidery", position: null, positionOther: null, quantity: 1, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, actualProductionTimeMinutes: null, machineId: null, operatorId: null }]);
+    setLineItems([...lineItems, { jobType: "Embroidery", position: null, positionOther: null, quantity: 1, description: "", stitchCount: 0, logoApproved: false, awaitingStock: false, completed: false, completedById: null, completedAt: null, actualProductionTimeMinutes: null, machineId: null, operatorId: null }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -478,6 +483,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               description: item.description || null,
               stitchCount: item.stitchCount,
               logoApproved: item.logoApproved,
+              awaitingStock: item.awaitingStock,
               completed: item.completed,
               completedById: item.completedById || null,
               completedAt: item.completedAt || null,
@@ -493,6 +499,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               description: item.description || null,
               stitchCount: item.stitchCount,
               logoApproved: item.logoApproved,
+              awaitingStock: item.awaitingStock,
               completed: item.completed,
               completedById: item.completedById || null,
               completedAt: item.completedAt || null,
@@ -969,6 +976,15 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                               data-testid={`checkbox-edit-line-item-logo-approved-${index}`}
                             />
                             <label htmlFor={`edit-logo-approved-${index}`} className="text-sm cursor-pointer">Logo OK</label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`edit-awaiting-stock-${index}`}
+                              checked={item.awaitingStock}
+                              onCheckedChange={(checked) => updateLineItem(index, 'awaitingStock', checked === true)}
+                              data-testid={`checkbox-edit-line-item-awaiting-stock-${index}`}
+                            />
+                            <label htmlFor={`edit-awaiting-stock-${index}`} className="text-sm cursor-pointer">Awaiting stock</label>
                           </div>
                           <div className="flex items-center gap-2">
                             <Checkbox
