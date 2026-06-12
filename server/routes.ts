@@ -5724,6 +5724,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const customer = job.customerId ? customerMap.get(job.customerId) : null;
 
+        // Skip jobs that have already been invoiced (or are queued ready to
+        // invoice) — production is finished, so they're not deadline risks.
+        if (job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready' || job.invoicedAt) continue;
+
+        // Skip jobs awaiting advance payment — the customer must pay before the
+        // job is released to production, so it shouldn't appear as a risk yet.
+        if (customer?.requiresAdvancePayment && !job.paymentReceived) continue;
+
         const dispatchDate = job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null;
         if (dispatchDate) dispatchDate.setHours(0, 0, 0, 0);
 
