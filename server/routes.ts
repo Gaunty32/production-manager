@@ -5347,6 +5347,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const staffHolidays = await storage.getStaffHolidays();
       const bankHolidays = await storage.getBankHolidays();
       const allMachines = await storage.getMachines();
+
+      // Staff explicitly allocated to a machine on a given day (specific-date or
+      // recurring day-of-week match). This is the machine+operator combination
+      // the user configures via Staff Allocations, and it decides who runs each
+      // job on that machine that day.
+      const allocatedStaffOnDate = (machineId: number, date: Date): string[] => {
+        const ids: string[] = [];
+        const seen = new Set<string>();
+        for (const a of staffMachineAllocations) {
+          if (a.machineId !== machineId) continue;
+          const ad = new Date(a.date);
+          const matches =
+            ad.toDateString() === date.toDateString() ||
+            (a.isRecurring && a.recurringDaysOfWeek?.includes(date.getDay()));
+          if (!matches || seen.has(a.staffId)) continue;
+          seen.add(a.staffId);
+          ids.push(a.staffId);
+        }
+        return ids;
+      };
       
       // Sort line items by required dispatch date (earliest first)
       // Jobs without dispatch dates go last, overdue jobs go first (most urgent)
@@ -5457,77 +5477,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        // Find the earliest fitting slot across a given list of staff members.
-        const findEarliestForStaff = (staffList: typeof staff) => {
-          let slot: any = null;
-          let slotStaffId: string | null = null;
-          for (const staffMember of staffList) {
-            const currentDate = new Date(startDate);
-            let foundForStaff = false;
+        const machineForItem = allMachines.find(m => m.id === lineItem.machineId);
+        const defaultOperator = machineForItem?.defaultOperatorId
+          ? staff.find(s => s.id === machineForItem.defaultOperatorId)
+          : undefined;
 
-            while (currentDate <= endDate) {
-              const dateSlots = findAvailableSlots(
-                currentDate,
-                lineItem.machineId!,
-                staffMember.id,
-                machineBlocks,
-                staffShifts,
-                currentSchedules,
-                staffMachineAllocations,
-                staffHolidays,
-                bankHolidays
-              );
+        // Walk forward day by day and take the earliest day where an eligible
+        // operator has a free slot. The operator is whoever is allocated to this
+        // machine that day (the machine+staff combination set up in Staff
+        // Allocations), so a job's operator always matches who is actually on the
+        // machine. When nobody is allocated that day we fall back to the machine's
+        // default operator, then to any candidate staff (legacy behaviour for
+        // set-ups without allocations).
+        const cursor = new Date(startDate);
+        while (cursor <= endDate && !bestSlot) {
+          const allocatedIds = allocatedStaffOnDate(lineItem.machineId!, cursor);
+          let dayStaff: typeof staff;
+          if (allocatedIds.length > 0) {
+            const allocated = candidateStaff.filter(s => allocatedIds.includes(s.id));
+            // Prefer the default operator first, but only if they are allocated today.
+            dayStaff = defaultOperator && allocatedIds.includes(defaultOperator.id)
+              ? [defaultOperator, ...allocated.filter(s => s.id !== defaultOperator.id)]
+              : allocated;
+          } else if (defaultOperator) {
+            dayStaff = [defaultOperator];
+          } else {
+            dayStaff = candidateStaff;
+          }
 
-              // Find first slot that fits
-              for (const s of dateSlots) {
-                const slotDuration = s.endTime - s.startTime;
-                if (slotDuration >= duration) {
-                  const proposedSlot = {
-                    date: new Date(currentDate),
+          let daySlot: any = null;
+          let daySlotStaffId: string | null = null;
+          for (const staffMember of dayStaff) {
+            const dateSlots = findAvailableSlots(
+              cursor,
+              lineItem.machineId!,
+              staffMember.id,
+              machineBlocks,
+              staffShifts,
+              currentSchedules,
+              staffMachineAllocations,
+              staffHolidays,
+              bankHolidays
+            );
+            for (const s of dateSlots) {
+              if (s.endTime - s.startTime >= duration) {
+                // Earliest start time on this day wins; ties keep the first
+                // (higher-priority) operator we already found.
+                if (!daySlot || s.startTime < daySlot.startTime) {
+                  daySlot = {
+                    date: new Date(cursor),
                     startTime: s.startTime,
                     endTime: s.startTime + duration
                   };
-
-                  // Take the earliest slot we find (greedy algorithm)
-                  if (!slot || proposedSlot.date < slot.date ||
-                      (proposedSlot.date.getTime() === slot.date.getTime() && proposedSlot.startTime < slot.startTime)) {
-                    slot = proposedSlot;
-                    slotStaffId = staffMember.id;
-                  }
-                  foundForStaff = true;
-                  break;
+                  daySlotStaffId = staffMember.id;
                 }
+                break;
               }
-
-              if (foundForStaff) break;
-              currentDate.setDate(currentDate.getDate() + 1);
             }
-
-            // If we already found the earliest possible slot (today), stop early
-            if (slot && slot.date.toDateString() === startDate.toDateString()) break;
           }
-          return { slot, slotStaffId };
-        };
 
-        // Prefer the machine's default operator (using their shift pattern). Fall back to
-        // the other candidate staff only if the default operator has no available slot.
-        const machineForItem = allMachines.find(m => m.id === lineItem.machineId);
-        const defaultOperator = machineForItem?.defaultOperatorId
-          ? candidateStaff.find(s => s.id === machineForItem.defaultOperatorId)
-          : undefined;
-
-        if (defaultOperator) {
-          const r = findEarliestForStaff([defaultOperator]);
-          bestSlot = r.slot;
-          bestStaffId = r.slotStaffId;
-        }
-        if (!bestSlot) {
-          const fallbackStaff = defaultOperator
-            ? candidateStaff.filter(s => s.id !== defaultOperator.id)
-            : candidateStaff;
-          const r = findEarliestForStaff(fallbackStaff);
-          bestSlot = r.slot;
-          bestStaffId = r.slotStaffId;
+          if (daySlot) {
+            bestSlot = daySlot;
+            bestStaffId = daySlotStaffId;
+          }
+          cursor.setDate(cursor.getDate() + 1);
         }
         
         // Create schedule if we found a slot
@@ -5578,7 +5591,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
-      
+
       res.json({
         success: true,
         scheduledCount: scheduledItems.length,
