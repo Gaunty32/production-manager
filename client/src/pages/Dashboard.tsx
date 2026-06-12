@@ -54,7 +54,7 @@ import type { Customer, Job, JobWithLineItems, JobLineItem, Staff, LogoSetup, Us
 import { canViewPrices } from "@shared/schema";
 import { useParams, useLocation } from "wouter";
 import { isPast, isToday, format, addDays, startOfDay, endOfDay } from "date-fns";
-import { getPrice, getPrintPrice, getFlatRatePrice, getBaggingPrice, type PricingTable } from "@shared/pricing";
+import { getPrice, getPrintPrice, getFlatRatePrice, getBaggingPrice, calculateJobPrice, type PricingTable } from "@shared/pricing";
 import { getCustomerColorClasses } from "@shared/colors";
 
 export default function Dashboard() {
@@ -631,44 +631,48 @@ export default function Dashboard() {
     return { totalQuantity, totalValue };
   })();
 
-  // Calculate the amount due for a single job (sum of priced line items).
-  // Mirrors the production-queue pricing logic above. Returns the numeric total
-  // and whether any line item is price-on-application (POA).
+  // Calculate the amount due for a single job. Uses the exact same pricing as
+  // the customer portal (calculateJobPrice + the customer's pricing table) so
+  // the staff figure always matches what the customer sees. Returns the numeric
+  // total of priced line items, and whether any line item is POA.
   const calculateJobAmountDue = (job: JobWithLineItems): { amount: number; hasPoa: boolean } => {
     const customer = customers.find(c => c.id === job.customerId);
-    let pricingTable: PricingTable = "2026";
-    if (customer?.pricingTable2025) {
-      pricingTable = "2025";
-    } else if (customer?.pricingTable2026) {
-      pricingTable = "2026";
-    }
+    // Same resolution order as the customer portal: 2026 first, then 2025.
+    const pricingTable: PricingTable | null = customer?.pricingTable2026
+      ? "2026"
+      : customer?.pricingTable2025
+        ? "2025"
+        : null;
+
+    const lineItems = job.lineItems ?? [];
+    if (lineItems.length === 0) return { amount: 0, hasPoa: false };
+
+    // No pricing table configured for this customer → everything is POA,
+    // exactly as the customer portal would show.
+    if (!pricingTable) return { amount: 0, hasPoa: true };
 
     let amount = 0;
     let hasPoa = false;
-    (job.lineItems ?? []).forEach(lineItem => {
-      try {
-        let itemPrice: number | "POA" | null = null;
-        if (lineItem.jobType === "Bagging") {
-          itemPrice = getBaggingPrice(lineItem.quantity, pricingTable).totalPrice;
-        } else if (lineItem.jobType === "Print Initials/Name" || lineItem.jobType === "Embroidery Initials/Name") {
-          itemPrice = getFlatRatePrice(lineItem.quantity, lineItem.jobType).totalPrice;
-        } else if (lineItem.jobType === "Print" && lineItem.stitchCount) {
-          itemPrice = getPrintPrice(lineItem.quantity, lineItem.stitchCount, pricingTable).totalPrice;
-        } else if (lineItem.stitchCount) {
-          itemPrice = getPrice(lineItem.quantity, lineItem.stitchCount, pricingTable).totalPrice;
-        }
-        if (typeof itemPrice === "number") {
-          amount += itemPrice;
+    try {
+      const { lineItemPrices } = calculateJobPrice(
+        lineItems.map(li => ({
+          quantity: li.quantity,
+          stitchCount: li.stitchCount || 0,
+          jobType: li.jobType || undefined,
+        })),
+        pricingTable
+      );
+      for (const p of lineItemPrices) {
+        if (typeof p.totalPrice === "number") {
+          amount += p.totalPrice;
         } else {
-          // "POA" or a line item we couldn't price (e.g. print with no stitch
-          // count) — flag rather than silently treating it as £0.
           hasPoa = true;
         }
-      } catch (error) {
-        // Couldn't price this item (missing data, invalid params) — treat as POA
-        hasPoa = true;
       }
-    });
+    } catch (error) {
+      // Couldn't price the job (missing data, invalid params) — treat as POA
+      hasPoa = true;
+    }
     return { amount, hasPoa };
   };
 
