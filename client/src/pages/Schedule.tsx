@@ -16,6 +16,7 @@ import { UnscheduledJobs } from "@/components/UnscheduledJobs";
 import { AvailabilitySummary } from "@/components/AvailabilitySummary";
 import { ScheduleHealth } from "@/components/ScheduleHealth";
 import { ProductionAccuracy } from "@/components/ProductionAccuracy";
+import { HolidaysManagement } from "@/pages/HolidayManagement";
 import type { JobSchedule, Staff, Job } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -141,6 +142,7 @@ export default function Schedule() {
             <TabsTrigger value="shifts" data-testid="tab-shifts">Staff Shifts</TabsTrigger>
             <TabsTrigger value="blocks" data-testid="tab-blocks">Machine Blocks</TabsTrigger>
             <TabsTrigger value="allocations" data-testid="tab-allocations">Staff Allocations</TabsTrigger>
+            <TabsTrigger value="holidays" data-testid="tab-holidays">Holidays</TabsTrigger>
           </TabsList>
 
           {/* ── Timeline ─────────────────────────────────────────────── */}
@@ -428,6 +430,16 @@ export default function Schedule() {
 
           <TabsContent value="allocations" className="mt-4">
             <StaffMachineAllocations />
+          </TabsContent>
+
+          <TabsContent value="holidays" className="mt-4">
+            <div className="mb-4">
+              <h2 className="text-base font-semibold">Holidays</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Record staff holidays, sick leave and bank holidays so the scheduler knows when people are not in.
+              </p>
+            </div>
+            <HolidaysManagement />
           </TabsContent>
         </Tabs>
       </div>

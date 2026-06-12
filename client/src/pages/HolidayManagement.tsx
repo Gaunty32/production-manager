@@ -36,7 +36,7 @@ import type { StaffHoliday, BankHoliday, Staff } from "@shared/schema";
 import { StaffHolidayFormDialog } from "@/components/StaffHolidayFormDialog";
 import { BankHolidayFormDialog } from "@/components/BankHolidayFormDialog";
 
-export default function HolidayManagement() {
+export function HolidaysManagement() {
   const { toast } = useToast();
   const [staffHolidayToDelete, setStaffHolidayToDelete] = useState<string | null>(null);
   const [staffHolidayToEdit, setStaffHolidayToEdit] = useState<StaffHoliday | null>(null);
@@ -117,26 +117,15 @@ export default function HolidayManagement() {
 
   if (loadingStaffHolidays || loadingBankHolidays) {
     return (
-      <div className="h-full flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Holiday Management</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Manage staff holidays and bank holidays that affect scheduling
-            </p>
-          </div>
-          <Calendar className="h-8 w-8 text-muted-foreground" />
-        </div>
-
-        <Tabs defaultValue="staff-holidays" className="w-full">
+    <>
+      <Tabs defaultValue="staff-holidays" className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="staff-holidays" data-testid="tab-staff-holidays">
               Staff Holidays
@@ -360,6 +349,24 @@ export default function HolidayManagement() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+    </>
+  );
+}
+
+export default function HolidayManagement() {
+  return (
+    <div className="h-full overflow-auto">
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">Holiday Management</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Manage staff holidays and bank holidays that affect scheduling
+            </p>
+          </div>
+          <Calendar className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <HolidaysManagement />
       </div>
     </div>
   );
