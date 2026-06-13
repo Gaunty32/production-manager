@@ -35,6 +35,7 @@ export function UnscheduledJobs() {
   const [confirmJobId, setConfirmJobId] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
   const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
+  const [confirmStale, setConfirmStale] = useState(false);
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
@@ -83,6 +84,32 @@ export function UnscheduledJobs() {
     onError: () => toast({ title: "Failed to delete job", variant: "destructive" }),
   });
 
+  const clearStaleMutation = useMutation({
+    mutationFn: async (jobIds: string[]) => {
+      const results = await Promise.allSettled(
+        jobIds.map(id => apiRequest("DELETE", `/api/jobs/${id}`))
+      );
+      const succeeded = results.filter(r => r.status === "fulfilled").length;
+      return { succeeded, failed: results.length - succeeded };
+    },
+    onSuccess: ({ succeeded, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      if (failed > 0) {
+        toast({
+          title: `${succeeded} deleted, ${failed} could not be removed`,
+          description: "Please try again to clear the remaining jobs.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: `${succeeded} stale job${succeeded === 1 ? "" : "s"} deleted` });
+      }
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: "Failed to clear stale jobs", variant: "destructive" });
+    },
+  });
+
   if (jobsLoading || customersLoading) {
     return <div className="text-sm text-muted-foreground">Loading...</div>;
   }
@@ -124,6 +151,24 @@ export function UnscheduledJobs() {
     return differenceInCalendarDays(new Date(j.requiredDispatchDate), new Date()) <= 3;
   }).length;
 
+  // "Stale" = badly overdue (more than 30 days past dispatch date) and never scheduled/produced.
+  // Any job with financial or invoicing activity is kept, so awaiting-payment, deposit-paid,
+  // and invoiced jobs are never bulk-deleted regardless of age.
+  const STALE_OVERDUE_DAYS = 30;
+  const staleJobs = unscheduledJobs.filter(j => {
+    if (!j.requiredDispatchDate) return false;
+    if (j.status === "pending_customer_approval") return false;
+    if (j.paymentReceived) return false;
+    if ((j.depositAmountPaid ?? 0) > 0) return false;
+    if (j.invoiceStatus && j.invoiceStatus !== "pending") return false;
+    if (j.invoiceTotal != null) return false;
+    // Awaiting payment: customer must pay in advance and payment hasn't arrived yet — never delete these.
+    const customer = customers.find(c => c.id === j.customerId);
+    if (customer?.requiresAdvancePayment && !j.paymentReceived) return false;
+    const daysOverdue = differenceInCalendarDays(new Date(), new Date(j.requiredDispatchDate));
+    return daysOverdue > STALE_OVERDUE_DAYS;
+  });
+
   const confirmJob = jobs.find(j => j.id === confirmJobId);
   const deleteJob = jobs.find(j => j.id === deleteJobId);
 
@@ -140,6 +185,19 @@ export function UnscheduledJobs() {
                 <AlertTriangle className="h-3 w-3" />
                 {urgentCount} urgent
               </Badge>
+            )}
+            {staleJobs.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1 text-destructive"
+                onClick={() => setConfirmStale(true)}
+                disabled={clearStaleMutation.isPending}
+                data-testid="button-clear-stale-jobs"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Clear stale jobs ({staleJobs.length})
+              </Button>
             )}
             <Button
               size="sm"
@@ -260,6 +318,48 @@ export function UnscheduledJobs() {
               }}
             >
               Yes, delete job
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear stale jobs confirm */}
+      <AlertDialog open={confirmStale} onOpenChange={setConfirmStale}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Clear {staleJobs.length} stale job{staleJobs.length === 1 ? "" : "s"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              These jobs are more than 30 days past their dispatch date and were never scheduled or produced. They will be permanently deleted. Jobs awaiting approval, or with any deposit, payment, or invoice recorded, are not affected. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul
+            className="max-h-40 overflow-y-auto text-sm list-disc pl-5 space-y-0.5 border rounded-md p-3"
+            data-testid="list-stale-jobs"
+          >
+            {staleJobs.map((j) => (
+              <li key={j.id}>
+                <span className="font-medium">{j.jobName}</span> — {getCustomerName(j.customerId)}
+                {j.requiredDispatchDate && (
+                  <span className="text-muted-foreground">
+                    {" "}(due {format(new Date(j.requiredDispatchDate), "MMM d, yyyy")})
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                clearStaleMutation.mutate(staleJobs.map(j => j.id));
+                setConfirmStale(false);
+              }}
+              data-testid="button-confirm-clear-stale"
+            >
+              Yes, clear stale jobs
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
