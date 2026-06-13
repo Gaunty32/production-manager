@@ -4,7 +4,13 @@ import { storage } from "./storage";
 import { isStaffAuthenticated } from "./staffAuth";
 import { isCasualAuthenticated, loginCasual, setCasualPinWithToken, normalizeMobile } from "./casualAuth";
 import { sendWhatsAppAsync } from "./highlevelService";
-import { subtractTimeSlots, minutesToTime, type TimeSlot } from "@shared/scheduling";
+import {
+  subtractTimeSlots,
+  minutesToTime,
+  getStaffAvailableSlots,
+  isStaffOnHoliday,
+  type TimeSlot,
+} from "@shared/scheduling";
 import {
   insertCasualStaffSchema,
   casualLoginSchema,
@@ -13,6 +19,11 @@ import {
   claimShiftSchema,
   insertShiftSchema,
   type Shift,
+  type Machine,
+  type StaffMachineAllocation,
+  type StaffShift,
+  type StaffHoliday,
+  type Staff,
 } from "@shared/schema";
 
 const INVITE_TTL_DAYS = 30;
@@ -55,6 +66,77 @@ function daysUntil(date: Date): number {
   const today = startOfDay(new Date());
   const target = startOfDay(date);
   return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+// Resolve the regular operator(s) of a machine on a date, using the same rules
+// as the scheduler: a specific-date or recurring day-of-week allocation match,
+// falling back to the machine's default operator when nothing is allocated.
+function resolveMachineOperators(
+  machineId: number,
+  date: Date,
+  machine: Machine | undefined,
+  allocations: StaffMachineAllocation[],
+): string[] {
+  const ids = new Set<string>();
+  for (const a of allocations) {
+    if (a.machineId !== machineId) continue;
+    const ad = new Date(a.date);
+    const matches =
+      ad.toDateString() === date.toDateString() ||
+      (a.isRecurring && a.recurringDaysOfWeek?.includes(date.getDay()));
+    if (matches) ids.add(a.staffId);
+  }
+  if (ids.size === 0 && machine?.defaultOperatorId) ids.add(machine.defaultOperatorId);
+  return Array.from(ids);
+}
+
+// A machine is "available" for a casual shift on a date when its regular
+// operator is away that day (on holiday or not working) or the machine has no
+// operator at all. If a present, working operator covers the machine that day,
+// it is occupied and a casual cannot be allocated to it.
+function checkMachineAvailability(
+  machineId: number,
+  date: Date,
+  data: {
+    machinesById: Map<number, Machine>;
+    allocations: StaffMachineAllocation[];
+    shifts: StaffShift[];
+    holidays: StaffHoliday[];
+    staffById: Map<string, Staff>;
+  },
+): { available: boolean; occupiedBy?: string } {
+  const machine = data.machinesById.get(machineId);
+  const operatorIds = resolveMachineOperators(machineId, date, machine, data.allocations);
+  if (operatorIds.length === 0) return { available: true };
+
+  for (const opId of operatorIds) {
+    // On approved holiday → away that day.
+    if (isStaffOnHoliday(date, opId, data.holidays)) continue;
+    // No working hours that day (no shift / weekend) → away that day.
+    const slots = getStaffAvailableSlots(date, opId, data.shifts);
+    if (slots.length === 0) continue;
+    // Present and working → machine is occupied.
+    return { available: false, occupiedBy: data.staffById.get(opId)?.name ?? "Operator" };
+  }
+  return { available: true };
+}
+
+// Load the data needed to evaluate machine availability for casual shifts.
+async function loadAvailabilityData() {
+  const [machines, allocations, shifts, holidays, staff] = await Promise.all([
+    storage.getMachines(),
+    storage.getStaffMachineAllocations(),
+    storage.getStaffShifts(),
+    storage.getStaffHolidays(),
+    storage.getStaff(),
+  ]);
+  return {
+    machinesById: new Map(machines.map((m) => [m.id, m])),
+    allocations,
+    shifts,
+    holidays,
+    staffById: new Map(staff.map((s) => [s.id, s])),
+  };
 }
 
 // Simple in-memory rate limiter to slow down PIN brute-forcing on the public
@@ -269,7 +351,17 @@ export function registerCasualShiftRoutes(app: Express) {
         return res.status(400).json({ error: "End time must be after start time." });
       }
       const status = req.body.status === "suggested" ? "suggested" : "available";
-      const shift = await storage.createShift({ ...data, date: startOfDay(new Date(data.date)), status });
+      const shiftDate = startOfDay(new Date(data.date));
+      const availData = await loadAvailabilityData();
+      const result = checkMachineAvailability(data.machineId, shiftDate, availData);
+      if (!result.available) {
+        const who = result.occupiedBy ?? "the operator";
+        const when = shiftDate.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
+        return res.status(400).json({
+          error: `That machine isn't available — ${who} is working it on ${when}. Pick a machine whose operator is away that day.`,
+        });
+      }
+      const shift = await storage.createShift({ ...data, date: shiftDate, status });
       res.json(shift);
     } catch (error: any) {
       if (error.name === "ZodError") {
@@ -313,11 +405,56 @@ export function registerCasualShiftRoutes(app: Express) {
       if (toCreate.length === 0) {
         return res.status(400).json({ error: "No matching days selected for the recurring shift." });
       }
-      const created = await storage.createShiftsBulk(toCreate);
-      res.json({ created });
+
+      // Only allow shifts on machines that are available that day — i.e. the
+      // regular operator is away (on holiday / not working) or the machine is
+      // unallocated. Skip occupied days; reject if nothing is available.
+      const availData = await loadAvailabilityData();
+      const available: typeof toCreate = [];
+      const skipped: { date: Date; occupiedBy?: string }[] = [];
+      for (const shift of toCreate) {
+        const result = checkMachineAvailability(shift.machineId, shift.date, availData);
+        if (result.available) available.push(shift);
+        else skipped.push({ date: shift.date, occupiedBy: result.occupiedBy });
+      }
+
+      if (available.length === 0) {
+        const first = skipped[0];
+        const who = first?.occupiedBy ?? "the operator";
+        const when = first ? new Date(first.date).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" }) : "that day";
+        return res.status(400).json({
+          error: `That machine isn't available — ${who} is working it on ${when}. Pick a machine whose operator is away that day.`,
+        });
+      }
+
+      const created = await storage.createShiftsBulk(available);
+      res.json({ created, skipped: skipped.length });
     } catch (error: any) {
       console.error("Manual create shift error:", error);
       res.status(500).json({ error: "Failed to create shift" });
+    }
+  });
+
+  // Machine availability for a given date — which machines a casual can cover
+  // (operator away / unallocated) vs. which are occupied by a working operator.
+  app.get("/api/shifts/machine-availability", isStaffAuthenticated, async (req, res) => {
+    try {
+      if (!req.query.date) return res.status(400).json({ error: "Date is required." });
+      const date = startOfDay(new Date(String(req.query.date)));
+      if (isNaN(date.getTime())) return res.status(400).json({ error: "Invalid date." });
+
+      const availData = await loadAvailabilityData();
+      const machines = await storage.getMachines();
+      const result = machines
+        .filter((m) => m.isActive)
+        .map((m) => {
+          const a = checkMachineAvailability(m.id, date, availData);
+          return { machineId: m.id, available: a.available, occupiedBy: a.occupiedBy ?? null };
+        });
+      res.json(result);
+    } catch (error: any) {
+      console.error("Machine availability error:", error);
+      res.status(500).json({ error: "Failed to check machine availability" });
     }
   });
 

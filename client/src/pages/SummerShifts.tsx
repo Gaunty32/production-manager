@@ -163,6 +163,20 @@ function ShiftsTab() {
 
   const refreshShifts = () => queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
 
+  const { data: machineAvailability = [], isLoading: availLoading } = useQuery<
+    { machineId: number; available: boolean; occupiedBy: string | null }[]
+  >({
+    queryKey: ["/api/shifts/machine-availability", addDate],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/shifts/machine-availability?date=${addDate}`)).json(),
+    enabled: addOpen && !!addDate,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+  const availByMachine = new Map(machineAvailability.map((a) => [a.machineId, a]));
+  const selectedAvail = addMachineId ? availByMachine.get(Number(addMachineId)) : undefined;
+  const selectedOccupied = !addRecurring && selectedAvail?.available === false;
+
   const createManualMutation = useMutation({
     mutationFn: async () =>
       (await apiRequest("POST", "/api/shifts/manual", {
@@ -175,9 +189,12 @@ function ShiftsTab() {
         weeks: addWeeks,
       })).json(),
     onSuccess: (res: any) => {
+      const skipped = Number(res.skipped) || 0;
       toast({
         title: res.created > 1 ? `Added ${res.created} shifts` : "Shift added",
-        description: "Find it under suggested shifts below to assign or publish.",
+        description: skipped > 0
+          ? `${skipped} day${skipped > 1 ? "s" : ""} skipped — the machine's operator was working those days. Find the rest under suggested shifts below.`
+          : "Find it under suggested shifts below to assign or publish.",
       });
       setAddOpen(false);
       refreshShifts();
@@ -469,13 +486,36 @@ function ShiftsTab() {
                     <SelectValue placeholder="Select machine" />
                   </SelectTrigger>
                   <SelectContent>
-                    {activeMachines.map((m) => (
-                      <SelectItem key={m.id} value={String(m.id)} data-testid={`option-add-machine-${m.id}`}>
-                        {m.name}
-                      </SelectItem>
-                    ))}
+                    {activeMachines.map((m) => {
+                      const a = availByMachine.get(m.id);
+                      const occupied = a?.available === false;
+                      return (
+                        <SelectItem
+                          key={m.id}
+                          value={String(m.id)}
+                          disabled={!addRecurring && occupied}
+                          data-testid={`option-add-machine-${m.id}`}
+                        >
+                          {m.name}
+                          {occupied ? ` — ${a?.occupiedBy ?? "operator"} working` : ""}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
+              )}
+              {availLoading && (
+                <p className="text-xs text-muted-foreground">Checking machine availability…</p>
+              )}
+              {selectedOccupied && (
+                <p className="text-xs text-destructive" data-testid="text-machine-occupied">
+                  {selectedAvail?.occupiedBy ?? "The operator"} is working this machine on the selected day. Casual cover is only for machines whose operator is away.
+                </p>
+              )}
+              {addRecurring && (
+                <p className="text-xs text-muted-foreground">
+                  Days where the machine's operator is working will be skipped automatically.
+                </p>
               )}
             </div>
 
@@ -543,6 +583,7 @@ function ShiftsTab() {
               disabled={
                 createManualMutation.isPending ||
                 !addMachineId ||
+                selectedOccupied ||
                 minutesFromTimeStr(addEnd) <= minutesFromTimeStr(addStart) ||
                 (addRecurring && addDays.length === 0)
               }
