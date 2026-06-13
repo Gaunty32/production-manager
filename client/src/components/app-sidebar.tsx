@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun, Tv } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -198,6 +198,16 @@ export function AppSidebar() {
                     <Link href="/users" onClick={handleNavClick} data-testid="link-user-management">
                       <ShieldCheck className="h-4 w-4" />
                       <span>User Management</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+              {isUserSuperAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/dashboard-tv-setup"}>
+                    <Link href="/dashboard-tv-setup" onClick={handleNavClick} data-testid="link-dashboard-tv-setup">
+                      <Tv className="h-4 w-4" />
+                      <span>TV Dashboard</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

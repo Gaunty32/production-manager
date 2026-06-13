@@ -55,6 +55,8 @@ import SummerShifts from "@/pages/SummerShifts";
 import CasualLogin from "@/pages/CasualLogin";
 import CasualSetPin from "@/pages/CasualSetPin";
 import CasualDashboard from "@/pages/CasualDashboard";
+import DashboardTv from "@/pages/DashboardTv";
+import DashboardTvSetup from "@/pages/DashboardTvSetup";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -104,6 +106,7 @@ function StaffRouter() {
       <Route path="/tasks"><Tasks /></Route>
       <Route path="/summer-shifts"><SummerShifts /></Route>
       <Route path="/thread-library"><ThreadColourChart /></Route>
+      <Route path="/dashboard-tv-setup"><DashboardTvSetup /></Route>
       {/* Customer portal paths — render without staff chrome */}
       <Route path="/customer/:rest*"><CustomerPortalApp /></Route>
       <Route><NotFound /></Route>
@@ -134,6 +137,7 @@ function AppRouter() {
     <>
       <Switch>
         {/* Public Routes - No Authentication Required */}
+        <Route path="/dashboard-tv" component={DashboardTv} />
         <Route path="/portal-preview" component={PortalPreview} />
         <Route path="/demo-access" component={DemoAccess} />
         <Route path="/demo" component={DemoPortal} />

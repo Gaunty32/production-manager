@@ -1,7 +1,9 @@
 import express from "express";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import crypto from "crypto";
 import { storage } from "./storage";
+import { buildDashboardTvData, TOKEN_KEY, DAILY_TARGET_KEY, DEFAULT_DAILY_TARGET } from "./dashboardTv";
 import { PRINT_MACHINE_ID, isPrintJobType } from "@shared/machines";
 import bcrypt from "bcrypt";
 import { 
@@ -4348,6 +4350,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch job" });
+    }
+  });
+
+  // ── Wall-mounted TV dashboard ───────────────────────────────────────────────
+  // Public (token-secured) live data feed consumed by /dashboard-tv.
+  app.get("/api/dashboard-tv/data", async (req, res) => {
+    try {
+      const provided = String(req.query.token ?? "");
+      const stored = await storage.getAppSetting(TOKEN_KEY);
+      if (!stored) {
+        return res.status(403).json({ error: "Dashboard display link not configured" });
+      }
+      const a = Buffer.from(provided);
+      const b = Buffer.from(stored);
+      if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+        return res.status(401).json({ error: "Invalid display token" });
+      }
+      const data = await buildDashboardTvData();
+      res.set("Cache-Control", "no-store");
+      res.json(data);
+    } catch (error) {
+      console.error("[ERROR] Failed to build TV dashboard data:", error);
+      res.status(500).json({ error: "Failed to build dashboard data" });
+    }
+  });
+
+  // Admin: read the display link + daily target (auto-generates a token on first use)
+  app.get("/api/dashboard-tv/config", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      let token = await storage.getAppSetting(TOKEN_KEY);
+      if (!token) {
+        token = crypto.randomBytes(24).toString("hex");
+        await storage.setAppSetting(TOKEN_KEY, token);
+      }
+      const targetRaw = await storage.getAppSetting(DAILY_TARGET_KEY);
+      const dailyTarget = Math.max(1, parseInt(targetRaw ?? "", 10) || DEFAULT_DAILY_TARGET);
+      res.json({ token, dailyTarget, path: `/dashboard-tv?token=${token}` });
+    } catch (error) {
+      console.error("[ERROR] Failed to read TV dashboard config:", error);
+      res.status(500).json({ error: "Failed to read config" });
+    }
+  });
+
+  // Admin: update daily target and/or regenerate the display token
+  app.post("/api/dashboard-tv/config", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const { dailyTarget, regenerateToken } = req.body ?? {};
+      if (dailyTarget !== undefined) {
+        const n = parseInt(String(dailyTarget), 10);
+        if (!Number.isFinite(n) || n < 1) {
+          return res.status(400).json({ error: "Daily target must be a positive number" });
+        }
+        await storage.setAppSetting(DAILY_TARGET_KEY, String(n));
+      }
+      if (regenerateToken === true) {
+        await storage.setAppSetting(TOKEN_KEY, crypto.randomBytes(24).toString("hex"));
+      }
+      const token = await storage.getAppSetting(TOKEN_KEY);
+      const targetRaw = await storage.getAppSetting(DAILY_TARGET_KEY);
+      const target = Math.max(1, parseInt(targetRaw ?? "", 10) || DEFAULT_DAILY_TARGET);
+      res.json({ token, dailyTarget: target, path: `/dashboard-tv?token=${token}` });
+    } catch (error) {
+      console.error("[ERROR] Failed to update TV dashboard config:", error);
+      res.status(500).json({ error: "Failed to update config" });
     }
   });
 
