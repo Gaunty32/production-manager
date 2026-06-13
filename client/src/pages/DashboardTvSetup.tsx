@@ -11,8 +11,10 @@ import { Copy, RefreshCw, ExternalLink, Tv } from "lucide-react";
 
 interface TvConfig {
   token: string;
+  slug: string;
   dailyTarget: number;
   path: string;
+  shortPath: string;
 }
 
 export default function DashboardTvSetup() {
@@ -30,6 +32,8 @@ export default function DashboardTvSetup() {
   }, [data?.dailyTarget]);
 
   const fullUrl = data ? `${window.location.origin}${data.path}` : "";
+  const shortUrl = data ? `${window.location.origin}${data.shortPath}` : "";
+  const shortDisplay = data ? `${window.location.host}${data.shortPath}` : "";
 
   const save = async (body: { dailyTarget?: number; regenerateToken?: boolean }) => {
     try {
@@ -43,7 +47,12 @@ export default function DashboardTvSetup() {
 
   const copyLink = async () => {
     await navigator.clipboard.writeText(fullUrl);
-    toast({ title: "Copied", description: "Display link copied to clipboard." });
+    toast({ title: "Copied", description: "Full display link copied to clipboard." });
+  };
+
+  const copyShort = async () => {
+    await navigator.clipboard.writeText(shortUrl);
+    toast({ title: "Copied", description: "Short TV link copied to clipboard." });
   };
 
   if (authLoading) return <div className="p-8 text-muted-foreground">Loading…</div>;
@@ -69,7 +78,47 @@ export default function DashboardTvSetup() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Display link</CardTitle>
+          <CardTitle>Easy TV link (for Firestick / smart TV)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            This is the short link to type on your TV. On the Firestick remote it's quick to enter — no long code needed.
+          </p>
+          <div className="rounded-md bg-muted p-4 text-center">
+            <div className="text-2xl md:text-3xl font-bold font-mono tracking-wide" data-testid="text-short-link">
+              {isLoading ? "Loading…" : shortDisplay}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={copyShort} disabled={!data} data-testid="button-copy-short">
+              <Copy className="h-4 w-4 mr-2" /> Copy short link
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => window.open(shortUrl, "_blank")}
+              disabled={!data}
+              data-testid="button-open-short"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" /> Test it
+            </Button>
+          </div>
+          <div className="rounded-md border p-4 space-y-2">
+            <div className="font-semibold text-sm">How to set it up on a Firestick</div>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
+              <li>From the Firestick home screen, search for and install the free <strong>Silk Browser</strong> (or any web browser).</li>
+              <li>Open the browser and type the short link above into the address bar exactly as shown.</li>
+              <li>When the dashboard loads, save it as a bookmark / set as home page so it opens automatically next time.</li>
+            </ol>
+            <p className="text-xs text-muted-foreground">
+              Tip: the letters are all lowercase and use no confusing characters (no zero, O, one, or L).
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Full display link</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-2">
@@ -94,8 +143,8 @@ export default function DashboardTvSetup() {
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            Anyone with this link can view the dashboard. Regenerate it if the link is shared outside the workshop —
-            the old link will stop working immediately.
+            Both links show the same dashboard. Anyone with a link can view it. Regenerate below if a link is shared
+            outside the workshop — the old links stop working immediately.
           </p>
           <Button
             variant="outline"

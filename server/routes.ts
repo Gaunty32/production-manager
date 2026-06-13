@@ -3,7 +3,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import crypto from "crypto";
 import { storage } from "./storage";
-import { buildDashboardTvData, TOKEN_KEY, DAILY_TARGET_KEY, DEFAULT_DAILY_TARGET } from "./dashboardTv";
+import { buildDashboardTvData, TOKEN_KEY, SLUG_KEY, DAILY_TARGET_KEY, DEFAULT_DAILY_TARGET, generateTvSlug } from "./dashboardTv";
 import { PRINT_MACHINE_ID, isPrintJobType } from "@shared/machines";
 import bcrypt from "bcrypt";
 import { 
@@ -4376,6 +4376,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public: short, easy-to-type link for TVs/Firesticks. Redirects to the full secure URL.
+  app.get("/tv/:code", async (req, res) => {
+    try {
+      const code = String(req.params.code ?? "").toLowerCase();
+      const slug = await storage.getAppSetting(SLUG_KEY);
+      const token = await storage.getAppSetting(TOKEN_KEY);
+      if (slug && token && code === slug) {
+        return res.redirect(302, `/dashboard-tv?token=${token}`);
+      }
+      // Unknown code -> show the "link required" empty state
+      return res.redirect(302, "/dashboard-tv");
+    } catch (error) {
+      console.error("[ERROR] TV short-link redirect failed:", error);
+      return res.redirect(302, "/dashboard-tv");
+    }
+  });
+
   // Admin: read the display link + daily target (auto-generates a token on first use)
   app.get("/api/dashboard-tv/config", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
     try {
@@ -4384,9 +4401,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         token = crypto.randomBytes(24).toString("hex");
         await storage.setAppSetting(TOKEN_KEY, token);
       }
+      let slug = await storage.getAppSetting(SLUG_KEY);
+      if (!slug) {
+        slug = generateTvSlug();
+        await storage.setAppSetting(SLUG_KEY, slug);
+      }
       const targetRaw = await storage.getAppSetting(DAILY_TARGET_KEY);
       const dailyTarget = Math.max(1, parseInt(targetRaw ?? "", 10) || DEFAULT_DAILY_TARGET);
-      res.json({ token, dailyTarget, path: `/dashboard-tv?token=${token}` });
+      res.json({ token, slug, dailyTarget, path: `/dashboard-tv?token=${token}`, shortPath: `/tv/${slug}` });
     } catch (error) {
       console.error("[ERROR] Failed to read TV dashboard config:", error);
       res.status(500).json({ error: "Failed to read config" });
@@ -4406,11 +4428,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (regenerateToken === true) {
         await storage.setAppSetting(TOKEN_KEY, crypto.randomBytes(24).toString("hex"));
+        await storage.setAppSetting(SLUG_KEY, generateTvSlug());
       }
       const token = await storage.getAppSetting(TOKEN_KEY);
+      let slug = await storage.getAppSetting(SLUG_KEY);
+      if (!slug) {
+        slug = generateTvSlug();
+        await storage.setAppSetting(SLUG_KEY, slug);
+      }
       const targetRaw = await storage.getAppSetting(DAILY_TARGET_KEY);
       const target = Math.max(1, parseInt(targetRaw ?? "", 10) || DEFAULT_DAILY_TARGET);
-      res.json({ token, dailyTarget: target, path: `/dashboard-tv?token=${token}` });
+      res.json({ token, slug, dailyTarget: target, path: `/dashboard-tv?token=${token}`, shortPath: `/tv/${slug}` });
     } catch (error) {
       console.error("[ERROR] Failed to update TV dashboard config:", error);
       res.status(500).json({ error: "Failed to update config" });

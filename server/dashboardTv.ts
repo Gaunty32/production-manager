@@ -68,7 +68,19 @@ function intersect(a: TimeSlot, b: TimeSlot): TimeSlot | null {
 
 export const DAILY_TARGET_KEY = "dashboard_tv_daily_target";
 export const TOKEN_KEY = "dashboard_tv_token";
+export const SLUG_KEY = "dashboard_tv_slug";
 export const DEFAULT_DAILY_TARGET = 750;
+
+// Short, easy-to-type code for entering the dashboard URL on a TV / Firestick remote.
+// Uses an unambiguous alphabet (no 0/o/1/l/i) so it's easy to read and type.
+export function generateTvSlug(): string {
+  const chars = "23456789abcdefghjkmnpqrstuvwxyz";
+  let out = "";
+  for (let i = 0; i < 6; i++) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
+}
 
 export async function buildDashboardTvData() {
   const now = new Date();
