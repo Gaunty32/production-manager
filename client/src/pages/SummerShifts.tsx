@@ -19,7 +19,10 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { minutesToTime } from "@shared/scheduling";
 import { format } from "date-fns";
-import { Sun, Copy, Send, Trash2, Sparkles, Users, CalendarClock, CheckCircle2, Pencil } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Sun, Trash2, Sparkles, CalendarClock, CheckCircle2, Pencil, UserPlus, Undo2, PoundSterling } from "lucide-react";
 
 interface CasualStaffRow {
   id: string;
@@ -40,6 +43,18 @@ interface ShiftRow {
   endLabel: string;
   status: string;
   claimedByName?: string | null;
+  offeredToId?: string | null;
+  offeredToName?: string | null;
+}
+
+interface PayrollRow {
+  casualStaffId: string;
+  name: string;
+  mobileNumber: string;
+  active: boolean;
+  shiftCount: number;
+  minutes: number;
+  hours: number;
 }
 
 function minutesFromTimeStr(t: string): number {
@@ -57,17 +72,17 @@ export default function SummerShifts() {
           </div>
           <div>
             <h1 className="text-xl font-semibold" data-testid="text-page-title">Casual Shifts</h1>
-            <p className="text-sm text-muted-foreground">Invite casual staff and offer machine shifts they can pick up.</p>
+            <p className="text-sm text-muted-foreground">Offer machine shifts your casual staff can pick up. Manage casual staff on the Staff page.</p>
           </div>
         </div>
 
         <Tabs defaultValue="shifts">
           <TabsList>
             <TabsTrigger value="shifts" data-testid="tab-shifts"><CalendarClock className="mr-1.5 h-4 w-4" />Shifts</TabsTrigger>
-            <TabsTrigger value="staff" data-testid="tab-staff"><Users className="mr-1.5 h-4 w-4" />Casual Staff</TabsTrigger>
+            <TabsTrigger value="payroll" data-testid="tab-payroll"><PoundSterling className="mr-1.5 h-4 w-4" />Payroll</TabsTrigger>
           </TabsList>
           <TabsContent value="shifts" className="mt-4"><ShiftsTab /></TabsContent>
-          <TabsContent value="staff" className="mt-4"><StaffTab /></TabsContent>
+          <TabsContent value="payroll" className="mt-4"><PayrollTab /></TabsContent>
         </Tabs>
       </div>
     </div>
@@ -85,12 +100,17 @@ function ShiftsTab() {
   const [editShift, setEditShift] = useState<ShiftRow | null>(null);
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
+  const [offerShift, setOfferShift] = useState<ShiftRow | null>(null);
+  const [offerPersonId, setOfferPersonId] = useState("");
 
   const openEdit = (s: ShiftRow) => {
     setEditShift(s);
     setEditStart(s.startLabel);
     setEditEnd(s.endLabel);
   };
+
+  const { data: casualStaff = [] } = useQuery<CasualStaffRow[]>({ queryKey: ["/api/casual-staff"] });
+  const activeStaff = casualStaff.filter((m) => m.active);
 
   const { data: suggested = [], isLoading: suggLoading } = useQuery<ShiftRow[]>({
     queryKey: ["/api/shifts", { status: "suggested" }],
@@ -151,6 +171,23 @@ function ShiftsTab() {
     },
     onSuccess: () => { toast({ title: "Suggestions cleared" }); refreshShifts(); },
   });
+
+  const offerMutation = useMutation({
+    mutationFn: async () => {
+      if (!offerShift || !offerPersonId) return;
+      await apiRequest("POST", `/api/shifts/${offerShift.id}/offer`, { casualStaffId: offerPersonId });
+    },
+    onSuccess: () => { toast({ title: "Shift offered", description: "They've been notified and can claim it." }); setOfferShift(null); setOfferPersonId(""); refreshShifts(); },
+    onError: (err: any) => toast({ title: "Couldn't offer", description: err.message, variant: "destructive" }),
+  });
+
+  const releaseMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("POST", `/api/shifts/${id}/release`, {}); },
+    onSuccess: () => { toast({ title: "Released to everyone" }); refreshShifts(); },
+    onError: (err: any) => toast({ title: "Couldn't release", description: err.message, variant: "destructive" }),
+  });
+
+  const openOffer = (s: ShiftRow) => { setOfferShift(s); setOfferPersonId(""); };
 
   const groupByDate = (rows: ShiftRow[]) => {
     const map = new Map<string, ShiftRow[]>();
@@ -262,12 +299,23 @@ function ShiftsTab() {
                   {rows.map((s) => (
                     <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border p-2.5" data-testid={`row-published-${s.id}`}>
                       <span className="text-sm">{s.startLabel}–{s.endLabel} · <span className="text-muted-foreground">{s.machineName}</span></span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {s.status === "claimed" ? (
                           <Badge variant="secondary" data-testid={`badge-claimed-${s.id}`}>{s.claimedByName || "Booked"}</Badge>
+                        ) : s.offeredToName ? (
+                          <Badge variant="outline" data-testid={`badge-offered-${s.id}`}>Offered to {s.offeredToName}</Badge>
                         ) : (
                           <Badge>Available</Badge>
                         )}
+                        {s.status !== "claimed" && (s.offeredToId ? (
+                          <Button variant="outline" size="sm" onClick={() => releaseMutation.mutate(s.id)} disabled={releaseMutation.isPending} data-testid={`button-release-${s.id}`}>
+                            <Undo2 className="mr-1.5 h-3.5 w-3.5" />Release
+                          </Button>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={() => openOffer(s)} data-testid={`button-offer-${s.id}`}>
+                            <UserPlus className="mr-1.5 h-3.5 w-3.5" />Offer
+                          </Button>
+                        ))}
                         {s.status !== "claimed" && (
                           <Button variant="ghost" size="icon" onClick={() => openEdit(s)} data-testid={`button-edit-published-${s.id}`}>
                             <Pencil className="h-4 w-4" />
@@ -319,150 +367,120 @@ function ShiftsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!offerShift} onOpenChange={(o) => !o && setOfferShift(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Offer this shift</DialogTitle>
+            <DialogDescription>
+              {offerShift && (
+                <>{format(new Date(offerShift.date), "EEEE d MMM")} · {offerShift.startLabel}–{offerShift.endLabel} · {offerShift.machineName}</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Offer to</Label>
+            {activeStaff.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No active casual staff. Add and invite people on the Staff page first.</p>
+            ) : (
+              <Select value={offerPersonId} onValueChange={setOfferPersonId}>
+                <SelectTrigger data-testid="select-offer-person">
+                  <SelectValue placeholder="Pick a person" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeStaff.map((m) => (
+                    <SelectItem key={m.id} value={m.id} data-testid={`option-offer-${m.id}`}>
+                      {m.firstName} {m.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <p className="text-xs text-muted-foreground">Only this person will see the shift until you release it to everyone.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOfferShift(null)} data-testid="button-cancel-offer">Cancel</Button>
+            <Button onClick={() => offerMutation.mutate()} disabled={offerMutation.isPending || !offerPersonId} data-testid="button-confirm-offer">
+              {offerMutation.isPending ? "Offering..." : "Offer shift"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function StaffTab() {
-  const { toast } = useToast();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [mobileNumber, setMobileNumber] = useState("");
-  const [inviteLink, setInviteLink] = useState<{ url: string; whatsappSent: boolean } | null>(null);
 
-  const { data: staff = [], isLoading } = useQuery<CasualStaffRow[]>({ queryKey: ["/api/casual-staff"] });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["/api/casual-staff"] });
+function PayrollTab() {
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [month, setMonth] = useState(defaultMonth);
 
-  const addMutation = useMutation({
-    mutationFn: async () => (await apiRequest("POST", "/api/casual-staff", { firstName, lastName, mobileNumber })).json(),
-    onSuccess: (res: any) => {
-      setFirstName(""); setLastName(""); setMobileNumber("");
-      setInviteLink({ url: res.inviteUrl, whatsappSent: res.whatsappSent });
-      refresh();
-    },
-    onError: (err: any) => toast({ title: "Couldn't add", description: err.message, variant: "destructive" }),
+  const [year, mon] = month.split("-").map(Number);
+  const from = new Date(year, mon - 1, 1).toISOString();
+  const to = new Date(year, mon, 0).toISOString();
+
+  const { data, isLoading } = useQuery<{ rows: PayrollRow[] }>({
+    queryKey: ["/api/casual-staff/hours", { from, to }],
+    queryFn: async () => (await apiRequest("GET", `/api/casual-staff/hours?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).json(),
   });
 
-  const inviteMutation = useMutation({
-    mutationFn: async (id: string) => (await apiRequest("POST", `/api/casual-staff/${id}/invite`, {})).json(),
-    onSuccess: (res: any) => setInviteLink({ url: res.inviteUrl, whatsappSent: res.whatsappSent }),
-    onError: (err: any) => toast({ title: "Couldn't create link", description: err.message, variant: "destructive" }),
-  });
-
-  const toggleMutation = useMutation({
-    mutationFn: async ({ id, active }: { id: string; active: boolean }) => { await apiRequest("PATCH", `/api/casual-staff/${id}`, { active }); },
-    onSuccess: refresh,
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/casual-staff/${id}`); },
-    onSuccess: () => { toast({ title: "Removed" }); refresh(); },
-  });
-
-  const copy = (url: string) => {
-    navigator.clipboard.writeText(url);
-    toast({ title: "Link copied", description: "Paste it into WhatsApp or a text message." });
-  };
+  const rows = data?.rows ?? [];
+  const totalHours = rows.reduce((sum, r) => sum + r.hours, 0);
+  const totalShifts = rows.reduce((sum, r) => sum + r.shiftCount, 0);
+  const monthLabel = format(new Date(year, mon - 1, 1), "MMMM yyyy");
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Add casual staff</CardTitle>
-          <CardDescription>They'll get an invite link to set a PIN and start booking shifts.</CardDescription>
+          <CardTitle className="text-base">Worked hours</CardTitle>
+          <CardDescription>Total claimed shift hours per casual person, for payroll. Pick a month below.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <form
-            className="grid gap-4 md:grid-cols-4 md:items-end"
-            onSubmit={(e) => { e.preventDefault(); addMutation.mutate(); }}
-          >
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="fn">First name</Label>
-              <Input id="fn" value={firstName} onChange={(e) => setFirstName(e.target.value)} required data-testid="input-first-name" />
+              <Label htmlFor="payroll-month">Month</Label>
+              <Input id="payroll-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} data-testid="input-payroll-month" />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ln">Last name</Label>
-              <Input id="ln" value={lastName} onChange={(e) => setLastName(e.target.value)} data-testid="input-last-name" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="mob">Mobile number</Label>
-              <Input id="mob" type="tel" value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)} required placeholder="07123 456789" data-testid="input-mobile-number" />
-            </div>
-            <Button type="submit" disabled={addMutation.isPending} data-testid="button-add-staff">
-              {addMutation.isPending ? "Adding..." : "Add & invite"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Team ({staff.length})</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
           {isLoading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Loading...</p>
-          ) : staff.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground" data-testid="text-no-staff">No casual staff yet. Add someone above.</p>
+          ) : rows.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground" data-testid="text-no-payroll">No casual staff to show.</p>
           ) : (
-            staff.map((m) => (
-              <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3" data-testid={`row-staff-${m.id}`}>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{m.firstName} {m.lastName}</p>
-                  <p className="text-xs text-muted-foreground">{m.mobileNumber}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {m.hasPin ? <Badge variant="secondary">Active</Badge> : <Badge variant="outline">Awaiting PIN</Badge>}
-                  {!m.active && <Badge variant="destructive">Disabled</Badge>}
-                  <Button variant="outline" size="sm" onClick={() => inviteMutation.mutate(m.id)} disabled={inviteMutation.isPending} data-testid={`button-invite-${m.id}`}>
-                    <Send className="mr-1.5 h-3.5 w-3.5" />Invite link
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => toggleMutation.mutate({ id: m.id, active: !m.active })} data-testid={`button-toggle-${m.id}`}>
-                    {m.active ? "Disable" : "Enable"}
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" data-testid={`button-delete-staff-${m.id}`}><Trash2 className="h-4 w-4" /></Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Remove {m.firstName}?</AlertDialogTitle>
-                        <AlertDialogDescription>This removes their login. Any shifts they've booked will be freed up.</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => deleteMutation.mutate(m.id)}>Remove</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-            ))
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Shifts</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Hours</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border bg-card">
+                  {rows.map((r) => (
+                    <tr key={r.casualStaffId} data-testid={`row-payroll-${r.casualStaffId}`}>
+                      <td className="px-4 py-2.5 text-sm">
+                        {r.name}
+                        {!r.active && <Badge variant="destructive" className="ml-2">Disabled</Badge>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-sm tabular-nums" data-testid={`text-shifts-${r.casualStaffId}`}>{r.shiftCount}</td>
+                      <td className="px-4 py-2.5 text-right text-sm font-medium tabular-nums" data-testid={`text-hours-${r.casualStaffId}`}>{r.hours.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-muted/50">
+                    <td className="px-4 py-2.5 text-sm font-semibold">Total · {monthLabel}</td>
+                    <td className="px-4 py-2.5 text-right text-sm font-semibold tabular-nums" data-testid="text-total-shifts">{totalShifts}</td>
+                    <td className="px-4 py-2.5 text-right text-sm font-semibold tabular-nums" data-testid="text-total-hours">{totalHours.toFixed(2)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
-
-      <Dialog open={!!inviteLink} onOpenChange={(o) => !o && setInviteLink(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Invite link ready</DialogTitle>
-            <DialogDescription>
-              {inviteLink?.whatsappSent
-                ? "We sent this via WhatsApp. You can also copy it to share another way."
-                : "Copy this link and send it to them on WhatsApp or by text."}
-            </DialogDescription>
-          </DialogHeader>
-          {inviteLink && (
-            <div className="flex items-center gap-2">
-              <Input readOnly value={inviteLink.url} className="text-xs" data-testid="input-invite-link" />
-              <Button size="icon" onClick={() => copy(inviteLink.url)} data-testid="button-copy-link"><Copy className="h-4 w-4" /></Button>
-            </div>
-          )}
-          <DialogFooter>
-            <Button onClick={() => setInviteLink(null)} data-testid="button-close-invite">Done</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

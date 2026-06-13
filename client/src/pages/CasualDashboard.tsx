@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { minutesToTime } from "@shared/scheduling";
 import { format } from "date-fns";
-import { Sun, LogOut, Clock, Cog, CalendarDays, AlertCircle } from "lucide-react";
+import { Sun, LogOut, Clock, Cog, CalendarDays, AlertCircle, CalendarPlus, Gift } from "lucide-react";
 
 interface ShiftRow {
   id: string;
@@ -27,6 +27,7 @@ interface ShiftRow {
   endLabel: string;
   status: string;
   canModify?: boolean;
+  offeredToId?: string | null;
 }
 
 interface Me {
@@ -189,6 +190,11 @@ export default function CasualDashboard() {
                       <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Cog className="h-3.5 w-3.5" />{s.machineName}
                       </p>
+                      {s.offeredToId === me.id && (
+                        <Badge className="mt-2" data-testid={`badge-offered-you-${s.id}`}>
+                          <Gift className="mr-1 h-3 w-3" />Offered to you
+                        </Badge>
+                      )}
                     </div>
                     <Button size="sm" onClick={() => openClaim(s)} disabled={limitReached} data-testid={`button-claim-${s.id}`}>
                       Book
@@ -222,6 +228,11 @@ export default function CasualDashboard() {
                       <Cog className="h-3.5 w-3.5" />{s.machineName}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" asChild data-testid={`button-calendar-${s.id}`}>
+                        <a href={`/api/casual/shifts/${s.id}/calendar.ics`}>
+                          <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />Add to calendar
+                        </a>
+                      </Button>
                       {s.canModify ? (
                         <>
                           <Button size="sm" variant="outline" onClick={() => openAmend(s)} data-testid={`button-amend-${s.id}`}>
@@ -232,7 +243,7 @@ export default function CasualDashboard() {
                           </Button>
                         </>
                       ) : (
-                        <p className="text-xs text-muted-foreground">Locked — changes only allowed 4+ days ahead.</p>
+                        <p className="self-center text-xs text-muted-foreground">Locked — changes only allowed 4+ days ahead.</p>
                       )}
                     </div>
                   </CardContent>

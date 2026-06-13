@@ -3429,6 +3429,11 @@ export class DatabaseStorage implements IStorage {
       if (!shift || shift.status !== "available") {
         throw fail("UNAVAILABLE", "Sorry, that shift is no longer available.");
       }
+      // Re-check the reservation under the row lock so an offer can't be
+      // bypassed by a concurrent claim (TOCTOU).
+      if (shift.offeredToId && shift.offeredToId !== params.casualStaffId) {
+        throw fail("RESERVED", "This shift is reserved for someone else.");
+      }
 
       const dayStart = new Date(shift.date); dayStart.setHours(0, 0, 0, 0);
       const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -3535,6 +3540,27 @@ export class DatabaseStorage implements IStorage {
       : eq(shifts.status, "suggested");
     const updated = await db.update(shifts).set({ status: "available" }).where(cond as any).returning({ id: shifts.id });
     return updated.length;
+  }
+
+  async getCasualHours(from: Date, to: Date): Promise<Array<{ casualStaffId: string; minutes: number; shiftCount: number }>> {
+    const rows = await db
+      .select()
+      .from(shifts)
+      .where(and(
+        eq(shifts.status, "claimed"),
+        isNotNull(shifts.claimedById),
+        gte(shifts.date, from),
+        lte(shifts.date, to),
+      ));
+    const totals = new Map<string, { minutes: number; shiftCount: number }>();
+    for (const s of rows) {
+      if (!s.claimedById) continue;
+      const cur = totals.get(s.claimedById) ?? { minutes: 0, shiftCount: 0 };
+      cur.minutes += Math.max(0, s.endTime - s.startTime);
+      cur.shiftCount += 1;
+      totals.set(s.claimedById, cur);
+    }
+    return Array.from(totals.entries()).map(([casualStaffId, v]) => ({ casualStaffId, ...v }));
   }
 
   async countClaimedShiftsInRange(casualStaffId: string, from: Date, to: Date): Promise<number> {

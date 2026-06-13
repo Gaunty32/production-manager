@@ -1325,6 +1325,7 @@ export const shifts = pgTable("shifts", {
   startTime: integer("start_time").notNull(), // minutes from midnight
   endTime: integer("end_time").notNull(),     // minutes from midnight
   status: text("status").notNull().default("available"),
+  offeredToId: varchar("offered_to_id").references(() => casualStaff.id, { onDelete: "set null" }),
   claimedById: varchar("claimed_by_id").references(() => casualStaff.id, { onDelete: "set null" }),
   claimedAt: timestamp("claimed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1349,6 +1350,7 @@ export const insertCasualStaffSchema = createInsertSchema(casualStaff).omit({
 export const insertShiftSchema = createInsertSchema(shifts).omit({
   id: true,
   status: true,
+  offeredToId: true,
   claimedById: true,
   claimedAt: true,
   createdAt: true,

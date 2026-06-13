@@ -112,14 +112,10 @@ export function registerCasualShiftRoutes(app: Express) {
         return res.status(409).json({ error: "Someone with this mobile number already exists." });
       }
 
+      // Note: adding a casual staff member does NOT send an invite. Managers
+      // invite separately via POST /api/casual-staff/:id/invite when ready.
       const member = await storage.createCasualStaff({ ...data, mobileNumber });
-      const { token, inviteUrl } = await issueInvite(member.id);
-      await storage.updateCasualStaff(member.id, { inviteSentAt: new Date() });
-
-      const message = `Hi ${member.firstName}, you've been added as summer staff at Select Branding. Set your PIN and pick your shifts here: ${inviteUrl}`;
-      const sent = await trySend(mobileNumber, message, member.firstName, member.lastName);
-
-      res.json({ id: member.id, inviteUrl, token, whatsappSent: sent });
+      res.json({ id: member.id, firstName: member.firstName, lastName: member.lastName });
     } catch (error: any) {
       if (error.name === "ZodError") {
         return res.status(400).json({ error: error.errors[0]?.message || "Invalid input" });
@@ -341,6 +337,105 @@ export function registerCasualShiftRoutes(app: Express) {
     }
   });
 
+  // Offer an available shift to a specific casual staff member. Only they will
+  // see/claim it until it's released back to everyone.
+  app.post("/api/shifts/:id/offer", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { casualStaffId } = req.body || {};
+      if (!casualStaffId) return res.status(400).json({ error: "Pick a person to offer this shift to." });
+      const shift = await storage.getShift(req.params.id);
+      if (!shift) return res.status(404).json({ error: "Shift not found" });
+      if (shift.status !== "available") {
+        return res.status(400).json({ error: "Only available (published) shifts can be offered." });
+      }
+      const member = await storage.getCasualStaffById(casualStaffId);
+      if (!member) return res.status(404).json({ error: "Person not found" });
+
+      const updated = await storage.updateShift(shift.id, { offeredToId: casualStaffId });
+
+      const machines = await storage.getMachines();
+      const machineName = machines.find((m) => m.id === shift.machineId)?.name ?? "a machine";
+      const baseUrl = getBaseUrl();
+      const when = `${new Date(shift.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} ${minutesToTime(shift.startTime)}–${minutesToTime(shift.endTime)}`;
+      const sent = await trySend(
+        member.mobileNumber,
+        `Hi ${member.firstName}, you've been offered a shift at Select Branding (${machineName}, ${when}). Claim it here: ${baseUrl}/casual`,
+        member.firstName,
+        member.lastName,
+      );
+
+      res.json({ ...updated, whatsappSent: sent });
+    } catch (error: any) {
+      console.error("Offer shift error:", error);
+      res.status(500).json({ error: "Failed to offer shift" });
+    }
+  });
+
+  // Release an offered shift back to everyone (clears the targeted person).
+  app.post("/api/shifts/:id/release", isStaffAuthenticated, async (req, res) => {
+    try {
+      const shift = await storage.getShift(req.params.id);
+      if (!shift) return res.status(404).json({ error: "Shift not found" });
+      const updated = await storage.updateShift(shift.id, { offeredToId: null });
+
+      // Let active staff know a shift is now open to all (best-effort)
+      if (shift.status === "available") {
+        const baseUrl = getBaseUrl();
+        const staff = await storage.listCasualStaff();
+        for (const member of staff) {
+          if (member.active && member.pinHash) {
+            sendWhatsAppAsync(
+              member.mobileNumber,
+              `Hi ${member.firstName}, a shift is now open to grab at Select Branding: ${baseUrl}/casual`,
+              { firstName: member.firstName, lastName: member.lastName ?? undefined },
+            );
+          }
+        }
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Release shift error:", error);
+      res.status(500).json({ error: "Failed to release shift" });
+    }
+  });
+
+  // Monthly worked-hours log for payroll. ?from=ISO&to=ISO (inclusive day range).
+  app.get("/api/casual-staff/hours", isStaffAuthenticated, async (req, res) => {
+    try {
+      const now = new Date();
+      const from = req.query.from ? startOfDay(new Date(String(req.query.from))) : startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+      const to = req.query.to ? new Date(String(req.query.to)) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      to.setHours(23, 59, 59, 999);
+
+      const [totals, staff] = await Promise.all([
+        storage.getCasualHours(from, to),
+        storage.listCasualStaff(),
+      ]);
+      const totalsMap = new Map(totals.map((t) => [t.casualStaffId, t]));
+
+      const rows = staff.map((m) => {
+        const t = totalsMap.get(m.id);
+        const minutes = t?.minutes ?? 0;
+        return {
+          casualStaffId: m.id,
+          name: `${m.firstName}${m.lastName ? " " + m.lastName : ""}`,
+          mobileNumber: m.mobileNumber,
+          active: m.active,
+          shiftCount: t?.shiftCount ?? 0,
+          minutes,
+          hours: Math.round((minutes / 60) * 100) / 100,
+        };
+      });
+      rows.sort((a, b) => b.minutes - a.minutes || a.name.localeCompare(b.name));
+
+      res.json({ from: from.toISOString(), to: to.toISOString(), rows });
+    } catch (error: any) {
+      console.error("Casual hours error:", error);
+      res.status(500).json({ error: "Failed to load worked hours" });
+    }
+  });
+
   // ============================================================
   // CASUAL STAFF ROUTES (mobile portal)
   // ============================================================
@@ -402,11 +497,14 @@ export function registerCasualShiftRoutes(app: Express) {
   });
 
   // Available shifts (future only)
-  app.get("/api/casual/shifts/available", isCasualAuthenticated, async (_req, res) => {
+  app.get("/api/casual/shifts/available", isCasualAuthenticated, async (req, res) => {
     try {
+      const id = (req.session as any).casualStaffId;
       const now = startOfDay(new Date());
       const shifts = await storage.listShifts({ status: "available", from: now });
-      res.json(await decorateShifts(shifts));
+      // Hide shifts that have been offered to a different person.
+      const visible = shifts.filter((s) => !s.offeredToId || s.offeredToId === id);
+      res.json(await decorateShifts(visible));
     } catch (error: any) {
       console.error("Available shifts error:", error);
       res.status(500).json({ error: "Failed to load available shifts" });
@@ -439,6 +537,9 @@ export function registerCasualShiftRoutes(app: Express) {
       const shift = await storage.getShift(req.params.id);
       if (!shift) {
         return res.status(409).json({ error: "Sorry, that shift is no longer available." });
+      }
+      if (shift.offeredToId && shift.offeredToId !== id) {
+        return res.status(403).json({ error: "This shift is reserved for someone else." });
       }
 
       const body = claimShiftSchema.partial().parse(req.body || {});
@@ -484,7 +585,7 @@ export function registerCasualShiftRoutes(app: Express) {
         return res.status(400).json({ error: `Shifts can only be cancelled ${AMEND_CANCEL_MIN_DAYS}+ days ahead.` });
       }
 
-      await storage.updateShift(shift.id, { status: "available", claimedById: null, claimedAt: null });
+      await storage.updateShift(shift.id, { status: "available", claimedById: null, claimedAt: null, offeredToId: null });
       await mergeAvailableShifts(shift.machineId, new Date(shift.date));
 
       // Notify other active staff a shift opened up (best-effort)
@@ -562,7 +663,61 @@ export function registerCasualShiftRoutes(app: Express) {
     }
   });
 
+  // Download a claimed shift as a calendar event (.ics) so casual staff can add
+  // it to their phone calendar as a reminder. Owner only.
+  app.get("/api/casual/shifts/:id/calendar.ics", isCasualAuthenticated, async (req, res) => {
+    try {
+      const id = (req.session as any).casualStaffId;
+      const shift = await storage.getShift(req.params.id);
+      if (!shift || shift.claimedById !== id || shift.status !== "claimed") {
+        return res.status(404).json({ error: "Shift not found" });
+      }
+      const machines = await storage.getMachines();
+      const machineName = machines.find((m) => m.id === shift.machineId)?.name ?? "Shift";
+      const ics = buildIcs(shift, machineName);
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader("Content-Disposition", 'attachment; filename="shift.ics"');
+      res.send(ics);
+    } catch (error: any) {
+      console.error("Calendar export error:", error);
+      res.status(500).json({ error: "Failed to create calendar event" });
+    }
+  });
+
   // ---------- helpers ----------
+
+  function buildIcs(shift: Shift, machineName: string): string {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const local = (minutes: number) => {
+      const d = new Date(shift.date);
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(h)}${pad(m)}00`;
+    };
+    const now = new Date();
+    const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+    return [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Select Branding//Casual Shifts//EN",
+      "CALSCALE:GREGORIAN",
+      "BEGIN:VEVENT",
+      `UID:${shift.id}@selectbranding`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${local(shift.startTime)}`,
+      `DTEND:${local(shift.endTime)}`,
+      `SUMMARY:Shift at Select Branding (${machineName})`,
+      "DESCRIPTION:Your booked shift at Select Branding.",
+      "LOCATION:Select Branding",
+      "BEGIN:VALARM",
+      "TRIGGER:-PT2H",
+      "ACTION:DISPLAY",
+      "DESCRIPTION:Shift reminder",
+      "END:VALARM",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+  }
 
   async function issueInvite(casualStaffId: string) {
     const token = randomBytes(32).toString("hex");
@@ -585,18 +740,21 @@ export function registerCasualShiftRoutes(app: Express) {
   async function decorateShifts(shifts: Shift[]) {
     const machines = await storage.getMachines();
     const machineMap = new Map(machines.map((m) => [m.id, m.name]));
-    const claimantIds = Array.from(new Set(shifts.map((s) => s.claimedById).filter(Boolean))) as string[];
-    const claimantMap = new Map<string, string>();
-    for (const cid of claimantIds) {
-      const c = await storage.getCasualStaffById(cid);
-      if (c) claimantMap.set(cid, `${c.firstName}${c.lastName ? " " + c.lastName : ""}`);
+    const personIds = Array.from(
+      new Set(shifts.flatMap((s) => [s.claimedById, s.offeredToId]).filter(Boolean))
+    ) as string[];
+    const nameMap = new Map<string, string>();
+    for (const pid of personIds) {
+      const c = await storage.getCasualStaffById(pid);
+      if (c) nameMap.set(pid, `${c.firstName}${c.lastName ? " " + c.lastName : ""}`);
     }
     return shifts.map((s) => ({
       ...s,
       machineName: machineMap.get(s.machineId) ?? `Machine ${s.machineId}`,
       startLabel: minutesToTime(s.startTime),
       endLabel: minutesToTime(s.endTime),
-      claimedByName: s.claimedById ? claimantMap.get(s.claimedById) ?? null : null,
+      claimedByName: s.claimedById ? nameMap.get(s.claimedById) ?? null : null,
+      offeredToName: s.offeredToId ? nameMap.get(s.offeredToId) ?? null : null,
     }));
   }
 }

@@ -17,3 +17,5 @@
 - [Machine-sheet day keys & operators](machine-sheet-date-keys.md) — server owns the yyyy-MM-dd dateKey (never recompute client-side: UTC vs local diverges); per-day operator = Staff Allocations, defaultOperatorId only a fallback.
 
 - [Print machine convention](print-machine-convention.md) — Print jobs force-routed to machine id 6 (operator Mollie); won't appear on the timeline until the operator has staff shifts (scheduler gates slots on shifts).
+
+- [Casual shift offers](casual-shift-offers.md) — offeredToId reservation must be re-checked inside claimShiftAtomic's lock (TOCTOU), and every claimed→available transition must null offeredToId.
