@@ -1,0 +1,183 @@
+Create a new wall-mounted TV dashboard for the production team.
+
+This should be a dedicated read-only dashboard designed to run on a non-smart TV connected via HDMI to a mini PC, Fire Stick, Raspberry Pi or similar browser-based device.
+
+The dashboard should be accessible at:
+
+/dashboard-tv
+
+The page must be optimised for a large screen mounted on the production wall. It should use large fonts, clear spacing, strong contrast, and be readable from 5–10 metres away.
+
+The dashboard should auto-refresh every 60 seconds without requiring the user to manually reload the page.
+
+It should run without normal navigation menus, sidebars, buttons, forms or editing controls. This is display-only for production staff.
+
+The layout should include the following key sections:
+
+1. Today’s Production
+
+Show:
+
+* Orders due today
+* Orders completed today
+* Orders remaining today
+* Orders overdue
+* Garments/items completed today
+* Garments/items remaining today
+
+2. Daily Target Progress
+
+Show:
+
+* Daily production target
+* Completed so far
+* Remaining
+* Percentage complete
+* Large progress bar
+
+Example:
+Today’s Target: 750 garments
+Completed: 523
+Remaining: 227
+Progress: 69%
+
+3. Capacity Remaining
+
+Show available remaining capacity for:
+
+* Embroidery
+* Print
+* Packing/dispatch if data is available
+
+This should make it clear whether we are on track, close to capacity, or over capacity.
+
+Use simple status indicators:
+
+* Green = on track
+* Amber = attention needed
+* Red = at risk / overdue
+
+4. Machine Utilisation
+
+Show current utilisation for each machine, including:
+
+* Barudan 8 Head
+* Barudan 6 Head 1
+* Barudan 6 Head 2
+* SWF 6 Head 1
+* SWF 6 Head 2
+* Happy 5 Head
+
+For each machine show:
+
+* Machine name
+* Current job if allocated
+* Operator if allocated
+* Items completed today
+* Items remaining today
+* Utilisation percentage
+
+5. Service Level
+
+Show:
+
+* Orders shipped on time today
+* On-time dispatch percentage this month
+* Orders at risk of missing requested dispatch date
+* Average turnaround time this month if available
+
+6. Quality Metric
+
+Add a large visible quality box:
+
+“Days Since Last Customer Error”
+
+This should show the number of days since the last logged customer-impacting production error.
+
+Also show:
+
+* Errors this month
+* Error-free order percentage this month if available
+
+7. Revenue / Production Value
+
+Show:
+
+* Production value completed today
+* Production value month to date
+* Value of orders due today
+* Value of overdue orders
+
+This should use the production/service value rather than total retail order value where possible.
+
+8. Active Team
+
+Show:
+
+* Operators currently clocked in, if clock-in data exists
+* Staff assigned to machines
+* Current shift coverage
+* Any unassigned machine capacity
+
+9. Alerts Section
+
+Create a visible alerts area for production issues requiring attention.
+
+Examples:
+
+* Orders overdue
+* Orders due today not yet started
+* Jobs waiting for stock
+* Jobs waiting for artwork approval
+* Jobs waiting for customer response
+* Machines with no assigned operator
+* Orders at risk of missing dispatch date
+
+Alerts should be displayed clearly and prioritised by urgency.
+
+10. Visual Style
+
+Use a clean dark dashboard style suitable for a production wall screen.
+
+Requirements:
+
+* Large bold numbers
+* Clear headings
+* Minimal text
+* No clutter
+* No small tables unless essential
+* Use colour coding for status
+* Designed for 16:9 TV screens
+* Should work well at 1920x1080 resolution
+
+11. Data Refresh
+
+The dashboard should:
+
+* Fetch live data from the existing production/order system
+* Refresh automatically every 60 seconds
+* Show a “Last updated at HH:MM” timestamp
+* Handle empty states clearly, for example “No overdue orders”
+
+12. Security
+
+The page should be read-only.
+
+If authentication is required, allow an admin user to generate a secure dashboard display link or token so the TV can load the dashboard without needing staff to log in every morning.
+
+No customer-sensitive information should be shown unnecessarily.
+
+Avoid showing full customer financial details, private messages, or personal contact data on the wall screen.
+
+13. Future Improvements
+
+Build this in a way that allows us later to add:
+
+* Separate embroidery dashboard
+* Separate print dashboard
+* Separate dispatch dashboard
+* Weekly team performance view
+* Monthly production trends
+* Celebration messages when daily targets are hit
+
+The aim of this dashboard is to give the production team a clear live view of what needs doing today, whether we are on track, what is at risk, and what has already been achieved.
