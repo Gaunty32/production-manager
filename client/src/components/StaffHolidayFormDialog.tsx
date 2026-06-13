@@ -113,6 +113,9 @@ export function StaffHolidayFormDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/allowances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/requests"] });
       toast({
         title: "Success",
         description: "Staff holiday added successfully",
@@ -136,6 +139,9 @@ export function StaffHolidayFormDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/allowances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/requests"] });
       toast({
         title: "Success",
         description: "Staff holiday updated successfully",
