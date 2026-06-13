@@ -3338,7 +3338,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateCasualStaff(
     id: string,
-    updates: Partial<Pick<CasualStaff, "firstName" | "lastName" | "mobileNumber" | "pinHash" | "active" | "lastLoginAt" | "inviteSentAt">>
+    updates: Partial<Pick<CasualStaff, "firstName" | "lastName" | "mobileNumber" | "pinHash" | "active" | "lastLoginAt" | "inviteSentAt" | "staffId">>
   ): Promise<CasualStaff> {
     const [row] = await db.update(casualStaff).set(updates).where(eq(casualStaff.id, id)).returning();
     return row;

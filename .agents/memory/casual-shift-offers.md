@@ -23,3 +23,16 @@ While offered, only that person sees/claims it; release clears `offeredToId` and
    **How to apply:** grep for `status: "available"` writes whenever touching shift lifecycle.
 
 Fragments created when someone claims part of a window default to `offeredToId = null` (public) — correct.
+
+## Never publish a shift offered to a non-loginnable person
+
+Assign/invite flow: staff assign a `suggested` shift (`/offer` sets `offeredToId` quietly, no notify),
+then `/api/shifts/invite` publishes the assigned suggested shifts (→ `available`) and WhatsApps each assignee.
+Worker accepts (claim) or declines (`/api/casual/shifts/:id/decline` → `offeredToId=null, status=suggested`, back to pool).
+
+**Rule:** only ever offer/publish a shift to a casual who is `active && pinHash` (can actually log in).
+**Why:** an `available` shift with `offeredToId` set is hidden from *everyone except* that person
+(available list filters out others' offers). If that person can't log in, the shift is orphaned —
+invisible to all casuals until a manager manually `/release`s it.
+**How to apply:** `/offer` rejects non-loginnable assignees (400); `/invite` filters to claim-capable
+assignees *before* `publishShifts`, leaves the rest as `suggested`, and returns a `skipped` count.

@@ -144,11 +144,12 @@ export function registerCasualShiftRoutes(app: Express) {
   // Activate / deactivate
   app.patch("/api/casual-staff/:id", isStaffAuthenticated, async (req, res) => {
     try {
-      const { active, firstName, lastName } = req.body || {};
+      const { active, firstName, lastName, staffId } = req.body || {};
       const updates: any = {};
       if (typeof active === "boolean") updates.active = active;
       if (typeof firstName === "string" && firstName.trim()) updates.firstName = firstName.trim();
       if (typeof lastName === "string") updates.lastName = lastName.trim();
+      if (staffId === null || typeof staffId === "string") updates.staffId = staffId || null;
       const member = await storage.updateCasualStaff(req.params.id, updates);
       const { pinHash, ...safe } = member;
       res.json(safe);
@@ -345,13 +346,23 @@ export function registerCasualShiftRoutes(app: Express) {
       if (!casualStaffId) return res.status(400).json({ error: "Pick a person to offer this shift to." });
       const shift = await storage.getShift(req.params.id);
       if (!shift) return res.status(404).json({ error: "Shift not found" });
-      if (shift.status !== "available") {
-        return res.status(400).json({ error: "Only available (published) shifts can be offered." });
+      if (shift.status !== "available" && shift.status !== "suggested") {
+        return res.status(400).json({ error: "This shift can no longer be offered." });
       }
       const member = await storage.getCasualStaffById(casualStaffId);
       if (!member) return res.status(404).json({ error: "Person not found" });
+      if (!member.active || !member.pinHash) {
+        return res.status(400).json({ error: `${member.firstName} can't be assigned yet — they need to accept their invite and set a PIN first.` });
+      }
 
       const updated = await storage.updateShift(shift.id, { offeredToId: casualStaffId });
+
+      // Suggested (draft) shifts are assigned quietly — the person is notified
+      // later, all at once, via the "Invite" button. Only already-published
+      // shifts notify the person immediately.
+      if (shift.status !== "available") {
+        return res.json({ ...updated, whatsappSent: false, notified: false });
+      }
 
       const machines = await storage.getMachines();
       const machineName = machines.find((m) => m.id === shift.machineId)?.name ?? "a machine";
@@ -397,6 +408,79 @@ export function registerCasualShiftRoutes(app: Express) {
     } catch (error: any) {
       console.error("Release shift error:", error);
       res.status(500).json({ error: "Failed to release shift" });
+    }
+  });
+
+  // Invite: publish every assigned (offered) suggested shift and notify each
+  // person, in one go, about the shift(s) waiting for them to accept or decline.
+  app.post("/api/shifts/invite", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const suggested = await storage.listShifts({ status: "suggested" });
+      const assigned = suggested.filter((s) => s.offeredToId);
+      if (assigned.length === 0) {
+        return res.json({ invited: 0, peopleNotified: 0, skipped: 0 });
+      }
+
+      // Only invite shifts assigned to people who can actually log in (active +
+      // PIN set). Publishing a shift to someone who can't log in would hide it
+      // from everyone else, so we leave those as suggested for the manager.
+      const memberCache = new Map<string, Awaited<ReturnType<typeof storage.getCasualStaffById>>>();
+      const eligible: typeof assigned = [];
+      for (const s of assigned) {
+        let member = memberCache.get(s.offeredToId!);
+        if (member === undefined) {
+          member = await storage.getCasualStaffById(s.offeredToId!);
+          memberCache.set(s.offeredToId!, member);
+        }
+        if (member && member.active && member.pinHash) eligible.push(s);
+      }
+      const skipped = assigned.length - eligible.length;
+      if (eligible.length === 0) {
+        return res.json({ invited: 0, peopleNotified: 0, skipped });
+      }
+
+      await storage.publishShifts(eligible.map((s) => s.id));
+
+      const machines = await storage.getMachines();
+      const machineMap = new Map(machines.map((m) => [m.id, m.name]));
+      const baseUrl = getBaseUrl();
+
+      // Group the shifts by the person they're assigned to so each person gets
+      // a single message listing all their new shifts.
+      const byPerson = new Map<string, typeof eligible>();
+      for (const s of eligible) {
+        const arr = byPerson.get(s.offeredToId!) ?? [];
+        arr.push(s);
+        byPerson.set(s.offeredToId!, arr);
+      }
+
+      let peopleNotified = 0;
+      for (const [personId, list] of Array.from(byPerson.entries())) {
+        const member = memberCache.get(personId);
+        if (!member || !member.active || !member.pinHash) continue;
+        list.sort(
+          (a, b) =>
+            new Date(a.date).getTime() - new Date(b.date).getTime() ||
+            a.startTime - b.startTime,
+        );
+        const lines = list.slice(0, 5).map((s) => {
+          const when = new Date(s.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+          return `${when} ${minutesToTime(s.startTime)}–${minutesToTime(s.endTime)} (${machineMap.get(s.machineId) ?? "machine"})`;
+        });
+        const extra = list.length > 5 ? ` and ${list.length - 5} more` : "";
+        const sent = await trySend(
+          member.mobileNumber,
+          `Hi ${member.firstName}, you've got ${list.length} extra shift${list.length > 1 ? "s" : ""} to accept or decline at Select Branding: ${lines.join("; ")}${extra}. Respond here: ${baseUrl}/casual`,
+          member.firstName,
+          member.lastName,
+        );
+        if (sent) peopleNotified += 1;
+      }
+
+      res.json({ invited: assigned.length, peopleNotified });
+    } catch (error: any) {
+      console.error("Invite shifts error:", error);
+      res.status(500).json({ error: "Failed to send invites" });
     }
   });
 
@@ -528,6 +612,68 @@ export function registerCasualShiftRoutes(app: Express) {
     }
   });
 
+  // Regular (recurring) shifts for this casual login, derived from the linked
+  // staff member's Machine Allocations. Read-only — these are already theirs, no
+  // accept/decline needed. Projected over the next 4 weeks.
+  app.get("/api/casual/shifts/regular", isCasualAuthenticated, async (req, res) => {
+    try {
+      const id = (req.session as any).casualStaffId;
+      const member = await storage.getCasualStaffById(id);
+      if (!member || !member.staffId) return res.json([]);
+
+      const today = startOfDay(new Date());
+      const horizon = new Date(today);
+      horizon.setDate(today.getDate() + 28);
+
+      const [allocations, machines] = await Promise.all([
+        storage.getStaffMachineAllocations(member.staffId),
+        storage.getMachines(),
+      ]);
+      const machineMap = new Map(machines.map((m) => [m.id, m.name]));
+
+      const rows: Array<{ machineId: number; date: Date; startTime: number; endTime: number }> = [];
+      for (const a of allocations) {
+        if (a.isRecurring && a.recurringDaysOfWeek && a.recurringDaysOfWeek.length) {
+          const anchor = startOfDay(new Date(a.date));
+          for (let d = new Date(today); d <= horizon; d.setDate(d.getDate() + 1)) {
+            if (d < anchor) continue;
+            if (a.recurringDaysOfWeek.includes(d.getDay())) {
+              rows.push({ machineId: a.machineId, date: startOfDay(d), startTime: a.startTime, endTime: a.endTime });
+            }
+          }
+        } else {
+          const when = startOfDay(new Date(a.date));
+          if (when >= today && when <= horizon) {
+            rows.push({ machineId: a.machineId, date: when, startTime: a.startTime, endTime: a.endTime });
+          }
+        }
+      }
+
+      rows.sort((x, y) => x.date.getTime() - y.date.getTime() || x.startTime - y.startTime);
+
+      res.json(
+        rows.map((r) => {
+          // Send the day anchored at noon so the date can't slip to the
+          // previous/next day when the client re-parses it in another timezone.
+          const noon = new Date(r.date);
+          noon.setHours(12, 0, 0, 0);
+          return {
+            machineId: r.machineId,
+            machineName: machineMap.get(r.machineId) ?? `Machine ${r.machineId}`,
+            date: noon.toISOString(),
+            startTime: r.startTime,
+            endTime: r.endTime,
+            startLabel: minutesToTime(r.startTime),
+            endLabel: minutesToTime(r.endTime),
+          };
+        }),
+      );
+    } catch (error: any) {
+      console.error("Regular shifts error:", error);
+      res.status(500).json({ error: "Failed to load your regular shifts" });
+    }
+  });
+
   // Claim a shift (optionally a sub-range of the window). Atomic: the split,
   // weekly-limit check and ownership are all done inside a DB transaction with a
   // row lock so concurrent claims can't double-book or exceed the weekly cap.
@@ -570,6 +716,24 @@ export function registerCasualShiftRoutes(app: Express) {
       }
       console.error("Claim shift error:", error);
       res.status(500).json({ error: "Failed to claim shift" });
+    }
+  });
+
+  // Decline a shift that was offered to me. Sends it back to the manager's
+  // suggested pool (unassigned) so they can re-offer it to someone else.
+  app.post("/api/casual/shifts/:id/decline", isCasualAuthenticated, async (req, res) => {
+    try {
+      const id = (req.session as any).casualStaffId;
+      const shift = await storage.getShift(req.params.id);
+      if (!shift) return res.status(404).json({ error: "Shift not found" });
+      if (shift.status !== "available" || shift.offeredToId !== id) {
+        return res.status(400).json({ error: "This shift isn't yours to decline." });
+      }
+      const updated = await storage.updateShift(shift.id, { offeredToId: null, status: "suggested" });
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Decline shift error:", error);
+      res.status(500).json({ error: "Failed to decline shift" });
     }
   });
 

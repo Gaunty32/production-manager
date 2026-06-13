@@ -13,6 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, Send, Trash2 } from "lucide-react";
 
@@ -24,26 +25,47 @@ interface CasualStaffRow {
   active: boolean;
   hasPin: boolean;
   inviteSentAt?: string | null;
+  staffId?: string | null;
 }
+
+interface StaffRow {
+  id: string;
+  name: string;
+}
+
+const NONE = "__none__";
 
 export function CasualStaffManager() {
   const { toast } = useToast();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
+  const [staffId, setStaffId] = useState<string>(NONE);
   const [inviteLink, setInviteLink] = useState<{ url: string; whatsappSent: boolean } | null>(null);
 
   const { data: staff = [], isLoading } = useQuery<CasualStaffRow[]>({ queryKey: ["/api/casual-staff"] });
+  const { data: allocationStaff = [] } = useQuery<StaffRow[]>({ queryKey: ["/api/staff"] });
+  const staffName = (id?: string | null) => (id ? allocationStaff.find((s) => s.id === id)?.name : undefined);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["/api/casual-staff"] });
 
   const addMutation = useMutation({
-    mutationFn: async () => (await apiRequest("POST", "/api/casual-staff", { firstName, lastName, mobileNumber })).json(),
+    mutationFn: async () => (await apiRequest("POST", "/api/casual-staff", {
+      firstName, lastName, mobileNumber, staffId: staffId === NONE ? null : staffId,
+    })).json(),
     onSuccess: () => {
-      setFirstName(""); setLastName(""); setMobileNumber("");
+      setFirstName(""); setLastName(""); setMobileNumber(""); setStaffId(NONE);
       toast({ title: "Casual staff added", description: "Send them an invite link when you're ready." });
       refresh();
     },
     onError: (err: any) => toast({ title: "Couldn't add", description: err.message, variant: "destructive" }),
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: string }) => {
+      await apiRequest("PATCH", `/api/casual-staff/${id}`, { staffId: value === NONE ? null : value });
+    },
+    onSuccess: () => { toast({ title: "Regular shifts updated" }); refresh(); },
+    onError: (err: any) => toast({ title: "Couldn't update", description: err.message, variant: "destructive" }),
   });
 
   const inviteMutation = useMutation({
@@ -91,6 +113,21 @@ export function CasualStaffManager() {
               <Label htmlFor="casual-mob">Mobile number</Label>
               <Input id="casual-mob" type="tel" value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)} required placeholder="07123 456789" data-testid="input-casual-mobile-number" />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="casual-staff-link">Regular shifts as (optional)</Label>
+              <Select value={staffId} onValueChange={setStaffId}>
+                <SelectTrigger id="casual-staff-link" data-testid="select-casual-staff-link">
+                  <SelectValue placeholder="Not linked" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE} data-testid="option-staff-link-none">Not linked</SelectItem>
+                  {allocationStaff.map((s) => (
+                    <SelectItem key={s.id} value={s.id} data-testid={`option-staff-link-${s.id}`}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Links this login to a person in Staff Machine Allocations so they see their regular shifts.</p>
+            </div>
             <Button type="submit" disabled={addMutation.isPending} data-testid="button-add-casual-staff">
               {addMutation.isPending ? "Adding..." : "Add casual staff"}
             </Button>
@@ -117,8 +154,22 @@ export function CasualStaffManager() {
                     <Badge variant="outline">Casual</Badge>
                   </p>
                   <p className="text-xs text-muted-foreground">{m.mobileNumber}</p>
+                  <p className="text-xs text-muted-foreground" data-testid={`text-staff-link-${m.id}`}>
+                    Regular shifts: {staffName(m.staffId) ?? "Not linked"}
+                  </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <Select value={m.staffId ?? NONE} onValueChange={(v) => linkMutation.mutate({ id: m.id, value: v })}>
+                    <SelectTrigger className="w-[160px]" data-testid={`select-staff-link-${m.id}`}>
+                      <SelectValue placeholder="Not linked" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE} data-testid={`option-row-link-none-${m.id}`}>Not linked</SelectItem>
+                      {allocationStaff.map((s) => (
+                        <SelectItem key={s.id} value={s.id} data-testid={`option-row-link-${m.id}-${s.id}`}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {m.hasPin ? <Badge variant="secondary">Active</Badge> : <Badge variant="outline">Awaiting PIN</Badge>}
                   {!m.active && <Badge variant="destructive">Disabled</Badge>}
                   <Button variant="outline" size="sm" onClick={() => inviteMutation.mutate(m.id)} disabled={inviteMutation.isPending} data-testid={`button-invite-${m.id}`}>

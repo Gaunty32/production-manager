@@ -14,7 +14,17 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { minutesToTime } from "@shared/scheduling";
 import { format } from "date-fns";
-import { Sun, LogOut, Clock, Cog, CalendarDays, AlertCircle, CalendarPlus, Gift } from "lucide-react";
+import { Sun, LogOut, Clock, Cog, CalendarDays, AlertCircle, CalendarPlus, Gift, Repeat, Check, X } from "lucide-react";
+
+interface RegularShiftRow {
+  machineId: number;
+  machineName: string;
+  date: string;
+  startTime: number;
+  endTime: number;
+  startLabel: string;
+  endLabel: string;
+}
 
 interface ShiftRow {
   id: string;
@@ -68,11 +78,30 @@ export default function CasualDashboard() {
     enabled: !!me,
   });
 
+  const { data: regular = [], isLoading: regularLoading } = useQuery<RegularShiftRow[]>({
+    queryKey: ["/api/casual/shifts/regular"],
+    enabled: !!me,
+  });
+
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/casual/shifts/available"] });
     queryClient.invalidateQueries({ queryKey: ["/api/casual/shifts/mine"] });
     queryClient.invalidateQueries({ queryKey: ["/api/casual/me"] });
   };
+
+  const acceptMutation = useMutation({
+    mutationFn: async (s: ShiftRow) => {
+      await apiRequest("POST", `/api/casual/shifts/${s.id}/claim`, { startTime: s.startTime, endTime: s.endTime });
+    },
+    onSuccess: () => { toast({ title: "Shift accepted!", description: "It's now in your shifts." }); refresh(); },
+    onError: (err: any) => toast({ title: "Couldn't accept", description: err.message, variant: "destructive" }),
+  });
+
+  const declineMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("POST", `/api/casual/shifts/${id}/decline`, {}); },
+    onSuccess: () => { toast({ title: "Shift declined" }); refresh(); },
+    onError: (err: any) => toast({ title: "Couldn't decline", description: err.message, variant: "destructive" }),
+  });
 
   const claimMutation = useMutation({
     mutationFn: async ({ id, startTime, endTime }: { id: string; startTime: number; endTime: number }) => {
@@ -159,8 +188,9 @@ export default function CasualDashboard() {
 
       <div className="mx-auto max-w-md p-4">
         <Tabs defaultValue="available">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="available" data-testid="tab-available">Available</TabsTrigger>
+            <TabsTrigger value="regular" data-testid="tab-regular">Regular</TabsTrigger>
             <TabsTrigger value="mine" data-testid="tab-mine">My shifts</TabsTrigger>
           </TabsList>
 
@@ -196,12 +226,59 @@ export default function CasualDashboard() {
                         </Badge>
                       )}
                     </div>
-                    <Button size="sm" onClick={() => openClaim(s)} disabled={limitReached} data-testid={`button-claim-${s.id}`}>
-                      Book
-                    </Button>
+                    {s.offeredToId === me.id ? (
+                      <div className="flex shrink-0 flex-col gap-2">
+                        <Button size="sm" onClick={() => acceptMutation.mutate(s)} disabled={limitReached || acceptMutation.isPending} data-testid={`button-accept-${s.id}`}>
+                          <Check className="mr-1 h-4 w-4" />Accept
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => declineMutation.mutate(s.id)} disabled={declineMutation.isPending} data-testid={`button-decline-${s.id}`}>
+                          <X className="mr-1 h-4 w-4" />Decline
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button size="sm" onClick={() => openClaim(s)} disabled={limitReached} data-testid={`button-claim-${s.id}`}>
+                        Book
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               ))
+            )}
+          </TabsContent>
+
+          <TabsContent value="regular" className="mt-4 space-y-3">
+            {regularLoading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
+            ) : regular.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground" data-testid="text-no-regular">
+                You don't have any regular shifts. These come from your machine allocations — ask the office if you expected some here.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-start gap-2 rounded-md bg-muted p-3 text-xs text-muted-foreground">
+                  <Repeat className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>These are your regular allocated shifts for the next few weeks. They're already yours — nothing to book.</span>
+                </div>
+                {regular.map((s, i) => (
+                  <Card key={`${s.machineId}-${s.date}-${s.startTime}-${i}`} data-testid={`card-regular-${i}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="flex items-center gap-1.5 text-sm font-medium">
+                          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                          {format(new Date(s.date), "EEE d MMM")}
+                        </p>
+                        <Badge variant="secondary"><Repeat className="mr-1 h-3 w-3" />Regular</Badge>
+                      </div>
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5" />{s.startLabel}–{s.endLabel}
+                      </p>
+                      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Cog className="h-3.5 w-3.5" />{s.machineName}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </>
             )}
           </TabsContent>
 

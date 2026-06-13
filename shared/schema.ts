@@ -1321,6 +1321,9 @@ export const casualStaff = pgTable("casual_staff", {
   mobileNumber: varchar("mobile_number").notNull().unique(),
   pinHash: varchar("pin_hash"),
   active: boolean("active").notNull().default(true),
+  // Optional link to a permanent staff member who has Machine Allocations.
+  // When set, this casual login shows that person's recurring allocated shifts.
+  staffId: varchar("staff_id").references(() => staff.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
   inviteSentAt: timestamp("invite_sent_at"),

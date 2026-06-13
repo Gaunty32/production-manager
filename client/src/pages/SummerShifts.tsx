@@ -22,7 +22,7 @@ import { format } from "date-fns";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Sun, Trash2, Sparkles, CalendarClock, CheckCircle2, Pencil, UserPlus, Undo2, PoundSterling } from "lucide-react";
+import { Sun, Trash2, Sparkles, CalendarClock, CheckCircle2, Pencil, UserPlus, Undo2, PoundSterling, Send } from "lucide-react";
 
 interface CasualStaffRow {
   id: string;
@@ -172,6 +172,38 @@ function ShiftsTab() {
     onSuccess: () => { toast({ title: "Suggestions cleared" }); refreshShifts(); },
   });
 
+  // Assign (or unassign) a suggested shift to a specific person — quietly, no
+  // notification yet. "anyone" clears the assignment.
+  const assignMutation = useMutation({
+    mutationFn: async ({ shift, personId }: { shift: ShiftRow; personId: string }) => {
+      if (personId === "anyone") {
+        await apiRequest("POST", `/api/shifts/${shift.id}/release`, {});
+      } else {
+        await apiRequest("POST", `/api/shifts/${shift.id}/offer`, { casualStaffId: personId });
+      }
+    },
+    onSuccess: refreshShifts,
+    onError: (err: any) => toast({ title: "Couldn't assign", description: err.message, variant: "destructive" }),
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: async () => (await apiRequest("POST", "/api/shifts/invite", {})).json(),
+    onSuccess: (res: any) => {
+      const skippedNote = res.skipped
+        ? ` ${res.skipped} skipped — those people still need to accept their invite and set a PIN.`
+        : "";
+      toast({
+        title: res.invited === 0 ? "No invites sent" : `Invited ${res.peopleNotified} ${res.peopleNotified === 1 ? "person" : "people"}`,
+        description: `${res.invited} shift${res.invited === 1 ? "" : "s"} sent out to accept or decline.${skippedNote}`,
+        variant: res.invited === 0 ? "destructive" : undefined,
+      });
+      refreshShifts();
+    },
+    onError: (err: any) => toast({ title: "Couldn't send invites", description: err.message, variant: "destructive" }),
+  });
+
+  const assignedCount = suggested.filter((s) => s.offeredToId).length;
+
   const offerMutation = useMutation({
     mutationFn: async () => {
       if (!offerShift || !offerPersonId) return;
@@ -246,12 +278,15 @@ function ShiftsTab() {
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle className="text-base">{suggested.length} suggested shifts</CardTitle>
-              <CardDescription>Remove any you don't want, then publish the rest.</CardDescription>
+              <CardDescription>Assign each shift to a person, then Invite them to accept or decline. Or Publish all to open every shift to everyone.</CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => discardAllMutation.mutate()} disabled={discardAllMutation.isPending} data-testid="button-discard-all">Discard all</Button>
-              <Button onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending} data-testid="button-publish">
+              <Button variant="outline" onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending} data-testid="button-publish">
                 {publishMutation.isPending ? "Publishing..." : "Publish all"}
+              </Button>
+              <Button onClick={() => inviteMutation.mutate()} disabled={inviteMutation.isPending || assignedCount === 0} data-testid="button-invite-assigned">
+                <Send className="mr-1.5 h-4 w-4" />{inviteMutation.isPending ? "Inviting..." : `Invite assigned${assignedCount ? ` (${assignedCount})` : ""}`}
               </Button>
             </div>
           </CardHeader>
@@ -261,9 +296,25 @@ function ShiftsTab() {
                 <p className="mb-2 text-sm font-medium">{date}</p>
                 <div className="space-y-1.5">
                   {rows.map((s) => (
-                    <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border p-2.5" data-testid={`row-suggested-${s.id}`}>
+                    <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2.5" data-testid={`row-suggested-${s.id}`}>
                       <span className="text-sm">{s.startLabel}–{s.endLabel} · <span className="text-muted-foreground">{s.machineName}</span></span>
                       <div className="flex items-center gap-1">
+                        <Select
+                          value={s.offeredToId ?? "anyone"}
+                          onValueChange={(v) => assignMutation.mutate({ shift: s, personId: v })}
+                        >
+                          <SelectTrigger className="w-[160px]" data-testid={`select-assign-${s.id}`}>
+                            <SelectValue placeholder="Assign to" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="anyone" data-testid={`option-assign-anyone-${s.id}`}>Anyone</SelectItem>
+                            {activeStaff.map((m) => (
+                              <SelectItem key={m.id} value={m.id} data-testid={`option-assign-${s.id}-${m.id}`}>
+                                {m.firstName} {m.lastName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Button variant="ghost" size="icon" onClick={() => openEdit(s)} data-testid={`button-edit-suggested-${s.id}`}>
                           <Pencil className="h-4 w-4" />
                         </Button>
