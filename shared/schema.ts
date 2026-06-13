@@ -427,7 +427,7 @@ export const insertStaffSchema = createInsertSchema(staff).omit({
 
 export const updateStaffSchema = z.object({
   name: z.string().optional(),
-  holidayAllowance: z.coerce.number().min(0).optional(),
+  holidayAllowance: z.coerce.number().min(0).max(366).optional(),
   canApproveHolidays: z.boolean().optional(),
 });
 

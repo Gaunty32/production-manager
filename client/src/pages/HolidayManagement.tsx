@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -100,6 +101,8 @@ export function HolidaysManagement() {
   const [staffHolidayToEdit, setStaffHolidayToEdit] = useState<StaffHoliday | null>(null);
   const [bankHolidayToDelete, setBankHolidayToDelete] = useState<string | null>(null);
   const [bankHolidayToEdit, setBankHolidayToEdit] = useState<BankHoliday | null>(null);
+  const [editingAllowanceId, setEditingAllowanceId] = useState<string | null>(null);
+  const [editAllowanceValue, setEditAllowanceValue] = useState("");
 
   const { data: me } = useQuery<MyHolidayResponse>({
     queryKey: ["/api/staff-holidays/me"],
@@ -151,6 +154,31 @@ export function HolidaysManagement() {
       });
     },
   });
+
+  const updateAllowanceMutation = useMutation({
+    mutationFn: async ({ staffId, holidayAllowance }: { staffId: string; holidayAllowance: number }) => {
+      const res = await apiRequest("PATCH", `/api/staff/${staffId}`, { holidayAllowance });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/allowances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff"] });
+      setEditingAllowanceId(null);
+      toast({ title: "Allowance updated" });
+    },
+    onError: (error: Error) =>
+      toast({ title: "Error", description: error.message || "Failed to update allowance", variant: "destructive" }),
+  });
+
+  const saveAllowance = (staffId: string) => {
+    const val = parseFloat(editAllowanceValue);
+    if (isNaN(val) || val < 0) {
+      toast({ title: "Enter a valid number", description: "Allowance must be 0 or more.", variant: "destructive" });
+      return;
+    }
+    updateAllowanceMutation.mutate({ staffId, holidayAllowance: val });
+  };
 
   const deleteStaffHolidayMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -472,7 +500,64 @@ export function HolidaysManagement() {
                       {allowancesData.allowances.map((a) => (
                         <TableRow key={a.staffId} data-testid={`row-allowance-${a.staffId}`}>
                           <TableCell className="font-medium">{a.staffName}</TableCell>
-                          <TableCell className="text-right">{a.allowance}</TableCell>
+                          <TableCell className="text-right">
+                            {editingAllowanceId === a.staffId ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step={0.5}
+                                  value={editAllowanceValue}
+                                  onChange={(e) => setEditAllowanceValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") saveAllowance(a.staffId);
+                                    if (e.key === "Escape") setEditingAllowanceId(null);
+                                  }}
+                                  autoFocus
+                                  className="h-8 w-20 text-right"
+                                  data-testid={`input-allowance-${a.staffId}`}
+                                />
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 text-green-600"
+                                  onClick={() => saveAllowance(a.staffId)}
+                                  disabled={updateAllowanceMutation.isPending}
+                                  title="Save"
+                                  data-testid={`button-save-allowance-${a.staffId}`}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 text-muted-foreground"
+                                  onClick={() => setEditingAllowanceId(null)}
+                                  title="Cancel"
+                                  data-testid={`button-cancel-allowance-${a.staffId}`}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                <span data-testid={`text-allowance-${a.staffId}`}>{a.allowance}</span>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground"
+                                  onClick={() => {
+                                    setEditingAllowanceId(a.staffId);
+                                    setEditAllowanceValue(String(a.allowance));
+                                  }}
+                                  title="Edit allowance"
+                                  data-testid={`button-edit-allowance-${a.staffId}`}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">{a.used}</TableCell>
                           <TableCell className="text-right">{a.pending}</TableCell>
                           <TableCell className="text-right font-medium">{a.remaining}</TableCell>

@@ -4308,6 +4308,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           delete data.canApproveHolidays;
         }
       }
+      // Only holiday approvers (or super_admins) may change a staff member's holiday allowance.
+      if (data.holidayAllowance !== undefined) {
+        const { canApprove } = await getHolidayContext(req);
+        if (!canApprove) {
+          return res.status(403).json({ error: "You do not have permission to edit holiday allowances" });
+        }
+      }
       const staffMember = await storage.updateStaff(req.params.id, data);
       res.json(staffMember);
     } catch (error) {
