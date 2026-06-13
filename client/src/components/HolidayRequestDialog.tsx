@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { z } from "zod";
@@ -41,81 +41,57 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { StaffHoliday, Staff } from "@shared/schema";
 
 type HolidayTypeValue = "holiday" | "sick" | "other";
 
-const formSchema = z.object({
-  staffId: z.string().min(1, "Staff member is required"),
-  holidayType: z.enum(["holiday", "sick", "other"]),
-  startDate: z.date({ required_error: "Start date is required" }),
-  endDate: z.date({ required_error: "End date is required" }),
-  halfDayStart: z.boolean(),
-  halfDayEnd: z.boolean(),
-  notes: z.string().optional(),
-}).refine((data) => data.endDate >= data.startDate, {
-  message: "End date must be on or after start date",
-  path: ["endDate"],
-});
+const formSchema = z
+  .object({
+    holidayType: z.enum(["holiday", "sick", "other"]),
+    startDate: z.date({ required_error: "Start date is required" }),
+    endDate: z.date({ required_error: "End date is required" }),
+    halfDayStart: z.boolean(),
+    halfDayEnd: z.boolean(),
+    notes: z.string().optional(),
+  })
+  .refine((data) => data.endDate >= data.startDate, {
+    message: "End date must be on or after start date",
+    path: ["endDate"],
+  });
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface StaffHolidayFormDialogProps {
-  holiday?: StaffHoliday | null;
-  trigger?: React.ReactNode;
-  onClose?: () => void;
+interface HolidayRequestDialogProps {
+  trigger: React.ReactNode;
 }
 
-export function StaffHolidayFormDialog({
-  holiday,
-  trigger,
-  onClose,
-}: StaffHolidayFormDialogProps) {
+export function HolidayRequestDialog({ trigger }: HolidayRequestDialogProps) {
   const { toast } = useToast();
-  const [open, setOpen] = useState(!!holiday);
-
-  const { data: staff = [] } = useQuery<Staff[]>({
-    queryKey: ["/api/staff"],
-  });
+  const [open, setOpen] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      staffId: holiday?.staffId || "",
-      holidayType: (holiday?.holidayType as HolidayTypeValue) || "holiday",
-      startDate: holiday?.startDate ? new Date(holiday.startDate) : undefined,
-      endDate: holiday?.endDate ? new Date(holiday.endDate) : undefined,
-      halfDayStart: holiday?.halfDayStart ?? false,
-      halfDayEnd: holiday?.halfDayEnd ?? false,
-      notes: holiday?.notes || "",
+      holidayType: "holiday",
+      startDate: undefined,
+      endDate: undefined,
+      halfDayStart: false,
+      halfDayEnd: false,
+      notes: "",
     },
   });
 
-  useEffect(() => {
-    if (holiday) {
-      setOpen(true);
-      form.reset({
-        staffId: holiday.staffId,
-        holidayType: holiday.holidayType as HolidayTypeValue,
-        startDate: new Date(holiday.startDate),
-        endDate: new Date(holiday.endDate),
-        halfDayStart: holiday.halfDayStart ?? false,
-        halfDayEnd: holiday.halfDayEnd ?? false,
-        notes: holiday.notes || "",
-      });
-    }
-  }, [holiday, form]);
-
-  const createMutation = useMutation({
+  const requestMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest("POST", "/api/staff-holidays", data);
+      const res = await apiRequest("POST", "/api/staff-holidays/request", data);
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays"] });
       toast({
-        title: "Success",
-        description: "Staff holiday added successfully",
+        title: "Request submitted",
+        description: "Your holiday request has been sent for approval.",
       });
       setOpen(false);
       form.reset();
@@ -123,31 +99,7 @@ export function StaffHolidayFormDialog({
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to add staff holiday",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const res = await apiRequest("PATCH", `/api/staff-holidays/${id}`, data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays"] });
-      toast({
-        title: "Success",
-        description: "Staff holiday updated successfully",
-      });
-      setOpen(false);
-      form.reset();
-      onClose?.();
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update staff holiday",
+        description: error.message || "Failed to submit holiday request",
         variant: "destructive",
       });
     },
@@ -155,76 +107,33 @@ export function StaffHolidayFormDialog({
 
   const onSubmit = (values: FormValues) => {
     const isHoliday = values.holidayType === "holiday";
-    const payload = {
-      staffId: values.staffId,
+    requestMutation.mutate({
       holidayType: values.holidayType,
       startDate: values.startDate.toISOString(),
       endDate: values.endDate.toISOString(),
       halfDayStart: isHoliday ? values.halfDayStart : false,
       halfDayEnd: isHoliday ? values.halfDayEnd : false,
       notes: values.notes,
-    };
-
-    if (holiday) {
-      updateMutation.mutate({ id: holiday.id, data: payload });
-    } else {
-      createMutation.mutate(payload);
-    }
+    });
   };
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
-    if (!newOpen) {
-      form.reset();
-      onClose?.();
-    }
+    if (!newOpen) form.reset();
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>
-            {holiday ? "Edit Staff Holiday" : "Add Staff Holiday"}
-          </DialogTitle>
+          <DialogTitle>Request Time Off</DialogTitle>
           <DialogDescription>
-            {holiday
-              ? "Update the staff holiday details below"
-              : "Add a new staff holiday or absence"}
+            Submit a holiday or absence request for approval.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="staffId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Staff Member</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    disabled={!!holiday}
-                  >
-                    <FormControl>
-                      <SelectTrigger data-testid="select-staff-member">
-                        <SelectValue placeholder="Select staff member" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {staff.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             <FormField
               control={form.control}
               name="holidayType"
@@ -233,7 +142,7 @@ export function StaffHolidayFormDialog({
                   <FormLabel>Type</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <SelectTrigger data-testid="select-holiday-type">
+                      <SelectTrigger data-testid="select-request-type">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
@@ -264,7 +173,7 @@ export function StaffHolidayFormDialog({
                               "pl-3 text-left font-normal",
                               !field.value && "text-muted-foreground"
                             )}
-                            data-testid="button-start-date"
+                            data-testid="button-request-start-date"
                           >
                             {field.value ? (
                               format(field.value, "dd MMM yyyy")
@@ -304,7 +213,7 @@ export function StaffHolidayFormDialog({
                               "pl-3 text-left font-normal",
                               !field.value && "text-muted-foreground"
                             )}
-                            data-testid="button-end-date"
+                            data-testid="button-request-end-date"
                           >
                             {field.value ? (
                               format(field.value, "dd MMM yyyy")
@@ -344,7 +253,7 @@ export function StaffHolidayFormDialog({
                         <Switch
                           checked={field.value}
                           onCheckedChange={field.onChange}
-                          data-testid="switch-half-day-start"
+                          data-testid="switch-request-half-day-start"
                         />
                       </FormControl>
                     </FormItem>
@@ -362,7 +271,7 @@ export function StaffHolidayFormDialog({
                         <Switch
                           checked={field.value}
                           onCheckedChange={field.onChange}
-                          data-testid="switch-half-day-end"
+                          data-testid="switch-request-half-day-end"
                         />
                       </FormControl>
                     </FormItem>
@@ -379,10 +288,10 @@ export function StaffHolidayFormDialog({
                   <FormLabel>Notes (Optional)</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Additional notes..."
+                      placeholder="Reason or extra details..."
                       className="resize-none"
                       rows={3}
-                      data-testid="input-notes"
+                      data-testid="input-request-notes"
                       {...field}
                     />
                   </FormControl>
@@ -396,20 +305,16 @@ export function StaffHolidayFormDialog({
                 type="button"
                 variant="outline"
                 onClick={() => handleOpenChange(false)}
-                data-testid="button-cancel"
+                data-testid="button-cancel-request"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                disabled={createMutation.isPending || updateMutation.isPending}
-                data-testid="button-submit"
+                disabled={requestMutation.isPending}
+                data-testid="button-submit-request"
               >
-                {createMutation.isPending || updateMutation.isPending
-                  ? "Saving..."
-                  : holiday
-                  ? "Update"
-                  : "Add"}
+                {requestMutation.isPending ? "Submitting..." : "Submit Request"}
               </Button>
             </DialogFooter>
           </form>

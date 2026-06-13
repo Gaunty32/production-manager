@@ -18,4 +18,6 @@
 
 - [Print machine convention](print-machine-convention.md) — Print jobs force-routed to machine id 6 (operator Mollie); won't appear on the timeline until the operator has staff shifts (scheduler gates slots on shifts).
 
+- [Holiday approval workflow](holiday-approval-workflow.md) — any route writing staffHolidays.status must be approver-gated (legacy CRUD too, or staff self-approve); /me returns canApprove even with no staff row; half-day & calendar-year clamp rules.
+
 - [Casual shift offers](casual-shift-offers.md) — offeredToId reservation must be re-checked inside claimShiftAtomic's lock (TOCTOU), and every claimed→available transition must null offeredToId.

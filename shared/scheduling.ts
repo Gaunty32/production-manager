@@ -275,7 +275,12 @@ export function isStaffOnHoliday(
     if (holiday.staffId !== staffId) {
       return false;
     }
-    
+
+    // Only approved holidays block scheduling (pending/declined requests do not).
+    if ((holiday as { status?: string }).status && (holiday as { status?: string }).status !== "approved") {
+      return false;
+    }
+
     const startDate = new Date(holiday.startDate);
     const endDate = new Date(holiday.endDate);
     
@@ -288,6 +293,57 @@ export function isStaffOnHoliday(
     
     return checkDate >= startDate && checkDate <= endDate;
   });
+}
+
+/**
+ * Count the number of holiday days between two dates, excluding weekends and
+ * bank holidays, with optional half-day adjustments at the start and/or end.
+ * Returns a number that may include .5 for half days.
+ */
+export function countHolidayDays(
+  start: Date | string,
+  end: Date | string,
+  halfDayStart: boolean = false,
+  halfDayEnd: boolean = false,
+  bankHolidays: BankHoliday[] = []
+): number {
+  const startDate = new Date(start);
+  startDate.setHours(12, 0, 0, 0);
+  const endDate = new Date(end);
+  endDate.setHours(12, 0, 0, 0);
+
+  if (endDate < startDate) return 0;
+
+  let workingDays = 0;
+  const cursor = new Date(startDate);
+  while (cursor <= endDate) {
+    const day = cursor.getDay();
+    const isWeekend = day === 0 || day === 6;
+    if (!isWeekend && !isBankHoliday(cursor, bankHolidays)) {
+      workingDays += 1;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  if (workingDays === 0) return 0;
+
+  // Half-day adjustments only apply when the start/end day is itself a working day.
+  const startDay = startDate.getDay();
+  const startIsWorking = startDay !== 0 && startDay !== 6 && !isBankHoliday(startDate, bankHolidays);
+  const endDay = endDate.getDay();
+  const endIsWorking = endDay !== 0 && endDay !== 6 && !isBankHoliday(endDate, bankHolidays);
+
+  let total = workingDays;
+  const singleDay = endDate.getTime() === startDate.getTime();
+  if (singleDay) {
+    // One-day leave: either half-day flag makes it a half day.
+    if ((halfDayStart || halfDayEnd) && startIsWorking) total -= 0.5;
+  } else {
+    if (halfDayStart && startIsWorking) total -= 0.5;
+    if (halfDayEnd && endIsWorking) total -= 0.5;
+  }
+
+  return Math.max(0, total);
 }
 
 /**

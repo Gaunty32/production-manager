@@ -57,6 +57,8 @@ export const staff = pgTable("staff", {
   email: text("email"),
   telephone: text("telephone"),
   userId: varchar("user_id").references(() => users.id),
+  holidayAllowance: real("holiday_allowance").notNull().default(23),
+  canApproveHolidays: boolean("can_approve_holidays").notNull().default(false),
 });
 
 export const jobs = pgTable("jobs", {
@@ -188,6 +190,12 @@ export const staffHolidays = pgTable("staff_holidays", {
   endDate: timestamp("end_date").notNull(),
   holidayType: text("holiday_type").notNull().default("holiday"), // holiday, sick, other
   notes: text("notes"),
+  status: text("status").notNull().default("approved"), // pending, approved, declined
+  halfDayStart: boolean("half_day_start").notNull().default(false),
+  halfDayEnd: boolean("half_day_end").notNull().default(false),
+  reviewedById: varchar("reviewed_by_id").references(() => users.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -419,6 +427,8 @@ export const insertStaffSchema = createInsertSchema(staff).omit({
 
 export const updateStaffSchema = z.object({
   name: z.string().optional(),
+  holidayAllowance: z.coerce.number().min(0).optional(),
+  canApproveHolidays: z.boolean().optional(),
 });
 
 export const insertJobSchema = createInsertSchema(jobs).omit({
@@ -847,11 +857,17 @@ export type StaffMachineAllocation = typeof staffMachineAllocations.$inferSelect
 export const insertStaffHolidaySchema = createInsertSchema(staffHolidays).omit({
   id: true,
   createdAt: true,
+  reviewedById: true,
+  reviewedAt: true,
 }).extend({
   startDate: z.string(),
   endDate: z.string(),
   holidayType: z.enum(["holiday", "sick", "other"]).default("holiday"),
   notes: z.string().optional(),
+  status: z.enum(["pending", "approved", "declined"]).default("approved"),
+  halfDayStart: z.boolean().default(false),
+  halfDayEnd: z.boolean().default(false),
+  reviewNotes: z.string().optional(),
 }).refine(
   (data) => new Date(data.endDate) >= new Date(data.startDate),
   { message: "End date must be on or after start date" }
@@ -863,6 +879,10 @@ export const updateStaffHolidaySchema = z.object({
   endDate: z.string().optional(),
   holidayType: z.enum(["holiday", "sick", "other"]).optional(),
   notes: z.string().optional(),
+  status: z.enum(["pending", "approved", "declined"]).optional(),
+  halfDayStart: z.boolean().optional(),
+  halfDayEnd: z.boolean().optional(),
+  reviewNotes: z.string().optional(),
 });
 
 export type InsertStaffHoliday = z.infer<typeof insertStaffHolidaySchema>;

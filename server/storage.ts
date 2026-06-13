@@ -115,6 +115,7 @@ export interface IStorage {
   updateCustomer(id: string, customer: Partial<Customer>): Promise<Customer>;
   deleteCustomer(id: string): Promise<void>;
   getStaff(): Promise<Staff[]>;
+  getStaffByUserId(userId: string): Promise<Staff | undefined>;
   createStaff(staffMember: InsertStaff): Promise<Staff>;
   updateStaff(id: string, staffMember: Partial<Staff>): Promise<Staff>;
   deleteStaff(id: string): Promise<void>;
@@ -463,6 +464,11 @@ export class DatabaseStorage implements IStorage {
 
   async getStaff(): Promise<Staff[]> {
     return await db.select().from(staff);
+  }
+
+  async getStaffByUserId(userId: string): Promise<Staff | undefined> {
+    const [staffMember] = await db.select().from(staff).where(eq(staff.userId, userId));
+    return staffMember;
   }
 
   async createStaff(insertStaff: InsertStaff): Promise<Staff> {
@@ -944,6 +950,16 @@ export class DatabaseStorage implements IStorage {
     if (updates.staffId !== undefined) processedUpdates.staffId = updates.staffId;
     if (updates.holidayType !== undefined) processedUpdates.holidayType = updates.holidayType;
     if (updates.notes !== undefined) processedUpdates.notes = updates.notes;
+    if (updates.status !== undefined) processedUpdates.status = updates.status;
+    if (updates.halfDayStart !== undefined) processedUpdates.halfDayStart = updates.halfDayStart;
+    if (updates.halfDayEnd !== undefined) processedUpdates.halfDayEnd = updates.halfDayEnd;
+    if (updates.reviewNotes !== undefined) processedUpdates.reviewNotes = updates.reviewNotes;
+    if (updates.reviewedById !== undefined) processedUpdates.reviewedById = updates.reviewedById;
+    if (updates.reviewedAt !== undefined) {
+      processedUpdates.reviewedAt = updates.reviewedAt === null
+        ? null
+        : (typeof updates.reviewedAt === 'string' ? new Date(updates.reviewedAt) : updates.reviewedAt);
+    }
     
     if (updates.startDate) {
       const dateValue = typeof updates.startDate === 'string' ? new Date(updates.startDate) : updates.startDate;

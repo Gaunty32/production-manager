@@ -20,12 +20,16 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { insertStaffSchema, type Staff } from "@shared/schema";
+import { Switch } from "@/components/ui/switch";
+import { insertStaffSchema, type Staff, UserRole } from "@shared/schema";
+import { useAuth } from "@/hooks/useAuth";
 
 const formSchema = insertStaffSchema.extend({
   name: z.string().min(1, "Staff name is required"),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   telephone: z.string().optional(),
+  holidayAllowance: z.coerce.number().min(0, "Allowance must be 0 or more"),
+  canApproveHolidays: z.boolean(),
 });
 
 interface StaffFormDialogProps {
@@ -41,6 +45,8 @@ export function StaffFormDialog({ trigger, staff, onSubmit, open: controlledOpen
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
   const isEditMode = !!staff;
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -48,6 +54,8 @@ export function StaffFormDialog({ trigger, staff, onSubmit, open: controlledOpen
       name: "",
       email: "",
       telephone: "",
+      holidayAllowance: 23,
+      canApproveHolidays: false,
     },
   });
 
@@ -57,12 +65,16 @@ export function StaffFormDialog({ trigger, staff, onSubmit, open: controlledOpen
         name: staff.name,
         email: staff.email || "",
         telephone: staff.telephone || "",
+        holidayAllowance: staff.holidayAllowance ?? 23,
+        canApproveHolidays: staff.canApproveHolidays ?? false,
       });
     } else if (!open) {
       form.reset({
         name: "",
         email: "",
         telephone: "",
+        holidayAllowance: 23,
+        canApproveHolidays: false,
       });
     }
   }, [staff, open, form]);
@@ -123,6 +135,49 @@ export function StaffFormDialog({ trigger, staff, onSubmit, open: controlledOpen
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="holidayAllowance"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Holiday Allowance (days per year)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      {...field}
+                      value={field.value ?? 23}
+                      data-testid="input-staff-holiday-allowance"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {isSuperAdmin && (
+              <FormField
+                control={form.control}
+                name="canApproveHolidays"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between gap-2 rounded-md border p-3">
+                    <div>
+                      <FormLabel className="text-sm font-normal">Can approve holidays</FormLabel>
+                      <p className="text-xs text-muted-foreground">
+                        Allow this staff member to approve or decline others' holiday requests.
+                      </p>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="switch-staff-can-approve"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel

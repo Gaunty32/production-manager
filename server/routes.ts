@@ -4297,6 +4297,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/staff/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateStaffSchema.parse(req.body);
+      // Only super_admins may change the "can approve holidays" flag.
+      if (data.canApproveHolidays !== undefined) {
+        const actingUser = req.session.userId
+          ? await storage.getUser(req.session.userId)
+          : undefined;
+        if (!actingUser || actingUser.role !== "super_admin") {
+          delete data.canApproveHolidays;
+        }
+      }
       const staffMember = await storage.updateStaff(req.params.id, data);
       res.json(staffMember);
     } catch (error) {
@@ -6738,8 +6747,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manager-entered holidays: approvers only (super_admin or canApproveHolidays).
   app.post("/api/staff-holidays", isStaffAuthenticated, async (req, res) => {
     try {
+      const { canApprove } = await getHolidayContext(req);
+      if (!canApprove) {
+        return res.status(403).json({ error: "You do not have permission to manage staff holidays" });
+      }
       const data = insertStaffHolidaySchema.parse(req.body);
       const holiday = await storage.createStaffHoliday(data);
       res.json(holiday);
@@ -6754,6 +6768,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/staff-holidays/:id", isStaffAuthenticated, async (req, res) => {
     try {
+      const { canApprove } = await getHolidayContext(req);
+      if (!canApprove) {
+        return res.status(403).json({ error: "You do not have permission to manage staff holidays" });
+      }
       const data = updateStaffHolidaySchema.parse(req.body);
       const holiday = await storage.updateStaffHoliday(req.params.id, data);
       res.json(holiday);
@@ -6770,10 +6788,212 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/staff-holidays/:id", isStaffAuthenticated, async (req, res) => {
     try {
+      const { canApprove } = await getHolidayContext(req);
+      if (!canApprove) {
+        return res.status(403).json({ error: "You do not have permission to manage staff holidays" });
+      }
       await storage.deleteStaffHoliday(req.params.id);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete staff holiday" });
+    }
+  });
+
+  // ---- Holiday request / approval / allowance workflow ----
+
+  // Resolve the staff record + approver permission for the current session user.
+  async function getHolidayContext(req: any): Promise<{
+    user: any;
+    staff: any | undefined;
+    canApprove: boolean;
+  }> {
+    const user = await storage.getUser(req.session.userId);
+    const staffRecord = await storage.getStaffByUserId(req.session.userId);
+    const canApprove =
+      !!user &&
+      (user.role === "super_admin" || (!!staffRecord && staffRecord.canApproveHolidays === true));
+    return { user, staff: staffRecord, canApprove };
+  }
+
+  // Build an allowance summary for a single staff member for the given calendar year.
+  async function buildAllowanceSummary(
+    staffMember: any,
+    year: number,
+    bankHolidays: any[]
+  ) {
+    const { countHolidayDays } = await import("@shared/scheduling");
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+    const holidays = await storage.getStaffHolidays(staffMember.id, yearStart, yearEnd);
+
+    let usedDays = 0;
+    let pendingDays = 0;
+    for (const h of holidays) {
+      if (h.holidayType !== "holiday") continue;
+      // Clamp the holiday to the calendar year before counting.
+      const origStart = new Date(h.startDate);
+      const origEnd = new Date(h.endDate);
+      const start = origStart < yearStart ? yearStart : origStart;
+      const end = origEnd > yearEnd ? yearEnd : origEnd;
+      // Only keep half-day flags when the real boundary day falls inside this year.
+      const halfStart = h.halfDayStart && origStart >= yearStart;
+      const halfEnd = h.halfDayEnd && origEnd <= yearEnd;
+      const days = countHolidayDays(start, end, halfStart, halfEnd, bankHolidays);
+      if (h.status === "approved") usedDays += days;
+      else if (h.status === "pending") pendingDays += days;
+    }
+
+    const allowance = staffMember.holidayAllowance ?? 23;
+    return {
+      staffId: staffMember.id,
+      staffName: staffMember.name,
+      allowance,
+      used: usedDays,
+      pending: pendingDays,
+      remaining: Math.round((allowance - usedDays) * 2) / 2,
+    };
+  }
+
+  // Submit a holiday request for the logged-in staff member (always pending).
+  app.post("/api/staff-holidays/request", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { staff: staffRecord } = await getHolidayContext(req);
+      if (!staffRecord) {
+        return res.status(403).json({ error: "No staff profile linked to your account" });
+      }
+      const data = insertStaffHolidaySchema.parse({
+        ...req.body,
+        staffId: staffRecord.id,
+        status: "pending",
+      });
+      const holiday = await storage.createStaffHoliday({ ...data, status: "pending" });
+      res.json(holiday);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to submit holiday request" });
+      }
+    }
+  });
+
+  // Approve a holiday request (approver only).
+  app.post("/api/staff-holidays/:id/approve", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { canApprove } = await getHolidayContext(req);
+      if (!canApprove) {
+        return res.status(403).json({ error: "You do not have permission to approve holidays" });
+      }
+      const holiday = await storage.updateStaffHoliday(req.params.id, {
+        status: "approved",
+        reviewedById: req.session.userId,
+        reviewedAt: new Date(),
+        reviewNotes: typeof req.body?.reviewNotes === "string" ? req.body.reviewNotes : undefined,
+      });
+      res.json(holiday);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to approve holiday",
+      });
+    }
+  });
+
+  // Decline a holiday request (approver only).
+  app.post("/api/staff-holidays/:id/decline", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { canApprove } = await getHolidayContext(req);
+      if (!canApprove) {
+        return res.status(403).json({ error: "You do not have permission to decline holidays" });
+      }
+      const holiday = await storage.updateStaffHoliday(req.params.id, {
+        status: "declined",
+        reviewedById: req.session.userId,
+        reviewedAt: new Date(),
+        reviewNotes: typeof req.body?.reviewNotes === "string" ? req.body.reviewNotes : undefined,
+      });
+      res.json(holiday);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to decline holiday",
+      });
+    }
+  });
+
+  // List all holiday requests with staff name + day counts (approver only).
+  app.get("/api/staff-holidays/requests", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { canApprove } = await getHolidayContext(req);
+      if (!canApprove) {
+        return res.status(403).json({ error: "You do not have permission to view holiday requests" });
+      }
+      const { countHolidayDays } = await import("@shared/scheduling");
+      const statusFilter = (req.query.status as string | undefined) || undefined;
+      const allHolidays = await storage.getStaffHolidays();
+      const allStaff = await storage.getStaff();
+      const bankHolidays = await storage.getBankHolidays();
+      const staffById = new Map(allStaff.map((s) => [s.id, s]));
+
+      const result = allHolidays
+        .filter((h) => (statusFilter ? h.status === statusFilter : true))
+        .map((h) => ({
+          ...h,
+          staffName: staffById.get(h.staffId)?.name ?? "Unknown",
+          days: countHolidayDays(h.startDate, h.endDate, h.halfDayStart, h.halfDayEnd, bankHolidays),
+        }))
+        .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch holiday requests" });
+    }
+  });
+
+  // Own holidays + allowance summary for the logged-in staff member.
+  app.get("/api/staff-holidays/me", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { staff: staffRecord, canApprove } = await getHolidayContext(req);
+      const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
+      // Approvers (e.g. super_admins) may not have a linked staff record; still
+      // return canApprove so they can reach the approver tabs.
+      if (!staffRecord) {
+        return res.json({ staff: null, canApprove, summary: null, holidays: [], year });
+      }
+      const { countHolidayDays } = await import("@shared/scheduling");
+      const bankHolidays = await storage.getBankHolidays();
+      const summary = await buildAllowanceSummary(staffRecord, year, bankHolidays);
+
+      const yearStart = new Date(year, 0, 1);
+      const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+      const holidays = (await storage.getStaffHolidays(staffRecord.id, yearStart, yearEnd))
+        .map((h) => ({
+          ...h,
+          days: countHolidayDays(h.startDate, h.endDate, h.halfDayStart, h.halfDayEnd, bankHolidays),
+        }))
+        .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+
+      res.json({ staff: staffRecord, canApprove, summary, holidays, year });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch your holidays" });
+    }
+  });
+
+  // Per-staff allowance overview (approver only).
+  app.get("/api/staff-holidays/allowances", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { canApprove } = await getHolidayContext(req);
+      if (!canApprove) {
+        return res.status(403).json({ error: "You do not have permission to view allowances" });
+      }
+      const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
+      const allStaff = await storage.getStaff();
+      const bankHolidays = await storage.getBankHolidays();
+      const summaries = await Promise.all(
+        allStaff.map((s) => buildAllowanceSummary(s, year, bankHolidays))
+      );
+      summaries.sort((a, b) => a.staffName.localeCompare(b.staffName));
+      res.json({ year, allowances: summaries });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch allowances" });
     }
   });
 
