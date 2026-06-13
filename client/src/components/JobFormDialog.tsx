@@ -74,6 +74,14 @@ type LineItem = {
 };
 
 const JOB_TYPES = ["Embroidery", "Print", "Embroidery Initials/Name", "Print Initials/Name", "Bagging", "Other"] as const;
+
+// Job types that run on a machine and therefore require a machine + operator.
+// Print is auto-assigned server-side; Initials/Name and Bagging are flat-rate.
+const requiresMachineOperator = (jobType: string) =>
+  jobType !== "Print" &&
+  jobType !== "Print Initials/Name" &&
+  jobType !== "Embroidery Initials/Name" &&
+  jobType !== "Bagging";
 const POSITION_OPTIONS = ["left chest", "right chest", "left sleeve", "right sleeve", "rear", "other"] as const;
 
 const formSchema = insertJobSchema.extend({
@@ -124,8 +132,6 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDuckDialog, setShowDuckDialog] = useState(false);
   const [duckConfirmed, setDuckConfirmed] = useState(false);
-  const [showMachineWarning, setShowMachineWarning] = useState(false);
-  const [machineWarningConfirmed, setMachineWarningConfirmed] = useState(false);
   const [showExpressWarning, setShowExpressWarning] = useState(false);
   const [expressWarningConfirmed, setExpressWarningConfirmed] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<z.infer<typeof formSchema> | null>(null);
@@ -520,7 +526,6 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const runValidationChain = async (
     data: z.infer<typeof formSchema>,
     confirmedDuck: boolean,
-    confirmedMachine: boolean,
     confirmedExpress: boolean
   ) => {
     // Check for suspicious data: quantity > stitch count (likely swapped)
@@ -542,19 +547,23 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       return;
     }
     
-    // Check for unassigned machines on embroidery items
-    const unassignedEmbroideryItems = lineItems
-      .map((item, index) => ({ ...item, index }))
-      .filter(item => 
+    // Machine and operator are required for every line item that runs on a
+    // machine (everything except Print, Initials/Name, and Bagging, which are
+    // auto-assigned or flat-rate and don't use a machine/operator).
+    const missingAssignment = lineItems.find(
+      (item) =>
         item.quantity > 0 &&
-        (item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") &&
-        item.machineId === null
-      );
-    
-    // If unassigned machines found and not yet confirmed, show warning dialog
-    if (unassignedEmbroideryItems.length > 0 && !confirmedMachine) {
-      setPendingFormData(data);
-      setShowMachineWarning(true);
+        requiresMachineOperator(item.jobType) &&
+        (item.machineId === null || !item.operatorId),
+    );
+
+    if (missingAssignment) {
+      toast({
+        title: "Machine & Operator Required",
+        description:
+          "Please select both a machine and an operator for every line item before saving.",
+        variant: "destructive",
+      });
       return;
     }
     
@@ -573,7 +582,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
     if (isSubmitting) return; // Prevent double submission
     
     // Start validation chain with current state values
-    await runValidationChain(data, duckConfirmed, machineWarningConfirmed, expressWarningConfirmed);
+    await runValidationChain(data, duckConfirmed, expressWarningConfirmed);
   };
 
   const handleDuckConfirm = () => {
@@ -581,16 +590,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
     setShowDuckDialog(false);
     // Continue validation chain with duck confirmed (pass true explicitly to avoid state batching)
     if (pendingFormData) {
-      runValidationChain(pendingFormData, true, machineWarningConfirmed, expressWarningConfirmed);
-    }
-  };
-
-  const handleMachineWarningConfirm = () => {
-    setMachineWarningConfirmed(true);
-    setShowMachineWarning(false);
-    // Continue validation chain with machine warning confirmed (pass true explicitly)
-    if (pendingFormData) {
-      runValidationChain(pendingFormData, true, true, expressWarningConfirmed);
+      runValidationChain(pendingFormData, true, expressWarningConfirmed);
     }
   };
 
@@ -608,8 +608,6 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
     if (!newOpen) {
       setCurrentStep(1);
       setDuckConfirmed(false);
-      setMachineWarningConfirmed(false);
-      setShowMachineWarning(false);
       setExpressWarningConfirmed(false);
       setShowExpressWarning(false);
       setPendingFormData(null);
@@ -1210,7 +1208,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                         </div>
                         {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
                           <div className="flex-1">
-                            <label className="text-xs text-muted-foreground font-medium">Machine</label>
+                            <label className="text-xs text-muted-foreground font-medium">Machine <span className="text-destructive">*</span></label>
                             <Select 
                               value={item.machineId?.toString() || "unassigned"}
                               onValueChange={(value) => assignMachine(index, value === "unassigned" ? null : parseInt(value))}
@@ -1231,7 +1229,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                         )}
                         {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
                           <div className="flex-1">
-                            <label className="text-xs text-muted-foreground font-medium">Operator</label>
+                            <label className="text-xs text-muted-foreground font-medium">Operator <span className="text-destructive">*</span></label>
                             <Select 
                               value={item.operatorId || "unassigned"}
                               onValueChange={(value) => updateLineItem(index, 'operatorId', value === "unassigned" ? null : value)}
@@ -1502,60 +1500,6 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
             stitchCount: item.stitchCount
           }))}
       />
-
-      <Dialog open={showMachineWarning} onOpenChange={(open) => {
-        setShowMachineWarning(open);
-        if (!open) {
-          setPendingFormData(null);
-          setMachineWarningConfirmed(false);
-        }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Machine Not Assigned</DialogTitle>
-            <DialogDescription>
-              The following embroidery items don't have a machine assigned. Are you sure you want to continue without assigning machines?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 my-4">
-            {lineItems
-              .map((item, index) => ({ ...item, index }))
-              .filter(item => 
-                item.quantity > 0 &&
-                (item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") &&
-                item.machineId === null
-              )
-              .map((item, idx) => (
-                <div key={idx} className="p-3 bg-muted rounded-md text-sm">
-                  <div className="font-semibold">{item.jobType}</div>
-                  <div className="text-muted-foreground">
-                    Quantity: {item.quantity}
-                    {item.description && ` • ${item.description}`}
-                  </div>
-                </div>
-              ))}
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowMachineWarning(false);
-                setPendingFormData(null);
-                setMachineWarningConfirmed(false);
-              }}
-              data-testid="button-cancel-machine-warning"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleMachineWarningConfirm}
-              data-testid="button-confirm-machine-warning"
-            >
-              Continue Anyway
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={showExpressWarning} onOpenChange={setShowExpressWarning}>
         <DialogContent>
