@@ -188,6 +188,8 @@ export function HolidaysManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/allowances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/requests"] });
       toast({ title: "Success", description: "Staff holiday deleted successfully" });
       setStaffHolidayToDelete(null);
     },
@@ -208,6 +210,8 @@ export function HolidaysManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bank-holidays"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/allowances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/me"] });
       toast({ title: "Success", description: "Bank holiday deleted successfully" });
       setBankHolidayToDelete(null);
     },

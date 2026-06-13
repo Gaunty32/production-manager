@@ -85,6 +85,8 @@ export function BankHolidayFormDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bank-holidays"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/allowances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/me"] });
       toast({
         title: "Success",
         description: "Bank holiday added successfully",
@@ -108,6 +110,8 @@ export function BankHolidayFormDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bank-holidays"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/allowances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/me"] });
       toast({
         title: "Success",
         description: "Bank holiday updated successfully",
