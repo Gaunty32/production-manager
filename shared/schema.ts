@@ -1365,7 +1365,7 @@ export const casualSetPinSchema = z.object({
 });
 
 export const generateShiftsSchema = z.object({
-  weeks: z.number().int().min(1).max(8).default(8),
+  weeks: z.number().int().min(1).max(12).default(8),
   dailyStartTime: z.number().int().min(0).max(1439).default(420),  // 07:00
   dailyEndTime: z.number().int().min(1).max(1440).default(1080),   // 18:00
   minShiftMinutes: z.number().int().min(30).max(720).default(120), // 2h

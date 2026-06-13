@@ -173,7 +173,7 @@ function ShiftsTab() {
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <div className="space-y-1.5">
               <Label htmlFor="weeks">Weeks ahead</Label>
-              <Input id="weeks" type="number" min={1} max={8} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))} data-testid="input-weeks" />
+              <Input id="weeks" type="number" min={1} max={12} value={weeks} onChange={(e) => setWeeks(Number(e.target.value))} data-testid="input-weeks" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="start">Day starts</Label>
