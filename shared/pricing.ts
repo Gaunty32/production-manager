@@ -134,6 +134,8 @@ export const PRICING_2026: PricingTier[] = [
       { maxStitches: 25000, price: 5.00 },
       { maxStitches: 35000, price: 7.50 },
       { maxStitches: 50000, price: 10.00 },
+      { maxStitches: 75000, price: 15.00 },
+      { maxStitches: 100000, price: 20.00 },
       { maxStitches: null, price: "POA" },
     ],
   },
@@ -149,6 +151,8 @@ export const PRICING_2026: PricingTier[] = [
       { maxStitches: 25000, price: 2.50 },
       { maxStitches: 35000, price: 3.75 },
       { maxStitches: 50000, price: 6.00 },
+      { maxStitches: 75000, price: 10.00 },
+      { maxStitches: 100000, price: 15.00 },
       { maxStitches: null, price: "POA" },
     ],
   },
@@ -164,6 +168,8 @@ export const PRICING_2026: PricingTier[] = [
       { maxStitches: 25000, price: 2.25 },
       { maxStitches: 35000, price: 3.00 },
       { maxStitches: 50000, price: 5.00 },
+      { maxStitches: 75000, price: 10.00 },
+      { maxStitches: 100000, price: 15.00 },
       { maxStitches: null, price: "POA" },
     ],
   },
@@ -179,6 +185,8 @@ export const PRICING_2026: PricingTier[] = [
       { maxStitches: 25000, price: 1.95 },
       { maxStitches: 35000, price: 2.50 },
       { maxStitches: 50000, price: 3.00 },
+      { maxStitches: 75000, price: 10.00 },
+      { maxStitches: 100000, price: 15.00 },
       { maxStitches: null, price: "POA" },
     ],
   },
@@ -194,6 +202,8 @@ export const PRICING_2026: PricingTier[] = [
       { maxStitches: 25000, price: 1.75 },
       { maxStitches: 35000, price: 2.25 },
       { maxStitches: 50000, price: 2.50 },
+      { maxStitches: 75000, price: 10.00 },
+      { maxStitches: 100000, price: 15.00 },
       { maxStitches: null, price: "POA" },
     ],
   },
@@ -313,9 +323,13 @@ export function getPrice(
   }
 
   const tierLabel = `${tier.minQty}-${tier.maxQty || "999+"}`;
+  const highestBreakpoint = tier.prices
+    .map((p) => p.maxStitches)
+    .filter((m): m is number => m !== null)
+    .reduce((max, m) => (m > max ? m : max), 0);
   const stitchRangeLabel = priceEntry.maxStitches
     ? `<${priceEntry.maxStitches.toLocaleString()}`
-    : "50,000+";
+    : `${highestBreakpoint.toLocaleString()}+`;
 
   if (priceEntry.price === "POA") {
     return {

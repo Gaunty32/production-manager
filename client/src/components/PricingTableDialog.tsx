@@ -77,7 +77,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
                         &lt;{stitches >= 1000 ? `${(stitches / 1000).toLocaleString()}k` : stitches.toLocaleString()}
                       </th>
                     ))}
-                    <th className="border border-border px-2 py-1.5 text-center font-medium">50k+</th>
+                    <th className="border border-border px-2 py-1.5 text-center font-medium">100k+</th>
                   </tr>
                 </thead>
                 <tbody>
