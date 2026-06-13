@@ -56,7 +56,7 @@ export default function SummerShifts() {
             <Sun className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold" data-testid="text-page-title">Summer Shifts</h1>
+            <h1 className="text-xl font-semibold" data-testid="text-page-title">Casual Shifts</h1>
             <p className="text-sm text-muted-foreground">Invite casual staff and offer machine shifts they can pick up.</p>
           </div>
         </div>
@@ -64,7 +64,7 @@ export default function SummerShifts() {
         <Tabs defaultValue="shifts">
           <TabsList>
             <TabsTrigger value="shifts" data-testid="tab-shifts"><CalendarClock className="mr-1.5 h-4 w-4" />Shifts</TabsTrigger>
-            <TabsTrigger value="staff" data-testid="tab-staff"><Users className="mr-1.5 h-4 w-4" />Summer Staff</TabsTrigger>
+            <TabsTrigger value="staff" data-testid="tab-staff"><Users className="mr-1.5 h-4 w-4" />Casual Staff</TabsTrigger>
           </TabsList>
           <TabsContent value="shifts" className="mt-4"><ShiftsTab /></TabsContent>
           <TabsContent value="staff" className="mt-4"><StaffTab /></TabsContent>
@@ -124,7 +124,7 @@ function ShiftsTab() {
 
   const publishMutation = useMutation({
     mutationFn: async () => (await apiRequest("POST", "/api/shifts/publish", {})).json(),
-    onSuccess: (res: any) => { toast({ title: `Published ${res.published} shifts`, description: "Summer staff can now book them." }); refreshShifts(); },
+    onSuccess: (res: any) => { toast({ title: `Published ${res.published} shifts`, description: "Casual staff can now book them." }); refreshShifts(); },
     onError: (err: any) => toast({ title: "Couldn't publish", description: err.message, variant: "destructive" }),
   });
 
@@ -368,7 +368,7 @@ function StaffTab() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Add summer staff</CardTitle>
+          <CardTitle className="text-base">Add casual staff</CardTitle>
           <CardDescription>They'll get an invite link to set a PIN and start booking shifts.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -403,7 +403,7 @@ function StaffTab() {
           {isLoading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Loading...</p>
           ) : staff.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground" data-testid="text-no-staff">No summer staff yet. Add someone above.</p>
+            <p className="py-6 text-center text-sm text-muted-foreground" data-testid="text-no-staff">No casual staff yet. Add someone above.</p>
           ) : (
             staff.map((m) => (
               <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3" data-testid={`row-staff-${m.id}`}>
