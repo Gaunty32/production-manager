@@ -280,6 +280,47 @@ export function registerCasualShiftRoutes(app: Express) {
     }
   });
 
+  // Manually create one or many shifts (manager). Created as "suggested" so they
+  // flow through the normal assign / invite / publish workflow. Supports a
+  // recurring option: repeat across the chosen weekdays over a number of weeks.
+  app.post("/api/shifts/manual", isStaffAuthenticated, async (req, res) => {
+    try {
+      const { machineId, isRecurring, recurringDaysOfWeek, weeks } = req.body || {};
+      const mId = Number(machineId);
+      const s = Number(req.body?.startTime);
+      const e = Number(req.body?.endTime);
+      if (!Number.isFinite(mId) || !Number.isFinite(s) || !Number.isFinite(e)) {
+        return res.status(400).json({ error: "Machine, start time and end time are required." });
+      }
+      if (e <= s) return res.status(400).json({ error: "End time must be after start time." });
+      if (!req.body?.date) return res.status(400).json({ error: "Date is required." });
+      const baseDate = startOfDay(new Date(req.body.date));
+      if (isNaN(baseDate.getTime())) return res.status(400).json({ error: "Invalid date." });
+
+      const toCreate: Array<{ machineId: number; date: Date; startTime: number; endTime: number; status: string }> = [];
+      if (isRecurring && Array.isArray(recurringDaysOfWeek) && recurringDaysOfWeek.length > 0) {
+        const numWeeks = Math.min(Math.max(Number(weeks) || 1, 1), 12);
+        const rangeEnd = new Date(baseDate);
+        rangeEnd.setDate(baseDate.getDate() + numWeeks * 7 - 1);
+        for (let d = new Date(baseDate); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+          if (recurringDaysOfWeek.includes(d.getDay())) {
+            toCreate.push({ machineId: mId, date: startOfDay(d), startTime: s, endTime: e, status: "suggested" });
+          }
+        }
+      } else {
+        toCreate.push({ machineId: mId, date: baseDate, startTime: s, endTime: e, status: "suggested" });
+      }
+      if (toCreate.length === 0) {
+        return res.status(400).json({ error: "No matching days selected for the recurring shift." });
+      }
+      const created = await storage.createShiftsBulk(toCreate);
+      res.json({ created });
+    } catch (error: any) {
+      console.error("Manual create shift error:", error);
+      res.status(500).json({ error: "Failed to create shift" });
+    }
+  });
+
   // Edit a shift (manager) — times/date only
   app.patch("/api/shifts/:id", isStaffAuthenticated, async (req, res) => {
     try {

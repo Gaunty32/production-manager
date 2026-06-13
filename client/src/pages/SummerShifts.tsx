@@ -22,7 +22,19 @@ import { format } from "date-fns";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Sun, Trash2, Sparkles, CalendarClock, CheckCircle2, Pencil, UserPlus, Undo2, PoundSterling, Send } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useMachines } from "@/hooks/useMachines";
+import { Sun, Trash2, Sparkles, CalendarClock, CheckCircle2, Pencil, UserPlus, Undo2, PoundSterling, Send, Plus } from "lucide-react";
+
+const DAYS_OF_WEEK = [
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+  { value: 0, label: "Sunday" },
+];
 
 interface CasualStaffRow {
   id: string;
@@ -103,6 +115,30 @@ function ShiftsTab() {
   const [offerShift, setOfferShift] = useState<ShiftRow | null>(null);
   const [offerPersonId, setOfferPersonId] = useState("");
 
+  const { activeMachines } = useMachines();
+  const [addOpen, setAddOpen] = useState(false);
+  const [addMachineId, setAddMachineId] = useState("");
+  const [addDate, setAddDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [addStart, setAddStart] = useState("07:00");
+  const [addEnd, setAddEnd] = useState("18:00");
+  const [addRecurring, setAddRecurring] = useState(false);
+  const [addDays, setAddDays] = useState<number[]>([]);
+  const [addWeeks, setAddWeeks] = useState(4);
+
+  const openAdd = () => {
+    setAddMachineId(activeMachines[0] ? String(activeMachines[0].id) : "");
+    setAddDate(format(new Date(), "yyyy-MM-dd"));
+    setAddStart("07:00");
+    setAddEnd("18:00");
+    setAddRecurring(false);
+    setAddDays([]);
+    setAddWeeks(4);
+    setAddOpen(true);
+  };
+
+  const toggleAddDay = (v: number) =>
+    setAddDays((prev) => (prev.includes(v) ? prev.filter((d) => d !== v) : [...prev, v].sort()));
+
   const openEdit = (s: ShiftRow) => {
     setEditShift(s);
     setEditStart(s.startLabel);
@@ -126,6 +162,28 @@ function ShiftsTab() {
   });
 
   const refreshShifts = () => queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
+
+  const createManualMutation = useMutation({
+    mutationFn: async () =>
+      (await apiRequest("POST", "/api/shifts/manual", {
+        machineId: Number(addMachineId),
+        date: addDate,
+        startTime: minutesFromTimeStr(addStart),
+        endTime: minutesFromTimeStr(addEnd),
+        isRecurring: addRecurring,
+        recurringDaysOfWeek: addRecurring ? addDays : [],
+        weeks: addWeeks,
+      })).json(),
+    onSuccess: (res: any) => {
+      toast({
+        title: res.created > 1 ? `Added ${res.created} shifts` : "Shift added",
+        description: "Find it under suggested shifts below to assign or publish.",
+      });
+      setAddOpen(false);
+      refreshShifts();
+    },
+    onError: (err: any) => toast({ title: "Couldn't add shift", description: err.message, variant: "destructive" }),
+  });
 
   const generateMutation = useMutation({
     mutationFn: async () => {
@@ -267,9 +325,15 @@ function ShiftsTab() {
               <Label htmlFor="sun">Include Sundays</Label>
             </div>
           </div>
-          <Button onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending} data-testid="button-generate">
-            {generateMutation.isPending ? "Generating..." : "Generate suggestions"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending} data-testid="button-generate">
+              {generateMutation.isPending ? "Generating..." : "Generate suggestions"}
+            </Button>
+            <span className="text-sm text-muted-foreground">or</span>
+            <Button variant="outline" onClick={openAdd} data-testid="button-add-manual-shift">
+              <Plus className="mr-1.5 h-4 w-4" />Add a shift manually
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -385,6 +449,110 @@ function ShiftsTab() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add a shift</DialogTitle>
+            <DialogDescription>
+              Create a shift by hand. It's added to the suggested list below, ready to assign or publish.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Machine</Label>
+              {activeMachines.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No active machines found.</p>
+              ) : (
+                <Select value={addMachineId} onValueChange={setAddMachineId}>
+                  <SelectTrigger data-testid="select-add-machine">
+                    <SelectValue placeholder="Select machine" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeMachines.map((m) => (
+                      <SelectItem key={m.id} value={String(m.id)} data-testid={`option-add-machine-${m.id}`}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="add-date">Date</Label>
+              <Input id="add-date" type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} data-testid="input-add-date" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="add-start">Start time</Label>
+                <Input id="add-start" type="time" value={addStart} onChange={(e) => setAddStart(e.target.value)} data-testid="input-add-start" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="add-end">End time</Label>
+                <Input id="add-end" type="time" value={addEnd} onChange={(e) => setAddEnd(e.target.value)} data-testid="input-add-end" />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Switch id="add-recurring" checked={addRecurring} onCheckedChange={setAddRecurring} data-testid="switch-add-recurring" />
+              <Label htmlFor="add-recurring">Repeat weekly</Label>
+            </div>
+
+            {addRecurring && (
+              <div className="space-y-3 rounded-md border p-3">
+                <div className="space-y-1.5">
+                  <Label>Days of week</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {DAYS_OF_WEEK.map((day) => (
+                      <div key={day.value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`add-day-${day.value}`}
+                          checked={addDays.includes(day.value)}
+                          onCheckedChange={() => toggleAddDay(day.value)}
+                          data-testid={`checkbox-add-day-${day.value}`}
+                        />
+                        <label htmlFor={`add-day-${day.value}`} className="text-sm font-medium leading-none cursor-pointer">
+                          {day.label}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="add-weeks">Number of weeks</Label>
+                  <Input
+                    id="add-weeks"
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={addWeeks}
+                    onChange={(e) => setAddWeeks(Number(e.target.value))}
+                    data-testid="input-add-weeks"
+                  />
+                  <p className="text-xs text-muted-foreground">Repeats on the chosen days from the start date for this many weeks.</p>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)} data-testid="button-cancel-add">Cancel</Button>
+            <Button
+              onClick={() => createManualMutation.mutate()}
+              disabled={
+                createManualMutation.isPending ||
+                !addMachineId ||
+                minutesFromTimeStr(addEnd) <= minutesFromTimeStr(addStart) ||
+                (addRecurring && addDays.length === 0)
+              }
+              data-testid="button-save-add"
+            >
+              {createManualMutation.isPending ? "Adding..." : "Add shift"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editShift} onOpenChange={(o) => !o && setEditShift(null)}>
         <DialogContent className="max-w-sm">
