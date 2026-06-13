@@ -18,6 +18,8 @@
 
 - [Print machine convention](print-machine-convention.md) — Print jobs force-routed to machine id 6 (operator Mollie); won't appear on the timeline until the operator has staff shifts (scheduler gates slots on shifts).
 
+- [Dev vs prod data divergence](dev-prod-data-divergence.md) — republish pushes code/schema only, never row data; dev-DB cleanups never reach the live app. Fix live data through the published app's own UI/API, not from agent tools (prod is read-only).
+
 - [Alloc-slots tri-state](alloc-slots-tristate.md) — getStaffMachineAllocationSlots returns null(=any machine)/[](=elsewhere)/slots; never collapse null & [] into one falsy check or operators get dropped.
 
 - [Holiday approval workflow](holiday-approval-workflow.md) — any route writing staffHolidays.status must be approver-gated (legacy CRUD too, or staff self-approve); /me returns canApprove even with no staff row; half-day & calendar-year clamp rules.

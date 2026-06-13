@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { type Job, type Customer } from "@shared/schema";
-import { Clock, Package, AlertTriangle, CheckCircle2, CheckCheck } from "lucide-react";
+import { Clock, Package, AlertTriangle, CheckCircle2, CheckCheck, Trash2 } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +34,7 @@ export function UnscheduledJobs() {
   const { toast } = useToast();
   const [confirmJobId, setConfirmJobId] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
+  const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
@@ -69,6 +70,17 @@ export function UnscheduledJobs() {
       toast({ title: `${jobIds.length} jobs marked as complete` });
     },
     onError: () => toast({ title: "Failed to mark jobs complete", variant: "destructive" }),
+  });
+
+  const deleteJobMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      await apiRequest("DELETE", `/api/jobs/${jobId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: "Job deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete job", variant: "destructive" }),
   });
 
   if (jobsLoading || customersLoading) {
@@ -113,6 +125,7 @@ export function UnscheduledJobs() {
   }).length;
 
   const confirmJob = jobs.find(j => j.id === confirmJobId);
+  const deleteJob = jobs.find(j => j.id === deleteJobId);
 
   return (
     <>
@@ -156,17 +169,30 @@ export function UnscheduledJobs() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-medium text-sm leading-snug">{job.jobName}</div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-green-600"
-                    onClick={() => setConfirmJobId(job.id)}
-                    disabled={completeJobMutation.isPending}
-                    title="Mark as complete"
-                    data-testid={`button-complete-job-${job.id}`}
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 text-muted-foreground hover:text-green-600"
+                      onClick={() => setConfirmJobId(job.id)}
+                      disabled={completeJobMutation.isPending}
+                      title="Mark as complete"
+                      data-testid={`button-complete-job-${job.id}`}
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteJobId(job.id)}
+                      disabled={deleteJobMutation.isPending}
+                      title="Delete job"
+                      data-testid={`button-delete-job-${job.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {getCustomerName(job.customerId)}
@@ -210,6 +236,30 @@ export function UnscheduledJobs() {
               }}
             >
               Yes, mark complete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete confirm */}
+      <AlertDialog open={!!deleteJobId} onOpenChange={(o) => { if (!o) setDeleteJobId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this job?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <span className="font-semibold">{deleteJob?.jobName}</span> and remove it from the system. Use this for old or abandoned jobs that were never produced. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteJobId) deleteJobMutation.mutate(deleteJobId);
+                setDeleteJobId(null);
+              }}
+            >
+              Yes, delete job
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
