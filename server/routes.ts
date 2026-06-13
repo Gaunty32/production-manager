@@ -4693,11 +4693,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Recalculate job's total actual production time from all completed line items
       await recalculateJobProductionTime(lineItem.jobId);
       
-      // Auto-schedule if machine is newly assigned and not already completed
-      if (lineItem.machineId && !previousMachineId && !lineItem.completed) {
-        const result = await autoScheduleLineItem(lineItem.id);
-        if (!result.success) {
-          console.log(`Auto-scheduling skipped for line item ${lineItem.id}: ${result.error}`);
+      // Keep the schedule in sync with the line item's machine assignment.
+      // Newly assigned  -> auto-book a slot.
+      // Changed machine -> drop the stale schedule rows (which still point at the
+      //                    OLD machine and would otherwise keep the job stuck on
+      //                    the wrong machine in the Machine Schedule board) and
+      //                    re-book onto the new machine.
+      // Machine removed -> drop the schedule rows so it leaves the board.
+      const machineChanged = lineItem.machineId !== previousMachineId;
+      if (machineChanged && !lineItem.completed) {
+        if (previousMachineId) {
+          const staleSchedules = (await storage.getJobSchedules()).filter(
+            s => s.lineItemId === lineItem.id,
+          );
+          for (const s of staleSchedules) {
+            await storage.deleteJobSchedule(s.id);
+          }
+        }
+        if (lineItem.machineId) {
+          const result = await autoScheduleLineItem(lineItem.id);
+          if (!result.success) {
+            console.log(`Auto-scheduling skipped for line item ${lineItem.id}: ${result.error}`);
+          }
         }
       }
       
@@ -5776,6 +5793,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Machine sheet error:", error);
       res.status(500).json({ error: "Failed to build machine sheet" });
+    }
+  });
+
+  // Staff sheet — the Machine Schedule board pivoted by staff member instead of
+  // machine. Each staff member lists every job scheduled to them (across all
+  // machines), grouped by day, with the machine each job runs on. This is the
+  // exact "flip" of /machine-sheet: machine <-> staff swap roles everywhere.
+  app.get("/api/scheduling/staff-sheet", isStaffAuthenticated, async (req, res) => {
+    try {
+      const showAll = (req.query.days as string) === "all";
+      const days = showAll ? null : Math.min(Math.max(parseInt(req.query.days as string) || 5, 1), 30);
+
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      let endDate: Date | undefined;
+      if (!showAll && days) {
+        endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + (days - 1));
+        endDate.setHours(23, 59, 59, 999);
+      }
+
+      const [allMachines, allStaff, schedules, allLineItems, allJobs, customers, allocations] = await Promise.all([
+        storage.getMachines(),
+        storage.getStaff(),
+        storage.getJobSchedules(undefined, undefined, undefined, startDate, endDate),
+        storage.getAllJobLineItems(),
+        storage.getJobs(),
+        storage.getCustomers(),
+        storage.getStaffMachineAllocations(),
+      ]);
+
+      const machineById = new Map(allMachines.map(m => [m.id, m]));
+      const staffById = new Map(allStaff.map(s => [s.id, s]));
+      const lineItemById = new Map(allLineItems.map(li => [li.id, li]));
+      const jobById = new Map(allJobs.map(j => [j.id, j]));
+      const customerById = new Map(customers.map(c => [c.id, c]));
+
+      const ymd = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+      let numDays = days ?? 1;
+      if (showAll) {
+        let maxTime = startDate.getTime();
+        for (const s of schedules) {
+          const t = new Date(s.scheduledDate).setHours(0, 0, 0, 0);
+          if (t > maxTime) maxTime = t;
+        }
+        numDays = Math.max(1, Math.round((maxTime - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+      }
+      const windowDays: { key: string; date: Date }[] = [];
+      for (let i = 0; i < numDays; i++) {
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + i);
+        windowDays.push({ key: ymd(d), date: d });
+      }
+
+      // Which machines a staff member is allocated to on a given date (inverse of
+      // the machine-sheet's operatorsForMachineOnDate — same matching rules).
+      const machinesForStaffOnDate = (staffId: string, date: Date): string[] => {
+        const seen = new Set<number>();
+        const names: string[] = [];
+        for (const a of allocations) {
+          if (a.staffId !== staffId) continue;
+          const ad = new Date(a.date);
+          const matches =
+            ad.toDateString() === date.toDateString() ||
+            (a.isRecurring && a.recurringDaysOfWeek?.includes(date.getDay()));
+          if (!matches || seen.has(a.machineId)) continue;
+          seen.add(a.machineId);
+          names.push(machineById.get(a.machineId)?.name ?? "Unknown");
+        }
+        return names;
+      };
+
+      // Only show staff who are relevant to production in this window: anyone with
+      // a scheduled job or a machine allocation. Avoids cluttering with office
+      // staff who never run a machine.
+      const relevantStaffIds = new Set<string>();
+      for (const s of schedules) {
+        if (s.staffId) relevantStaffIds.add(s.staffId);
+      }
+      for (const { date } of windowDays) {
+        for (const a of allocations) {
+          const ad = new Date(a.date);
+          const matches =
+            ad.toDateString() === date.toDateString() ||
+            (a.isRecurring && a.recurringDaysOfWeek?.includes(date.getDay()));
+          if (matches) relevantStaffIds.add(a.staffId);
+        }
+      }
+
+      const staffOut = allStaff
+        .filter(s => relevantStaffIds.has(s.id))
+        .map(member => {
+          const machinesByDate: Record<string, string[]> = {};
+          for (const { key, date } of windowDays) {
+            const allocated = machinesForStaffOnDate(member.id, date);
+            if (allocated.length > 0) machinesByDate[key] = allocated;
+          }
+
+          const jobsForStaff = schedules
+            .filter(s => s.staffId === member.id)
+            .map(s => {
+              const lineItem = s.lineItemId ? lineItemById.get(s.lineItemId) : undefined;
+              const job = jobById.get(s.jobId);
+              const customer = job ? customerById.get(job.customerId) : undefined;
+              const machine = machineById.get(s.machineId);
+              return {
+                scheduleId: s.id,
+                date: s.scheduledDate,
+                dateKey: ymd(new Date(s.scheduledDate)),
+                startTime: s.startTime,
+                endTime: s.endTime,
+                machineId: s.machineId,
+                machineName: machine?.name ?? "Unknown machine",
+                jobId: s.jobId,
+                jobNumber: job?.jobNumber ?? null,
+                jobName: job?.jobName ?? "",
+                customerName: customer?.name ?? "",
+                requiredDispatchDate: job?.requiredDispatchDate ?? null,
+                description: lineItem?.description ?? null,
+                position: lineItem?.position ?? null,
+                quantity: lineItem?.quantity ?? null,
+                stitchCount: lineItem?.stitchCount ?? null,
+              };
+            })
+            .sort((a, b) => {
+              const da = new Date(a.date).getTime();
+              const db = new Date(b.date).getTime();
+              if (da !== db) return da - db;
+              return a.startTime - b.startTime;
+            });
+
+          return {
+            staffId: member.id,
+            staffName: member.name,
+            machinesByDate,
+            jobs: jobsForStaff,
+          };
+        })
+        // Show busiest staff first, but keep allocated-but-idle staff visible too.
+        .sort((a, b) => b.jobs.length - a.jobs.length || a.staffName.localeCompare(b.staffName));
+
+      const lastDay = windowDays[windowDays.length - 1]?.date ?? startDate;
+      res.json({
+        days: numDays,
+        showAll,
+        startDate: startDate.toISOString(),
+        endDate: (endDate ?? lastDay).toISOString(),
+        dateKeys: windowDays.map(d => d.key),
+        staff: staffOut,
+      });
+    } catch (error) {
+      console.error("Staff sheet error:", error);
+      res.status(500).json({ error: "Failed to build staff sheet" });
     }
   });
 

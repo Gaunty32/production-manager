@@ -1,12 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { User, Printer, Cog, CalendarDays } from "lucide-react";
+import { User, Printer, Cog, CalendarDays, Users } from "lucide-react";
 import { format } from "date-fns";
+
+// ---------------------------------------------------------------------------
+// Raw API shapes
+// ---------------------------------------------------------------------------
 
 interface MachineSheetJob {
   scheduleId: string;
@@ -36,12 +40,6 @@ interface MachineSheet {
   jobs: MachineSheetJob[];
 }
 
-function operatorsForDay(machine: MachineSheet, date: string): string {
-  const ops = machine.operatorsByDate?.[date];
-  if (ops && ops.length > 0) return ops.join(", ");
-  return machine.defaultOperatorName ?? "No operator";
-}
-
 interface MachineSheetResponse {
   days: number;
   startDate: string;
@@ -50,14 +48,165 @@ interface MachineSheetResponse {
   machines: MachineSheet[];
 }
 
-// Build one entry per day in the window, attaching that day's jobs. Days are
-// shown even with no jobs so the allocated operator is always visible.
+interface StaffSheetJob {
+  scheduleId: string;
+  date: string;
+  dateKey: string;
+  startTime: number;
+  endTime: number;
+  machineId: number;
+  machineName: string;
+  jobId: string;
+  jobNumber: number | null;
+  jobName: string;
+  customerName: string;
+  requiredDispatchDate: string | null;
+  description: string | null;
+  position: string | null;
+  quantity: number | null;
+  stitchCount: number | null;
+}
+
+interface StaffSheet {
+  staffId: string;
+  staffName: string;
+  machinesByDate: Record<string, string[]>;
+  jobs: StaffSheetJob[];
+}
+
+interface StaffSheetResponse {
+  days: number;
+  startDate: string;
+  endDate: string;
+  dateKeys: string[];
+  staff: StaffSheet[];
+}
+
+type ViewMode = "machine" | "staff";
+
+// ---------------------------------------------------------------------------
+// Normalized board model — both views map onto these so the rendering and
+// printing code is written once. A "column" is a machine (machine view) or a
+// staff member (staff view). Each job carries a contextLabel which is the
+// *other* dimension: the operator (machine view) or the machine (staff view).
+// ---------------------------------------------------------------------------
+
+interface BoardJob {
+  scheduleId: string;
+  date: string;
+  dateKey: string;
+  startTime: number;
+  endTime: number;
+  jobNumber: number | null;
+  jobName: string;
+  customerName: string;
+  requiredDispatchDate: string | null;
+  description: string | null;
+  position: string | null;
+  quantity: number | null;
+  stitchCount: number | null;
+  contextLabel: string;
+}
+
+interface BoardColumn {
+  id: string;
+  name: string;
+  // Per-day secondary label (operator(s) for machine view, machine(s) for staff
+  // view); falls back to defaultSubLabel when a day has no specific entry.
+  subLabelByDate: Record<string, string[]>;
+  defaultSubLabel: string | null;
+  jobs: BoardJob[];
+}
+
+interface BoardData {
+  dateKeys: string[];
+  columns: BoardColumn[];
+}
+
+// Labels that adapt to the active view.
+const VIEW_LABELS: Record<
+  ViewMode,
+  { heading: string; subLabel: string; jobContext: string }
+> = {
+  machine: { heading: "Machine Schedule", subLabel: "Operator", jobContext: "Operator" },
+  staff: { heading: "Staff Schedule", subLabel: "Machine", jobContext: "Machine" },
+};
+
+function toBoardData(
+  mode: ViewMode,
+  machineData?: MachineSheetResponse,
+  staffData?: StaffSheetResponse,
+): BoardData | undefined {
+  if (mode === "machine") {
+    if (!machineData) return undefined;
+    return {
+      dateKeys: machineData.dateKeys,
+      columns: machineData.machines.map((m) => ({
+        id: `machine-${m.machineId}`,
+        name: m.machineName,
+        subLabelByDate: m.operatorsByDate ?? {},
+        defaultSubLabel: m.defaultOperatorName,
+        jobs: m.jobs.map((j) => ({
+          scheduleId: j.scheduleId,
+          date: j.date,
+          dateKey: j.dateKey,
+          startTime: j.startTime,
+          endTime: j.endTime,
+          jobNumber: j.jobNumber,
+          jobName: j.jobName,
+          customerName: j.customerName,
+          requiredDispatchDate: j.requiredDispatchDate,
+          description: j.description,
+          position: j.position,
+          quantity: j.quantity,
+          stitchCount: j.stitchCount,
+          contextLabel: j.operatorName,
+        })),
+      })),
+    };
+  }
+  if (!staffData) return undefined;
+  return {
+    dateKeys: staffData.dateKeys,
+    columns: staffData.staff.map((s) => ({
+      id: `staff-${s.staffId}`,
+      name: s.staffName,
+      subLabelByDate: s.machinesByDate ?? {},
+      defaultSubLabel: null,
+      jobs: s.jobs.map((j) => ({
+        scheduleId: j.scheduleId,
+        date: j.date,
+        dateKey: j.dateKey,
+        startTime: j.startTime,
+        endTime: j.endTime,
+        jobNumber: j.jobNumber,
+        jobName: j.jobName,
+        customerName: j.customerName,
+        requiredDispatchDate: j.requiredDispatchDate,
+        description: j.description,
+        position: j.position,
+        quantity: j.quantity,
+        stitchCount: j.stitchCount,
+        contextLabel: j.machineName,
+      })),
+    })),
+  };
+}
+
+function subLabelForDay(column: BoardColumn, date: string): string {
+  const entries = column.subLabelByDate?.[date];
+  if (entries && entries.length > 0) return entries.join(", ");
+  return column.defaultSubLabel ?? "—";
+}
+
+// Build one entry per day in the window, attaching that day's jobs. Days with no
+// jobs are kept when there is a sub-label (e.g. an operator/machine) to show.
 function buildDays(
-  machine: MachineSheet,
+  column: BoardColumn,
   dateKeys: string[],
-): { date: string; jobs: MachineSheetJob[]; hasOperator: boolean }[] {
+): { date: string; jobs: BoardJob[]; hasSubLabel: boolean }[] {
   return dateKeys.map((key) => {
-    const jobs = machine.jobs
+    const jobs = column.jobs
       .filter((j) => j.dateKey === key)
       .sort((a, b) => {
         const da = a.requiredDispatchDate
@@ -69,13 +218,13 @@ function buildDays(
         if (da !== db) return da - db;
         return a.startTime - b.startTime;
       });
-    const hasOperator =
-      (machine.operatorsByDate?.[key]?.length ?? 0) > 0 || !!machine.defaultOperatorName;
-    return { date: key, jobs, hasOperator };
+    const hasSubLabel =
+      (column.subLabelByDate?.[key]?.length ?? 0) > 0 || !!column.defaultSubLabel;
+    return { date: key, jobs, hasSubLabel };
   });
 }
 
-// Show every scheduled job for each machine (no upper day limit).
+// Show every scheduled job for each column (no upper day limit).
 const DAYS_PARAM = "all";
 
 function minutesToLabel(mins: number): string {
@@ -104,26 +253,28 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// Build the printable section for a single machine (its own page).
-function buildMachineSection(machine: MachineSheet, data: MachineSheetResponse): string {
-  const todayOperator = escapeHtml(
-    data.dateKeys.length
-      ? operatorsForDay(machine, data.dateKeys[0])
-      : machine.defaultOperatorName ?? "No operator",
+// Build the printable section for a single column (its own page).
+function buildColumnSection(
+  column: BoardColumn,
+  dateKeys: string[],
+  labels: { subLabel: string; jobContext: string },
+): string {
+  const todaySubLabel = escapeHtml(
+    dateKeys.length ? subLabelForDay(column, dateKeys[0]) : column.defaultSubLabel ?? "—",
   );
 
-  const groups = buildDays(machine, data.dateKeys).filter(
-    (d) => d.jobs.length > 0 || d.hasOperator,
+  const groups = buildDays(column, dateKeys).filter(
+    (d) => d.jobs.length > 0 || d.hasSubLabel,
   );
 
   const body = groups.length
     ? groups
         .map((group) => {
           const dayLabel = format(parseDateKey(group.date), "EEEE d MMM yyyy");
-          const dayOperator = escapeHtml(operatorsForDay(machine, group.date));
+          const daySub = escapeHtml(subLabelForDay(column, group.date));
           if (group.jobs.length === 0) {
             return `<div class="day">
-              <h3>${dayLabel} <span class="day-operator">· Operator: ${dayOperator}</span></h3>
+              <h3>${dayLabel} <span class="day-operator">· ${labels.subLabel}: ${daySub}</span></h3>
               <p class="empty">No jobs scheduled</p>
             </div>`;
           }
@@ -134,6 +285,7 @@ function buildMachineSection(machine: MachineSheet, data: MachineSheetResponse):
                 <td>${job.jobNumber ?? "—"}</td>
                 <td>${escapeHtml(job.customerName)}</td>
                 <td>${escapeHtml(job.jobName)}</td>
+                <td>${escapeHtml(job.contextLabel)}</td>
                 <td>${escapeHtml(formatDue(job.requiredDispatchDate))}</td>
                 <td class="num">${job.quantity ?? "—"}</td>
                 <td class="num">${job.stitchCount != null ? job.stitchCount.toLocaleString() : "—"}</td>
@@ -141,11 +293,12 @@ function buildMachineSection(machine: MachineSheet, data: MachineSheetResponse):
             })
             .join("");
           return `<div class="day">
-            <h3>${dayLabel} <span class="day-operator">· Operator: ${dayOperator}</span></h3>
+            <h3>${dayLabel} <span class="day-operator">· ${labels.subLabel}: ${daySub}</span></h3>
             <table>
               <thead>
                 <tr>
                   <th>Time</th><th>Job #</th><th>Customer</th><th>Job</th>
+                  <th>${escapeHtml(labels.jobContext)}</th>
                   <th>Due</th><th class="num">Qty</th><th class="num">Stitches</th>
                 </tr>
               </thead>
@@ -158,20 +311,21 @@ function buildMachineSection(machine: MachineSheet, data: MachineSheetResponse):
 
   return `<section class="machine">
     <div class="machine-header">
-      <h2>${escapeHtml(machine.machineName)}</h2>
-      <span class="operator">Today: ${todayOperator}</span>
+      <h2>${escapeHtml(column.name)}</h2>
+      <span class="operator">Today: ${todaySubLabel}</span>
     </div>
     ${body}
   </section>`;
 }
 
-// Build a full printable document for the given machines (one page each).
+// Build a full printable document for the given columns (one page each).
 function buildPrintDocument(
-  machines: MachineSheet[],
-  data: MachineSheetResponse,
+  columns: BoardColumn[],
+  dateKeys: string[],
   heading: string,
+  labels: { subLabel: string; jobContext: string },
 ): string {
-  const sections = machines.map((machine) => buildMachineSection(machine, data)).join("");
+  const sections = columns.map((c) => buildColumnSection(c, dateKeys, labels)).join("");
   const printedOn = format(new Date(), "EEEE d MMM yyyy, HH:mm");
 
   return `<!DOCTYPE html>
@@ -204,7 +358,7 @@ function buildPrintDocument(
 <body>
   <h1>${escapeHtml(heading)}</h1>
   <p class="subtitle">Printed ${printedOn}</p>
-  ${sections || '<p class="empty">No active machines.</p>'}
+  ${sections || '<p class="empty">No data.</p>'}
   <script>window.onload = function () { window.print(); };</script>
 </body>
 </html>`;
@@ -218,7 +372,9 @@ function openPrintWindow(html: string): void {
 }
 
 export function MachineScheduleBoard() {
-  const { data, isLoading } = useQuery<MachineSheetResponse>({
+  const [mode, setMode] = useState<ViewMode>("machine");
+
+  const { data: machineData, isLoading: machineLoading } = useQuery<MachineSheetResponse>({
     queryKey: ["/api/scheduling/machine-sheet", DAYS_PARAM],
     queryFn: async () => {
       const res = await fetch(`/api/scheduling/machine-sheet?days=${DAYS_PARAM}`, {
@@ -227,6 +383,19 @@ export function MachineScheduleBoard() {
       if (!res.ok) throw new Error("Failed to load machine schedule");
       return res.json();
     },
+    refetchInterval: 60000,
+  });
+
+  const { data: staffData, isLoading: staffLoading } = useQuery<StaffSheetResponse>({
+    queryKey: ["/api/scheduling/staff-sheet", DAYS_PARAM],
+    queryFn: async () => {
+      const res = await fetch(`/api/scheduling/staff-sheet?days=${DAYS_PARAM}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load staff schedule");
+      return res.json();
+    },
+    enabled: mode === "staff",
     refetchInterval: 60000,
   });
 
@@ -241,6 +410,7 @@ export function MachineScheduleBoard() {
     onSuccess: (result: any) => {
       if (result?.scheduledCount > 0) {
         queryClient.invalidateQueries({ queryKey: ["/api/scheduling/machine-sheet"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/scheduling/staff-sheet"] });
         queryClient.invalidateQueries({ queryKey: ["/api/job-schedules"] });
         queryClient.invalidateQueries({ queryKey: ["/api/scheduling/health"] });
       }
@@ -254,37 +424,67 @@ export function MachineScheduleBoard() {
     autoFillMutation.mutate();
   }, []);
 
+  const labels = VIEW_LABELS[mode];
+  const board = toBoardData(mode, machineData, staffData);
+  const isLoading = mode === "machine" ? machineLoading : staffLoading || machineLoading;
+
   const handlePrintAll = () => {
-    if (!data) return;
+    if (!board) return;
     openPrintWindow(
-      buildPrintDocument(data.machines, data, `Machine Schedule — All Jobs`),
+      buildPrintDocument(board.columns, board.dateKeys, `${labels.heading} — All Jobs`, labels),
     );
   };
 
-  const handlePrintMachine = (machine: MachineSheet) => {
-    if (!data) return;
+  const handlePrintColumn = (column: BoardColumn) => {
+    if (!board) return;
     openPrintWindow(
-      buildPrintDocument([machine], data, `${machine.machineName} — All Jobs`),
+      buildPrintDocument([column], board.dateKeys, `${column.name} — All Jobs`, labels),
     );
   };
+
+  const emptyText =
+    mode === "machine" ? "No active machines configured." : "No staff scheduled.";
 
   return (
     <Card data-testid="card-machine-schedule-board">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 flex-wrap">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Cog className="h-5 w-5" />
-          Machine Schedule — All Jobs
+          {mode === "machine" ? <Cog className="h-5 w-5" /> : <Users className="h-5 w-5" />}
+          {labels.heading} — All Jobs
         </CardTitle>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handlePrintAll}
-          disabled={isLoading || !data}
-          data-testid="button-print-machine-sheet"
-        >
-          <Printer className="h-4 w-4 mr-2" />
-          Print all
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Machine / Staff view toggle */}
+          <div className="inline-flex rounded-md border p-0.5" role="group">
+            <Button
+              size="sm"
+              variant={mode === "machine" ? "default" : "ghost"}
+              onClick={() => setMode("machine")}
+              data-testid="button-view-machine"
+            >
+              <Cog className="h-4 w-4 mr-2" />
+              Machine
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === "staff" ? "default" : "ghost"}
+              onClick={() => setMode("staff")}
+              data-testid="button-view-staff"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Staff
+            </Button>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handlePrintAll}
+            disabled={isLoading || !board}
+            data-testid="button-print-machine-sheet"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print all
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -293,45 +493,47 @@ export function MachineScheduleBoard() {
               <Skeleton key={i} className="h-48 w-full" />
             ))}
           </div>
-        ) : !data || data.machines.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic" data-testid="text-no-machines">
-            No active machines configured.
+        ) : !board || board.columns.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic" data-testid="text-no-columns">
+            {emptyText}
           </p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {data.machines.map((machine) => {
-              const groups = buildDays(machine, data.dateKeys).filter(
-                (d) => d.jobs.length > 0 || d.hasOperator,
+            {board.columns.map((column) => {
+              const groups = buildDays(column, board.dateKeys).filter(
+                (d) => d.jobs.length > 0 || d.hasSubLabel,
               );
-              const todayOperator = data.dateKeys.length
-                ? operatorsForDay(machine, data.dateKeys[0])
-                : machine.defaultOperatorName ?? "No operator";
+              const todaySubLabel = board.dateKeys.length
+                ? subLabelForDay(column, board.dateKeys[0])
+                : column.defaultSubLabel ?? "—";
               return (
                 <Card
-                  key={machine.machineId}
+                  key={column.id}
                   className="flex flex-col"
-                  data-testid={`pill-machine-${machine.machineId}`}
+                  data-testid={`pill-column-${column.id}`}
                 >
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center justify-between gap-2 text-base">
-                      <span data-testid={`text-machine-name-${machine.machineId}`}>
-                        {machine.machineName}
-                      </span>
+                      <span data-testid={`text-column-name-${column.id}`}>{column.name}</span>
                       <div className="flex items-center gap-1">
                         <Badge
                           variant="secondary"
                           className="text-xs"
-                          data-testid={`badge-operator-${machine.machineId}`}
+                          data-testid={`badge-sublabel-${column.id}`}
                         >
-                          <User className="h-3 w-3 mr-1" />
-                          Today: {todayOperator}
+                          {mode === "machine" ? (
+                            <User className="h-3 w-3 mr-1" />
+                          ) : (
+                            <Cog className="h-3 w-3 mr-1" />
+                          )}
+                          Today: {todaySubLabel}
                         </Badge>
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => handlePrintMachine(machine)}
-                          title={`Print ${machine.machineName} handout`}
-                          data-testid={`button-print-machine-${machine.machineId}`}
+                          onClick={() => handlePrintColumn(column)}
+                          title={`Print ${column.name} handout`}
+                          data-testid={`button-print-column-${column.id}`}
                         >
                           <Printer className="h-4 w-4" />
                         </Button>
@@ -353,10 +555,14 @@ export function MachineScheduleBoard() {
                               </p>
                               <span
                                 className="text-xs text-muted-foreground flex items-center gap-1"
-                                data-testid={`text-day-operator-${machine.machineId}-${group.date}`}
+                                data-testid={`text-day-sublabel-${column.id}-${group.date}`}
                               >
-                                <User className="h-3 w-3" />
-                                {operatorsForDay(machine, group.date)}
+                                {mode === "machine" ? (
+                                  <User className="h-3 w-3" />
+                                ) : (
+                                  <Cog className="h-3 w-3" />
+                                )}
+                                {subLabelForDay(column, group.date)}
                               </span>
                             </div>
                             {group.jobs.length === 0 ? (
@@ -364,39 +570,52 @@ export function MachineScheduleBoard() {
                                 No jobs scheduled
                               </p>
                             ) : (
-                            <ul className="space-y-1">
-                              {group.jobs.map((job) => (
-                                <li
-                                  key={job.scheduleId}
-                                  className="rounded-md border p-2 text-xs"
-                                  data-testid={`job-${job.scheduleId}`}
-                                >
-                                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <span className="font-medium">
-                                      {job.jobNumber ? `#${job.jobNumber} ` : ""}
-                                      {job.customerName}
-                                    </span>
-                                    <span className="text-muted-foreground tabular-nums">
-                                      {minutesToLabel(job.startTime)}–{minutesToLabel(job.endTime)}
-                                    </span>
-                                  </div>
-                                  <div className="text-muted-foreground">{job.jobName}</div>
-                                  <div
-                                    className="font-medium"
-                                    data-testid={`text-due-${job.scheduleId}`}
+                              <ul className="space-y-1">
+                                {group.jobs.map((job) => (
+                                  <li
+                                    key={job.scheduleId}
+                                    className="rounded-md border p-2 text-xs"
+                                    data-testid={`job-${job.scheduleId}`}
                                   >
-                                    Due {formatDue(job.requiredDispatchDate)}
-                                  </div>
-                                  <div className="text-muted-foreground">
-                                    {[job.position, job.description].filter(Boolean).join(" — ")}
-                                    {job.quantity != null ? ` · ${job.quantity} pcs` : ""}
-                                    {job.stitchCount != null
-                                      ? ` · ${job.stitchCount.toLocaleString()} st`
-                                      : ""}
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                      <span className="font-medium">
+                                        {job.jobNumber ? `#${job.jobNumber} ` : ""}
+                                        {job.customerName}
+                                      </span>
+                                      <span className="text-muted-foreground tabular-nums">
+                                        {minutesToLabel(job.startTime)}–{minutesToLabel(job.endTime)}
+                                      </span>
+                                    </div>
+                                    <div className="text-muted-foreground">{job.jobName}</div>
+                                    {job.contextLabel ? (
+                                      <div
+                                        className="flex items-center gap-1 text-muted-foreground"
+                                        data-testid={`text-context-${job.scheduleId}`}
+                                      >
+                                        {mode === "machine" ? (
+                                          <User className="h-3 w-3" />
+                                        ) : (
+                                          <Cog className="h-3 w-3" />
+                                        )}
+                                        {job.contextLabel}
+                                      </div>
+                                    ) : null}
+                                    <div
+                                      className="font-medium"
+                                      data-testid={`text-due-${job.scheduleId}`}
+                                    >
+                                      Due {formatDue(job.requiredDispatchDate)}
+                                    </div>
+                                    <div className="text-muted-foreground">
+                                      {[job.position, job.description].filter(Boolean).join(" — ")}
+                                      {job.quantity != null ? ` · ${job.quantity} pcs` : ""}
+                                      {job.stitchCount != null
+                                        ? ` · ${job.stitchCount.toLocaleString()} st`
+                                        : ""}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
                             )}
                           </div>
                         ))}
