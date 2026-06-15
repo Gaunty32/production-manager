@@ -1411,3 +1411,165 @@ export type Shift = typeof shifts.$inferSelect;
 export type CasualLogin = z.infer<typeof casualLoginSchema>;
 export type GenerateShiftsInput = z.infer<typeof generateShiftsSchema>;
 export type ClaimShiftInput = z.infer<typeof claimShiftSchema>;
+
+// ============================================================
+// Purchasing & Consumables
+// Tracks supplier purchases, consumable items, reorder points and
+// spend visibility. NOT a warehouse stock system — focus is on
+// purchasing visibility, spend analysis and reorder management.
+// ============================================================
+
+// The fixed set of consumable categories used for "Spend by Category".
+export const CONSUMABLE_CATEGORIES = [
+  "Thread",
+  "Backing",
+  "Bobbins",
+  "Needles",
+  "Packaging",
+  "Labels",
+  "Tapes",
+  "Maintenance",
+  "Other",
+] as const;
+export type ConsumableCategory = (typeof CONSUMABLE_CATEGORIES)[number];
+
+// Suppliers we buy consumables from.
+export const suppliers = pgTable("suppliers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  contactName: text("contact_name"),
+  email: text("email"),
+  phone: text("phone"),
+  notes: text("notes"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Consumable items being tracked.
+export const consumables = pgTable("consumables", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("Other"),
+  unit: text("unit").notNull().default("units"), // e.g. cones, rolls, boxes
+  // White Thread / White Backing — high volume bulk-purchased items.
+  isProductionConsumable: boolean("is_production_consumable").notNull().default(false),
+  // Reorder management. Null = not tracked for reorder.
+  targetStock: integer("target_stock"),
+  reorderPoint: integer("reorder_point"),
+  purchaseQuantity: integer("purchase_quantity"),
+  // Current stock estimate — a snapshot staff can update after a stock check.
+  // There is no running usage ledger; this is just the latest known figure.
+  currentStock: integer("current_stock").notNull().default(0),
+  preferredSupplierId: varchar("preferred_supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
+  notes: text("notes"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("consumables_category_idx").on(table.category),
+]);
+
+// Purchase orders placed with suppliers.
+// status: 'open' (placed, not yet received) | 'received' | 'cancelled'
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  poNumber: text("po_number").notNull(),
+  supplierId: varchar("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("open"),
+  orderDate: timestamp("order_date").notNull().defaultNow(),
+  expectedDate: timestamp("expected_date"),
+  receivedDate: timestamp("received_date"),
+  // True once this PO's quantities have been added to stock estimates. Ensures
+  // stock is only ever applied once, regardless of status toggling.
+  stockApplied: boolean("stock_applied").notNull().default(false),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("purchase_orders_status_idx").on(table.status),
+  index("purchase_orders_order_date_idx").on(table.orderDate),
+]);
+
+// Line items on a purchase order.
+export const purchaseOrderItems = pgTable("purchase_order_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  purchaseOrderId: varchar("purchase_order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  consumableId: varchar("consumable_id").references(() => consumables.id, { onDelete: "set null" }),
+  description: text("description").notNull(), // snapshot of item name
+  quantity: integer("quantity").notNull().default(1),
+  unitCost: real("unit_cost").notNull().default(0), // £ per unit
+}, (table) => [
+  index("purchase_order_items_po_idx").on(table.purchaseOrderId),
+  index("purchase_order_items_consumable_idx").on(table.consumableId),
+]);
+
+export const insertSupplierSchema = createInsertSchema(suppliers).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  name: z.string().min(1, "Supplier name is required"),
+  email: z.string().email("Enter a valid email").optional().or(z.literal("")),
+});
+
+export const insertConsumableSchema = createInsertSchema(consumables).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  name: z.string().min(1, "Item name is required"),
+  category: z.enum(CONSUMABLE_CATEGORIES),
+  unit: z.string().min(1, "Unit is required"),
+  targetStock: z.coerce.number().int().min(0).nullable().optional(),
+  reorderPoint: z.coerce.number().int().min(0).nullable().optional(),
+  purchaseQuantity: z.coerce.number().int().min(0).nullable().optional(),
+  currentStock: z.coerce.number().int().min(0).default(0),
+});
+
+export const purchaseOrderLineInputSchema = z.object({
+  consumableId: z.string().nullable().optional(),
+  description: z.string().min(1, "Description is required"),
+  quantity: z.coerce.number().int().min(1, "Quantity must be at least 1"),
+  unitCost: z.coerce.number().min(0, "Unit cost cannot be negative"),
+});
+
+export const insertPurchaseOrderSchema = z.object({
+  supplierId: z.string().nullable().optional(),
+  status: z.enum(["open", "received", "cancelled"]).default("open"),
+  orderDate: z.coerce.date().optional(),
+  expectedDate: z.coerce.date().nullable().optional(),
+  receivedDate: z.coerce.date().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  lineItems: z.array(purchaseOrderLineInputSchema).min(1, "Add at least one line item"),
+});
+
+export type Supplier = typeof suppliers.$inferSelect;
+export type InsertSupplier = z.infer<typeof insertSupplierSchema>;
+export type Consumable = typeof consumables.$inferSelect;
+export type InsertConsumable = z.infer<typeof insertConsumableSchema>;
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+export type PurchaseOrderLineInput = z.infer<typeof purchaseOrderLineInputSchema>;
+export type InsertPurchaseOrder = z.infer<typeof insertPurchaseOrderSchema>;
+
+// Computed/enriched types returned by the API
+export type ConsumableWithStats = Consumable & {
+  totalPurchased: number;
+  totalSpend: number;
+  averageCost: number | null;
+  lastPurchaseDate: string | null;
+  needsReorder: boolean;
+  supplierName: string | null;
+};
+
+export type PurchaseOrderWithDetails = PurchaseOrder & {
+  supplierName: string | null;
+  lineItems: PurchaseOrderItem[];
+  total: number;
+};
+
+export type PurchasingDashboard = {
+  monthlySpend: number;
+  annualSpend: number;
+  openPurchaseOrders: number;
+  itemsRequiringReorder: number;
+  spendByCategory: { category: string; spend: number }[];
+  garmentsProducedThisMonth: number;
+  costPerGarment: number | null;
+};

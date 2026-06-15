@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun, Tv } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun, Tv, ShoppingCart } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -225,6 +225,14 @@ export function AppSidebar() {
                   <Link href="/thread-library" onClick={handleNavClick} data-testid="link-thread-library">
                     <Palette className="h-4 w-4" />
                     <span>Thread Colours</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/purchasing"}>
+                  <Link href="/purchasing" onClick={handleNavClick} data-testid="link-purchasing">
+                    <ShoppingCart className="h-4 w-4" />
+                    <span>Purchasing</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

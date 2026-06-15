@@ -52,6 +52,7 @@ import PortalPreview from "@/pages/PortalPreview";
 import FeatureRequests from "@/pages/FeatureRequests";
 import Tasks from "@/pages/Tasks";
 import SummerShifts from "@/pages/SummerShifts";
+import Purchasing from "@/pages/Purchasing";
 import CasualLogin from "@/pages/CasualLogin";
 import CasualSetPin from "@/pages/CasualSetPin";
 import CasualDashboard from "@/pages/CasualDashboard";
@@ -105,6 +106,7 @@ function StaffRouter() {
       <Route path="/feature-requests"><FeatureRequests /></Route>
       <Route path="/tasks"><Tasks /></Route>
       <Route path="/summer-shifts"><SummerShifts /></Route>
+      <Route path="/purchasing"><Purchasing /></Route>
       <Route path="/thread-library"><ThreadColourChart /></Route>
       <Route path="/dashboard-tv-setup"><DashboardTvSetup /></Route>
       {/* Customer portal paths — render without staff chrome */}
