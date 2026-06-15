@@ -420,8 +420,8 @@ function ShiftsTab() {
                           <SelectContent>
                             <SelectItem value="anyone" data-testid={`option-assign-anyone-${s.id}`}>Anyone</SelectItem>
                             {activeStaff.map((m) => (
-                              <SelectItem key={m.id} value={m.id} data-testid={`option-assign-${s.id}-${m.id}`}>
-                                {m.firstName} {m.lastName}
+                              <SelectItem key={m.id} value={m.id} disabled={!m.hasPin} data-testid={`option-assign-${s.id}-${m.id}`}>
+                                {m.firstName} {m.lastName}{!m.hasPin ? " — needs to set up" : ""}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -739,8 +739,8 @@ function ShiftsTab() {
                 </SelectTrigger>
                 <SelectContent>
                   {activeStaff.map((m) => (
-                    <SelectItem key={m.id} value={m.id} data-testid={`option-offer-${m.id}`}>
-                      {m.firstName} {m.lastName}
+                    <SelectItem key={m.id} value={m.id} disabled={!m.hasPin} data-testid={`option-offer-${m.id}`}>
+                      {m.firstName} {m.lastName}{!m.hasPin ? " — needs to set up" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
