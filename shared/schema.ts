@@ -1451,6 +1451,9 @@ export const consumables = pgTable("consumables", {
   name: text("name").notNull(),
   category: text("category").notNull().default("Other"),
   unit: text("unit").notNull().default("units"), // e.g. cones, rolls, boxes
+  // Optional supplier/product reference code and a reference purchase price (£ per unit).
+  productCode: text("product_code"),
+  purchasePrice: real("purchase_price"),
   // White Thread / White Backing — high volume bulk-purchased items.
   isProductionConsumable: boolean("is_production_consumable").notNull().default(false),
   // Reorder management. Null = not tracked for reorder.
@@ -1520,6 +1523,8 @@ export const insertConsumableSchema = createInsertSchema(consumables).omit({
   reorderPoint: z.coerce.number().int().min(0).nullable().optional(),
   purchaseQuantity: z.coerce.number().int().min(0).nullable().optional(),
   currentStock: z.coerce.number().int().min(0).default(0),
+  productCode: z.string().nullable().optional(),
+  purchasePrice: z.coerce.number().min(0).nullable().optional(),
 });
 
 export const purchaseOrderLineInputSchema = z.object({

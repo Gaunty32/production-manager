@@ -174,6 +174,8 @@ const emptyItem = {
   name: "",
   category: "Other" as (typeof CONSUMABLE_CATEGORIES)[number],
   unit: "units",
+  productCode: "",
+  purchasePrice: "" as string | number,
   isProductionConsumable: false,
   targetStock: "" as string | number,
   reorderPoint: "" as string | number,
@@ -208,6 +210,8 @@ function ConsumablesTab() {
         name: form.name,
         category: form.category,
         unit: form.unit,
+        productCode: form.productCode.trim() || null,
+        purchasePrice: form.purchasePrice === "" ? null : Number(form.purchasePrice),
         isProductionConsumable: form.isProductionConsumable,
         targetStock: form.targetStock === "" ? null : Number(form.targetStock),
         reorderPoint: form.reorderPoint === "" ? null : Number(form.reorderPoint),
@@ -252,6 +256,8 @@ function ConsumablesTab() {
       name: item.name,
       category: item.category as any,
       unit: item.unit,
+      productCode: item.productCode ?? "",
+      purchasePrice: item.purchasePrice ?? "",
       isProductionConsumable: item.isProductionConsumable,
       targetStock: item.targetStock ?? "",
       reorderPoint: item.reorderPoint ?? "",
@@ -273,6 +279,9 @@ function ConsumablesTab() {
           <CardTitle className="text-base truncate">{item.name}</CardTitle>
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="secondary">{item.category}</Badge>
+            {item.productCode && (
+              <Badge variant="outline" data-testid={`badge-code-${item.id}`}>{item.productCode}</Badge>
+            )}
             {item.needsReorder && (
               <Badge variant="destructive" data-testid={`badge-reorder-${item.id}`}>Reorder</Badge>
             )}
@@ -297,6 +306,7 @@ function ConsumablesTab() {
         <div className="border-t pt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <Stat label="Total purchased" value={`${item.totalPurchased} ${item.unit}`} />
           <Stat label="Total spend" value={gbp(item.totalSpend)} />
+          <Stat label="Purchase price" value={item.purchasePrice != null ? gbp(item.purchasePrice) : "—"} />
           <Stat label="Avg cost" value={item.averageCost != null ? gbp(item.averageCost) : "—"} />
           <Stat label="Last purchase" value={fmtDate(item.lastPurchaseDate)} />
         </div>
@@ -377,6 +387,16 @@ function ConsumablesTab() {
               <div className="space-y-2">
                 <Label htmlFor="item-unit">Unit</Label>
                 <Input id="item-unit" placeholder="cones, rolls, boxes…" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} data-testid="input-item-unit" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="item-code">Product code <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input id="item-code" placeholder="e.g. TH-WHT-100" value={form.productCode} onChange={(e) => setForm({ ...form, productCode: e.target.value })} data-testid="input-item-product-code" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="item-price">Purchase price £ <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input id="item-price" type="number" min={0} step="0.01" placeholder="per unit" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} data-testid="input-item-purchase-price" />
               </div>
             </div>
             <div className="flex items-center justify-between gap-2 rounded-md border p-3">
