@@ -1347,6 +1347,7 @@ export const shifts = pgTable("shifts", {
   date: timestamp("date").notNull(),
   startTime: integer("start_time").notNull(), // minutes from midnight
   endTime: integer("end_time").notNull(),     // minutes from midnight
+  startFlexMinutes: integer("start_flex_minutes").notNull().default(0), // how far the start may slide either way (end shifts with it, duration fixed)
   status: text("status").notNull().default("available"),
   offeredToId: varchar("offered_to_id").references(() => casualStaff.id, { onDelete: "set null" }),
   claimedById: varchar("claimed_by_id").references(() => casualStaff.id, { onDelete: "set null" }),

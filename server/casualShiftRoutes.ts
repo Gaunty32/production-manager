@@ -466,6 +466,13 @@ export function registerCasualShiftRoutes(app: Express) {
       const updates: Partial<Shift> = {};
       if (req.body.startTime != null) updates.startTime = Number(req.body.startTime);
       if (req.body.endTime != null) updates.endTime = Number(req.body.endTime);
+      if (req.body.startFlexMinutes != null) {
+        const flex = Number(req.body.startFlexMinutes);
+        if (![0, 60, 120].includes(flex)) {
+          return res.status(400).json({ error: "Start flexibility must be 0, 1 hour, or 2 hours." });
+        }
+        updates.startFlexMinutes = flex;
+      }
       if (req.body.date) updates.date = startOfDay(new Date(req.body.date));
       const s = updates.startTime ?? shift.startTime;
       const e = updates.endTime ?? shift.endTime;

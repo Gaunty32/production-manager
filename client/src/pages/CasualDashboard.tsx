@@ -33,6 +33,7 @@ interface ShiftRow {
   date: string;
   startTime: number;
   endTime: number;
+  startFlexMinutes?: number;
   startLabel: string;
   endLabel: string;
   status: string;
@@ -59,6 +60,7 @@ export default function CasualDashboard() {
   const { toast } = useToast();
   const [claimTarget, setClaimTarget] = useState<ShiftRow | null>(null);
   const [amendTarget, setAmendTarget] = useState<ShiftRow | null>(null);
+  const [flexTarget, setFlexTarget] = useState<ShiftRow | null>(null);
   const [start, setStart] = useState<number>(0);
   const [end, setEnd] = useState<number>(0);
 
@@ -110,6 +112,7 @@ export default function CasualDashboard() {
     onSuccess: () => {
       toast({ title: "Shift booked!", description: "It's now in your shifts." });
       setClaimTarget(null);
+      setFlexTarget(null);
       refresh();
     },
     onError: (err: any) => toast({ title: "Couldn't book shift", description: err.message, variant: "destructive" }),
@@ -135,9 +138,29 @@ export default function CasualDashboard() {
   };
 
   const openClaim = (shift: ShiftRow) => {
+    // Flexible-start shifts slide as a whole (fixed length), so they use the
+    // start-picker dialog rather than the partial-window picker.
+    if (shift.startFlexMinutes && shift.startFlexMinutes > 0) {
+      setStart(shift.startTime);
+      setEnd(shift.endTime);
+      setFlexTarget(shift);
+      return;
+    }
     setStart(shift.startTime);
     setEnd(shift.endTime);
     setClaimTarget(shift);
+  };
+
+  // Accepting an offered shift. If the manager allowed a flexible start, let the
+  // person pick their start time first; otherwise accept it exactly as offered.
+  const onAccept = (shift: ShiftRow) => {
+    if (shift.startFlexMinutes && shift.startFlexMinutes > 0) {
+      setStart(shift.startTime);
+      setEnd(shift.endTime);
+      setFlexTarget(shift);
+    } else {
+      acceptMutation.mutate(shift);
+    }
   };
 
   const openAmend = (shift: ShiftRow) => {
@@ -228,7 +251,7 @@ export default function CasualDashboard() {
                     </div>
                     {s.offeredToId === me.id ? (
                       <div className="flex shrink-0 flex-col gap-2">
-                        <Button size="sm" onClick={() => acceptMutation.mutate(s)} disabled={limitReached || acceptMutation.isPending} data-testid={`button-accept-${s.id}`}>
+                        <Button size="sm" onClick={() => onAccept(s)} disabled={limitReached || acceptMutation.isPending} data-testid={`button-accept-${s.id}`}>
                           <Check className="mr-1 h-4 w-4" />Accept
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => declineMutation.mutate(s.id)} disabled={declineMutation.isPending} data-testid={`button-decline-${s.id}`}>
@@ -363,6 +386,63 @@ export default function CasualDashboard() {
               data-testid="button-confirm-claim"
             >
               {claimMutation.isPending ? "Booking..." : "Confirm booking"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Flexible-start accept dialog */}
+      <Dialog open={!!flexTarget} onOpenChange={(o) => !o && setFlexTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Pick your start time</DialogTitle>
+            <DialogDescription>
+              {flexTarget && `${flexTarget.machineName} · ${format(new Date(flexTarget.date), "EEE d MMM")}`}
+            </DialogDescription>
+          </DialogHeader>
+          {flexTarget && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                You can start up to {(flexTarget.startFlexMinutes ?? 0) / 60} hour{(flexTarget.startFlexMinutes ?? 0) / 60 === 1 ? "" : "s"} earlier or later.
+                Your shift stays {Math.round((flexTarget.endTime - flexTarget.startTime) / 60 * 10) / 10} hours long, so the finish moves with it.
+              </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Start</Label>
+                <Select
+                  value={String(start)}
+                  onValueChange={(v) => {
+                    const nv = Number(v);
+                    setStart(nv);
+                    setEnd(nv + (flexTarget.endTime - flexTarget.startTime));
+                  }}
+                >
+                  <SelectTrigger data-testid="select-flex-start"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const flex = flexTarget.startFlexMinutes ?? 0;
+                      const dur = flexTarget.endTime - flexTarget.startTime;
+                      const lo = Math.max(0, flexTarget.startTime - flex);
+                      const hi = Math.min(flexTarget.startTime + flex, 1440 - dur);
+                      return timeOptions(lo, hi).map((t) => (
+                        <SelectItem key={t} value={String(t)}>{minutesToTime(t)}</SelectItem>
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-sm" data-testid="text-flex-finish">
+                Finish: <span className="font-medium">{minutesToTime(end)}</span>
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFlexTarget(null)} data-testid="button-cancel-flex">Cancel</Button>
+            <Button
+              onClick={() => flexTarget && claimMutation.mutate({ id: flexTarget.id, startTime: start, endTime: end })}
+              disabled={claimMutation.isPending || limitReached}
+              data-testid="button-confirm-flex"
+            >
+              {claimMutation.isPending ? "Accepting..." : "Accept shift"}
             </Button>
           </DialogFooter>
         </DialogContent>

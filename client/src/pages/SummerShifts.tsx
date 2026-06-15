@@ -53,6 +53,7 @@ interface ShiftRow {
   date: string;
   startLabel: string;
   endLabel: string;
+  startFlexMinutes?: number;
   status: string;
   claimedByName?: string | null;
   offeredToId?: string | null;
@@ -112,6 +113,7 @@ function ShiftsTab() {
   const [editShift, setEditShift] = useState<ShiftRow | null>(null);
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
+  const [editFlex, setEditFlex] = useState("0");
   const [offerShift, setOfferShift] = useState<ShiftRow | null>(null);
   const [offerPersonId, setOfferPersonId] = useState("");
 
@@ -143,6 +145,7 @@ function ShiftsTab() {
     setEditShift(s);
     setEditStart(s.startLabel);
     setEditEnd(s.endLabel);
+    setEditFlex(String(s.startFlexMinutes ?? 0));
   };
 
   const { data: casualStaff = [] } = useQuery<CasualStaffRow[]>({ queryKey: ["/api/casual-staff"] });
@@ -234,6 +237,7 @@ function ShiftsTab() {
       await apiRequest("PATCH", `/api/shifts/${editShift.id}`, {
         startTime: minutesFromTimeStr(editStart),
         endTime: minutesFromTimeStr(editEnd),
+        startFlexMinutes: Number(editFlex),
       });
     },
     onSuccess: () => { toast({ title: "Shift updated" }); setEditShift(null); refreshShifts(); },
@@ -378,7 +382,7 @@ function ShiftsTab() {
                 <div className="space-y-1.5">
                   {rows.map((s) => (
                     <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2.5" data-testid={`row-suggested-${s.id}`}>
-                      <span className="text-sm">{s.startLabel}–{s.endLabel} · <span className="text-muted-foreground">{s.machineName}</span></span>
+                      <span className="text-sm">{s.startLabel}–{s.endLabel} · <span className="text-muted-foreground">{s.machineName}</span>{s.startFlexMinutes ? <span className="ml-1.5 text-xs text-muted-foreground">(start ±{s.startFlexMinutes / 60}h)</span> : null}</span>
                       <div className="flex items-center gap-1">
                         <Select
                           value={s.offeredToId ?? "anyone"}
@@ -430,7 +434,7 @@ function ShiftsTab() {
                 <div className="space-y-1.5">
                   {rows.map((s) => (
                     <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border p-2.5" data-testid={`row-published-${s.id}`}>
-                      <span className="text-sm">{s.startLabel}–{s.endLabel} · <span className="text-muted-foreground">{s.machineName}</span></span>
+                      <span className="text-sm">{s.startLabel}–{s.endLabel} · <span className="text-muted-foreground">{s.machineName}</span>{s.startFlexMinutes ? <span className="ml-1.5 text-xs text-muted-foreground">(start ±{s.startFlexMinutes / 60}h)</span> : null}</span>
                       <div className="flex flex-wrap items-center gap-2">
                         {s.status === "claimed" ? (
                           <Badge variant="secondary" data-testid={`badge-claimed-${s.id}`}>{s.claimedByName || "Booked"}</Badge>
@@ -614,6 +618,22 @@ function ShiftsTab() {
               <Label htmlFor="edit-end">End</Label>
               <Input id="edit-end" type="time" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} data-testid="input-edit-end" />
             </div>
+          </div>
+          <div className="mt-4 space-y-1.5">
+            <Label htmlFor="edit-flex">Let them shift the start time</Label>
+            <Select value={editFlex} onValueChange={setEditFlex}>
+              <SelectTrigger id="edit-flex" data-testid="select-edit-flex">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0" data-testid="option-flex-0">Fixed — must start at this time</SelectItem>
+                <SelectItem value="60" data-testid="option-flex-60">Up to 1 hour earlier or later</SelectItem>
+                <SelectItem value="120" data-testid="option-flex-120">Up to 2 hours earlier or later</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              They keep the same shift length — moving the start moves the finish by the same amount.
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditShift(null)} data-testid="button-cancel-edit">Cancel</Button>

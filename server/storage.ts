@@ -3457,7 +3457,23 @@ export class DatabaseStorage implements IStorage {
 
       const s = params.start ?? shift.startTime;
       const e = params.end ?? shift.endTime;
-      if (e <= s || s < shift.startTime || e > shift.endTime) {
+      const flex = shift.startFlexMinutes ?? 0;
+      const isFlex = flex > 0;
+      if (isFlex) {
+        // Flexible-start shift: the start may slide up to `flex` minutes either
+        // way and the duration is fixed, so the end slides with it. No leftover
+        // window is split off for others.
+        const duration = shift.endTime - shift.startTime;
+        if (e <= s) {
+          throw fail("OUT_OF_RANGE", "Pick a valid start time.");
+        }
+        if (e - s !== duration) {
+          throw fail("OUT_OF_RANGE", "This shift has a fixed length — only the start time can change.");
+        }
+        if (s < shift.startTime - flex || s > shift.startTime + flex || s < 0 || e > 1440) {
+          throw fail("OUT_OF_RANGE", "Start time is outside the allowed range.");
+        }
+      } else if (e <= s || s < shift.startTime || e > shift.endTime) {
         throw fail("OUT_OF_RANGE", "Pick a time inside the shift window.");
       }
       if (e - s < params.minMinutes) {
@@ -3484,12 +3500,16 @@ export class DatabaseStorage implements IStorage {
         .returning();
       if (!claimed) throw fail("UNAVAILABLE", "Sorry, that shift is no longer available.");
 
+      // Flexible-start shifts keep a fixed length and slide as a whole, so there
+      // is never a leftover window to hand back to others.
       const fragments: Array<InsertShift & { status?: string }> = [];
-      if (s - shift.startTime >= params.fragmentMinMinutes) {
-        fragments.push({ machineId: shift.machineId, date: dayStart, startTime: shift.startTime, endTime: s, status: "available" });
-      }
-      if (shift.endTime - e >= params.fragmentMinMinutes) {
-        fragments.push({ machineId: shift.machineId, date: dayStart, startTime: e, endTime: shift.endTime, status: "available" });
+      if (!isFlex) {
+        if (s - shift.startTime >= params.fragmentMinMinutes) {
+          fragments.push({ machineId: shift.machineId, date: dayStart, startTime: shift.startTime, endTime: s, status: "available" });
+        }
+        if (shift.endTime - e >= params.fragmentMinMinutes) {
+          fragments.push({ machineId: shift.machineId, date: dayStart, startTime: e, endTime: shift.endTime, status: "available" });
+        }
       }
       if (fragments.length) await tx.insert(shifts).values(fragments);
 
