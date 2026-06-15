@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -56,6 +57,7 @@ import {
   Shirt,
   ChevronDown,
   ChevronRight,
+  Palette,
 } from "lucide-react";
 
 const NO_SUPPLIER = "__none__";
@@ -323,11 +325,22 @@ function ConsumablesTab() {
         <p className="text-sm text-muted-foreground">
           {items.length} item{items.length === 1 ? "" : "s"} tracked
         </p>
-        <Button onClick={openAdd} data-testid="button-add-consumable">
-          <Plus className="h-4 w-4" />
-          Add Item
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" data-testid="link-thread-colours">
+            <Link href="/thread-library">
+              <Palette className="h-4 w-4" />
+              Thread Colours
+            </Link>
+          </Button>
+          <Button onClick={openAdd} data-testid="button-add-consumable">
+            <Plus className="h-4 w-4" />
+            Add Item
+          </Button>
+        </div>
       </div>
+      <p className="text-sm text-muted-foreground">
+        Coloured thread is managed in the Thread Colour Library — open it to browse codes and names when ordering thread.
+      </p>
 
       {isLoading && <p className="text-muted-foreground">Loading…</p>}
 
