@@ -23,6 +23,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
 import { useMachines } from "@/hooks/useMachines";
 import { Sun, Trash2, Sparkles, CalendarClock, CheckCircle2, Pencil, UserPlus, Undo2, PoundSterling, Send, Plus } from "lucide-react";
 
@@ -126,6 +127,8 @@ function ShiftsTab() {
   const [addRecurring, setAddRecurring] = useState(false);
   const [addDays, setAddDays] = useState<number[]>([]);
   const [addWeeks, setAddWeeks] = useState(4);
+  const [addDates, setAddDates] = useState<Date[]>([]);
+  const [addAssignee, setAddAssignee] = useState("anyone");
 
   const openAdd = () => {
     setAddMachineId(activeMachines[0] ? String(activeMachines[0].id) : "");
@@ -135,6 +138,8 @@ function ShiftsTab() {
     setAddRecurring(false);
     setAddDays([]);
     setAddWeeks(4);
+    setAddDates([]);
+    setAddAssignee("anyone");
     setAddOpen(true);
   };
 
@@ -150,6 +155,7 @@ function ShiftsTab() {
 
   const { data: casualStaff = [] } = useQuery<CasualStaffRow[]>({ queryKey: ["/api/casual-staff"] });
   const activeStaff = casualStaff.filter((m) => m.active);
+  const eligibleStaff = casualStaff.filter((m) => m.active && m.hasPin);
 
   const { data: suggested = [], isLoading: suggLoading } = useQuery<ShiftRow[]>({
     queryKey: ["/api/shifts", { status: "suggested" }],
@@ -166,19 +172,25 @@ function ShiftsTab() {
 
   const refreshShifts = () => queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
 
+  const availDate = addRecurring
+    ? addDate
+    : addDates[0]
+      ? format(addDates[0], "yyyy-MM-dd")
+      : addDate;
+
   const { data: machineAvailability = [], isLoading: availLoading } = useQuery<
     { machineId: number; available: boolean; occupiedBy: string | null }[]
   >({
-    queryKey: ["/api/shifts/machine-availability", addDate],
+    queryKey: ["/api/shifts/machine-availability", availDate],
     queryFn: async () =>
-      (await apiRequest("GET", `/api/shifts/machine-availability?date=${addDate}`)).json(),
-    enabled: addOpen && !!addDate,
+      (await apiRequest("GET", `/api/shifts/machine-availability?date=${availDate}`)).json(),
+    enabled: addOpen && !!availDate,
     staleTime: 0,
     refetchOnMount: "always",
   });
   const availByMachine = new Map(machineAvailability.map((a) => [a.machineId, a]));
   const selectedAvail = addMachineId ? availByMachine.get(Number(addMachineId)) : undefined;
-  const selectedOccupied = !addRecurring && selectedAvail?.available === false;
+  const selectedOccupied = !addRecurring && addDates.length === 1 && selectedAvail?.available === false;
 
   const createManualMutation = useMutation({
     mutationFn: async () =>
@@ -190,15 +202,29 @@ function ShiftsTab() {
         isRecurring: addRecurring,
         recurringDaysOfWeek: addRecurring ? addDays : [],
         weeks: addWeeks,
+        dates: addRecurring ? undefined : addDates.map((d) => format(d, "yyyy-MM-dd")),
+        casualStaffId: addAssignee !== "anyone" ? addAssignee : undefined,
       })).json(),
     onSuccess: (res: any) => {
       const skipped = Number(res.skipped) || 0;
-      toast({
-        title: res.created > 1 ? `Added ${res.created} shifts` : "Shift added",
-        description: skipped > 0
-          ? `${skipped} day${skipped > 1 ? "s" : ""} skipped — the machine's operator was working those days. Find the rest under suggested shifts below.`
-          : "Find it under suggested shifts below to assign or publish.",
-      });
+      const skipNote = skipped > 0
+        ? ` ${skipped} day${skipped > 1 ? "s" : ""} skipped — the machine's operator was working those days.`
+        : "";
+      if (res.assigned) {
+        toast({
+          title: res.created > 1 ? `${res.created} shifts assigned` : "Shift assigned",
+          description: (res.notified
+            ? "They've been texted to accept or decline."
+            : "Couldn't text them, but the shift is waiting in their app to accept.") + skipNote,
+        });
+      } else {
+        toast({
+          title: res.created > 1 ? `Added ${res.created} shifts` : "Shift added",
+          description: (skipped > 0
+            ? "Find the rest under suggested shifts below."
+            : "Find it under suggested shifts below to assign or publish.") + skipNote,
+        });
+      }
       setAddOpen(false);
       refreshShifts();
     },
@@ -476,7 +502,7 @@ function ShiftsTab() {
           <DialogHeader>
             <DialogTitle>Add a shift</DialogTitle>
             <DialogDescription>
-              Create a shift by hand. It's added to the suggested list below, ready to assign or publish.
+              Pick a machine, one or more dates and the times. Leave it as "Anyone" to add to the suggested list, or assign it straight to a person to accept.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -497,7 +523,7 @@ function ShiftsTab() {
                         <SelectItem
                           key={m.id}
                           value={String(m.id)}
-                          disabled={!addRecurring && occupied}
+                          disabled={!addRecurring && addDates.length === 1 && occupied}
                           data-testid={`option-add-machine-${m.id}`}
                         >
                           {m.name}
@@ -516,7 +542,7 @@ function ShiftsTab() {
                   {selectedAvail?.occupiedBy ?? "The operator"} is working this machine on the selected day. Casual cover is only for machines whose operator is away.
                 </p>
               )}
-              {addRecurring && (
+              {(addRecurring || addDates.length > 1) && (
                 <p className="text-xs text-muted-foreground">
                   Days where the machine's operator is working will be skipped automatically.
                 </p>
@@ -524,9 +550,51 @@ function ShiftsTab() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="add-date">Date</Label>
-              <Input id="add-date" type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} data-testid="input-add-date" />
+              <Label>Assign to</Label>
+              <Select value={addAssignee} onValueChange={setAddAssignee}>
+                <SelectTrigger data-testid="select-add-assignee">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="anyone">Anyone (add to suggested list)</SelectItem>
+                  {eligibleStaff.map((m) => (
+                    <SelectItem key={m.id} value={m.id} data-testid={`option-add-assignee-${m.id}`}>
+                      {m.firstName}{m.lastName ? ` ${m.lastName}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {addAssignee === "anyone"
+                  ? "Or pick a person to offer these shifts straight to them."
+                  : "They'll be texted to accept or decline these shifts."}
+              </p>
             </div>
+
+            {addRecurring ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="add-date">Start date</Label>
+                <Input id="add-date" type="date" value={addDate} onChange={(e) => setAddDate(e.target.value)} data-testid="input-add-date" />
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>Dates</Label>
+                <div className="flex justify-center rounded-md border p-2">
+                  <Calendar
+                    mode="multiple"
+                    selected={addDates}
+                    onSelect={(d) => setAddDates(d ?? [])}
+                    disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
+                    data-testid="calendar-add-dates"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {addDates.length === 0
+                    ? "Pick one or more days."
+                    : `${addDates.length} day${addDates.length > 1 ? "s" : ""} selected.`}
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -589,11 +657,13 @@ function ShiftsTab() {
                 !addMachineId ||
                 selectedOccupied ||
                 minutesFromTimeStr(addEnd) <= minutesFromTimeStr(addStart) ||
-                (addRecurring && addDays.length === 0)
+                (addRecurring ? addDays.length === 0 : addDates.length === 0)
               }
               data-testid="button-save-add"
             >
-              {createManualMutation.isPending ? "Adding..." : "Add shift"}
+              {createManualMutation.isPending
+                ? (addAssignee !== "anyone" ? "Assigning..." : "Adding...")
+                : (addAssignee !== "anyone" ? "Assign shifts" : "Add shift")}
             </Button>
           </DialogFooter>
         </DialogContent>

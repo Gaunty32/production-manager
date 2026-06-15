@@ -377,7 +377,7 @@ export function registerCasualShiftRoutes(app: Express) {
   // recurring option: repeat across the chosen weekdays over a number of weeks.
   app.post("/api/shifts/manual", isStaffAuthenticated, async (req, res) => {
     try {
-      const { machineId, isRecurring, recurringDaysOfWeek, weeks } = req.body || {};
+      const { machineId, isRecurring, recurringDaysOfWeek, weeks, dates, casualStaffId } = req.body || {};
       const mId = Number(machineId);
       const s = Number(req.body?.startTime);
       const e = Number(req.body?.endTime);
@@ -385,25 +385,51 @@ export function registerCasualShiftRoutes(app: Express) {
         return res.status(400).json({ error: "Machine, start time and end time are required." });
       }
       if (e <= s) return res.status(400).json({ error: "End time must be after start time." });
-      if (!req.body?.date) return res.status(400).json({ error: "Date is required." });
-      const baseDate = startOfDay(new Date(req.body.date));
-      if (isNaN(baseDate.getTime())) return res.status(400).json({ error: "Invalid date." });
 
-      const toCreate: Array<{ machineId: number; date: Date; startTime: number; endTime: number; status: string }> = [];
-      if (isRecurring && Array.isArray(recurringDaysOfWeek) && recurringDaysOfWeek.length > 0) {
-        const numWeeks = Math.min(Math.max(Number(weeks) || 1, 1), 12);
-        const rangeEnd = new Date(baseDate);
-        rangeEnd.setDate(baseDate.getDate() + numWeeks * 7 - 1);
-        for (let d = new Date(baseDate); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
-          if (recurringDaysOfWeek.includes(d.getDay())) {
-            toCreate.push({ machineId: mId, date: startOfDay(d), startTime: s, endTime: e, status: "suggested" });
-          }
+      // When assigning straight to a person, the shift is created already offered
+      // to them (and notified) so they can accept it. Otherwise it lands in the
+      // "suggested" list to assign / publish later.
+      let assignee: Awaited<ReturnType<typeof storage.getCasualStaffById>> | undefined;
+      if (casualStaffId) {
+        assignee = await storage.getCasualStaffById(casualStaffId);
+        if (!assignee) return res.status(404).json({ error: "Person not found" });
+        if (!assignee.active || !assignee.pinHash) {
+          return res.status(400).json({ error: `${assignee.firstName} can't be assigned yet — they need to accept their invite and set a PIN first.` });
+        }
+      }
+      const status = assignee ? "available" : "suggested";
+
+      const toCreate: Array<{ machineId: number; date: Date; startTime: number; endTime: number; status: string; offeredToId?: string }> = [];
+      const pushShift = (date: Date) =>
+        toCreate.push({ machineId: mId, date, startTime: s, endTime: e, status, offeredToId: assignee?.id });
+
+      if (Array.isArray(dates) && dates.length > 0) {
+        // Explicit list of specific dates.
+        const seen = new Set<number>();
+        for (const raw of dates) {
+          const d = startOfDay(new Date(raw));
+          if (isNaN(d.getTime())) return res.status(400).json({ error: "One of the selected dates is invalid." });
+          if (seen.has(d.getTime())) continue;
+          seen.add(d.getTime());
+          pushShift(d);
         }
       } else {
-        toCreate.push({ machineId: mId, date: baseDate, startTime: s, endTime: e, status: "suggested" });
+        if (!req.body?.date) return res.status(400).json({ error: "Date is required." });
+        const baseDate = startOfDay(new Date(req.body.date));
+        if (isNaN(baseDate.getTime())) return res.status(400).json({ error: "Invalid date." });
+        if (isRecurring && Array.isArray(recurringDaysOfWeek) && recurringDaysOfWeek.length > 0) {
+          const numWeeks = Math.min(Math.max(Number(weeks) || 1, 1), 12);
+          const rangeEnd = new Date(baseDate);
+          rangeEnd.setDate(baseDate.getDate() + numWeeks * 7 - 1);
+          for (let d = new Date(baseDate); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+            if (recurringDaysOfWeek.includes(d.getDay())) pushShift(startOfDay(d));
+          }
+        } else {
+          pushShift(baseDate);
+        }
       }
       if (toCreate.length === 0) {
-        return res.status(400).json({ error: "No matching days selected for the recurring shift." });
+        return res.status(400).json({ error: "Pick at least one date for the shift." });
       }
 
       // Only allow shifts on machines that are available that day — i.e. the
@@ -428,7 +454,29 @@ export function registerCasualShiftRoutes(app: Express) {
       }
 
       const created = await storage.createShiftsBulk(available);
-      res.json({ created, skipped: skipped.length });
+
+      // If assigned to a specific person, notify them about the new shift(s)
+      // waiting for them to accept or decline.
+      let notified = false;
+      if (assignee && assignee.mobileNumber) {
+        const machines = await storage.getMachines();
+        const machineName = machines.find((m) => m.id === mId)?.name ?? "a machine";
+        const baseUrl = getBaseUrl();
+        const sorted = [...available].sort((a, b) => a.date.getTime() - b.date.getTime());
+        const lines = sorted.slice(0, 5).map((sh) => {
+          const when = sh.date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+          return `${when} ${minutesToTime(sh.startTime)}–${minutesToTime(sh.endTime)} (${machineName})`;
+        });
+        const extra = sorted.length > 5 ? ` and ${sorted.length - 5} more` : "";
+        notified = await trySend(
+          assignee.mobileNumber,
+          `Hi ${assignee.firstName}, you've got ${sorted.length} shift${sorted.length > 1 ? "s" : ""} to accept or decline at Select Branding: ${lines.join("; ")}${extra}. Respond here: ${baseUrl}/casual`,
+          assignee.firstName,
+          assignee.lastName,
+        );
+      }
+
+      res.json({ created, skipped: skipped.length, assigned: !!assignee, notified });
     } catch (error: any) {
       console.error("Manual create shift error:", error);
       res.status(500).json({ error: "Failed to create shift" });
