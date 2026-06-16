@@ -88,8 +88,28 @@ type CustomerUser = {
   emailNotificationsDispatch?: boolean;
 };
 
+// Mobile Safari parses dates more strictly than desktop Chrome; an unparseable
+// string becomes an Invalid Date and date-fns format() THROWS, which would
+// white-screen the whole page. Always go through these guarded helpers.
+function parseDate(value: unknown): Date | null {
+  if (value == null) return null;
+  const d = new Date(value as string | number | Date);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function safeFormat(value: unknown, fmt: string, fallback = ""): string {
+  const d = parseDate(value);
+  if (!d) return fallback;
+  try {
+    return format(d, fmt);
+  } catch {
+    return fallback;
+  }
+}
+
 function formatConvoTime(iso: string) {
-  const d = new Date(iso);
+  const d = parseDate(iso);
+  if (!d) return "";
   if (isToday(d)) return format(d, "h:mm a");
   if (isYesterday(d)) return "Yesterday";
   return format(d, "d MMM");
@@ -128,8 +148,14 @@ export default function CustomerInbox() {
   useEffect(() => {
     const mql = window.matchMedia("(min-width: 640px)");
     const onChange = () => setIsDesktop(mql.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
+    // Older iOS Safari only supports the deprecated addListener/removeListener;
+    // calling addEventListener on those throws and white-screens the page.
+    if (typeof mql.addEventListener === "function") {
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    }
+    mql.addListener(onChange);
+    return () => mql.removeListener(onChange);
   }, []);
 
   // Request browser notification permission once on mount
@@ -1138,10 +1164,12 @@ export default function CustomerInbox() {
                     : isCustomer ? "ME" : "SB";
 
                   // Date separator logic
-                  const msgDate = new Date(msg.createdAt);
-                  const prevMsgDate = prevMsg ? new Date(prevMsg.createdAt) : null;
-                  const showDateSep = !prevMsgDate || msgDate.toDateString() !== prevMsgDate.toDateString();
-                  const dateSepLabel = isToday(msgDate)
+                  const msgDate = parseDate(msg.createdAt);
+                  const prevMsgDate = prevMsg ? parseDate(prevMsg.createdAt) : null;
+                  const showDateSep = !!msgDate && (!prevMsgDate || msgDate.toDateString() !== prevMsgDate.toDateString());
+                  const dateSepLabel = !msgDate
+                    ? ""
+                    : isToday(msgDate)
                     ? "Today"
                     : isYesterday(msgDate)
                     ? "Yesterday"
@@ -1247,7 +1275,7 @@ export default function CustomerInbox() {
                             })()}
                           </div>
                           <p className={`text-[10px] text-muted-foreground px-1 mt-0.5 ${isCustomer ? "text-right" : ""}`}>
-                            {format(msgDate, "h:mm a")}
+                            {safeFormat(msg.createdAt, "h:mm a")}
                           </p>
                         </div>
                         {/* Action buttons — incoming (staff) messages: mark unread + remind */}

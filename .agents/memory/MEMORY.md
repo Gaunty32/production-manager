@@ -4,6 +4,8 @@
 - [Drive Verification reconciliation](drive-verification-reconciliation.md) — invoice↔Drive-sheet matching is token-subset, not exact; keep it lenient (auto-push only covers new jobs, hand-typed rows vary).
 - [DB transactions & row locks](db-transactions-row-locks.md) — db is websocket Pool (not Neon HTTP); db.transaction + .for("update") work — use them for claim/merge concurrency.
 - [Chat null-message crash](chat-null-message-crash.md) — image/file-only chat msgs have null `message`; always `(msg.message||"")` before string ops or the whole inbox white-screens.
+
+- [Mobile white-screen crashes](mobile-white-screen-crashes.md) — iPhone-only blank pages: date-fns format() throws on Safari-Invalid-Date + matchMedia.addEventListener unsupported; ErrorBoundary now wraps Router.
 - [Direct conversation archiving](direct-conversation-archive.md) — direct channels share ONE status field; customer archive/delete hides them from staff, and staff inbox shows only status==open with no archived view ("disappearing channels").
 
 - [Deadline Alerts vs Production Queue](deadline-alerts-stale-jobs.md) — stale incomplete jobs show in alerts but are filtered out of the queue; delete via super-admin trash → /api/admin/jobs/:id.

@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useVersionCheck } from "@/hooks/use-version-check";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -171,9 +172,11 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider>
-          <Router>
-            <AppRouter />
-          </Router>
+          <ErrorBoundary>
+            <Router>
+              <AppRouter />
+            </Router>
+          </ErrorBoundary>
           <Toaster />
         </ThemeProvider>
       </TooltipProvider>
