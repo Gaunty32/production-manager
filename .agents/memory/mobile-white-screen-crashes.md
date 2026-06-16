@@ -5,10 +5,10 @@ description: Why customer pages white-screen on iPhone but render fine on deskto
 
 # Mobile-only white screens (esp. customer Messages / CustomerInbox)
 
-A blank white page = an uncaught render/effect throw. The app historically had
-**no React error boundary**, so any single throw blanked the entire SPA. There is
-now `client/src/components/ErrorBoundary.tsx` wrapping the Router in `App.tsx` —
-keep it; it shows a "Something went wrong / Reload" fallback instead of white.
+A blank white page = an uncaught render/effect throw. With no React error
+boundary, any single throw blanks the entire SPA — so keep an app-wide error
+boundary around the router as a safety net (shows a reload fallback instead of
+white). Grep for ErrorBoundary to confirm it's still in place.
 
 **Why mobile (iPhone/Safari) but not staff desktop (Chrome):** two classic
 Safari-stricter-than-Chrome traps, both of which throw and white-screen:

@@ -2,6 +2,8 @@ import express from "express";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import { storage } from "./storage";
 import { buildDashboardTvData, TOKEN_KEY, SLUG_KEY, DAILY_TARGET_KEY, DEFAULT_DAILY_TARGET, generateTvSlug } from "./dashboardTv";
 import { PRINT_MACHINE_ID, isPrintJobType } from "@shared/machines";
@@ -339,7 +341,23 @@ async function recalculateJobProductionTime(jobId: string): Promise<void> {
   }
 }
 
-const SERVER_START_VERSION = Date.now().toString();
+// Deterministic build version shared by every server instance for a single
+// deployment. We hash the built client index.html (which references content-
+// hashed JS/CSS bundles), so the value is identical across Cloud Run instances
+// of the same build but changes whenever a new build is published. This lets
+// clients reliably detect a republish and auto-reload. Falls back to a start
+// timestamp in development where the build directory does not exist.
+function computeBuildVersion(): string {
+  try {
+    const indexPath = path.resolve(import.meta.dirname, "public", "index.html");
+    const html = fs.readFileSync(indexPath, "utf8");
+    return crypto.createHash("sha1").update(html).digest("hex").slice(0, 12);
+  } catch {
+    return `dev-${Date.now()}`;
+  }
+}
+
+const SERVER_START_VERSION = computeBuildVersion();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Casual / summer staff shift system routes
@@ -348,8 +366,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Purchasing & Consumables routes
   registerPurchasingRoutes(app);
 
-  // Version endpoint — used by client to detect deployments and auto-reload
+  // Version endpoint — used by client to detect deployments and auto-reload.
+  // no-store prevents any intermediary/CDN caching from delaying detection.
   app.get("/api/version", (_req, res) => {
+    res.set("Cache-Control", "no-store");
     res.json({ version: SERVER_START_VERSION });
   });
 
