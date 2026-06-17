@@ -453,7 +453,7 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
       if (typeof val === "string") return parseInt(val, 10);
       return val;
     },
-    z.union([z.number().int().min(1).max(5), z.null()])
+    z.union([z.number().int().min(1), z.null()])
   ),
   quantity: z.coerce.number().int().min(0),
 });
@@ -577,7 +577,7 @@ export const insertMachineScheduleBlockSchema = createInsertSchema(machineSchedu
   id: true,
 }).extend({
   date: z.string(),
-  machineId: z.number().int().min(1).max(5),
+  machineId: z.number().int().min(1),
   startTime: z.number().int().min(0).max(1440),
   endTime: z.number().int().min(0).max(1440),
   blockType: z.enum(["job", "maintenance", "blocked"]),
@@ -592,7 +592,7 @@ export const insertJobScheduleSchema = createInsertSchema(jobSchedule).omit({
 }).extend({
   scheduledDate: z.string(),
   lineItemId: z.string().nullable().optional(),
-  machineId: z.number().int().min(1).max(5),
+  machineId: z.number().int().min(1),
   startTime: z.number().int().min(0).max(1440),
   endTime: z.number().int().min(0).max(1440),
   status: z.enum(["scheduled", "in_progress", "completed", "cancelled"]).default("scheduled"),
@@ -630,7 +630,7 @@ export const updateStaffShiftSchema = z.object({
 );
 
 export const updateMachineScheduleBlockSchema = z.object({
-  machineId: z.number().int().min(1).max(5).optional(),
+  machineId: z.number().int().min(1).optional(),
   date: z.preprocess(
     (val) => val ? new Date(val as string) : undefined,
     z.date().optional()
@@ -652,7 +652,7 @@ export const updateMachineScheduleBlockSchema = z.object({
 
 export const updateJobScheduleSchema = z.object({
   jobId: z.string().optional(),
-  machineId: z.number().int().min(1).max(5).optional(),
+  machineId: z.number().int().min(1).optional(),
   staffId: z.string().optional(),
   scheduledDate: z.preprocess(
     (val) => val ? new Date(val as string) : undefined,
@@ -728,7 +728,7 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
       if (typeof val === "string") return parseInt(val, 10);
       return val;
     },
-    z.union([z.number().int().min(1).max(5), z.null()])
+    z.union([z.number().int().min(1), z.null()])
   ).optional(),
   operatorId: z.string().nullable().optional(),
 });
@@ -752,7 +752,7 @@ export const updateJobLineItemSchema = z.object({
       if (typeof val === "string") return parseInt(val, 10);
       return val;
     },
-    z.union([z.number().int().min(1).max(5), z.null()]).optional()
+    z.union([z.number().int().min(1), z.null()]).optional()
   ),
   operatorId: z.string().nullable().optional(),
 }).refine(
@@ -792,7 +792,7 @@ export const insertProductionEntrySchema = createInsertSchema(productionEntries)
       if (typeof val === "string") return parseInt(val, 10);
       return val;
     },
-    z.union([z.number().int().min(1).max(5), z.null()]).optional()
+    z.union([z.number().int().min(1), z.null()]).optional()
   ),
   notes: z.string().nullable().optional(),
 });
@@ -804,7 +804,7 @@ export const insertStaffMachineAllocationSchema = createInsertSchema(staffMachin
   id: true,
 }).extend({
   date: z.string(),
-  machineId: z.number().int().min(1).max(5),
+  machineId: z.number().int().min(1),
   startTime: z.number().int().min(0).max(1440),
   endTime: z.number().int().min(0).max(1440),
   isRecurring: z.boolean().default(false),
@@ -824,7 +824,7 @@ export const insertStaffMachineAllocationSchema = createInsertSchema(staffMachin
 
 export const updateStaffMachineAllocationSchema = z.object({
   staffId: z.string().optional(),
-  machineId: z.number().int().min(1).max(5).optional(),
+  machineId: z.number().int().min(1).optional(),
   date: z.preprocess(
     (val) => val ? new Date(val as string) : undefined,
     z.date().optional()

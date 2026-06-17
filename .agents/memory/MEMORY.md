@@ -22,6 +22,8 @@
 
 - [Print machine convention](print-machine-convention.md) — Print jobs force-routed to machine id 6 (operator Mollie); won't appear on the timeline until the operator has staff shifts (scheduler gates slots on shifts).
 
+- [Machine ID validation cap](machine-id-validation-cap.md) — "Number must be ≤ 5" on save = machineId zod fields were hardcoded .max(5); machines table grows (id 6 = Print). Never cap an FK id to a fixed number.
+
 - [Dev vs prod data divergence](dev-prod-data-divergence.md) — republish pushes code/schema only, never row data; dev-DB cleanups never reach the live app. Fix live data through the published app's own UI/API, not from agent tools (prod is read-only).
 
 - [Alloc-slots tri-state](alloc-slots-tristate.md) — getStaffMachineAllocationSlots returns null(=any machine)/[](=elsewhere)/slots; never collapse null & [] into one falsy check or operators get dropped.
