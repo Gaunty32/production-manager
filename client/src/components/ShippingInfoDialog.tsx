@@ -142,17 +142,21 @@ export function ShippingInfoDialog({
       if (
         job.customerId === customerId &&
         job.consolidatedShipmentId &&
-        job.invoiceStatus !== "invoiced"
+        job.invoiceStatus !== "invoiced" &&
+        job.id !== currentJobId
         // Allow joining shipments even if tracking info hasn't been added yet
       ) {
-        // Use the first job we find for each shipment ID
-        if (!shipmentsMap.has(job.consolidatedShipmentId)) {
-          shipmentsMap.set(job.consolidatedShipmentId, job);
+        // Group by the physical parcel (tracking number) so multiple jobs going
+        // out in the same shipment appear as ONE option. Fall back to the
+        // shipment ID when no tracking number has been added yet.
+        const shipmentKey = job.dhlTrackingNumber?.trim() || job.consolidatedShipmentId;
+        if (!shipmentsMap.has(shipmentKey)) {
+          shipmentsMap.set(shipmentKey, job);
         }
       }
     });
     return Array.from(shipmentsMap.values());
-  }, [jobs, customerId, selectedMethod]);
+  }, [jobs, customerId, currentJobId, selectedMethod]);
 
   // Filter to only show completed jobs for this customer (excluding current job)
   const availableJobsForConsolidation = useMemo(() => {
