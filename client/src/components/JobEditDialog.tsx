@@ -868,8 +868,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                 <div className="space-y-3 mt-2">
                   {lineItems.map((item, index) => (
                     <div key={index} className="border rounded-md p-3 space-y-2">
-                      <div className="flex gap-2 items-start">
-                        <div className="flex-1">
+                      <div className="flex flex-wrap gap-2 items-start">
+                        <div className="flex-1 min-w-[140px]">
                           <label className="text-xs text-muted-foreground">Job Type</label>
                           <Select 
                             value={item.jobType}
@@ -898,7 +898,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-[140px]">
                           <label className="text-xs text-muted-foreground">Position</label>
                           <Select 
                             value={item.position || undefined}
@@ -989,7 +989,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                           )}
                         </div>
                         {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-[140px]">
                             <label className="text-xs text-muted-foreground">
                               Machine
                               {item.completed && (item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") && (
@@ -1015,7 +1015,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                           </div>
                         )}
                         {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-[140px]">
                             <label className="text-xs text-muted-foreground">Operator</label>
                             <Select 
                               value={item.operatorId || "unassigned"}

@@ -1037,8 +1037,8 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                 <div className="space-y-3">
                   {lineItems.map((item, index) => (
                     <div key={index} className="border rounded-lg p-4 space-y-3 bg-muted/20">
-                      <div className="flex gap-3 items-start">
-                        <div className="flex-1">
+                      <div className="flex flex-wrap gap-3 items-start">
+                        <div className="flex-1 min-w-[140px]">
                           <label className="text-xs text-muted-foreground font-medium">Job Type</label>
                           <Select 
                             value={item.jobType}
@@ -1078,7 +1078,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-[140px]">
                           <label className="text-xs text-muted-foreground font-medium">Position</label>
                           <Select 
                             value={item.position || undefined}
@@ -1104,7 +1104,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-[140px]">
                           <label className="text-xs text-muted-foreground font-medium">Quantity</label>
                           <Input
                             type="number"
@@ -1207,7 +1207,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                           )}
                         </div>
                         {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-[140px]">
                             <label className="text-xs text-muted-foreground font-medium">Machine <span className="text-destructive">*</span></label>
                             <Select 
                               value={item.machineId?.toString() || "unassigned"}
@@ -1228,7 +1228,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                           </div>
                         )}
                         {item.jobType !== "Print" && item.jobType !== "Print Initials/Name" && item.jobType !== "Embroidery Initials/Name" && item.jobType !== "Bagging" && (
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-[140px]">
                             <label className="text-xs text-muted-foreground font-medium">Operator <span className="text-destructive">*</span></label>
                             <Select 
                               value={item.operatorId || "unassigned"}
