@@ -4589,7 +4589,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } as any);
           }
         } else {
-          // Creating a single-job consolidated shipment (for future consolidation)
+          // Creating a single-job consolidated shipment (for future consolidation).
+          // Assign a shipment ID now so the NEXT completed job can immediately
+          // "Join Existing Consolidated Shipment" instead of having to bundle this one.
+          const { randomUUID } = await import('crypto');
+          updates.consolidatedShipmentId = randomUUID();
+
           // Calculate shipping cost
           if (updates.packageType && updates.packageCount) {
             const shippingCost = calculateShippingCost(
