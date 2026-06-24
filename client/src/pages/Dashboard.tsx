@@ -43,6 +43,7 @@ import { JobErrorsDialog } from "@/components/JobErrorsDialog";
 import { JobErrorBadge } from "@/components/JobErrorBadge";
 import { JobFilesDialog } from "@/components/JobFilesDialog";
 import { RecordProductionDialog } from "@/components/RecordProductionDialog";
+import { BulkCompleteDialog, type BulkCompleteItem } from "@/components/BulkCompleteDialog";
 import { MachineScheduleBoard } from "@/components/MachineScheduleBoard";
 import { CustomerDocumentsManager } from "@/components/CustomerDocumentsManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -74,6 +75,7 @@ export default function Dashboard() {
   const [worksheetJob, setWorksheetJob] = useState<JobWithLineItems | null>(null);
   const [sortOrder, setSortOrder] = useState<'date' | 'customer' | 'jobNumber'>('date');
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
+  const [bulkCompleteOpen, setBulkCompleteOpen] = useState(false);
   const [editingTrackingJob, setEditingTrackingJob] = useState<JobWithLineItems | null>(null);
   const [dpdBookingJob, setDpdBookingJob] = useState<JobWithLineItems | null>(null);
   const [recordingProductionItem, setRecordingProductionItem] = useState<{ lineItem: JobLineItem; jobName: string } | null>(null);
@@ -374,6 +376,22 @@ export default function Dashboard() {
       completedByName: staffMember?.name || null,
     };
   });
+
+  // All non-completed line items across the selected jobs — the candidates for
+  // the "Complete N Items" bulk action.
+  const bulkCompleteItems: BulkCompleteItem[] = jobsWithCustomers
+    .filter((job) => selectedJobIds.has(job.id))
+    .flatMap((job) => {
+      const lineItems = (job as JobWithLineItems).lineItems ?? [];
+      return lineItems
+        .filter((li) => !li.completed)
+        .map((li) => ({
+          lineItem: li,
+          jobName: job.jobName,
+          customerName: job.customerName,
+          defaultOperatorId: getOperatorId(li),
+        }));
+    });
 
   const filteredJobs = jobsWithCustomers.filter((job) => {
     if (!searchTerm) return true;
@@ -1306,10 +1324,21 @@ export default function Dashboard() {
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              {selectedJobIds.size > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {bulkCompleteItems.length > 0 && (
                 <Button
                   variant="default"
+                  size="sm"
+                  onClick={() => setBulkCompleteOpen(true)}
+                  data-testid="button-complete-selected"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Complete {bulkCompleteItems.length} Item{bulkCompleteItems.length !== 1 ? 's' : ''}
+                </Button>
+              )}
+              {selectedJobIds.size > 0 && (
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => {
                     const selectedJobs = jobs.filter(j => selectedJobIds.has(j.id));
@@ -2188,6 +2217,14 @@ export default function Dashboard() {
             currentUserId={currentUser?.id}
           />
         )}
+
+        <BulkCompleteDialog
+          open={bulkCompleteOpen}
+          onOpenChange={setBulkCompleteOpen}
+          items={bulkCompleteItems}
+          staff={staff}
+          onSuccess={() => setSelectedJobIds(new Set())}
+        />
 
         <JobFilesDialog
           job={filesDialogJob}
