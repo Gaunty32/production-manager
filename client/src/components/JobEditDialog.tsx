@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
 import { PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
+import { calculateProductionMetrics } from "@shared/machines";
 import { z } from "zod";
 import {
   Dialog,
@@ -309,6 +310,73 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     }
     updated[index] = { ...current, machineId, operatorId: nextOperator };
     setLineItems(updated);
+  };
+
+  // Per-line-item completion popup: ticking "Done" opens this so the operator
+  // and production time can be entered without scrolling to inline fields.
+  const [completionDialogIndex, setCompletionDialogIndex] = useState<number | null>(null);
+  const [draftCompletedById, setDraftCompletedById] = useState<string | null>(null);
+  const [draftCompletedAt, setDraftCompletedAt] = useState<string | null>(null);
+  const [draftMinutes, setDraftMinutes] = useState<number | null>(null);
+
+  // Don't leave the completion popup open if the parent edit dialog is closed.
+  useEffect(() => {
+    if (!open) setCompletionDialogIndex(null);
+  }, [open]);
+
+  const staffNameById = (id: string | null) =>
+    id ? staff.find((s) => s.id === id)?.name ?? null : null;
+
+  const openCompletionDialog = (index: number) => {
+    const item = lineItems[index];
+    if (!item) return;
+    const machineDefault = item.machineId
+      ? dbMachines.find((m) => m.id === item.machineId)?.defaultOperatorId ?? null
+      : null;
+    const est =
+      calculateProductionMetrics(item.quantity, item.stitchCount, item.machineId)
+        ?.totalTimeMinutes ?? null;
+    setDraftCompletedById(
+      item.completedById || item.operatorId || machineDefault || currentUserStaff?.id || null,
+    );
+    setDraftCompletedAt(item.completedAt || new Date().toISOString());
+    setDraftMinutes(item.actualProductionTimeMinutes ?? est);
+    setCompletionDialogIndex(index);
+  };
+
+  const commitCompletion = () => {
+    const index = completionDialogIndex;
+    if (index === null) return;
+    const item = lineItems[index];
+    if (!item) return;
+    const isEmbroidery =
+      item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name";
+    if (isEmbroidery && !draftCompletedById) {
+      toast({
+        title: "Completed By required",
+        description: "Please pick who completed this line item.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (isEmbroidery && (draftMinutes === null || draftMinutes <= 0)) {
+      toast({
+        title: "Production Time required",
+        description: "Please enter the production time for this embroidery item.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const updated = [...lineItems];
+    updated[index] = {
+      ...item,
+      completed: true,
+      completedById: draftCompletedById,
+      completedAt: draftCompletedAt || new Date().toISOString(),
+      actualProductionTimeMinutes: draftMinutes,
+    };
+    setLineItems(updated);
+    setCompletionDialogIndex(null);
   };
 
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean | null) => {
@@ -990,7 +1058,13 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             <Checkbox
                               id={`edit-completed-${index}`}
                               checked={item.completed}
-                              onCheckedChange={(checked) => updateLineItem(index, 'completed', checked === true)}
+                              onCheckedChange={(checked) => {
+                                if (checked === true) {
+                                  openCompletionDialog(index);
+                                } else {
+                                  updateLineItem(index, 'completed', false);
+                                }
+                              }}
                               data-testid={`checkbox-edit-line-item-completed-${index}`}
                             />
                             <label htmlFor={`edit-completed-${index}`} className="text-sm cursor-pointer">Done</label>
@@ -1063,102 +1137,38 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                         )}
                       </div>
                       
-                      {/* Completion Tracking - Show when item is completed */}
+                      {/* Completion summary - tap Edit to reopen the completion popup */}
                       {item.completed && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t">
-                          <div>
-                            <label className="text-xs text-muted-foreground">
-                              Completed By
-                              {(item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") && (
-                                <span className="text-destructive ml-1">*</span>
-                              )}
-                            </label>
-                            <Select 
-                              value={item.completedById || "unassigned"}
-                              onValueChange={(value) => updateLineItem(index, 'completedById', value === "unassigned" ? null : value)}
-                            >
-                              <SelectTrigger className="mt-1" data-testid={`select-edit-line-item-completed-by-${index}`}>
-                                <SelectValue placeholder="Select staff" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="unassigned">Not assigned</SelectItem>
-                                {staff.map((s) => (
-                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <label className="text-xs text-muted-foreground">Completed Date</label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    "w-full justify-start text-left font-normal mt-1",
-                                    !item.completedAt && "text-muted-foreground"
-                                  )}
-                                  data-testid={`button-edit-line-item-completed-at-${index}`}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {item.completedAt ? format(new Date(item.completedAt), "PPP") : "Pick date"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={item.completedAt ? new Date(item.completedAt) : undefined}
-                                  onSelect={(date) => updateLineItem(index, 'completedAt', date?.toISOString() || null)}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          {(item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") && (
-                            <div>
-                              <label className="text-xs text-muted-foreground">
-                                Production Time
-                                <span className="text-destructive ml-1">*</span>
-                              </label>
-                              <div className="flex gap-2 mt-1">
-                                <div className="flex-1">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    value={Math.floor((item.actualProductionTimeMinutes || 0) / 60)}
-                                    onChange={(e) => {
-                                      const hours = parseInt(e.target.value) || 0;
-                                      const minutes = (item.actualProductionTimeMinutes || 0) % 60;
-                                      const totalMinutes = (hours * 60) + minutes;
-                                      updateLineItem(index, 'actualProductionTimeMinutes', totalMinutes > 0 ? totalMinutes : null);
-                                    }}
-                                    placeholder="Hours"
-                                    className="font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    data-testid={`input-edit-line-item-production-hours-${index}`}
-                                  />
-                                  <div className="text-xs text-muted-foreground text-center mt-0.5">hrs</div>
-                                </div>
-                                <div className="flex-1">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    max="59"
-                                    value={(item.actualProductionTimeMinutes || 0) % 60}
-                                    onChange={(e) => {
-                                      const hours = Math.floor((item.actualProductionTimeMinutes || 0) / 60);
-                                      const minutes = Math.min(59, parseInt(e.target.value) || 0);
-                                      const totalMinutes = (hours * 60) + minutes;
-                                      updateLineItem(index, 'actualProductionTimeMinutes', totalMinutes > 0 ? totalMinutes : null);
-                                    }}
-                                    placeholder="Mins"
-                                    className="font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    data-testid={`input-edit-line-item-production-minutes-${index}`}
-                                  />
-                                  <div className="text-xs text-muted-foreground text-center mt-0.5">mins</div>
-                                </div>
-                              </div>
-                            </div>
+                        <div
+                          className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 border-t text-sm"
+                          data-testid={`summary-edit-line-item-completed-${index}`}
+                        >
+                          <span className="font-medium">Completed</span>
+                          <span className="text-muted-foreground">
+                            by {staffNameById(item.completedById) || "—"}
+                          </span>
+                          {item.completedAt && (
+                            <span className="text-muted-foreground">
+                              {format(new Date(item.completedAt), "PP")}
+                            </span>
                           )}
+                          {(item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name") &&
+                            item.actualProductionTimeMinutes != null && (
+                              <span className="text-muted-foreground font-mono">
+                                {Math.floor(item.actualProductionTimeMinutes / 60)}h{" "}
+                                {item.actualProductionTimeMinutes % 60}m
+                              </span>
+                            )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="ml-auto"
+                            onClick={() => openCompletionDialog(index)}
+                            data-testid={`button-edit-line-item-completion-${index}`}
+                          >
+                            Edit
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -1347,6 +1357,136 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         setShippingDialogOpen(false);
       }}
     />
+    {open && completionDialogIndex !== null && (() => {
+      const item = lineItems[completionDialogIndex];
+      if (!item) return null;
+      const isEmbroidery =
+        item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name";
+      return (
+        <Dialog open onOpenChange={(o) => { if (!o) setCompletionDialogIndex(null); }}>
+          <DialogContent className="max-w-md" data-testid="dialog-line-item-completion">
+            <DialogHeader>
+              <DialogTitle>Mark line item done</DialogTitle>
+              <DialogDescription>
+                {item.quantity} × {item.jobType}{item.description ? ` — ${item.description}` : ""}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-muted-foreground">
+                  Completed By
+                  {isEmbroidery && <span className="text-destructive ml-1">*</span>}
+                </label>
+                <Select
+                  value={draftCompletedById || "unassigned"}
+                  onValueChange={(value) =>
+                    setDraftCompletedById(value === "unassigned" ? null : value)
+                  }
+                >
+                  <SelectTrigger className="mt-1" data-testid="select-completion-completed-by">
+                    <SelectValue placeholder="Select staff" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Not assigned</SelectItem>
+                    {staff.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Completed Date</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal mt-1",
+                        !draftCompletedAt && "text-muted-foreground"
+                      )}
+                      data-testid="button-completion-date"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {draftCompletedAt ? format(new Date(draftCompletedAt), "PPP") : "Pick date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={draftCompletedAt ? new Date(draftCompletedAt) : undefined}
+                      onSelect={(date) => setDraftCompletedAt(date?.toISOString() || null)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {isEmbroidery && (
+                <div>
+                  <label className="text-xs text-muted-foreground">
+                    Production Time
+                    <span className="text-destructive ml-1">*</span>
+                  </label>
+                  <div className="flex gap-2 mt-1">
+                    <div className="flex-1">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={Math.floor((draftMinutes || 0) / 60)}
+                        onChange={(e) => {
+                          const hours = parseInt(e.target.value) || 0;
+                          const minutes = (draftMinutes || 0) % 60;
+                          const totalMinutes = (hours * 60) + minutes;
+                          setDraftMinutes(totalMinutes > 0 ? totalMinutes : null);
+                        }}
+                        placeholder="Hours"
+                        className="font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        data-testid="input-completion-hours"
+                      />
+                      <div className="text-xs text-muted-foreground text-center mt-0.5">hrs</div>
+                    </div>
+                    <div className="flex-1">
+                      <Input
+                        type="number"
+                        min="0"
+                        max="59"
+                        value={(draftMinutes || 0) % 60}
+                        onChange={(e) => {
+                          const hours = Math.floor((draftMinutes || 0) / 60);
+                          const minutes = Math.min(59, parseInt(e.target.value) || 0);
+                          const totalMinutes = (hours * 60) + minutes;
+                          setDraftMinutes(totalMinutes > 0 ? totalMinutes : null);
+                        }}
+                        placeholder="Mins"
+                        className="font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        data-testid="input-completion-minutes"
+                      />
+                      <div className="text-xs text-muted-foreground text-center mt-0.5">mins</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCompletionDialogIndex(null)}
+                data-testid="button-completion-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={commitCompletion}
+                data-testid="button-completion-save"
+              >
+                Save
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      );
+    })()}
     </>
   );
 }
