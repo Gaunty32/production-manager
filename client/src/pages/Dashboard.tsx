@@ -1271,6 +1271,19 @@ export default function Dashboard() {
                             <Button
                               variant="outline"
                               size="sm"
+                              className="relative"
+                              onClick={() => setLocation(`/messages?jobId=${job.id}`)}
+                              data-testid={`button-chat-unscheduled-${job.id}`}
+                            >
+                              <MessageSquare className="h-4 w-4 mr-1" />
+                              Chat
+                              {!!(unreadByJobId[job.id] && unreadByJobId[job.id] > 0) && (
+                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-destructive" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
                               className="text-destructive"
                               disabled={deleteJobMutation.isPending && (deleteJobMutation.variables as string) === job.id}
                               onClick={() => {
