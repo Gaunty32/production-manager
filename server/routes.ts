@@ -3931,7 +3931,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const file of files) {
         try {
-          const objectFile = await objectStorageService.getObjectEntityFile(file.fileUrl);
+          // Stored fileUrls come in several formats: "/api/img/uploads/<id>"
+          // (the served path), "/objects/uploads/<id>", or a full GCS URL.
+          // getObjectEntityFile only accepts "/objects/..." paths, so normalise
+          // every format down to that before resolving — otherwise non-/objects
+          // files silently fail with "Object not found" and get skipped.
+          let objectPath = objectStorageService.normalizeObjectEntityPath(file.fileUrl);
+          objectPath = objectPath.replace(/^(\/api\/img)+/, "/objects");
+          const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
           const stream = objectFile.createReadStream();
           archive.append(stream, { name: file.fileName });
         } catch (err) {
