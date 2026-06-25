@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Clock, FileText, MessageSquare, CheckCircle, XCircle, Eye, Plus, X, StickyNote, Pencil, Check, Search } from "lucide-react";
+import { Clock, FileText, MessageSquare, CheckCircle, XCircle, Eye, Plus, X, StickyNote, Pencil, Check, Search, Printer } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import {
@@ -274,6 +274,83 @@ export default function StaffHoldingArea() {
     onError: () => toast({ title: "Failed to save note", variant: "destructive" }),
   });
 
+  const handlePrintJob = (job: Job) => {
+    const esc = (v: unknown) =>
+      String(v ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const requiredDate = job.requiredDispatchDate
+      ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
+      : "Not set";
+    const submitted = job.submittedAt
+      ? format(new Date(job.submittedAt), "d MMM yyyy 'at' HH:mm")
+      : "";
+
+    const row = (label: string, value: string) =>
+      value
+        ? `<div class="row"><div class="label">${esc(label)}</div><div class="value">${value}</div></div>`
+        : "";
+
+    const block = (label: string, value: string) =>
+      value
+        ? `<div class="block"><div class="label">${esc(label)}</div><div class="box">${value}</div></div>`
+        : "";
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(job.jobName)} — ${esc(job.customerName)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #18181b; margin: 32px; }
+    .customer { color: #6366f1; font-weight: 600; font-size: 13px; margin: 0 0 2px; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    .po { color: #71717a; font-size: 13px; margin: 0 0 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; margin-bottom: 20px; }
+    .label { color: #71717a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
+    .value { font-size: 15px; font-weight: 500; }
+    .block { margin-bottom: 18px; }
+    .box { border: 1px solid #e4e4e7; background: #fafafa; border-radius: 6px; padding: 12px; font-size: 14px; white-space: pre-line; }
+    hr { border: none; border-top: 1px solid #e4e4e7; margin: 20px 0; }
+    .footer { color: #a1a1aa; font-size: 11px; margin-top: 28px; }
+  </style>
+</head>
+<body>
+  <p class="customer">${esc(job.customerName)}</p>
+  <h1>${esc(job.jobName)}</h1>
+  ${job.poNumber ? `<p class="po">PO: ${esc(job.poNumber)}</p>` : ""}
+  <div class="grid">
+    ${row("Quantity", esc(job.quantity))}
+    ${row("Required Date", esc(requiredDate))}
+    ${row("Submitted", esc(submitted))}
+    ${row("Files", esc(job.files?.length || 0))}
+  </div>
+  ${block("Delivery Address", job.deliveryAddress ? esc(job.deliveryAddress) : "")}
+  ${block("Notes", job.notes ? esc(job.notes) : "")}
+  ${block("Internal Notes", job.staffNotes ? esc(job.staffNotes) : "")}
+  <div class="footer">Printed ${esc(format(new Date(), "d MMM yyyy 'at' HH:mm"))} — Select Branding Solutions</div>
+</body>
+</html>`;
+
+    const printWindow = window.open("", "_blank", "width=800,height=900");
+    if (!printWindow) {
+      toast({
+        title: "Couldn't open print window",
+        description: "Please allow pop-ups for this site and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 300);
+  };
+
   const updateJobMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       const res = await apiRequest("PATCH", `/api/jobs/${id}`, data);
@@ -430,10 +507,21 @@ export default function StaffHoldingArea() {
                       <p className="text-sm text-muted-foreground">PO: {job.poNumber}</p>
                     )}
                   </div>
-                  <Badge variant="secondary" className="flex-shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
-                    <Clock className="h-3 w-3 mr-1" />
-                    Pending
-                  </Badge>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePrintJob(job)}
+                      data-testid={`button-print-${job.id}`}
+                    >
+                      <Printer className="h-4 w-4 mr-1.5" />
+                      Print
+                    </Button>
+                    <Badge variant="secondary" className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                      <Clock className="h-3 w-3 mr-1" />
+                      Pending
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
