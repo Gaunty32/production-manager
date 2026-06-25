@@ -30,6 +30,8 @@
 
 - [Holiday approval workflow](holiday-approval-workflow.md) — any route writing staffHolidays.status must be approver-gated (legacy CRUD too, or staff self-approve); /me returns canApprove even with no staff row; half-day & calendar-year clamp rules.
 
+- [wouter query-only navigation](wouter-query-navigation.md) — query-only URL changes don't remount route components; derive query-driven state via useSearch()+effect, not a one-time useState read.
+
 - [Casual shift offers](casual-shift-offers.md) — offeredToId reservation must be re-checked inside claimShiftAtomic's lock (TOCTOU), and every claimed→available transition must null offeredToId.
 
 - [Auth session patterns](auth-session-patterns.md) — staff=userId (regenerates), customer=customerUserId (legacy login does NOT regenerate); any new login path MUST regenerate before attaching id. OTP lives in login_codes table.

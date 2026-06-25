@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import {
   Dialog,
   DialogContent,
@@ -195,6 +195,26 @@ export default function StaffMessages() {
         ? { type: "job", jobId: urlJobId }
         : null
   );
+  // Keep the open conversation in sync when the URL query changes while the
+  // Messages page is already mounted (e.g. clicking a job's chat icon from
+  // another page navigates here without remounting this component).
+  const search = useSearch();
+  useEffect(() => {
+    let j: string | null = null;
+    let c: string | null = null;
+    try {
+      const p = new URLSearchParams(search);
+      j = p.get("jobId");
+      c = p.get("conversationId");
+    } catch {}
+    if (c) {
+      setTab("direct");
+      setSelected({ type: "direct", conversationId: c });
+    } else if (j) {
+      setTab("job");
+      setSelected({ type: "job", jobId: j });
+    }
+  }, [search]);
   const [newMessage, setNewMessage] = useState("");
   const [isInternal, setIsInternal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
