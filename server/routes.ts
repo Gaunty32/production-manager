@@ -51,7 +51,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail } from "./emailService";
+import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 
@@ -755,6 +755,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[LOGIN] Login error:", error);
       res.status(401).json({ error: error.message || "Login failed" });
+    }
+  });
+
+  // ── Staff email one-time code (passwordless) sign-in ──────────────────────
+  // Step 1: request a 6-digit code by email
+  app.post("/api/staff-auth/request-code", async (req, res) => {
+    try {
+      const email = String(req.body?.email || "").trim();
+      if (!email) {
+        return res.status(400).json({ error: "Please enter your username or email" });
+      }
+
+      // Rate limit code requests per identifier (3 per 15 min)
+      if (!checkRateLimit(`request-code:staff:${email.toLowerCase()}`, 3, 15 * 60 * 1000)) {
+        return res.status(429).json({ error: "Too many code requests. Please try again in 15 minutes." });
+      }
+
+      // Look up by email, then username — but always send the code to the
+      // account's real email address.
+      let user = await storage.getUserByEmail(email);
+      if (!user) user = await storage.getUserByUsername(email);
+
+      // Only generate + send a code for an active account with an email.
+      if (user && user.active !== false && user.email) {
+        const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+        const codeHash = await bcrypt.hash(code, 10);
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        await storage.invalidateLoginCodes(user.email, "staff");
+        await storage.createLoginCode({ email: user.email, codeHash, userType: "staff", expiresAt });
+        try {
+          await sendLoginCodeEmail(user.email, code);
+        } catch (mailErr) {
+          console.error("[STAFF_CODE] Failed to send login code email:", mailErr);
+          return res.status(500).json({ error: "We couldn't send the code. Please try again." });
+        }
+      }
+
+      // Always respond generically so we don't reveal which accounts exist.
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[STAFF_CODE] request-code error:", error);
+      res.status(500).json({ error: "Failed to send code" });
+    }
+  });
+
+  // Step 2: verify the code and establish a session
+  app.post("/api/staff-auth/verify-code", async (req, res) => {
+    try {
+      const email = String(req.body?.email || "").trim();
+      const code = String(req.body?.code || "").trim();
+      if (!email || !code) {
+        return res.status(400).json({ error: "Enter the code we emailed you" });
+      }
+
+      if (!checkRateLimit(`verify-code:staff:${email.toLowerCase()}`, 10, 15 * 60 * 1000)) {
+        return res.status(429).json({ error: "Too many attempts. Please request a new code." });
+      }
+
+      // Resolve the account (email or username) to find its real email.
+      let user = await storage.getUserByEmail(email);
+      if (!user) user = await storage.getUserByUsername(email);
+      if (!user || user.active === false || !user.email) {
+        return res.status(401).json({ error: "Invalid or expired code" });
+      }
+
+      const record = await storage.getActiveLoginCode(user.email, "staff");
+      if (!record) {
+        return res.status(401).json({ error: "Invalid or expired code" });
+      }
+
+      if (record.attempts >= 5) {
+        await storage.consumeLoginCode(record.id);
+        return res.status(429).json({ error: "Too many incorrect attempts. Please request a new code." });
+      }
+
+      const isValid = await bcrypt.compare(code, record.codeHash);
+      if (!isValid) {
+        await storage.incrementLoginCodeAttempts(record.id);
+        return res.status(401).json({ error: "Invalid or expired code" });
+      }
+
+      // Success — consume the code and start the session.
+      await storage.consumeLoginCode(record.id);
+
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error("[STAFF_CODE] Session regeneration error:", err);
+          return res.status(500).json({ error: "Login failed" });
+        }
+        req.session.userId = user!.id;
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("[STAFF_CODE] Session save error:", saveErr);
+            return res.status(500).json({ error: "Login failed" });
+          }
+          const { password: _pw, ...userWithoutPassword } = user as any;
+          res.json(userWithoutPassword);
+        });
+      });
+    } catch (error: any) {
+      console.error("[STAFF_CODE] verify-code error:", error);
+      res.status(500).json({ error: "Login failed" });
     }
   });
 
@@ -1989,6 +2092,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/customer-auth/logout", (req, res) => {
     (req.session as any).customerUserId = undefined;
     res.json({ success: true });
+  });
+
+  // ── Customer email one-time code (passwordless) sign-in ───────────────────
+  // Step 1: request a 6-digit code by email
+  app.post("/api/customer-auth/request-code", async (req, res) => {
+    try {
+      const email = String(req.body?.email || "").trim();
+      if (!email) {
+        return res.status(400).json({ error: "Please enter your email address" });
+      }
+
+      if (!checkRateLimit(`request-code:customer:${email.toLowerCase()}`, 3, 15 * 60 * 1000)) {
+        return res.status(429).json({ error: "Too many code requests. Please try again in 15 minutes." });
+      }
+
+      const customerUser = await storage.getCustomerUserByEmail(email);
+      if (customerUser && customerUser.active && customerUser.email) {
+        const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+        const codeHash = await bcrypt.hash(code, 10);
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        await storage.invalidateLoginCodes(customerUser.email, "customer");
+        await storage.createLoginCode({ email: customerUser.email, codeHash, userType: "customer", expiresAt });
+        try {
+          await sendLoginCodeEmail(customerUser.email, code);
+        } catch (mailErr) {
+          console.error("[CUSTOMER_CODE] Failed to send login code email:", mailErr);
+          return res.status(500).json({ error: "We couldn't send the code. Please try again." });
+        }
+      }
+
+      // Always respond generically so we don't reveal which accounts exist.
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[CUSTOMER_CODE] request-code error:", error);
+      res.status(500).json({ error: "Failed to send code" });
+    }
+  });
+
+  // Step 2: verify the code and establish a session
+  app.post("/api/customer-auth/verify-code", async (req, res) => {
+    try {
+      const email = String(req.body?.email || "").trim();
+      const code = String(req.body?.code || "").trim();
+      if (!email || !code) {
+        return res.status(400).json({ error: "Enter the code we emailed you" });
+      }
+
+      if (!checkRateLimit(`verify-code:customer:${email.toLowerCase()}`, 10, 15 * 60 * 1000)) {
+        return res.status(429).json({ error: "Too many attempts. Please request a new code." });
+      }
+
+      const customerUser = await storage.getCustomerUserByEmail(email);
+      if (!customerUser || !customerUser.active || !customerUser.email) {
+        return res.status(401).json({ error: "Invalid or expired code" });
+      }
+
+      const record = await storage.getActiveLoginCode(customerUser.email, "customer");
+      if (!record) {
+        return res.status(401).json({ error: "Invalid or expired code" });
+      }
+
+      if (record.attempts >= 5) {
+        await storage.consumeLoginCode(record.id);
+        return res.status(429).json({ error: "Too many incorrect attempts. Please request a new code." });
+      }
+
+      const isValid = await bcrypt.compare(code, record.codeHash);
+      if (!isValid) {
+        await storage.incrementLoginCodeAttempts(record.id);
+        return res.status(401).json({ error: "Invalid or expired code" });
+      }
+
+      await storage.consumeLoginCode(record.id);
+      await storage.updateCustomerLastLogin(customerUser.id);
+
+      // Regenerate the session to prevent session fixation, then attach the
+      // authenticated customer.
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error("[CUSTOMER_CODE] Session regeneration error:", err);
+          return res.status(500).json({ error: "Login failed" });
+        }
+        (req.session as any).customerUserId = customerUser.id;
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("[CUSTOMER_CODE] Session save error:", saveErr);
+            return res.status(500).json({ error: "Session error" });
+          }
+          const { passwordHash: _ph, ...userWithoutHash } = customerUser as any;
+          res.json(userWithoutHash);
+        });
+      });
+    } catch (error: any) {
+      console.error("[CUSTOMER_CODE] verify-code error:", error);
+      res.status(500).json({ error: "Login failed" });
+    }
   });
 
   // Customer notification settings

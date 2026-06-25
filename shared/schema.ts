@@ -264,6 +264,20 @@ export const customerInviteTokens = pgTable("customer_invite_tokens", {
   used: boolean("used").notNull().default(false),
 });
 
+// One-time email login codes (passwordless sign-in) for staff and customers
+export const loginCodes = pgTable("login_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull(),
+  codeHash: varchar("code_hash").notNull(),
+  userType: varchar("user_type").notNull(), // 'staff' | 'customer'
+  expiresAt: timestamp("expires_at").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  consumed: boolean("consumed").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type LoginCode = typeof loginCodes.$inferSelect;
+
 // Customer impersonation sessions for staff "view as customer" feature
 export const impersonationSessions = pgTable("impersonation_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

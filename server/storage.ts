@@ -18,6 +18,8 @@ import {
   jobFiles,
   passwordResetTokens,
   customerInviteTokens,
+  loginCodes,
+  type LoginCode,
   impersonationSessions,
   jobErrors,
   customerDocuments,
@@ -221,6 +223,13 @@ export interface IStorage {
   getPasswordResetToken(token: string): Promise<any | undefined>;
   updateUserPassword(userId: string, passwordHash: string): Promise<void>;
   markPasswordResetTokenUsed(tokenId: string): Promise<void>;
+
+  // Email one-time login codes (passwordless sign-in)
+  createLoginCode(data: { email: string; codeHash: string; userType: string; expiresAt: Date }): Promise<LoginCode>;
+  getActiveLoginCode(email: string, userType: string): Promise<LoginCode | undefined>;
+  incrementLoginCodeAttempts(id: string): Promise<void>;
+  consumeLoginCode(id: string): Promise<void>;
+  invalidateLoginCodes(email: string, userType: string): Promise<void>;
   
   
   // Weekly Performance Report
@@ -1776,6 +1785,53 @@ export class DatabaseStorage implements IStorage {
       .update(passwordResetTokens)
       .set({ used: true })
       .where(eq(passwordResetTokens.id, tokenId));
+  }
+
+  // Email one-time login codes (passwordless sign-in)
+  async createLoginCode(data: { email: string; codeHash: string; userType: string; expiresAt: Date }): Promise<LoginCode> {
+    const [code] = await db.insert(loginCodes).values(data).returning();
+    return code;
+  }
+
+  async getActiveLoginCode(email: string, userType: string): Promise<LoginCode | undefined> {
+    const [code] = await db
+      .select()
+      .from(loginCodes)
+      .where(
+        and(
+          eq(loginCodes.email, email.toLowerCase()),
+          eq(loginCodes.userType, userType),
+          eq(loginCodes.consumed, false),
+          gte(loginCodes.expiresAt, new Date()),
+        ),
+      )
+      .orderBy(desc(loginCodes.createdAt))
+      .limit(1);
+    return code;
+  }
+
+  async incrementLoginCodeAttempts(id: string): Promise<void> {
+    await db
+      .update(loginCodes)
+      .set({ attempts: sql`${loginCodes.attempts} + 1` })
+      .where(eq(loginCodes.id, id));
+  }
+
+  async consumeLoginCode(id: string): Promise<void> {
+    await db.update(loginCodes).set({ consumed: true }).where(eq(loginCodes.id, id));
+  }
+
+  async invalidateLoginCodes(email: string, userType: string): Promise<void> {
+    await db
+      .update(loginCodes)
+      .set({ consumed: true })
+      .where(
+        and(
+          eq(loginCodes.email, email.toLowerCase()),
+          eq(loginCodes.userType, userType),
+          eq(loginCodes.consumed, false),
+        ),
+      );
   }
 
   async createCustomerInviteToken(data: { customerUserId: string; token: string; expiresAt: Date }): Promise<any> {

@@ -14,8 +14,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { HelpCircle, Package, Clock, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { HelpCircle, Package, Clock, CheckCircle2, Eye, EyeOff, Mail, ArrowLeft } from "lucide-react";
 import { useLocation } from "wouter";
 import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 import {
@@ -84,10 +85,56 @@ export default function CustomerLogin() {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
 
+  // Email one-time code (passwordless) sign-in
+  const [mode, setMode] = useState<"password" | "code">("password");
+  const [codeStep, setCodeStep] = useState<"email" | "code">("email");
+  const [codeEmail, setCodeEmail] = useState("");
+  const [code, setCode] = useState("");
+
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
+
+  const requestCodeMutation = useMutation({
+    mutationFn: async (email: string) => {
+      return await apiRequest("POST", "/api/customer-auth/request-code", { email });
+    },
+    onSuccess: () => {
+      setCodeStep("code");
+      toast({ title: "Code sent", description: "Check your email for a 6-digit sign-in code." });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Couldn't send code",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const verifyCodeMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/customer-auth/verify-code", { email: codeEmail, code });
+    },
+    onSuccess: () => {
+      toast({ title: "Welcome back!", description: "You've been signed in successfully." });
+      setLocation(redirectTo);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Sign in failed",
+        description: error.message || "Invalid or expired code",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetCodeFlow = () => {
+    setMode("password");
+    setCodeStep("email");
+    setCode("");
+  };
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastLookedUpEmailRef = useRef<string>("");
@@ -220,15 +267,113 @@ export default function CustomerLogin() {
 
           <div className="mb-8">
             <h1 className="text-2xl font-bold tracking-tight">
-              {hasCustomer ? `Welcome back, ${customerInfo.customerName}` : "Sign in"}
+              {mode === "code"
+                ? "Sign in with a code"
+                : hasCustomer
+                  ? `Welcome back, ${customerInfo.customerName}`
+                  : "Sign in"}
             </h1>
             <p className="text-muted-foreground text-sm mt-1.5">
-              {hasCustomer
-                ? "Enter your password to access your orders"
-                : "Sign in to your customer portal account"}
+              {mode === "code"
+                ? "We'll email you a 6-digit code — no password needed"
+                : hasCustomer
+                  ? "Enter your password to access your orders"
+                  : "Sign in to your customer portal account"}
             </p>
           </div>
 
+          {mode === "code" ? (
+            <div className="space-y-5">
+              <button
+                type="button"
+                onClick={resetCodeFlow}
+                className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
+                data-testid="button-back-to-password"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to password sign-in
+              </button>
+
+              {codeStep === "email" ? (
+                <form
+                  className="space-y-5"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!codeEmail.trim() || requestCodeMutation.isPending) return;
+                    requestCodeMutation.mutate(codeEmail.trim());
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="code-email">Email address</Label>
+                    <Input
+                      id="code-email"
+                      type="email"
+                      placeholder="you@company.com"
+                      value={codeEmail}
+                      onChange={(e) => setCodeEmail(e.target.value)}
+                      data-testid="input-code-email"
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={!codeEmail.trim() || requestCodeMutation.isPending}
+                    data-testid="button-send-code"
+                  >
+                    {requestCodeMutation.isPending ? "Sending…" : "Send me a code"}
+                  </Button>
+                </form>
+              ) : (
+                <form
+                  className="space-y-5"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (code.trim().length !== 6 || verifyCodeMutation.isPending) return;
+                    verifyCodeMutation.mutate();
+                  }}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="code-input">Enter your code</Label>
+                    <Input
+                      id="code-input"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="123456"
+                      className="text-center text-2xl tracking-[0.5em] font-semibold"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      data-testid="input-code"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      We sent a 6-digit code to {codeEmail}. It expires in 10 minutes.
+                    </p>
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={code.trim().length !== 6 || verifyCodeMutation.isPending}
+                    data-testid="button-verify-code"
+                  >
+                    {verifyCodeMutation.isPending ? "Signing in…" : "Sign in"}
+                  </Button>
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="text-sm"
+                      onClick={() => requestCodeMutation.mutate(codeEmail.trim())}
+                      disabled={requestCodeMutation.isPending}
+                      data-testid="button-resend-code"
+                    >
+                      {requestCodeMutation.isPending ? "Sending…" : "Resend code"}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
+          ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
@@ -319,6 +464,26 @@ export default function CustomerLogin() {
               </div>
             </form>
           </Form>
+          )}
+
+          {mode === "password" && (
+            <div className="mt-5 pt-5 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setCodeEmail(form.getValues("email"));
+                  setMode("code");
+                  setCodeStep("email");
+                }}
+                data-testid="button-use-code"
+              >
+                <Mail className="h-4 w-4" />
+                Sign in with an email code
+              </Button>
+            </div>
+          )}
 
           <p className="text-center text-xs text-muted-foreground/60 mt-10">
             &copy; {new Date().getFullYear()} Select Branding Solutions

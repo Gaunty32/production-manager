@@ -286,6 +286,32 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
   return data;
 }
 
+export async function sendLoginCodeEmail(email: string, code: string) {
+  const { client, fromEmail } = await getUncachableResendClient();
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Your sign-in code</h2>
+    <p style="margin:0 0 12px;">Use the code below to sign in to the Production Manager. It expires in <strong>10 minutes</strong>.</p>
+    <div style="margin:24px 0;text-align:center;">
+      <span style="display:inline-block;font-size:34px;font-weight:700;letter-spacing:10px;color:#18181b;background:#f4f4f5;border-radius:8px;padding:16px 28px;">${code}</span>
+    </div>
+    ${divider}
+    ${muted("If you didn't try to sign in, you can safely ignore this email — no one can access your account without this code.")}
+  `;
+
+  const { data, error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: email,
+    subject: `${code} is your sign-in code – Production Manager`,
+    html: brandedEmail(body),
+  });
+
+  if (error) {
+    throw new Error(`Failed to send email: ${error.message}`);
+  }
+  return data;
+}
+
 export async function sendNewJobSubmissionEmail(
   staffEmails: string[],
   jobDetails: {
