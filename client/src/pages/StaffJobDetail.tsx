@@ -895,6 +895,16 @@ export default function StaffJobDetail() {
                           handleSendMessage();
                         }
                       }}
+                      onPaste={(e) => {
+                        const files = Array.from(e.clipboardData?.items ?? [])
+                          .filter((item) => item.kind === "file")
+                          .map((item) => item.getAsFile())
+                          .filter((f): f is File => f !== null);
+                        if (files.length) {
+                          e.preventDefault();
+                          uploadAttachments(files);
+                        }
+                      }}
                       rows={2}
                       className="resize-none"
                       data-testid="input-message"
