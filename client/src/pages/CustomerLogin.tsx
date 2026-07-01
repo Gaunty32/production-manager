@@ -16,7 +16,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { HelpCircle, Package, Clock, CheckCircle2, Eye, EyeOff, Mail, ArrowLeft } from "lucide-react";
+import { HelpCircle, Package, Clock, CheckCircle2, Eye, EyeOff, Mail, ArrowLeft, Info, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 import {
@@ -84,6 +85,22 @@ export default function CustomerLogin() {
   const [forgotSubmitting, setForgotSubmitting] = useState(false);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
+
+  // Editable announcement banner (managed by staff on the Users page)
+  const [banner, setBanner] = useState<{ enabled: boolean; message: string; variant: string } | null>(null);
+  useEffect(() => {
+    fetch("/api/customer-portal/login-banner")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setBanner(d); })
+      .catch(() => {});
+  }, []);
+  const bannerVariantClasses: Record<string, string> = {
+    info: "bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-950/40 dark:border-blue-900 dark:text-blue-200",
+    warning: "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/40 dark:border-amber-900 dark:text-amber-200",
+    success: "bg-green-50 border-green-200 text-green-900 dark:bg-green-950/40 dark:border-green-900 dark:text-green-200",
+  };
+  const BannerIcon = banner?.variant === "warning" ? AlertTriangle : banner?.variant === "success" ? CheckCircle2 : Info;
+  const showBanner = Boolean(banner?.enabled && banner?.message?.trim());
 
   // Email one-time code (passwordless) sign-in
   const [mode, setMode] = useState<"password" | "code">("password");
@@ -243,6 +260,19 @@ export default function CustomerLogin() {
 
       <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-6 sm:p-12 bg-background">
         <div className="w-full max-w-sm">
+          {showBanner && (
+            <div
+              className={cn(
+                "mb-6 rounded-md border p-3 flex items-start gap-2.5 text-sm",
+                bannerVariantClasses[banner!.variant] || bannerVariantClasses.info
+              )}
+              data-testid="banner-customer-login"
+            >
+              <BannerIcon className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <p className="leading-relaxed whitespace-pre-line">{banner!.message}</p>
+            </div>
+          )}
+
           <div className="flex items-center justify-center lg:hidden mb-8">
             <img
               src={selectLogo}

@@ -1252,6 +1252,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer login banner — an editable message shown on the customer portal login page.
+  // Stored as JSON in app_settings so super_admins can change it whenever needed.
+  const LOGIN_BANNER_KEY = "customer_login_banner";
+  const BANNER_VARIANTS = ["info", "warning", "success"] as const;
+  const parseLoginBanner = (raw: string | null) => {
+    const fallback = { enabled: false, message: "", variant: "info" as string };
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        enabled: Boolean(parsed?.enabled),
+        message: typeof parsed?.message === "string" ? parsed.message : "",
+        variant: BANNER_VARIANTS.includes(parsed?.variant) ? parsed.variant : "info",
+      };
+    } catch {
+      return fallback;
+    }
+  };
+
+  app.get("/api/customer-portal/login-banner", async (_req, res) => {
+    try {
+      const raw = await storage.getAppSetting(LOGIN_BANNER_KEY);
+      res.json(parseLoginBanner(raw));
+    } catch (error: any) {
+      console.error("Error fetching login banner:", error);
+      res.json({ enabled: false, message: "", variant: "info" });
+    }
+  });
+
+  app.put("/api/admin/login-banner", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const enabled = Boolean(req.body?.enabled);
+      const message =
+        typeof req.body?.message === "string" ? req.body.message.trim().slice(0, 500) : "";
+      const variant = BANNER_VARIANTS.includes(req.body?.variant) ? req.body.variant : "info";
+      await storage.setAppSetting(LOGIN_BANNER_KEY, JSON.stringify({ enabled, message, variant }));
+      res.json({ enabled, message, variant });
+    } catch (error: any) {
+      console.error("Error saving login banner:", error);
+      res.status(500).json({ error: error.message || "Failed to save login banner" });
+    }
+  });
+
   // Data cleanup (super_admin only) — permanently delete old completed & invoiced jobs.
   // Preview the count + total value before deleting anything.
   const parseCleanupCutoff = (raw: unknown): Date | null => {

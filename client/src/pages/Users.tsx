@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
 import { DataCleanupCard } from "@/components/DataCleanupCard";
+import { LoginBannerCard } from "@/components/LoginBannerCard";
 
 const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -738,6 +739,8 @@ export default function Users() {
             </div>
           </CardContent>
         </Card>
+
+        {currentUser?.role === UserRole.SUPER_ADMIN && <LoginBannerCard />}
 
         {currentUser?.role === UserRole.SUPER_ADMIN && <DataCleanupCard />}
 
