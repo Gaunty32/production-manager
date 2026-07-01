@@ -1284,8 +1284,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/admin/login-banner", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
     try {
       const enabled = Boolean(req.body?.enabled);
-      const message =
-        typeof req.body?.message === "string" ? req.body.message.trim().slice(0, 500) : "";
+      const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
       const variant = BANNER_VARIANTS.includes(req.body?.variant) ? req.body.variant : "info";
       await storage.setAppSetting(LOGIN_BANNER_KEY, JSON.stringify({ enabled, message, variant }));
       res.json({ enabled, message, variant });

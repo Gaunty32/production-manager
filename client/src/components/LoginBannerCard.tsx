@@ -110,12 +110,10 @@ export function LoginBannerCard() {
             id="banner-message"
             placeholder="e.g. Our office will be closed Friday 25th December for the holidays."
             value={message}
-            maxLength={500}
             rows={3}
             onChange={(e) => setMessage(e.target.value)}
             data-testid="input-banner-message"
           />
-          <p className="text-xs text-muted-foreground">{message.length}/500 characters</p>
         </div>
 
         <div className="space-y-2">
