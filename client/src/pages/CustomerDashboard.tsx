@@ -10,6 +10,7 @@ import { SiWhatsapp } from "react-icons/si";
 import sbsLogo from "@assets/logo_transparent.png";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PricingTableDialog } from "@/components/PricingTableDialog";
+import { CustomerPortalBanner } from "@/components/CustomerPortalBanner";
 import { FeatureRequestDialog } from "@/components/FeatureRequestDialog";
 import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 import { AppDownloadModal } from "@/components/AppDownloadModal";
@@ -682,6 +683,9 @@ export default function CustomerDashboard() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6 pb-24 md:pb-8">
+
+        {/* Editable announcement banner (managed by staff on the Users page) */}
+        <CustomerPortalBanner className="mb-6" />
 
         {/* Logo hero */}
         <div className="flex justify-center mb-6">
