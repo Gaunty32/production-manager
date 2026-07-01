@@ -1611,9 +1611,9 @@ export default function Dashboard() {
               
               {/* Desktop Table View */}
               <div className="hidden md:block border rounded-md overflow-hidden" data-testid="table-production-queue">
-                <div className="overflow-x-auto">
+                <div className="overflow-auto max-h-[calc(100vh-260px)] [&>div]:overflow-visible">
                   <Table>
-                  <TableHeader className="bg-muted/50">
+                  <TableHeader className="bg-muted/50 sticky top-0 z-20 [&_th]:bg-muted">
                     <TableRow className="text-xs text-muted-foreground uppercase tracking-wider">
                       <TableHead className="py-3 px-3 w-10" onClick={(e) => e.stopPropagation()}>
                         <input
