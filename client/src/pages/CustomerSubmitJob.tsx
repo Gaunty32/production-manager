@@ -1,3 +1,4 @@
+import { goBack } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -411,7 +412,7 @@ export default function CustomerSubmitJob() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setLocation("/customer/dashboard")}
+              onClick={() => goBack("/customer/dashboard", setLocation)}
               data-testid="button-back-to-dashboard"
             >
               <ArrowLeft className="h-5 w-5" />

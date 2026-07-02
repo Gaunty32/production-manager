@@ -1,3 +1,4 @@
+import { goBack } from "@/lib/utils";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -203,7 +204,7 @@ export default function CustomerPaymentMethods() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setLocation("/customer/dashboard")}
+              onClick={() => goBack("/customer/dashboard", setLocation)}
               data-testid="button-back"
             >
               <ArrowLeft className="h-4 w-4 mr-1.5" />

@@ -1,3 +1,4 @@
+import { goBack } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocation } from "wouter";
@@ -18,7 +19,7 @@ export default function CustomerDeliveryAddress() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setLocation("/customer")}
+            onClick={() => goBack("/customer", setLocation)}
             data-testid="button-back"
           >
             <ArrowLeft className="h-4 w-4" />

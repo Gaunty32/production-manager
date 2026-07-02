@@ -1,3 +1,4 @@
+import { goBack } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -153,7 +154,7 @@ export default function CustomerDocuments() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setLocation("/customer/dashboard")}
+            onClick={() => goBack("/customer/dashboard", setLocation)}
             data-testid="button-back-to-portal"
           >
             <ArrowLeft className="h-4 w-4 mr-1.5" />

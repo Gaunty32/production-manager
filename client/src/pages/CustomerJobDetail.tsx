@@ -1,3 +1,4 @@
+import { goBack } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -217,7 +218,7 @@ export default function CustomerJobDetail() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setLocation("/customer/pending")}
+              onClick={() => goBack("/customer/pending", setLocation)}
               data-testid="button-back-to-pending"
             >
               <ArrowLeft className="h-5 w-5" />

@@ -1,3 +1,4 @@
+import { goBack } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -719,7 +720,7 @@ export default function CustomerInbox() {
                 {selected.type === "job" ? selectedJobConvo?.jobName : selectedDirectConvo?.subject}
               </span>
               {/* Desktop: normal header */}
-              <Button variant="ghost" size="sm" className="hidden sm:flex" onClick={() => setLocation("/customer/dashboard")} data-testid="button-back-to-portal">
+              <Button variant="ghost" size="sm" className="hidden sm:flex" onClick={() => goBack("/customer/dashboard", setLocation)} data-testid="button-back-to-portal">
                 <ArrowLeft className="h-4 w-4 mr-1.5" />
                 Back
               </Button>
@@ -733,7 +734,7 @@ export default function CustomerInbox() {
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" onClick={() => setLocation("/customer/dashboard")} data-testid="button-back-to-portal">
+              <Button variant="ghost" size="sm" onClick={() => goBack("/customer/dashboard", setLocation)} data-testid="button-back-to-portal">
                 <ArrowLeft className="h-4 w-4 mr-1.5" />
                 Back
               </Button>

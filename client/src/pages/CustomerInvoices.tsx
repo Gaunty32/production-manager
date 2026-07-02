@@ -1,3 +1,4 @@
+import { goBack } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -245,7 +246,7 @@ export default function CustomerInvoices() {
       <div className="container mx-auto px-4 py-6 max-w-2xl flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setLocation("/customer/dashboard")} data-testid="button-back">
+          <Button variant="ghost" size="icon" onClick={() => goBack("/customer/dashboard", setLocation)} data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex-1">

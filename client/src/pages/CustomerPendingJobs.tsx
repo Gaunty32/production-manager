@@ -1,3 +1,4 @@
+import { goBack } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -71,7 +72,7 @@ export default function CustomerPendingJobs() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setLocation("/customer/dashboard")}
+              onClick={() => goBack("/customer/dashboard", setLocation)}
               data-testid="button-back-to-dashboard"
             >
               <ArrowLeft className="h-5 w-5" />
