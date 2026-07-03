@@ -105,28 +105,33 @@ export default function EmailCustomers() {
 
   if (authLoading) {
     return (
-      <div className="container mx-auto px-4 py-12 flex justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="h-full overflow-auto">
+        <div className="container mx-auto px-4 py-12 flex justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
       </div>
     );
   }
 
   if (!isAllowed) {
     return (
-      <div className="container mx-auto px-4 py-12 max-w-md">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Access restricted</CardTitle>
-            <CardDescription data-testid="text-access-restricted">
-              Only super admins can send emails to all customers.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+      <div className="h-full overflow-auto">
+        <div className="container mx-auto px-4 py-12 max-w-md">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Access restricted</CardTitle>
+              <CardDescription data-testid="text-access-restricted">
+                Only super admins can send emails to all customers.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
+    <div className="h-full overflow-auto">
     <div className="container mx-auto px-4 py-6 max-w-6xl space-y-6">
       <div className="flex items-center gap-3 flex-wrap">
         <Mail className="h-6 w-6 text-muted-foreground" />
@@ -331,6 +336,7 @@ export default function EmailCustomers() {
           </CardContent>
         </Card>
       </div>
+    </div>
     </div>
   );
 }
