@@ -51,7 +51,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail } from "./emailService";
+import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail, buildBroadcastEmailHtml, sendBroadcastEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 
@@ -1291,6 +1291,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error saving login banner:", error);
       res.status(500).json({ error: error.message || "Failed to save login banner" });
+    }
+  });
+
+  // ─── Broadcast email to all customers (super_admin only) ──────────────────
+  app.get("/api/admin/broadcast-recipients", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      const [allCustomerUsers, allCustomers] = await Promise.all([
+        storage.getAllCustomerUsers(),
+        storage.getCustomers(),
+      ]);
+      const customerNameById = new Map(allCustomers.map((c) => [c.id, c.name]));
+      const seen = new Set<string>();
+      const recipients = allCustomerUsers
+        .filter((u) => u.active && u.email)
+        .filter((u) => {
+          const key = u.email.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map((u) => ({
+          email: u.email,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          customerName: customerNameById.get(u.customerId) || "",
+        }))
+        .sort((a, b) => (a.customerName || "").localeCompare(b.customerName || ""));
+      res.json({ count: recipients.length, recipients });
+    } catch (error: any) {
+      console.error("Error fetching broadcast recipients:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch recipients" });
+    }
+  });
+
+  app.post("/api/admin/broadcast-preview", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const message = typeof req.body?.message === "string" ? req.body.message : "";
+      res.json({ html: buildBroadcastEmailHtml(message, "Sam") });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to build preview" });
+    }
+  });
+
+  app.post("/api/admin/broadcast-email", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const subject = typeof req.body?.subject === "string" ? req.body.subject.trim() : "";
+      const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+      const testEmail = typeof req.body?.testEmail === "string" ? req.body.testEmail.trim() : "";
+      if (!subject || !message) {
+        return res.status(400).json({ error: "Subject and message are required" });
+      }
+
+      // Test mode: send a single copy to the given address
+      if (testEmail) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail)) {
+          return res.status(400).json({ error: "Invalid test email address" });
+        }
+        await sendBroadcastEmail({ to: testEmail, subject, message, recipientFirstName: null });
+        return res.json({ test: true, sent: 1, failed: 0 });
+      }
+
+      const [allCustomerUsers, allCustomers] = await Promise.all([
+        storage.getAllCustomerUsers(),
+        storage.getCustomers(),
+      ]);
+      const customerNameById = new Map(allCustomers.map((c) => [c.id, c.name]));
+      const seen = new Set<string>();
+      const recipients = allCustomerUsers.filter((u) => {
+        if (!u.active || !u.email) return false;
+        const key = u.email.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      let sent = 0;
+      const failures: string[] = [];
+      for (const r of recipients) {
+        try {
+          await sendBroadcastEmail({
+            to: r.email,
+            subject,
+            message,
+            recipientFirstName: r.firstName,
+          });
+          sent++;
+        } catch (err: any) {
+          console.error(`[Broadcast] Failed to send to ${r.email}:`, err?.message || err);
+          failures.push(`${r.email}${customerNameById.get(r.customerId) ? ` (${customerNameById.get(r.customerId)})` : ""}`);
+        }
+        // Gentle pacing to stay under Resend rate limits
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+      res.json({ test: false, sent, failed: failures.length, failures });
+    } catch (error: any) {
+      console.error("Error sending broadcast email:", error);
+      res.status(500).json({ error: error.message || "Failed to send broadcast email" });
     }
   });
 

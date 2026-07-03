@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun, Tv, ShoppingCart } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun, Tv, ShoppingCart, Mail } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -208,6 +208,16 @@ export function AppSidebar() {
                     <Link href="/dashboard-tv-setup" onClick={handleNavClick} data-testid="link-dashboard-tv-setup">
                       <Tv className="h-4 w-4" />
                       <span>TV Dashboard</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+              {isUserSuperAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/email-customers"}>
+                    <Link href="/email-customers" onClick={handleNavClick} data-testid="link-email-customers">
+                      <Mail className="h-4 w-4" />
+                      <span>Email Customers</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

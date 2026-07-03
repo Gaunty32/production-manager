@@ -18,6 +18,7 @@ import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
 import StaffPage from "@/pages/Staff";
 import UsersPage from "@/pages/Users";
+import EmailCustomers from "@/pages/EmailCustomers";
 import Schedule from "@/pages/Schedule";
 import Leaderboard from "@/pages/Leaderboard";
 import InvoicingQueue from "@/pages/InvoicingQueue";
@@ -93,6 +94,7 @@ function StaffRouter() {
       <Route path="/customers"><Customers /></Route>
       <Route path="/staff"><StaffPage /></Route>
       <Route path="/users"><UsersPage /></Route>
+      <Route path="/email-customers"><EmailCustomers /></Route>
       <Route path="/schedule"><Schedule /></Route>
       <Route path="/holidays"><HolidayManagement /></Route>
       <Route path="/leaderboard"><Leaderboard /></Route>

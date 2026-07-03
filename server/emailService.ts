@@ -1186,3 +1186,38 @@ export async function sendDeliverabilityTestEmail(params: { to: string; cc?: str
     throw new Error(JSON.stringify(error));
   }
 }
+
+// ─── Broadcast email to all customers ────────────────────────────────────────
+export function buildBroadcastEmailHtml(message: string, recipientFirstName?: string | null): string {
+  const safeMessage = sanitizeHtml(message).replace(/\r\n/g, '\n').replace(/\n/g, '<br />');
+  const greeting = recipientFirstName?.trim()
+    ? `<p style="margin:0 0 18px;">Hi ${sanitizeHtml(recipientFirstName.trim())},</p>`
+    : '';
+  const body = `
+    ${greeting}
+    <p style="margin:0 0 18px;">${safeMessage}</p>
+    <p style="margin:0 0 8px;">
+      Best wishes,<br />
+      <strong>The Select Branding Solutions Team</strong>
+    </p>
+  `;
+  return brandedEmail(body);
+}
+
+export async function sendBroadcastEmail(params: {
+  to: string;
+  subject: string;
+  message: string;
+  recipientFirstName?: string | null;
+}): Promise<void> {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const { error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: params.to,
+    subject: params.subject,
+    html: buildBroadcastEmailHtml(params.message, params.recipientFirstName),
+  });
+  if (error) {
+    throw new Error(`Failed to send broadcast email to ${params.to}: ${JSON.stringify(error)}`);
+  }
+}
