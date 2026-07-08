@@ -486,11 +486,16 @@ export default function Dashboard() {
   });
 
   // Sort completed jobs
-  const sortedCompletedJobs = [...filteredCompletedJobs].sort((a, b) => {
-    if (!a.requiredDispatchDate) return 1;
-    if (!b.requiredDispatchDate) return -1;
-    return new Date(b.requiredDispatchDate).getTime() - new Date(a.requiredDispatchDate).getTime();
-  });
+  const latestCompletionTime = (job: (typeof filteredCompletedJobs)[number]): number => {
+    const times = ((job as JobWithLineItems).lineItems ?? [])
+      .map(li => li.completedAt ? new Date(li.completedAt).getTime() : NaN)
+      .filter(t => !isNaN(t));
+    if (times.length) return Math.max(...times);
+    return job.requiredDispatchDate ? new Date(job.requiredDispatchDate).getTime() : 0;
+  };
+  const sortedCompletedJobs = [...filteredCompletedJobs].sort(
+    (a, b) => latestCompletionTime(b) - latestCompletionTime(a)
+  );
 
   const sortedActiveJobs = [...activeJobs].sort(
     (a, b) => new Date(a.requiredDispatchDate!).getTime() - new Date(b.requiredDispatchDate!).getTime()
@@ -2059,6 +2064,10 @@ export default function Dashboard() {
                   ) : (
                     sortedCompletedJobs.map((job) => {
                       const totalQty = job.lineItems?.reduce((sum, li) => sum + li.quantity, 0) || job.quantity;
+                      const completedTimes = (job.lineItems ?? [])
+                        .map(li => li.completedAt ? new Date(li.completedAt).getTime() : null)
+                        .filter((t): t is number => t !== null && !isNaN(t));
+                      const completedDate = completedTimes.length ? new Date(Math.max(...completedTimes)) : null;
                       
                       return (
                         <TableRow 
@@ -2092,7 +2101,7 @@ export default function Dashboard() {
                           </TableCell>
                           <TableCell className="py-1 px-2 text-right">{totalQty}</TableCell>
                           <TableCell className="py-1 px-2 text-xs text-muted-foreground">
-                            {job.goodsReceived ? format(new Date(job.goodsReceived), 'dd MMM') : '-'}
+                            {completedDate ? format(completedDate, 'dd MMM') : '-'}
                           </TableCell>
                           <TableCell className="py-1 px-2">
                             {job.dhlTrackingNumber ? (
