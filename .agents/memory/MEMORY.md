@@ -34,4 +34,6 @@
 
 - [Casual shift offers](casual-shift-offers.md) — offeredToId reservation must be re-checked inside claimShiftAtomic's lock (TOCTOU), and every claimed→available transition must null offeredToId.
 
+- [DPD Local API](dpd-local-api.md) — use api.dpdlocal.co.uk (old public-ws is dead); labels are HTML, print via sandboxed no-scripts iframe; fail hard on missing consignment number.
+
 - [Auth session patterns](auth-session-patterns.md) — staff=userId (regenerates), customer=customerUserId (legacy login does NOT regenerate); any new login path MUST regenerate before attaching id. OTP lives in login_codes table.

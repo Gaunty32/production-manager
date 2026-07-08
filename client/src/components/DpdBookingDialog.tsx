@@ -65,15 +65,47 @@ interface DpdBookingDialogProps {
   onSuccess?: (trackingNumber: string) => void;
 }
 
-function downloadLabel(base64: string, filename: string) {
-  const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-  const blob = new Blob([bytes], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+function sanitizeLabelHtml(html: string): string {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/(href|src)\s*=\s*(["']?)\s*javascript:[^"'>\s]*/gi, "$1=$2#");
+}
+
+function openLabelForPrinting(labelHtml: string) {
+  const safeHtml = sanitizeLabelHtml(labelHtml);
+  // Render in a hidden sandboxed iframe with NO allow-scripts, so nothing in
+  // the third-party label HTML can ever execute. allow-same-origin (safe here
+  // because scripts are disabled) lets us call print() on the frame.
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("sandbox", "allow-same-origin allow-modals");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.srcdoc = safeHtml;
+  iframe.onload = () => {
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        // Printing blocked — fall back to downloading the label file
+        const blob = new Blob([safeHtml], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "dpd-label.html";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      }
+      // Clean up after the print dialog has had time to capture the content
+      setTimeout(() => iframe.remove(), 60_000);
+    }, 300);
+  };
+  document.body.appendChild(iframe);
 }
 
 function parseAddressField(address: string | null | undefined): Partial<BookingFormData> {
@@ -99,7 +131,7 @@ export function DpdBookingDialog({
   onSuccess,
 }: DpdBookingDialogProps) {
   const { toast } = useToast();
-  const [result, setResult] = useState<{ trackingNumber: string; labelPdfBase64: string } | null>(null);
+  const [result, setResult] = useState<{ trackingNumber: string; labelHtml: string | null } | null>(null);
   const [isBooking, setIsBooking] = useState(false);
   const [selectedOtherIds, setSelectedOtherIds] = useState<Set<string>>(new Set());
 
@@ -188,7 +220,7 @@ export function DpdBookingDialog({
             Book DPD Shipment
           </DialogTitle>
           <DialogDescription>
-            Enter the delivery address to book through DPD. A label PDF will be generated automatically.
+            Enter the delivery address to book through DPD. A shipping label will be generated automatically.
           </DialogDescription>
         </DialogHeader>
 
@@ -207,14 +239,14 @@ export function DpdBookingDialog({
               </AlertDescription>
             </Alert>
 
-            {result.labelPdfBase64 && (
+            {result.labelHtml && (
               <Button
                 className="w-full"
-                onClick={() => downloadLabel(result.labelPdfBase64, `dpd-label-${result.trackingNumber}.pdf`)}
+                onClick={() => openLabelForPrinting(result.labelHtml!)}
                 data-testid="button-download-label"
               >
                 <Download className="h-4 w-4 mr-2" />
-                Download Shipping Label (PDF)
+                Print Shipping Label
               </Button>
             )}
 
@@ -405,7 +437,7 @@ export function DpdBookingDialog({
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="text-xs">
-                  Booking will generate a real DPD shipment and tracking number. The label PDF will open for printing once confirmed.
+                  Booking will generate a real DPD shipment and tracking number. The shipping label will open for printing once confirmed.
                 </AlertDescription>
               </Alert>
 

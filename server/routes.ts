@@ -9427,6 +9427,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ configured: dpdService.isConfigured() });
   });
 
+  app.get("/api/dpd/test-connection", isStaffAuthenticated, async (req, res) => {
+    const result = await dpdService.testConnection();
+    res.json(result);
+  });
+
   app.post("/api/dpd/book-shipment", isStaffAuthenticated, async (req, res) => {
     try {
       if (!dpdService.isConfigured()) {
@@ -9538,8 +9543,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         trackingNumber: result.trackingNumber,
-        labelPdfBase64: result.labelPdfBase64,
+        labelHtml: result.labelHtml,
         parcelNumbers: result.parcelNumbers,
+        trackingUrl: result.trackingUrl,
       });
     } catch (e: any) {
       console.error("[DPD] Book shipment error:", e);

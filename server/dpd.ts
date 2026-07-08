@@ -1,7 +1,10 @@
 /**
- * DPD UK Shipping API Service
- * Uses the DPD Web Connect REST API (public-ws.dpd.com)
- * Authentication: login once per day, cache token for 24h
+ * DPD Local API v3.2 integration (api.dpdlocal.co.uk)
+ * Auth: Basic login → GeoSession token (cached ~12h).
+ *
+ * Required env vars: DPD_API_USERNAME, DPD_API_PASSWORD, DPD_ACCOUNT_NUMBER
+ * Optional: DPD_SENDER_NAME, DPD_SENDER_LINE1, DPD_SENDER_TOWN,
+ *           DPD_SENDER_POSTCODE, DPD_NETWORK_CODE (default "2^12" Parcel Next Day)
  */
 
 export interface DpdShipmentRequest {
@@ -15,197 +18,260 @@ export interface DpdShipmentRequest {
     phone?: string;
     email?: string;
   };
-  parcels: Array<{ weight: number; customerReference?: string }>;
+  parcels: Array<{ weight: number; customerReference?: string }>; // weight in grams
   reference?: string;
   notifyEmail?: string;
 }
 
 export interface DpdShipmentResult {
   trackingNumber: string;
-  labelPdfBase64: string;
+  labelHtml: string | null;
   parcelNumbers: string[];
+  shipmentJobId: number;
+  trackingUrl: string;
 }
 
-interface DpdToken {
-  token: string;
-  depot: string;
-  expiresAt: number;
+/**
+ * Channel Islands (JE/GY) use UK-style postcodes but sit outside the UK
+ * customs territory — DPD requires customsValue + parcelDescription there.
+ */
+export function isChannelIslandsPostcode(postcode: string | null | undefined): boolean {
+  if (!postcode) return false;
+  return /^\s*(JE|GY)\d/i.test(postcode.trim());
 }
 
-const DPD_BASE_URL = "https://public-ws.dpd.com/restservices";
-const TOKEN_TTL_MS = 23 * 60 * 60 * 1000; // 23 hours (token valid 24h, we refresh 1h early)
+const DPD_BASE = "https://api.dpdlocal.co.uk";
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 class DpdService {
-  private cachedToken: DpdToken | null = null;
+  private cachedSession: { token: string; expiresAt: number } | null = null;
 
   private get username(): string {
     return process.env.DPD_API_USERNAME || "";
   }
-
   private get password(): string {
     return process.env.DPD_API_PASSWORD || "";
   }
-
   private get accountNumber(): string {
     return process.env.DPD_ACCOUNT_NUMBER || "";
+  }
+  private get senderName(): string {
+    return process.env.DPD_SENDER_NAME || "Select Branding Solutions";
+  }
+  private get networkCode(): string {
+    return process.env.DPD_NETWORK_CODE || "2^12";
   }
 
   isConfigured(): boolean {
     return !!(this.username && this.password && this.accountNumber);
   }
 
-  private async getToken(): Promise<DpdToken> {
-    // Return cached token if still valid
-    if (this.cachedToken && Date.now() < this.cachedToken.expiresAt) {
-      return this.cachedToken;
+  private async login(): Promise<string> {
+    if (this.cachedSession && Date.now() < this.cachedSession.expiresAt) {
+      return this.cachedSession.token;
     }
 
-    console.log("[DPD] Fetching new auth token...");
-
-    const response = await fetch(`${DPD_BASE_URL}/LoginService/V2_0/login`, {
+    console.log("[DPD] Logging in to DPD Local API...");
+    const credentials = Buffer.from(`${this.username}:${this.password}`).toString("base64");
+    const res = await fetch(`${DPD_BASE}/user/?action=login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({
-        login: {
-          delisId: this.username,
-          password: this.password,
-          messageLanguage: "en_GB",
-        },
-      }),
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        GeoClient: `account/${this.accountNumber}`,
+      },
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`DPD login failed (${response.status}): ${text}`);
+    if (res.status === 401) {
+      throw new Error("DPD login failed: invalid username or password (HTTP 401)");
+    }
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`DPD login failed (${res.status}): ${body}`);
     }
 
-    const data = await response.json();
-
-    if (!data.login?.authToken) {
-      throw new Error("DPD login response missing authToken");
+    const json = (await res.json()) as { data?: { geoSession?: string } };
+    const session = json?.data?.geoSession;
+    if (!session) {
+      throw new Error(`DPD login succeeded but returned no geoSession. Response: ${JSON.stringify(json)}`);
     }
-
-    this.cachedToken = {
-      token: data.login.authToken,
-      depot: data.login.depot || "60",
-      expiresAt: Date.now() + TOKEN_TTL_MS,
-    };
-
-    console.log(`[DPD] Auth token obtained, depot: ${this.cachedToken.depot}`);
-    return this.cachedToken;
+    this.cachedSession = { token: session, expiresAt: Date.now() + SESSION_TTL_MS };
+    return session;
   }
 
-  async createShipment(req: DpdShipmentRequest): Promise<DpdShipmentResult> {
+  private async authHeaders(): Promise<Record<string, string>> {
+    const geoSession = await this.login();
+    return {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      GeoClient: `account/${this.accountNumber}`,
+      GeoSession: geoSession,
+    };
+  }
+
+  async testConnection(): Promise<{ ok: boolean; message: string }> {
+    if (!this.isConfigured()) {
+      return { ok: false, message: "DPD credentials are not configured" };
+    }
+    try {
+      this.cachedSession = null; // force a fresh login for a true test
+      await this.login();
+      return { ok: true, message: "Connected successfully to DPD Local API. GeoSession token received." };
+    } catch (e: any) {
+      return { ok: false, message: e?.message || String(e) };
+    }
+  }
+
+  async createShipment(request: DpdShipmentRequest): Promise<DpdShipmentResult> {
     if (!this.isConfigured()) {
       throw new Error("DPD API credentials are not configured");
     }
 
-    const tokenData = await this.getToken();
+    const headers = await this.authHeaders();
 
-    // Strip spaces from UK postcode for DPD
-    const zipCode = req.recipient.zipCode.replace(/\s/g, "").toUpperCase();
+    const numberOfParcels = Math.max(1, request.parcels.length);
+    const totalWeightGrams = request.parcels.reduce((sum, p) => sum + (p.weight || 0), 0);
+    const totalWeightKg = Math.max(0.1, Math.round((totalWeightGrams / 1000) * 100) / 100);
 
-    const payload = {
-      printOptions: {
-        printerLanguage: "PDF",
-        paperFormat: "A6",
-        startPosition: "UPPER_LEFT",
-      },
-      order: {
-        generalShipmentData: {
-          sendingDepot: tokenData.depot,
-          product: "CL", // Classic (standard DPD service)
-          sender: {
-            name1: "Select Branding Solutions",
-            street: "Station Road",
-            houseNo: "1",
-            country: "GB",
-            zipCode: "LS279EQ",
-            city: "Leeds",
-            phone: "01132523838",
-            email: "info@selectuniforms.co.uk",
-          },
-          recipient: {
-            name1: req.recipient.name,
-            street: req.recipient.street,
-            houseNo: req.recipient.houseNo || "1",
-            country: req.recipient.country || "GB",
-            zipCode: zipCode,
-            city: req.recipient.city,
-            phone: req.recipient.phone || "",
-            email: req.recipient.email || "",
-          },
-        },
-        parcels: req.parcels.map((p) => ({
-          weight: p.weight || 1000, // grams
-          customerReferenceNumber1: p.customerReference || req.reference || "",
-        })),
-        productAndServiceData: {
-          orderType: "consignment",
-          ...(req.notifyEmail ? {
-            predict: {
-              channel: 1,
-              value: req.notifyEmail,
+    const street = [request.recipient.houseNo, request.recipient.street].filter(Boolean).join(" ").trim();
+    const reference = (request.reference || "").slice(0, 25);
+    const channelIslands = isChannelIslandsPostcode(request.recipient.zipCode);
+
+    const collectionDate = new Date().toISOString().split("T")[0] + "T09:00:00";
+
+    const shipmentPayload = {
+      jobId: null,
+      collectionOnDelivery: false,
+      invoice: null,
+      collectionDate,
+      consolidate: false,
+      consignment: [
+        {
+          consignmentNumber: null,
+          consignmentRef: reference,
+          parcel: [],
+          collectionDetails: {
+            contactDetails: {
+              contactName: this.senderName,
+              telephone: "",
             },
-          } : {}),
+            address: {
+              organisation: this.senderName,
+              countryCode: "GB",
+              postcode: process.env.DPD_SENDER_POSTCODE || "",
+              street: process.env.DPD_SENDER_LINE1 || "",
+              locality: "",
+              town: process.env.DPD_SENDER_TOWN || "",
+              county: "",
+            },
+          },
+          deliveryDetails: {
+            contactDetails: {
+              contactName: request.recipient.name,
+              telephone: request.recipient.phone || "",
+            },
+            address: {
+              organisation: request.recipient.name,
+              countryCode: request.recipient.country || "GB",
+              postcode: request.recipient.zipCode,
+              street,
+              locality: "",
+              town: request.recipient.city,
+              county: "",
+            },
+            notificationDetails: {
+              email: request.notifyEmail || request.recipient.email || "",
+              mobile: request.recipient.phone || "",
+            },
+          },
+          networkCode: this.networkCode,
+          numberOfParcels,
+          totalWeight: totalWeightKg,
+          shippingRef1: reference,
+          shippingRef2: "",
+          shippingRef3: "",
+          customsValue: channelIslands ? 50 : null,
+          deliveryInstructions: "",
+          parcelDescription: channelIslands ? "Branded clothing / embroidered garments" : "",
+          liabilityValue: null,
+          liability: false,
         },
-      },
+      ],
     };
 
-    console.log("[DPD] Creating shipment for:", req.recipient.name);
-
-    const response = await fetch(`${DPD_BASE_URL}/ShipmentService/V5_2/createShipmentWithLabels`, {
+    const shipRes = await fetch(`${DPD_BASE}/shipping/shipment`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Authorization": tokenData.token,
-      },
-      body: JSON.stringify(payload),
+      headers,
+      body: JSON.stringify(shipmentPayload),
     });
 
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      // Token may have expired — clear cache so next request re-authenticates
-      if (response.status === 401 || response.status === 403) {
-        this.cachedToken = null;
-      }
-      throw new Error(`DPD shipment creation failed (${response.status}): ${responseText}`);
+    if (!shipRes.ok) {
+      const body = await shipRes.text();
+      throw new Error(`DPD shipment booking failed (${shipRes.status}): ${body}`);
     }
 
-    let data: any;
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      throw new Error("DPD returned non-JSON response");
+    const shipJson = (await shipRes.json()) as {
+      data?: {
+        jobId?: number;
+        shipmentId?: number;
+        consignmentDetail?: Array<{ consignmentNumber?: string; parcelNumbers?: string[] }>;
+      } | null;
+      error?:
+        | { errorCode?: number | string; errorMessage?: string }
+        | Array<{ errorCode?: number | string; errorMessage?: string }>
+        | null;
+    };
+
+    const shipError = Array.isArray(shipJson.error) ? shipJson.error[0] : shipJson.error;
+    if (shipError?.errorCode) {
+      throw new Error(`DPD error ${shipError.errorCode}: ${shipError.errorMessage}`);
     }
 
-    // Extract parcel info from response
-    const parcels = data.shipmentResponse?.parcels || [];
-    if (!parcels.length) {
-      throw new Error("DPD response contained no parcels");
+    const detail = shipJson.data?.consignmentDetail?.[0];
+    const consignmentNumber = (detail?.consignmentNumber ?? "").trim();
+    const parcelNumbers = detail?.parcelNumbers ?? [];
+    const jobId = shipJson.data?.jobId ?? shipJson.data?.shipmentId ?? 0;
+
+    if (!consignmentNumber) {
+      console.error("[DPD] Booking response missing consignment number:", JSON.stringify(shipJson));
+      throw new Error("DPD did not return a consignment/tracking number — the shipment was not booked correctly.");
     }
 
-    const firstParcel = parcels[0];
-    const trackingNumber = (firstParcel.parcelNumber || firstParcel.trackId || "").trim();
-    const labelBase64 = firstParcel.label || "";
+    console.log(`[DPD] Shipment created — consignment: ${consignmentNumber}, jobId: ${jobId}`);
 
-    if (!trackingNumber) {
-      throw new Error("DPD response missing tracking number");
+    const labelHtml = jobId ? await this.fetchLabel(jobId) : null;
+    if (!jobId) {
+      console.error("[DPD] No jobId in shipment response — cannot fetch label:", JSON.stringify(shipJson));
     }
-
-    console.log(`[DPD] Shipment created. Tracking: ${trackingNumber}`);
 
     return {
-      trackingNumber,
-      labelPdfBase64: labelBase64,
-      parcelNumbers: parcels.map((p: any) => p.parcelNumber || ""),
+      trackingNumber: consignmentNumber,
+      labelHtml,
+      parcelNumbers,
+      shipmentJobId: jobId,
+      trackingUrl: `https://track.dpdlocal.co.uk/search?reference=${consignmentNumber}&postcode=${encodeURIComponent(request.recipient.zipCode)}`,
     };
   }
 
-  invalidateToken() {
-    this.cachedToken = null;
+  async fetchLabel(shipmentJobId: number): Promise<string | null> {
+    try {
+      const headers = await this.authHeaders();
+      const res = await fetch(`${DPD_BASE}/shipping/shipment/${shipmentJobId}/label/`, {
+        headers: { ...headers, Accept: "text/html" },
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        console.error(`[DPD] Label fetch failed (${res.status}): ${body}`);
+        return null;
+      }
+      const html = await res.text();
+      console.log(`[DPD] Label fetched for jobId ${shipmentJobId} (${html.length} chars)`);
+      return html;
+    } catch (e: any) {
+      console.error(`[DPD] Label fetch exception: ${e?.message || e}`);
+      return null;
+    }
   }
 }
 
