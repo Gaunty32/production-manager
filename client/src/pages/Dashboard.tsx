@@ -78,6 +78,8 @@ export default function Dashboard() {
   const [bulkCompleteOpen, setBulkCompleteOpen] = useState(false);
   const [editingTrackingJob, setEditingTrackingJob] = useState<JobWithLineItems | null>(null);
   const [dpdBookingJob, setDpdBookingJob] = useState<JobWithLineItems | null>(null);
+  const [dpdBatchJobs, setDpdBatchJobs] = useState<{ id: string; jobName: string; jobNumber: number | null; customerId: string }[]>([]);
+  const [dpdJustBooked, setDpdJustBooked] = useState(false);
   const [recordingProductionItem, setRecordingProductionItem] = useState<{ lineItem: JobLineItem; jobName: string } | null>(null);
   const [filesDialogJob, setFilesDialogJob] = useState<{ id: string; jobName: string; jobNumber: number } | null>(null);
   const [machineFilter, setMachineFilter] = useState<string>("all");
@@ -2115,7 +2117,11 @@ export default function Dashboard() {
                                 className="h-6 text-xs px-2"
                                 onClick={() => {
                                   const fullJob = jobs.find(j => j.id === job.id);
-                                  if (fullJob) setDpdBookingJob(fullJob);
+                                  if (fullJob) {
+                                    setDpdJustBooked(false);
+                                    setDpdBatchJobs([]);
+                                    setDpdBookingJob(fullJob);
+                                  }
                                 }}
                                 data-testid={`button-book-dpd-${job.id}`}
                               >
@@ -2236,7 +2242,19 @@ export default function Dashboard() {
           onOpenChange={setBulkCompleteOpen}
           items={bulkCompleteItems}
           staff={staff}
-          onSuccess={() => setSelectedJobIds(new Set())}
+          onSuccess={() => {
+            const justCompleted = jobsWithCustomers.filter((j) => selectedJobIds.has(j.id));
+            setSelectedJobIds(new Set());
+            const needsShipping = justCompleted.find((j) => !j.dhlTrackingNumber);
+            if (needsShipping) {
+              setDpdBatchJobs(
+                justCompleted
+                  .filter((j) => !j.dhlTrackingNumber)
+                  .map((j) => ({ id: j.id, jobName: j.jobName, jobNumber: j.jobNumber, customerId: j.customerId }))
+              );
+              setDpdBookingJob(needsShipping as JobWithLineItems);
+            }
+          }}
         />
 
         <JobFilesDialog
@@ -2251,18 +2269,50 @@ export default function Dashboard() {
             j.id !== dpdBookingJob.id &&
             !j.dhlTrackingNumber
           );
+          const batchSameCustomer = dpdBatchJobs.filter(b =>
+            b.customerId === dpdBookingJob.customerId &&
+            b.id !== dpdBookingJob.id &&
+            !otherJobs.some(j => j.id === b.id)
+          );
+          const combinedOtherJobs = [
+            ...otherJobs.map(j => ({ id: j.id, jobName: j.jobName, jobNumber: j.jobNumber })),
+            ...batchSameCustomer.map(b => ({ id: b.id, jobName: b.jobName, jobNumber: b.jobNumber })),
+          ];
+          const advanceToNextBatchJob = () => {
+            // Remove this customer's jobs from the batch, then open the next customer's booking (if any)
+            const remaining = dpdBatchJobs.filter(b => b.customerId !== dpdBookingJob.customerId);
+            setDpdBatchJobs(remaining);
+            if (remaining.length > 0) {
+              const nextJob = jobs.find(j => j.id === remaining[0].id);
+              setDpdBookingJob(nextJob ?? null);
+            } else {
+              setDpdBookingJob(null);
+            }
+          };
           return (
             <DpdBookingDialog
               open={true}
-              onOpenChange={(open) => { if (!open) setDpdBookingJob(null); }}
+              onOpenChange={(open) => {
+                if (!open) {
+                  if (dpdJustBooked) {
+                    // Booked & closed the print screen — move on to the next customer in the batch
+                    setDpdJustBooked(false);
+                    advanceToNextBatchJob();
+                  } else {
+                    // Cancelled — stop the batch flow entirely
+                    setDpdBookingJob(null);
+                    setDpdBatchJobs([]);
+                  }
+                }
+              }}
               jobId={dpdBookingJob.id}
               jobReference={dpdBookingJob.poNumber || dpdBookingJob.jobName}
               prefillName={customer?.name}
               prefillAddress={customer?.address ?? undefined}
               prefillPhone={customer?.telephone ?? undefined}
               prefillEmail={customer?.email ?? undefined}
-              otherJobs={otherJobs.map(j => ({ id: j.id, jobName: j.jobName, jobNumber: j.jobNumber }))}
-              onSuccess={() => setDpdBookingJob(null)}
+              otherJobs={combinedOtherJobs}
+              onSuccess={() => setDpdJustBooked(true)}
             />
           );
         })()}

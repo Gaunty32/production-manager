@@ -56,7 +56,8 @@ class DpdService {
     return process.env.DPD_ACCOUNT_NUMBER || "";
   }
   private get senderName(): string {
-    return process.env.DPD_SENDER_NAME || "Select Branding Solutions";
+    // Generic by default — labels must not reveal our company details
+    return process.env.DPD_SENDER_NAME || "Dispatch";
   }
   private get networkCode(): string {
     return process.env.DPD_NETWORK_CODE || "2^12";
