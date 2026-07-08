@@ -31,6 +31,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobEditDialog } from "@/components/JobEditDialog";
 import { CustomerFormDialog } from "@/components/CustomerFormDialog";
@@ -80,6 +88,7 @@ export default function Dashboard() {
   const [dpdBookingJob, setDpdBookingJob] = useState<JobWithLineItems | null>(null);
   const [dpdBatchJobs, setDpdBatchJobs] = useState<{ id: string; jobName: string; jobNumber: number | null; customerId: string }[]>([]);
   const [dpdJustBooked, setDpdJustBooked] = useState(false);
+  const [dpdShipPrompt, setDpdShipPrompt] = useState<{ id: string; jobName: string; jobNumber: number | null; customerId: string }[] | null>(null);
   const [recordingProductionItem, setRecordingProductionItem] = useState<{ lineItem: JobLineItem; jobName: string } | null>(null);
   const [filesDialogJob, setFilesDialogJob] = useState<{ id: string; jobName: string; jobNumber: number } | null>(null);
   const [machineFilter, setMachineFilter] = useState<string>("all");
@@ -496,6 +505,7 @@ export default function Dashboard() {
   const sortedCompletedJobs = [...filteredCompletedJobs].sort(
     (a, b) => latestCompletionTime(b) - latestCompletionTime(a)
   );
+  const awaitingDespatchCount = allCompletedJobs.filter(j => !j.dhlTrackingNumber && j.invoiceStatus === 'ready').length;
 
   const sortedActiveJobs = [...activeJobs].sort(
     (a, b) => new Date(a.requiredDispatchDate!).getTime() - new Date(b.requiredDispatchDate!).getTime()
@@ -2036,6 +2046,11 @@ export default function Dashboard() {
                 </h2>
                 <p className="text-xs text-muted-foreground">
                   {filteredCompletedJobs.length} of {allCompletedJobs.length} orders
+                  {awaitingDespatchCount > 0 && (
+                    <span className="ml-2 text-amber-600 dark:text-amber-500" data-testid="text-awaiting-despatch-count">
+                      · {awaitingDespatchCount} awaiting despatch
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -2254,17 +2269,56 @@ export default function Dashboard() {
           onSuccess={() => {
             const justCompleted = jobsWithCustomers.filter((j) => selectedJobIds.has(j.id));
             setSelectedJobIds(new Set());
-            const needsShipping = justCompleted.find((j) => !j.dhlTrackingNumber);
-            if (needsShipping) {
-              setDpdBatchJobs(
-                justCompleted
-                  .filter((j) => !j.dhlTrackingNumber)
-                  .map((j) => ({ id: j.id, jobName: j.jobName, jobNumber: j.jobNumber, customerId: j.customerId }))
-              );
-              setDpdBookingJob(needsShipping as JobWithLineItems);
+            const needingShipping = justCompleted
+              .filter((j) => !j.dhlTrackingNumber)
+              .map((j) => ({ id: j.id, jobName: j.jobName, jobNumber: j.jobNumber, customerId: j.customerId }));
+            if (needingShipping.length > 0) {
+              setDpdShipPrompt(needingShipping);
             }
           }}
         />
+
+        <AlertDialog open={dpdShipPrompt !== null} onOpenChange={(open) => { if (!open) setDpdShipPrompt(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Ship now or hold for consolidation?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {dpdShipPrompt?.length === 1
+                  ? "This order is complete. Book DPD now, or hold it to ship together with the customer's other orders later?"
+                  : `${dpdShipPrompt?.length ?? 0} orders are complete. Book DPD now, or hold them to ship together with other orders later?`}
+                {" "}Held orders stay in the Completed section marked as awaiting despatch — use their Book DPD button whenever you're ready.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setDpdShipPrompt(null)}
+                data-testid="button-hold-despatch"
+              >
+                <Package className="h-4 w-4 mr-2" />
+                Hold — awaiting despatch
+              </Button>
+              <Button
+                onClick={() => {
+                  const batch = dpdShipPrompt ?? [];
+                  setDpdShipPrompt(null);
+                  if (batch.length > 0) {
+                    const firstJob = jobs.find((j) => j.id === batch[0].id);
+                    if (firstJob) {
+                      setDpdBatchJobs(batch);
+                      setDpdJustBooked(false);
+                      setDpdBookingJob(firstJob);
+                    }
+                  }
+                }}
+                data-testid="button-ship-now"
+              >
+                <Truck className="h-4 w-4 mr-2" />
+                Book DPD now
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <JobFilesDialog
           job={filesDialogJob}
