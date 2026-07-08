@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "XYLhXaWnPBfn3aqIBM2lk"
+uri = "file://exports/profile-pictures-implementation-guide.md"
+type = "text"
+title = "Profile Pictures Implementation Guide"
