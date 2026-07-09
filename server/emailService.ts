@@ -58,14 +58,30 @@ async function getUncachableResendClient() {
   };
 }
 
+// Reply-to for chat notification emails — replies to this address bounce, so
+// customers are steered back to the portal to reply instead of replying by email.
+const NO_REPLY_ADDRESS = 'noreply@selectbranding.co.uk';
+
+/** Prominent notice used in chat notification emails so customers reply in the portal. */
+function noReplyNotice(): string {
+  return `
+    <div style="background-color:#fef3c7;border-radius:6px;padding:12px 16px;margin:16px 0;">
+      <p style="margin:0;color:#92400e;font-size:13px;font-weight:600;">
+        Please do not reply to this email — replies are not monitored.
+        Use the "View &amp; Reply" button above to respond in your customer portal.
+      </p>
+    </div>
+  `;
+}
+
 /** Sends an email via Resend and records it in the daily budget tracker. */
 async function sendEmail(
   client: Resend,
   params: Parameters<Resend['emails']['send']>[0],
 ): ReturnType<Resend['emails']['send']> {
-  // Always set reply_to so replies land in a real inbox, not spam
+  // Always set replyTo so replies land in a real inbox, not spam
   const enriched = {
-    reply_to: 'info@selectbranding.co.uk',
+    replyTo: 'info@selectbranding.co.uk',
     ...params,
   };
   const result = await client.emails.send(enriched);
@@ -81,7 +97,7 @@ function getBaseUrl() {
 
 // ─── Branded email wrapper ────────────────────────────────────────────────────
 // All emails share this shell so branding updates happen in one place.
-function brandedEmail(bodyHtml: string, opts?: { customerLogoUrl?: string | null; customerName?: string | null }): string {
+function brandedEmail(bodyHtml: string, opts?: { customerLogoUrl?: string | null; customerName?: string | null; noReply?: boolean }): string {
   const sbLogoUrl = `${getBaseUrl()}/logo.png`;
   const customerLogo = opts?.customerLogoUrl;
   const customerName = opts?.customerName ?? 'Customer';
@@ -143,7 +159,9 @@ function brandedEmail(bodyHtml: string, opts?: { customerLogoUrl?: string | null
                 <a href="mailto:info@selectbranding.co.uk" style="color:#4f46e5;text-decoration:none;">info@selectbranding.co.uk</a>
               </p>
               <p style="margin:12px 0 0;font-size:11px;color:#a1a1aa;">
-                You can reply to this email and it will reach our team at <a href="mailto:info@selectbranding.co.uk" style="color:#4f46e5;text-decoration:none;">info@selectbranding.co.uk</a>.
+                ${opts?.noReply
+                  ? 'This is an automated notification — please do not reply to this email. To respond, use your customer portal.'
+                  : 'You can reply to this email and it will reach our team at <a href="mailto:info@selectbranding.co.uk" style="color:#4f46e5;text-decoration:none;">info@selectbranding.co.uk</a>.'}
               </p>
             </td>
           </tr>
@@ -527,13 +545,15 @@ export async function sendStaffMessageToCustomerEmail(
       <p style="margin:0;color:#18181b;white-space:pre-line;">${safeMessage}</p>
     </div>
     ${ctaButton(viewUrl, 'View &amp; Reply')}
+    ${noReplyNotice()}
   `;
 
   const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmail,
     subject: `New message about your order: ${safeJobName}`,
-    html: brandedEmail(body),
+    html: brandedEmail(body, { noReply: true }),
+    replyTo: NO_REPLY_ADDRESS,
   });
 
   if (error) {
@@ -625,6 +645,7 @@ export async function sendNewChatEmail(
       <p style="margin:0;color:#18181b;white-space:pre-line;">${safeMessage}</p>
     </div>
     ${ctaButton(details.portalUrl, 'View &amp; Reply')}
+    ${noReplyNotice()}
     ${divider}
     <p style="color:#71717a;font-size:13px;margin:8px 0;">
       You can reply directly from your customer portal. If you have any questions, please don't hesitate to get in touch.
@@ -642,7 +663,8 @@ export async function sendNewChatEmail(
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmails,
     subject: emailSubject,
-    html: brandedEmail(body),
+    html: brandedEmail(body, { noReply: true }),
+    replyTo: NO_REPLY_ADDRESS,
   });
 
   if (error) {
