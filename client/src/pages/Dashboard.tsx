@@ -2330,7 +2330,8 @@ export default function Dashboard() {
           const otherJobs = allCompletedJobs.filter(j =>
             j.customerId === dpdBookingJob.customerId &&
             j.id !== dpdBookingJob.id &&
-            !j.dhlTrackingNumber
+            !j.dhlTrackingNumber &&
+            j.invoiceStatus === 'ready'
           );
           const batchSameCustomer = dpdBatchJobs.filter(b =>
             b.customerId === dpdBookingJob.customerId &&
