@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Truck, CheckCircle2, Download, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -39,9 +40,15 @@ const bookingSchema = z.object({
   recipientPhone: z.string().optional(),
   recipientEmail: z.string().email("Invalid email").optional().or(z.literal("")),
   packageCount: z.coerce.number().int().min(1).max(50).default(1),
-  packageWeightGrams: z.coerce.number().int().min(100).max(70000).default(1000),
+  packageType: z.enum(["box", "bag"]).default("box"),
+  packageWeightGrams: z.coerce.number().int().min(100).max(70000).default(5000),
   reference: z.string().optional(),
 });
+
+const DEFAULT_WEIGHT_GRAMS: Record<"box" | "bag", number> = {
+  box: 5000,
+  bag: 2000,
+};
 
 type BookingFormData = z.infer<typeof bookingSchema>;
 
@@ -149,8 +156,9 @@ export function DpdBookingDialog({
       recipientPhone: prefillPhone || "",
       recipientEmail: prefillEmail || "",
       packageCount: 1,
-      packageWeightGrams: 1000,
-      reference: jobReference || "",
+      packageType: "box" as const,
+      packageWeightGrams: DEFAULT_WEIGHT_GRAMS.box,
+      reference: prefillName || jobReference || "",
     },
   });
 
@@ -368,13 +376,40 @@ export function DpdBookingDialog({
 
               <div className="space-y-3 border-t pt-3">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Parcel Details</h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="packageType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Type</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            form.setValue("packageWeightGrams", DEFAULT_WEIGHT_GRAMS[value as "box" | "bag"]);
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-package-type">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="box">Box</SelectItem>
+                            <SelectItem value="bag">Bag</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <FormField
                     control={form.control}
                     name="packageCount"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Number of Parcels</FormLabel>
+                        <FormLabel>How Many</FormLabel>
                         <FormControl>
                           <Input {...field} type="number" min="1" max="50" data-testid="input-package-count" />
                         </FormControl>
@@ -387,24 +422,27 @@ export function DpdBookingDialog({
                     name="packageWeightGrams"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Weight per Parcel (g)</FormLabel>
+                        <FormLabel>Weight Each (g)</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" min="100" max="70000" placeholder="1000" data-testid="input-weight" />
+                          <Input {...field} type="number" min="100" max="70000" placeholder="5000" data-testid="input-weight" />
                         </FormControl>
-                        <FormDescription className="text-xs">e.g. 1000 = 1kg</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
+                <p className="text-xs text-muted-foreground" data-testid="text-total-weight">
+                  Total weight: {(((Number(form.watch("packageCount")) || 1) * (Number(form.watch("packageWeightGrams")) || 0)) / 1000).toFixed(1)}kg
+                  {" "}({form.watch("packageCount") || 1} × {((Number(form.watch("packageWeightGrams")) || 0) / 1000).toFixed(1)}kg per {form.watch("packageType") === "bag" ? "bag" : "box"})
+                </p>
                 <FormField
                   control={form.control}
                   name="reference"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Reference <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                      <FormLabel>Reference <span className="text-muted-foreground font-normal">(shown on the label)</span></FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="e.g. PO number or job name" data-testid="input-reference" />
+                        <Input {...field} placeholder="e.g. customer name" data-testid="input-reference" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
