@@ -218,13 +218,13 @@ export default function CustomerDashboard() {
   // Inject live chat widget — only on customer portal, cleaned up on unmount
   useEffect(() => {
     const script = document.createElement("script");
-    script.src = "https://beta.leadconnectorhq.com/loader.js";
-    script.setAttribute("data-resources-url", "https://beta.leadconnectorhq.com/chat-widget/loader.js");
+    script.src = "https://widgets.leadconnectorhq.com/loader.js";
+    script.setAttribute("data-resources-url", "https://widgets.leadconnectorhq.com/chat-widget/loader.js");
     script.setAttribute("data-widget-id", "69b2725d6a7fad523c100573");
     script.async = true;
     document.body.appendChild(script);
     return () => {
-      document.body.removeChild(script);
+      if (script.parentNode) script.parentNode.removeChild(script);
       // Remove any widget elements the loader may have injected
       document.querySelectorAll('[id^="leadconnector"], [class*="leadconnector"], [id^="chat-widget"]').forEach(el => el.remove());
     };
