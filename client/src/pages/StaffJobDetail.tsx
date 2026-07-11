@@ -51,7 +51,8 @@ type JobMessage = {
   id: string;
   senderType: "customer" | "staff";
   senderName: string | null;
-  message: string;
+  message: string | null;
+  imageUrl: string | null;
   createdAt: string;
 };
 
@@ -759,6 +760,22 @@ export default function StaffJobDetail() {
                               </>
                             );
                           })()}
+                          {msg.imageUrl && (
+                            <a
+                              href={msg.imageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block mt-2"
+                              data-testid={`link-message-image-${msg.id}`}
+                            >
+                              <img
+                                src={msg.imageUrl}
+                                alt="Attachment"
+                                className="max-w-full rounded-lg max-h-48 object-contain"
+                                data-testid={`img-message-image-${msg.id}`}
+                              />
+                            </a>
+                          )}
                           <p
                             className={`text-xs mt-1 ${
                               msg.senderType === "staff"
