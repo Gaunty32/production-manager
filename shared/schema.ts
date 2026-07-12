@@ -59,6 +59,7 @@ export const staff = pgTable("staff", {
   userId: varchar("user_id").references(() => users.id),
   holidayAllowance: real("holiday_allowance").notNull().default(23),
   canApproveHolidays: boolean("can_approve_holidays").notNull().default(false),
+  active: boolean("active").notNull().default(true),
 });
 
 export const jobs = pgTable("jobs", {
@@ -443,6 +444,7 @@ export const updateStaffSchema = z.object({
   name: z.string().optional(),
   holidayAllowance: z.coerce.number().min(0).max(366).optional(),
   canApproveHolidays: z.boolean().optional(),
+  active: z.boolean().optional(),
 });
 
 export const insertJobSchema = createInsertSchema(jobs).omit({

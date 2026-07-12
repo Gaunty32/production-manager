@@ -289,8 +289,8 @@ function MachineCard({ machine, staff }: { machine: Machine; staff: Staff[] }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_OPERATOR}>No default operator</SelectItem>
-                {staff.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                {staff.filter(s => s.active !== false || s.id === machine.defaultOperatorId).map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}{s.active === false ? " (disabled)" : ""}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -383,6 +383,7 @@ export default function MachineManagement() {
   }, 0);
 
   return (
+    <div className="h-full overflow-y-auto">
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -428,6 +429,7 @@ export default function MachineManagement() {
           ))}
         </div>
       )}
+    </div>
     </div>
   );
 }

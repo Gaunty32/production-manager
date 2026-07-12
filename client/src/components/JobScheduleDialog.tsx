@@ -448,7 +448,7 @@ export function JobScheduleDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {staff.map((member) => (
+                      {staff.filter((member) => member.active !== false).map((member) => (
                         <SelectItem key={member.id} value={member.id}>
                           {member.name}
                         </SelectItem>

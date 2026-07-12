@@ -83,7 +83,7 @@ export function BulkCompleteDialog({
     setSplits({});
   }, [open, items]);
 
-  const sortedStaff = [...staff].sort((a, b) => a.name.localeCompare(b.name));
+  const sortedStaff = staff.filter((s) => s.active !== false).sort((a, b) => a.name.localeCompare(b.name));
 
   const toggleSplit = (item: BulkCompleteItem) => {
     setSplits((prev) => {

@@ -201,7 +201,7 @@ export async function autoScheduleLineItem(lineItemId: string): Promise<{ succes
     const staffMachineAllocations = await storage.getStaffMachineAllocations();
     const staffHolidays = await storage.getStaffHolidays();
     const bankHolidays = await storage.getBankHolidays();
-    const staff = await storage.getStaff();
+    const staff = (await storage.getStaff()).filter(s => s.active !== false);
     
     if (staff.length === 0) {
       return { success: false, error: "No staff available" };
@@ -4888,6 +4888,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/staff/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateStaffSchema.parse(req.body);
+      // Only super_admins may enable/disable staff members.
+      if (data.active !== undefined) {
+        const actingUser = req.session.userId
+          ? await storage.getUser(req.session.userId)
+          : undefined;
+        if (!actingUser || actingUser.role !== "super_admin") {
+          return res.status(403).json({ error: "Only super admins can disable or re-enable staff members" });
+        }
+      }
       // Only super_admins may change the "can approve holidays" flag.
       if (data.canApproveHolidays !== undefined) {
         const actingUser = req.session.userId
@@ -7048,7 +7057,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get all scheduling data
-      const staffMembers = await storage.getStaff();
+      const staffMembers = (await storage.getStaff()).filter(s => s.active !== false);
       const shifts = await storage.getStaffShifts();
       const blocks = await storage.getMachineScheduleBlocks();
       const schedules = await storage.getJobSchedules();
@@ -7162,7 +7171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { findAvailableSlots, minutesToTime } = await import("@shared/scheduling");
       
       // Get all scheduling data
-      const staffMembers = await storage.getStaff();
+      const staffMembers = (await storage.getStaff()).filter(s => s.active !== false);
       const staffShifts = await storage.getStaffShifts();
       const machineBlocks = await storage.getMachineScheduleBlocks();
       const jobSchedules = await storage.getJobSchedules();

@@ -188,7 +188,7 @@ export function RecordProductionDialog({
                     <SelectValue placeholder="Select staff" />
                   </SelectTrigger>
                   <SelectContent>
-                    {staff.map((s) => (
+                    {staff.filter((s) => s.active !== false).map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.name}
                       </SelectItem>

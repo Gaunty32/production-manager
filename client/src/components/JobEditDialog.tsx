@@ -133,7 +133,7 @@ interface JobEditDialogProps {
     deliveryAddress?: string | null;
   } | null;
   customers: Array<{ id: string; name: string; address?: string | null; pricingTable2025?: boolean | null; pricingTable2026?: boolean | null }>;
-  staff: Array<{ id: string; name: string }>;
+  staff: Array<{ id: string; name: string; active?: boolean }>;
   onSubmit: (id: string, data: z.infer<typeof formSchema>) => void;
 }
 
@@ -1026,9 +1026,9 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="unassigned">Not assigned</SelectItem>
-                                {staff.map((s) => (
+                                {staff.filter((s) => s.active !== false || s.id === item.operatorId).map((s) => (
                                   <SelectItem key={s.id} value={s.id}>
-                                    {s.name}
+                                    {s.name}{s.active === false ? " (disabled)" : ""}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1388,8 +1388,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">Not assigned</SelectItem>
-                    {staff.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    {staff.filter((s) => s.active !== false || s.id === draftCompletedById).map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}{s.active === false ? " (disabled)" : ""}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

@@ -1,4 +1,5 @@
-import { Plus, Trash2, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil, UserX, UserCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { StaffFormDialog } from "@/components/StaffFormDialog";
@@ -27,8 +28,11 @@ export default function StaffPage() {
     queryKey: ["/api/staff"],
   });
 
-  // Sort staff alphabetically by name
+  // Sort staff alphabetically by name, active members first
   const staff = [...staffData].sort((a, b) => {
+    const aActive = a.active !== false;
+    const bActive = b.active !== false;
+    if (aActive !== bActive) return aActive ? -1 : 1;
     if (!a.name || !b.name) return 0;
     return a.name.localeCompare(b.name);
   });
@@ -99,6 +103,29 @@ export default function StaffPage() {
     },
   });
 
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/staff/${id}`, { active });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff"] });
+      toast({
+        title: variables.active ? "Staff member re-enabled" : "Staff member disabled",
+        description: variables.active
+          ? "They can be assigned to work again."
+          : "They're hidden from assignment lists, but all their history is kept.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update staff member",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleDelete = (id: string) => {
     setStaffToDelete(id);
   };
@@ -159,15 +186,23 @@ export default function StaffPage() {
                     </td>
                   </tr>
                 ) : (
-                  staff.map((staffMember) => (
-                    <tr key={staffMember.id} className="hover-elevate" data-testid={`row-staff-${staffMember.id}`}>
-                      <td className="py-3 px-4 text-sm">{staffMember.name}</td>
+                  staff.map((staffMember) => {
+                    const isActive = staffMember.active !== false;
+                    return (
+                    <tr key={staffMember.id} className={`hover-elevate ${isActive ? "" : "opacity-60"}`} data-testid={`row-staff-${staffMember.id}`}>
+                      <td className="py-3 px-4 text-sm">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{staffMember.name}</span>
+                          {!isActive && (
+                            <Badge variant="secondary" data-testid={`badge-inactive-${staffMember.id}`}>Disabled</Badge>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-wrap">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
                             onClick={() => setStaffToEdit(staffMember)}
                             data-testid={`button-edit-staff-${staffMember.id}`}
                           >
@@ -175,8 +210,20 @@ export default function StaffPage() {
                           </Button>
                           <Button
                             variant="ghost"
+                            size="sm"
+                            onClick={() => toggleActiveMutation.mutate({ id: staffMember.id, active: !isActive })}
+                            disabled={toggleActiveMutation.isPending}
+                            data-testid={`button-toggle-active-${staffMember.id}`}
+                          >
+                            {isActive ? (
+                              <><UserX className="h-4 w-4 mr-1" /> Disable</>
+                            ) : (
+                              <><UserCheck className="h-4 w-4 mr-1" /> Re-enable</>
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
                             onClick={() => handleDelete(staffMember.id)}
                             data-testid={`button-delete-staff-${staffMember.id}`}
                           >
@@ -185,7 +232,8 @@ export default function StaffPage() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -197,8 +245,12 @@ export default function StaffPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete Staff Member</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete this staff member? This action cannot be undone.
-                Any jobs assigned to this staff member will be unassigned.
+                Deleting permanently removes this person's production history — their completed
+                work records, leaderboard stats, shifts, and holidays will all be erased. This
+                cannot be undone.
+                <br /><br />
+                If they've left the company, use <strong>Disable</strong> instead — that hides
+                them from assignment lists but keeps all their history.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

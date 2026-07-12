@@ -120,7 +120,7 @@ const formSchema = insertJobSchema.extend({
 interface JobFormDialogProps {
   trigger: React.ReactNode;
   customers: Customer[];
-  staff: Array<{ id: string; name: string }>;
+  staff: Array<{ id: string; name: string; active?: boolean }>;
   onJobCreated?: (jobId: string) => void;
 }
 
@@ -1239,7 +1239,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="unassigned">Not assigned</SelectItem>
-                                {staff.map((s) => (
+                                {staff.filter((s) => s.active !== false).map((s) => (
                                   <SelectItem key={s.id} value={s.id}>
                                     {s.name}
                                   </SelectItem>
