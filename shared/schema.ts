@@ -769,13 +769,22 @@ export const updateJobLineItemSchema = z.object({
     z.union([z.number().int().min(1), z.null()]).optional()
   ),
   operatorId: z.string().nullable().optional(),
+  // Multi-member completion: each contributor gets credited a quantity and time.
+  // When provided on completion, the server derives completedById (largest quantity)
+  // and actualProductionTimeMinutes (sum) and records a production entry per person.
+  contributors: z.array(z.object({
+    staffId: z.string().min(1),
+    quantity: z.coerce.number().int().min(1),
+    minutes: z.coerce.number().int().min(1),
+  })).optional(),
 }).refine(
   (data) => {
     // If completed is true and this is an embroidery job, require machineId, completedById, and actualProductionTime
     // Note: We can't check jobType here as it's not in the update schema
     // The UI/backend will need to enforce this based on the line item's jobType
     if (data.completed === true) {
-      return data.completedById !== null && data.completedById !== undefined;
+      const hasContributors = Array.isArray(data.contributors) && data.contributors.length > 0;
+      return hasContributors || (data.completedById !== null && data.completedById !== undefined);
     }
     return true;
   },

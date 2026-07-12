@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DemoAmount } from "@/components/DemoText";
 import { Calendar } from "@/components/ui/calendar";
-import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw, Gauge, Printer } from "lucide-react";
+import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw, Gauge, Printer, Factory } from "lucide-react";
+import { ProductionWeekSummary } from "@/components/ProductionWeekSummary";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -742,6 +743,10 @@ export default function WeeklyReports() {
             <TrendingUp className="h-4 w-4 mr-2" />
             Daily Production
           </TabsTrigger>
+          <TabsTrigger value="production-week" data-testid="tab-production-week">
+            <Factory className="h-4 w-4 mr-2" />
+            Weekly Summary
+          </TabsTrigger>
           <TabsTrigger value="daily-output" data-testid="tab-daily-output">
             <LineChartIcon className="h-4 w-4 mr-2" />
             Daily Output
@@ -763,6 +768,10 @@ export default function WeeklyReports() {
             Lead Times
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="production-week" className="space-y-4">
+          <ProductionWeekSummary />
+        </TabsContent>
 
         <TabsContent value="performance" className="space-y-4">
           <Card>

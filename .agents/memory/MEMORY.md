@@ -18,6 +18,8 @@
 
 - [Line item operator](line-item-operator.md) — operatorId falls back to machine.defaultOperatorId; keep create+update routes in parity; queue filters apply per-line-item (one row per line item).
 
+- [Staff credit attribution](staff-credit-attribution.md) — production_entries is the source of truth for per-staff credit; completedById fallback ONLY when an item has zero entries all-time, or you double count.
+
 - [Machine-sheet day keys & operators](machine-sheet-date-keys.md) — server owns the yyyy-MM-dd dateKey (never recompute client-side: UTC vs local diverges); per-day operator = Staff Allocations, defaultOperatorId only a fallback.
 
 - [Print machine convention](print-machine-convention.md) — Print jobs force-routed to machine id 6 (operator Mollie); won't appear on the timeline until the operator has staff shifts (scheduler gates slots on shifts).

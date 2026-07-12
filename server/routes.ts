@@ -1828,6 +1828,225 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Weekly production summary — a single Monday–Sunday production week with
+  // per-staff credit (from production entries, falling back to "completed by"),
+  // per-machine breakdown, and estimated vs actual production time.
+  app.get("/api/reports/production-week", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      // UTC instant of midnight in London for a given calendar date (handles BST).
+      const londonMidnightUtc = (y: number, mo: number, d: number): Date => {
+        const guess = new Date(Date.UTC(y, mo - 1, d));
+        const hourInLondon = parseInt(
+          new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "numeric", hourCycle: "h23" }).format(guess),
+          10
+        );
+        // At UTC midnight, London shows 00 (GMT) or 01 (BST); shift back accordingly.
+        return new Date(guess.getTime() - (hourInLondon === 23 ? -1 : hourInLondon) * 3600_000);
+      };
+
+      // Resolve requested calendar date (defaults to today in London)
+      let y: number, mo: number, d: number;
+      const ws = req.query.weekStart;
+      if (typeof ws === "string" && /^\d{4}-\d{2}-\d{2}$/.test(ws)) {
+        [y, mo, d] = ws.split("-").map(Number);
+      } else {
+        const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+        [y, mo, d] = parts.split("-").map(Number);
+      }
+
+      // Snap to the Monday of that week
+      const calMs = Date.UTC(y, mo - 1, d);
+      const dow = new Date(calMs).getUTCDay(); // 0=Sun..6=Sat
+      const mondayMs = calMs - ((dow + 6) % 7) * 86400_000;
+      const monday = new Date(mondayMs);
+      const nextMonday = new Date(mondayMs + 7 * 86400_000);
+      const sunday = new Date(mondayMs + 6 * 86400_000);
+      const start = londonMidnightUtc(monday.getUTCFullYear(), monday.getUTCMonth() + 1, monday.getUTCDate());
+      const end = londonMidnightUtc(nextMonday.getUTCFullYear(), nextMonday.getUTCMonth() + 1, nextMonday.getUTCDate());
+      const ymd = (dt: Date) =>
+        `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+
+      const [allLineItems, allJobs, machines, staffList, customers, allEntries] = await Promise.all([
+        storage.getAllJobLineItems(),
+        storage.getJobs(),
+        storage.getMachines(),
+        storage.getStaff(),
+        storage.getCustomers(),
+        storage.getProductionEntries(),
+      ]);
+
+      const lineItemMap = new Map(allLineItems.map(li => [li.id, li]));
+      const jobMap = new Map(allJobs.map(j => [j.id, j]));
+      const machineMap = new Map(machines.map(m => [m.id, m]));
+      const staffMap = new Map(staffList.map(s => [s.id, s]));
+      const customerMap = new Map(customers.map(c => [c.id, c]));
+
+      // Line items that have ANY production entries (all time) — for these, staff
+      // credit comes solely from entries so we never double count.
+      const lineItemsWithEntries = new Set(allEntries.map(e => e.lineItemId));
+
+      const inRange = (dt: Date | string | null | undefined) => {
+        if (!dt) return false;
+        const t = new Date(dt).getTime();
+        return t >= start.getTime() && t < end.getTime();
+      };
+
+      const entriesInWeek = allEntries.filter(e => inRange(e.workDate));
+      const completedItems = allLineItems.filter(li => li.completed && inRange(li.completedAt));
+
+      const estimateMinutes = (li: typeof allLineItems[number]): number | null => {
+        if (!li.machineId || li.stitchCount <= 0 || li.quantity <= 0) return null;
+        const machine = machineMap.get(li.machineId);
+        const heads = machine?.heads || 6;
+        const spm = machine?.stitchesPerMinute || 750;
+        const changeover = machine?.changeoverTimeMinutes || 3;
+        const multiplier = machine?.schedulingMultiplier ?? 1;
+        const runs = Math.ceil(li.quantity / heads);
+        return Math.ceil((runs * ((li.stitchCount / spm) + changeover) * multiplier) / 10) * 10;
+      };
+
+      // ----- Per-staff credit -----
+      type StaffAgg = { staffId: string; name: string; quantity: number; minutes: number; stitches: number; itemsWorkedOn: Set<string> };
+      const byStaffAcc = new Map<string, StaffAgg>();
+      const creditStaff = (staffId: string, qty: number, minutes: number, stitches: number, lineItemId: string) => {
+        let agg = byStaffAcc.get(staffId);
+        if (!agg) {
+          agg = { staffId, name: staffMap.get(staffId)?.name || "Unknown", quantity: 0, minutes: 0, stitches: 0, itemsWorkedOn: new Set() };
+          byStaffAcc.set(staffId, agg);
+        }
+        agg.quantity += qty;
+        agg.minutes += minutes;
+        agg.stitches += stitches;
+        agg.itemsWorkedOn.add(lineItemId);
+      };
+
+      for (const entry of entriesInWeek) {
+        const li = lineItemMap.get(entry.lineItemId);
+        creditStaff(
+          entry.staffId,
+          entry.quantityCompleted,
+          entry.productionTimeMinutes,
+          entry.quantityCompleted * (li?.stitchCount || 0),
+          entry.lineItemId
+        );
+      }
+      // Fallback: completed items with no production entries credit the completer
+      for (const li of completedItems) {
+        if (lineItemsWithEntries.has(li.id)) continue;
+        if (!li.completedById) continue;
+        creditStaff(li.completedById, li.quantity, li.actualProductionTimeMinutes || 0, li.quantity * li.stitchCount, li.id);
+      }
+
+      const byStaff = Array.from(byStaffAcc.values())
+        .map(s => ({
+          staffId: s.staffId,
+          name: s.name,
+          quantity: s.quantity,
+          minutes: s.minutes,
+          stitches: s.stitches,
+          itemsWorkedOn: s.itemsWorkedOn.size,
+          stitchesPerHour: s.minutes > 0 ? Math.round(s.stitches / (s.minutes / 60)) : null,
+        }))
+        .sort((a, b) => b.quantity - a.quantity);
+
+      // ----- Per-machine breakdown (completed items this week) -----
+      type MachineAgg = { machineId: number; name: string; items: number; quantity: number; actualMinutes: number; estimatedMinutes: number; ratios: number[] };
+      const byMachineAcc = new Map<number, MachineAgg>();
+      for (const li of completedItems) {
+        if (!li.machineId) continue;
+        let agg = byMachineAcc.get(li.machineId);
+        if (!agg) {
+          agg = { machineId: li.machineId, name: machineMap.get(li.machineId)?.name || `Machine ${li.machineId}`, items: 0, quantity: 0, actualMinutes: 0, estimatedMinutes: 0, ratios: [] };
+          byMachineAcc.set(li.machineId, agg);
+        }
+        agg.items++;
+        agg.quantity += li.quantity;
+        const est = estimateMinutes(li);
+        const actual = li.actualProductionTimeMinutes;
+        if (actual != null) agg.actualMinutes += actual;
+        if (est != null) agg.estimatedMinutes += est;
+        if (est != null && est > 0 && actual != null) agg.ratios.push(actual / est);
+      }
+      const byMachine = Array.from(byMachineAcc.values())
+        .map(m => ({
+          machineId: m.machineId,
+          name: m.name,
+          items: m.items,
+          quantity: m.quantity,
+          actualMinutes: m.actualMinutes,
+          estimatedMinutes: m.estimatedMinutes,
+          avgRatio: m.ratios.length ? m.ratios.reduce((a, b) => a + b, 0) / m.ratios.length : null,
+        }))
+        .sort((a, b) => b.quantity - a.quantity);
+
+      // ----- Totals + item list -----
+      let totalQuantity = 0, totalStitches = 0, actualMinutesTotal = 0, estimatedMinutesTotal = 0;
+      let onTime = 0, late = 0, withDueDate = 0;
+      const ratios: number[] = [];
+      const items = completedItems.map(li => {
+        const job = jobMap.get(li.jobId);
+        const est = estimateMinutes(li);
+        const actual = li.actualProductionTimeMinutes;
+        totalQuantity += li.quantity;
+        totalStitches += li.quantity * li.stitchCount;
+        if (actual != null) actualMinutesTotal += actual;
+        if (est != null) estimatedMinutesTotal += est;
+        if (est != null && est > 0 && actual != null) ratios.push(actual / est);
+
+        // On-time vs the job's required dispatch date (that day counts as on time)
+        if (job?.requiredDispatchDate && li.completedAt) {
+          const due = new Date(job.requiredDispatchDate);
+          if (!isNaN(due.getTime())) {
+            due.setUTCHours(23, 59, 59, 999);
+            withDueDate++;
+            if (new Date(li.completedAt) <= due) onTime++; else late++;
+          }
+        }
+
+        const itemEntries = allEntries.filter(e => e.lineItemId === li.id);
+        const contributorNames = Array.from(new Set(itemEntries.map(e => staffMap.get(e.staffId)?.name || "Unknown")));
+        return {
+          lineItemId: li.id,
+          jobName: job?.jobName || "Unknown",
+          customerName: job ? (customerMap.get(job.customerId)?.name || "Unknown") : "Unknown",
+          description: li.description,
+          machineId: li.machineId,
+          machineName: li.machineId ? (machineMap.get(li.machineId)?.name || `Machine ${li.machineId}`) : null,
+          quantity: li.quantity,
+          stitchCount: li.stitchCount,
+          estimatedMinutes: est,
+          actualMinutes: actual,
+          variance: est != null && actual != null ? actual - est : null,
+          completedAt: li.completedAt,
+          completedByName: li.completedById ? (staffMap.get(li.completedById)?.name || "Unknown") : null,
+          contributors: contributorNames.length ? contributorNames : (li.completedById ? [staffMap.get(li.completedById)?.name || "Unknown"] : []),
+        };
+      }).sort((a, b) => new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime());
+
+      res.json({
+        weekStart: ymd(monday),
+        weekEnd: ymd(sunday),
+        totals: {
+          itemsCompleted: completedItems.length,
+          quantityCompleted: totalQuantity,
+          totalStitches,
+          actualMinutes: actualMinutesTotal,
+          estimatedMinutes: estimatedMinutesTotal,
+          avgRatio: ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : null,
+          onTime,
+          late,
+          withDueDate,
+        },
+        byStaff,
+        byMachine,
+        items,
+      });
+    } catch (error) {
+      console.error("Error building production week report:", error);
+      res.status(500).json({ error: "Failed to build production week report" });
+    }
+  });
+
   // Daily Output Log API - per-day, per-staff embroidery output (garments + stitches)
   app.get("/api/reports/daily-output", isStaffAuthenticated, async (req: any, res) => {
     try {
@@ -5116,13 +5335,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/job-line-items/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateJobLineItemSchema.parse(req.body);
-      
+
+      // Multi-member completion: contributors is not a column — pull it out and
+      // derive completedById (largest quantity) + actualProductionTimeMinutes (sum).
+      const contributors = data.contributors;
+      delete (data as any).contributors;
+      if (data.completed === true && contributors && contributors.length > 0) {
+        const primary = contributors.reduce((best, c) => (c.quantity > best.quantity ? c : best), contributors[0]);
+        data.completedById = primary.staffId;
+        data.actualProductionTimeMinutes = contributors.reduce((sum, c) => sum + c.minutes, 0);
+      }
+
       // If marking as completed, enforce embroidery-specific requirements
       if (data.completed === true) {
         // Load existing line item to check job type
         const existingLineItem = await storage.getJobLineItem(req.params.id);
         if (!existingLineItem) {
           return res.status(404).json({ error: "Line item not found" });
+        }
+
+        if (contributors && contributors.length > 0) {
+          // Re-completing an already-completed item with contributors would
+          // append duplicate production entries and double count staff credit.
+          if (existingLineItem.completed) {
+            return res.status(400).json({
+              error: "This line item is already completed. To change the team split, un-complete it first, then complete it again with the new split.",
+            });
+          }
+
+          // Contributor quantities must not exceed what's left to produce after
+          // any partial production already recorded against this line item.
+          const existingEntries = await storage.getProductionEntriesByLineItem(existingLineItem.id);
+          const alreadyRecorded = existingEntries.reduce((sum, e) => sum + e.quantityCompleted, 0);
+          const remaining = existingLineItem.quantity - alreadyRecorded;
+          const totalQty = contributors.reduce((sum, c) => sum + c.quantity, 0);
+          if (totalQty > remaining) {
+            return res.status(400).json({
+              error: alreadyRecorded > 0
+                ? `Team member quantities add up to ${totalQty}, but only ${remaining} of ${existingLineItem.quantity} remain (${alreadyRecorded} already recorded as partial production). Please adjust the split.`
+                : `Team member quantities add up to ${totalQty}, which is more than the line item quantity of ${existingLineItem.quantity}. Please adjust the split.`,
+            });
+          }
         }
         
         // For embroidery jobs, require machine, staff, and actual production time
@@ -5174,6 +5427,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
       const lineItem = await storage.updateJobLineItem(req.params.id, updates);
+
+      // Record one production entry per contributor so each team member is
+      // credited their own quantity and time (used by weekly reports/metrics).
+      // If any entry fails, roll everything back so completion state and staff
+      // credit never diverge.
+      if (data.completed === true && contributors && contributors.length > 0) {
+        const workDate = data.completedAt ? new Date(data.completedAt).toISOString() : new Date().toISOString();
+        const createdEntryIds: string[] = [];
+        try {
+          for (const c of contributors) {
+            const entry = await storage.createProductionEntry({
+              lineItemId: lineItem.id,
+              staffId: c.staffId,
+              machineId: lineItem.machineId ?? null,
+              workDate,
+              quantityCompleted: c.quantity,
+              productionTimeMinutes: c.minutes,
+              notes: null,
+            });
+            createdEntryIds.push(entry.id);
+          }
+        } catch (entryErr) {
+          console.error(`Failed to record contributor production entries for line item ${lineItem.id}, rolling back completion:`, entryErr);
+          // Best-effort compensation: remove any entries we created and restore
+          // the line item's previous completion fields.
+          for (const entryId of createdEntryIds) {
+            try {
+              await storage.deleteProductionEntry(entryId);
+            } catch (cleanupErr) {
+              console.error(`Failed to clean up production entry ${entryId}:`, cleanupErr);
+            }
+          }
+          try {
+            await storage.updateJobLineItem(lineItem.id, {
+              completed: existingBeforeUpdate?.completed ?? false,
+              completedAt: existingBeforeUpdate?.completedAt ?? null,
+              completedById: existingBeforeUpdate?.completedById ?? null,
+              actualProductionTimeMinutes: existingBeforeUpdate?.actualProductionTimeMinutes ?? null,
+            });
+          } catch (revertErr) {
+            console.error(`Failed to revert completion state for line item ${lineItem.id}:`, revertErr);
+          }
+          return res.status(500).json({
+            error: "Could not record the team split, so the item was not marked complete. Please try again.",
+          });
+        }
+      }
       
       // Recalculate job's total actual production time from all completed line items
       await recalculateJobProductionTime(lineItem.jobId);
