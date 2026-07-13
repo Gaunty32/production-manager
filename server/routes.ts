@@ -1581,6 +1581,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Key Metrics report — weekly headlines + rolling window + trend series
+  app.get("/api/reports/key-metrics", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const showPrices = canViewPrices(user.role);
+
+      const querySchema = z.object({
+        weeks: z.string().optional().transform((val) => {
+          if (!val) return 16;
+          const num = parseInt(val);
+          if (isNaN(num) || num < 1 || num > 52) return 16;
+          return num;
+        }),
+      });
+      const params = querySchema.parse(req.query);
+
+      const data = await storage.getKeyMetricsWeekly({
+        weeks: params.weeks,
+        endDate: new Date(),
+        timezone: 'Europe/London',
+      });
+
+      if (!showPrices) {
+        // Strip financial figures for roles without pricing access
+        data.weekly = data.weekly.map(w => ({ ...w, jobValue: 0, avgJobValue: 0 }));
+        data.rolling = { ...data.rolling, jobValue: 0, avgJobValue: 0 };
+      }
+
+      res.json({ ...data, showPrices });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching key metrics:", error);
+      res.status(500).json({ error: "Failed to fetch key metrics" });
+    }
+  });
+
   // Customer-specific weekly trend (output + invoiced value) — used by Customers page chart
   app.get("/api/reports/all-customers-weekly-trend", isStaffAuthenticated, async (req: any, res) => {
     try {

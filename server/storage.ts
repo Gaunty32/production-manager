@@ -242,6 +242,36 @@ export interface IStorage {
     totalActiveCustomers: number;
   }>>;
 
+  getKeyMetricsWeekly(params: { weeks?: number; endDate?: Date; timezone?: string }): Promise<{
+    weekly: Array<{
+      weekStart: string;
+      weekEnd: string;
+      activeCustomers: number;
+      invoicedJobs: number;
+      jobValue: number;
+      avgJobValue: number;
+      avgJobQuantity: number;
+      onTimeCount: number;
+      lateOrders: number;
+      onTimePercentage: number;
+      totalErrors: number;
+      outputQuantity: number;
+    }>;
+    rolling: {
+      weeks: number;
+      activeCustomers: number;
+      invoicedJobs: number;
+      jobValue: number;
+      avgJobValue: number;
+      avgJobQuantity: number;
+      onTimeCount: number;
+      lateOrders: number;
+      onTimePercentage: number;
+      totalErrors: number;
+      outputQuantity: number;
+    };
+  }>;
+
   getAllCustomersWeeklyTrend(params: { weeks?: number; endDate?: Date; timezone?: string; topN?: number }): Promise<{
     weeks: Array<{ weekStart: string; weekEnd: string }>;
     customers: Array<{
@@ -1960,6 +1990,175 @@ export class DatabaseStorage implements IStorage {
       newCustomers: parseInt(row.new_customers) || 0,
       totalActiveCustomers: parseInt(row.total_active_customers) || 0,
     }));
+  }
+
+  async getKeyMetricsWeekly(params: { weeks?: number; endDate?: Date; timezone?: string }): Promise<{
+    weekly: Array<{
+      weekStart: string;
+      weekEnd: string;
+      activeCustomers: number;
+      invoicedJobs: number;
+      jobValue: number;
+      avgJobValue: number;
+      avgJobQuantity: number;
+      onTimeCount: number;
+      lateOrders: number;
+      onTimePercentage: number;
+      totalErrors: number;
+      outputQuantity: number;
+    }>;
+    rolling: {
+      weeks: number;
+      activeCustomers: number;
+      invoicedJobs: number;
+      jobValue: number;
+      avgJobValue: number;
+      avgJobQuantity: number;
+      onTimeCount: number;
+      lateOrders: number;
+      onTimePercentage: number;
+      totalErrors: number;
+      outputQuantity: number;
+    };
+  }> {
+    const { weeks = 16, endDate = new Date(), timezone = 'Europe/London' } = params;
+
+    // Timestamps are stored as naive UTC; convert UTC -> local wall time before bucketing
+    const result = await db.execute(sql`
+      WITH base_week AS (
+        SELECT date_trunc('week', ${endDate}::timestamptz AT TIME ZONE ${timezone}) AS week_end
+      ),
+      window_start AS (
+        SELECT (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval AS start
+      ),
+      week_series AS (
+        SELECT
+          date_trunc('week',
+            (SELECT start FROM window_start) + (n || ' weeks')::interval
+          ) AS week_start
+        FROM generate_series(0, ${weeks} - 1) AS n
+      ),
+      weeks_with_end AS (
+        SELECT
+          week_start::date,
+          (week_start + '6 days'::interval)::date AS week_end
+        FROM week_series
+      ),
+      invoiced_by_week AS (
+        SELECT
+          date_trunc('week', (j.invoiced_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::date AS week_start,
+          COUNT(*) AS invoiced_jobs,
+          COUNT(DISTINCT j.customer_id) AS active_customers,
+          SUM(COALESCE(j.invoice_total, 0)) AS job_value,
+          AVG(j.quantity) AS avg_job_quantity
+        FROM jobs j
+        WHERE j.invoiced_at IS NOT NULL
+          AND date_trunc('week', (j.invoiced_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) >= (SELECT start FROM window_start)
+          AND date_trunc('week', (j.invoiced_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) <= (SELECT week_end FROM base_week)
+        GROUP BY 1
+      ),
+      delivery_by_week AS (
+        SELECT
+          date_trunc('week', (jli.completed_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::date AS week_start,
+          SUM(COALESCE(jli.quantity, 0)) AS output_quantity,
+          COUNT(CASE WHEN j.required_dispatch_date IS NOT NULL
+                      AND DATE((jli.completed_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) <= DATE(j.required_dispatch_date) THEN 1 END) AS on_time_count,
+          COUNT(CASE WHEN j.required_dispatch_date IS NOT NULL
+                      AND DATE((jli.completed_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) > DATE(j.required_dispatch_date) THEN 1 END) AS late_count
+        FROM job_line_items jli
+        INNER JOIN jobs j ON jli.job_id = j.id
+        WHERE jli.completed = true
+          AND jli.completed_at IS NOT NULL
+          AND date_trunc('week', (jli.completed_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) >= (SELECT start FROM window_start)
+          AND date_trunc('week', (jli.completed_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) <= (SELECT week_end FROM base_week)
+        GROUP BY 1
+      ),
+      errors_by_week AS (
+        SELECT
+          date_trunc('week', (je.reported_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::date AS week_start,
+          COUNT(*) AS total_errors
+        FROM job_errors je
+        WHERE je.reported_at IS NOT NULL
+          AND date_trunc('week', (je.reported_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) >= (SELECT start FROM window_start)
+          AND date_trunc('week', (je.reported_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) <= (SELECT week_end FROM base_week)
+        GROUP BY 1
+      )
+      SELECT
+        w.week_start::text,
+        w.week_end::text,
+        COALESCE(ib.active_customers, 0) AS active_customers,
+        COALESCE(ib.invoiced_jobs, 0) AS invoiced_jobs,
+        COALESCE(ib.job_value, 0) AS job_value,
+        COALESCE(ib.avg_job_quantity, 0) AS avg_job_quantity,
+        COALESCE(db.on_time_count, 0) AS on_time_count,
+        COALESCE(db.late_count, 0) AS late_count,
+        COALESCE(db.output_quantity, 0) AS output_quantity,
+        COALESCE(eb.total_errors, 0) AS total_errors
+      FROM weeks_with_end w
+      LEFT JOIN invoiced_by_week ib ON w.week_start = ib.week_start
+      LEFT JOIN delivery_by_week db ON w.week_start = db.week_start
+      LEFT JOIN errors_by_week eb ON w.week_start = eb.week_start
+      ORDER BY w.week_start
+    `);
+
+    // Rolling distinct active customers over the whole window (can't sum weekly distinct counts)
+    const rollingCustomersResult = await db.execute(sql`
+      WITH base_week AS (
+        SELECT date_trunc('week', ${endDate}::timestamptz AT TIME ZONE ${timezone}) AS week_end
+      )
+      SELECT COUNT(DISTINCT j.customer_id) AS active_customers
+      FROM jobs j
+      WHERE j.invoiced_at IS NOT NULL
+        AND date_trunc('week', (j.invoiced_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) >=
+            (SELECT week_end FROM base_week) - ((${weeks} - 1) || ' weeks')::interval
+        AND date_trunc('week', (j.invoiced_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) <=
+            (SELECT week_end FROM base_week)
+    `);
+
+    const weekly = result.rows.map((row: any) => {
+      const invoicedJobs = parseInt(row.invoiced_jobs) || 0;
+      const jobValue = parseFloat(row.job_value) || 0;
+      const onTimeCount = parseInt(row.on_time_count) || 0;
+      const lateOrders = parseInt(row.late_count) || 0;
+      const deliveryTotal = onTimeCount + lateOrders;
+      return {
+        weekStart: row.week_start,
+        weekEnd: row.week_end,
+        activeCustomers: parseInt(row.active_customers) || 0,
+        invoicedJobs,
+        jobValue,
+        avgJobValue: invoicedJobs > 0 ? jobValue / invoicedJobs : 0,
+        avgJobQuantity: parseFloat(row.avg_job_quantity) || 0,
+        onTimeCount,
+        lateOrders,
+        onTimePercentage: deliveryTotal > 0 ? Math.round((onTimeCount / deliveryTotal) * 100) : 0,
+        totalErrors: parseInt(row.total_errors) || 0,
+        outputQuantity: parseInt(row.output_quantity) || 0,
+      };
+    });
+
+    const totJobs = weekly.reduce((s, w) => s + w.invoicedJobs, 0);
+    const totValue = weekly.reduce((s, w) => s + w.jobValue, 0);
+    const totQty = weekly.reduce((s, w) => s + w.avgJobQuantity * w.invoicedJobs, 0);
+    const totOnTime = weekly.reduce((s, w) => s + w.onTimeCount, 0);
+    const totLate = weekly.reduce((s, w) => s + w.lateOrders, 0);
+    const totDelivery = totOnTime + totLate;
+
+    const rolling = {
+      weeks,
+      activeCustomers: parseInt((rollingCustomersResult.rows[0] as any)?.active_customers) || 0,
+      invoicedJobs: totJobs,
+      jobValue: totValue,
+      avgJobValue: totJobs > 0 ? totValue / totJobs : 0,
+      avgJobQuantity: totJobs > 0 ? totQty / totJobs : 0,
+      onTimeCount: totOnTime,
+      lateOrders: totLate,
+      onTimePercentage: totDelivery > 0 ? Math.round((totOnTime / totDelivery) * 100) : 0,
+      totalErrors: weekly.reduce((s, w) => s + w.totalErrors, 0),
+      outputQuantity: weekly.reduce((s, w) => s + w.outputQuantity, 0),
+    };
+
+    return { weekly, rolling };
   }
 
   async getAllCustomersWeeklyTrend(params: { weeks?: number; endDate?: Date; timezone?: string; topN?: number }): Promise<{
