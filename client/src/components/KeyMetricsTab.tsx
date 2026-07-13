@@ -3,7 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DemoAmount } from "@/components/DemoText";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DemoAmount, DemoText } from "@/components/DemoText";
 import { format, parseISO, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Users, Package, PoundSterling, Target, Clock, AlertTriangle, Activity, BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
@@ -13,7 +16,7 @@ interface KeyMetricsWeek {
   weekStart: string;
   weekEnd: string;
   activeCustomers: number;
-  invoicedJobs: number;
+  completedJobs: number;
   jobValue: number;
   avgJobValue: number;
   avgJobQuantity: number;
@@ -24,9 +27,21 @@ interface KeyMetricsWeek {
   outputQuantity: number;
 }
 
+interface DeliveryJob {
+  jobId: string;
+  jobNumber: number | null;
+  jobName: string;
+  customerName: string;
+  requiredDispatchDate: string | null;
+  completedDate: string;
+  onTime: boolean | null;
+  invoiceTotal: number;
+}
+
 interface KeyMetricsData {
   weekly: KeyMetricsWeek[];
   rolling: Omit<KeyMetricsWeek, "weekStart" | "weekEnd"> & { weeks: number };
+  deliveryJobs: DeliveryJob[];
   showPrices: boolean;
 }
 
@@ -70,7 +85,7 @@ function formatValue(def: MetricDef, value: number): string {
   return Math.round(value).toLocaleString();
 }
 
-function MetricCard({ def, data, weekLabel }: { def: MetricDef; data: KeyMetricsData; weekLabel: string }) {
+function MetricCard({ def, data, weekLabel, onClick }: { def: MetricDef; data: KeyMetricsData; weekLabel: string; onClick?: () => void }) {
   const weeks = data.weekly;
   const current = weeks[weeks.length - 1];
   const headline = current ? current[def.key] : 0;
@@ -96,7 +111,12 @@ function MetricCard({ def, data, weekLabel }: { def: MetricDef; data: KeyMetrics
   const hideValue = def.isCurrency && !data.showPrices;
 
   return (
-    <Card data-testid={`card-metric-${def.key}`}>
+    <Card
+      data-testid={`card-metric-${def.key}`}
+      className={onClick ? "cursor-pointer hover-elevate" : undefined}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+    >
       <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{def.label}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -149,9 +169,85 @@ function MetricCard({ def, data, weekLabel }: { def: MetricDef; data: KeyMetrics
   );
 }
 
+function DeliveryJobsDialog({
+  open,
+  onOpenChange,
+  jobs,
+  filter,
+  weekLabel,
+  showPrices,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  jobs: DeliveryJob[];
+  filter: "onTime" | "late";
+  weekLabel: string;
+  showPrices: boolean;
+}) {
+  const filtered = jobs.filter(j => (filter === "onTime" ? j.onTime === true : j.onTime === false));
+  const title = filter === "onTime" ? "On-Time Jobs" : "Late Jobs";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {title} · Wk {weekLabel}
+          </DialogTitle>
+        </DialogHeader>
+        {filtered.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4" data-testid="text-no-delivery-jobs">
+            No {filter === "onTime" ? "on-time" : "late"} jobs completed this week.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Job</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Due</TableHead>
+                <TableHead>Completed</TableHead>
+                {showPrices && <TableHead className="text-right">Value</TableHead>}
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(job => (
+                <TableRow key={job.jobId} data-testid={`row-delivery-job-${job.jobId}`}>
+                  <TableCell className="font-medium">
+                    {job.jobNumber != null ? `#${job.jobNumber} · ` : ""}{job.jobName}
+                  </TableCell>
+                  <TableCell><DemoText>{job.customerName}</DemoText></TableCell>
+                  <TableCell>
+                    {job.requiredDispatchDate ? format(parseISO(job.requiredDispatchDate), "d MMM yyyy") : "—"}
+                  </TableCell>
+                  <TableCell>{format(parseISO(job.completedDate), "d MMM yyyy")}</TableCell>
+                  {showPrices && (
+                    <TableCell className="text-right">
+                      <DemoAmount value={`£${Math.round(job.invoiceTotal).toLocaleString()}`} />
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    {job.onTime ? (
+                      <Badge variant="outline" className="text-green-600 dark:text-green-400">On time</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-red-600 dark:text-red-400">Late</Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function KeyMetricsTab() {
   // 0 = last complete week (Mon-Sun); each step back adds 1
   const [weekOffset, setWeekOffset] = useState(0);
+  const [jobsDialog, setJobsDialog] = useState<"onTime" | "late" | null>(null);
   const endDate = format(subWeeks(new Date(), 1 + weekOffset), "yyyy-MM-dd");
 
   const { data, isLoading, isError } = useQuery<KeyMetricsData>({
@@ -238,9 +334,29 @@ export function KeyMetricsTab() {
       </div>
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {METRICS.map(def => (
-          <MetricCard key={def.key} def={def} data={data} weekLabel={`Wk ${weekLabel}`} />
+          <MetricCard
+            key={def.key}
+            def={def}
+            data={data}
+            weekLabel={`Wk ${weekLabel}`}
+            onClick={
+              def.key === "onTimePercentage"
+                ? () => setJobsDialog("onTime")
+                : def.key === "lateOrders"
+                  ? () => setJobsDialog("late")
+                  : undefined
+            }
+          />
         ))}
       </div>
+      <DeliveryJobsDialog
+        open={jobsDialog !== null}
+        onOpenChange={(open) => !open && setJobsDialog(null)}
+        jobs={data.deliveryJobs}
+        filter={jobsDialog ?? "late"}
+        weekLabel={weekLabel}
+        showPrices={data.showPrices}
+      />
     </div>
   );
 }

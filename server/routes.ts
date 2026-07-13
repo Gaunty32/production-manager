@@ -1623,6 +1623,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Strip financial figures for roles without pricing access
         data.weekly = data.weekly.map(w => ({ ...w, jobValue: 0, avgJobValue: 0 }));
         data.rolling = { ...data.rolling, jobValue: 0, avgJobValue: 0 };
+        data.deliveryJobs = data.deliveryJobs.map(j => ({ ...j, invoiceTotal: 0 }));
       }
 
       res.json({ ...data, showPrices });
