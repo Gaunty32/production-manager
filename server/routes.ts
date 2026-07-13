@@ -1597,12 +1597,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (isNaN(num) || num < 1 || num > 52) return 16;
           return num;
         }),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       });
       const params = querySchema.parse(req.query);
 
+      // Only complete (Mon-Sun) weeks are reported: default headline week is LAST week,
+      // so subtract 7 days from "now" when no explicit endDate is provided.
+      // Never allow navigating into the current (incomplete) week or beyond.
+      const lastCompleteWeekDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      let endDate = lastCompleteWeekDate;
+      if (params.endDate) {
+        const requested = new Date(`${params.endDate}T12:00:00Z`);
+        if (!isNaN(requested.getTime()) && requested <= lastCompleteWeekDate) {
+          endDate = requested;
+        }
+      }
+
       const data = await storage.getKeyMetricsWeekly({
         weeks: params.weeks,
-        endDate: new Date(),
+        endDate,
         timezone: 'Europe/London',
       });
 

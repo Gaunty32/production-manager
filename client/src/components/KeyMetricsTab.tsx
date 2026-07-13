@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DemoAmount } from "@/components/DemoText";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Users, Package, PoundSterling, Target, Clock, AlertTriangle, Activity, BarChart3 } from "lucide-react";
+import { Users, Package, PoundSterling, Target, Clock, AlertTriangle, Activity, BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 interface KeyMetricsWeek {
@@ -68,7 +70,7 @@ function formatValue(def: MetricDef, value: number): string {
   return Math.round(value).toLocaleString();
 }
 
-function MetricCard({ def, data }: { def: MetricDef; data: KeyMetricsData }) {
+function MetricCard({ def, data, weekLabel }: { def: MetricDef; data: KeyMetricsData; weekLabel: string }) {
   const weeks = data.weekly;
   const current = weeks[weeks.length - 1];
   const headline = current ? current[def.key] : 0;
@@ -108,7 +110,7 @@ function MetricCard({ def, data }: { def: MetricDef; data: KeyMetricsData }) {
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          This week
+          {weekLabel}
           {!hideValue && (
             <>
               {" · "}
@@ -148,8 +150,18 @@ function MetricCard({ def, data }: { def: MetricDef; data: KeyMetricsData }) {
 }
 
 export function KeyMetricsTab() {
+  // 0 = last complete week (Mon-Sun); each step back adds 1
+  const [weekOffset, setWeekOffset] = useState(0);
+  const endDate = format(subWeeks(new Date(), 1 + weekOffset), "yyyy-MM-dd");
+
   const { data, isLoading, isError } = useQuery<KeyMetricsData>({
-    queryKey: ["/api/reports/key-metrics"],
+    queryKey: ["/api/reports/key-metrics", { endDate }],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/key-metrics?endDate=${endDate}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load key metrics");
+      return res.json();
+    },
+    placeholderData: (prev) => prev,
   });
 
   if (isLoading) {
@@ -185,6 +197,9 @@ export function KeyMetricsTab() {
 
   const firstWeek = data.weekly[0];
   const lastWeek = data.weekly[data.weekly.length - 1];
+  const weekLabel = lastWeek
+    ? `${format(parseISO(lastWeek.weekStart), "d MMM")} – ${format(parseISO(lastWeek.weekEnd), "d MMM")}`
+    : "";
 
   return (
     <div className="space-y-4">
@@ -193,13 +208,37 @@ export function KeyMetricsTab() {
         <h2 className="text-lg font-semibold">Key Metrics</h2>
         {firstWeek && lastWeek && (
           <span className="text-sm text-muted-foreground" data-testid="text-key-metrics-range">
-            {format(parseISO(firstWeek.weekStart), "d MMM yyyy")} – {format(parseISO(lastWeek.weekEnd), "d MMM yyyy")} · headline is the current week, trend shows the last {data.rolling.weeks} weeks
+            headline is the week shown, trend covers {format(parseISO(firstWeek.weekStart), "d MMM yyyy")} – {format(parseISO(lastWeek.weekEnd), "d MMM yyyy")} · completed weeks only
           </span>
         )}
+        <div className="flex items-center gap-1 ml-auto">
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => setWeekOffset(o => o + 1)}
+            data-testid="button-week-prev"
+            aria-label="Previous week"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-medium min-w-[130px] text-center" data-testid="text-selected-week">
+            {lastWeek ? `Week ${weekLabel}` : ""}
+          </span>
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => setWeekOffset(o => Math.max(0, o - 1))}
+            disabled={weekOffset === 0}
+            data-testid="button-week-next"
+            aria-label="Next week"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {METRICS.map(def => (
-          <MetricCard key={def.key} def={def} data={data} />
+          <MetricCard key={def.key} def={def} data={data} weekLabel={`Wk ${weekLabel}`} />
         ))}
       </div>
     </div>
