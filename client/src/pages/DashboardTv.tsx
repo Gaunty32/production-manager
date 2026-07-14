@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 
 interface TvData {
   lastUpdated: string;
@@ -171,13 +172,37 @@ export default function DashboardTv() {
   const operativePages = useMemo(() => chunk(data?.operatives ?? [], 4), [data?.operatives]);
   const pageCount = data ? 3 + operativePages.length : 1;
   const [page, setPage] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [navNonce, setNavNonce] = useState(0);
+
+  const goToPage = (target: number) => {
+    setPage(((target % pageCount) + pageCount) % pageCount);
+    setNavNonce((n) => n + 1);
+  };
 
   useEffect(() => {
-    if (pageCount <= 1) return;
+    if (pageCount <= 1 || paused) return;
     const t = setInterval(() => {
       setPage((p) => (p + 1) % pageCount);
     }, PAGE_SECONDS * 1000);
     return () => clearInterval(t);
+  }, [pageCount, paused, navNonce]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        setPage((p) => ((p - 1) % pageCount + pageCount) % pageCount);
+        setNavNonce((n) => n + 1);
+      } else if (e.key === "ArrowRight") {
+        setPage((p) => (p + 1) % pageCount);
+        setNavNonce((n) => n + 1);
+      } else if (e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        setPaused((p) => !p);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [pageCount]);
 
   useEffect(() => {
@@ -233,18 +258,54 @@ export default function DashboardTv() {
           )}
         </div>
         {pageCount > 1 && (
-          <div className="flex items-center justify-center gap-3 pt-4" data-testid="page-dots">
+          <div className="flex items-center justify-center gap-4 pt-4" data-testid="page-dots">
+            <button
+              onClick={() => goToPage(page - 1)}
+              className="flex items-center justify-center rounded-full w-10 h-10 bg-slate-800/80 ring-1 ring-slate-700 text-slate-300 hover:bg-slate-700"
+              data-testid="button-page-prev"
+              aria-label="Previous screen"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
             {Array.from({ length: pageCount }).map((_, i) => (
-              <div
+              <button
                 key={i}
+                onClick={() => goToPage(i)}
                 className="rounded-full transition-all"
                 style={{
                   width: i === page ? 28 : 12,
                   height: 12,
                   backgroundColor: i === page ? "#3b82f6" : "#334155",
                 }}
+                data-testid={`button-page-dot-${i}`}
+                aria-label={`Go to screen ${i + 1}`}
               />
             ))}
+            <button
+              onClick={() => goToPage(page + 1)}
+              className="flex items-center justify-center rounded-full w-10 h-10 bg-slate-800/80 ring-1 ring-slate-700 text-slate-300 hover:bg-slate-700"
+              data-testid="button-page-next"
+              aria-label="Next screen"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+            <button
+              onClick={() => setPaused((p) => !p)}
+              className={`flex items-center justify-center rounded-full w-10 h-10 ring-1 ${
+                paused
+                  ? "bg-amber-500/20 ring-amber-500 text-amber-400"
+                  : "bg-slate-800/80 ring-slate-700 text-slate-300 hover:bg-slate-700"
+              }`}
+              data-testid="button-page-pause"
+              aria-label={paused ? "Resume rotation" : "Pause rotation"}
+            >
+              {paused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+            </button>
+            {paused && (
+              <span className="text-lg font-semibold text-amber-400" data-testid="text-paused">
+                Paused
+              </span>
+            )}
           </div>
         )}
       </div>
