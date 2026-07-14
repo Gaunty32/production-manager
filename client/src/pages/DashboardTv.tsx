@@ -62,6 +62,21 @@ interface TvData {
     jobsToDo: { jobLabel: string; date: string }[];
     jobsToDoCount: number;
   }[];
+  dueOut: {
+    overdueCount: number;
+    todayCount: number;
+    soonCount: number;
+    garmentsRemaining: number;
+    totalJobs: number;
+    jobs: {
+      id: string;
+      customer: string;
+      jobName: string;
+      dueDate: string;
+      garmentsRemaining: number;
+      status: "overdue" | "today" | "soon";
+    }[];
+  };
 }
 
 interface DisciplineCapacity {
@@ -174,7 +189,7 @@ export default function DashboardTv() {
   });
 
   const operativePages = useMemo(() => chunk(data?.operatives ?? [], 4), [data?.operatives]);
-  const pageCount = data ? 2 + operativePages.length : 1;
+  const pageCount = data ? 3 + operativePages.length : 1;
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -186,8 +201,8 @@ export default function DashboardTv() {
   }, [pageCount]);
 
   useEffect(() => {
-    if (page >= pageCount) setPage(0);
-  }, [page, pageCount]);
+    if (data && page >= pageCount) setPage(0);
+  }, [data, page, pageCount]);
 
   if (!token) {
     return (
@@ -226,12 +241,13 @@ export default function DashboardTv() {
       <div className="flex flex-col h-full">
         <div className="flex-1 min-h-0">
           {page === 0 && <OpsPage data={data} />}
-          {page === 1 && <TeamGoalPage data={data} />}
-          {page >= 2 && operativePages[page - 2] && (
+          {page === 1 && <DueOutPage data={data} />}
+          {page === 2 && <TeamGoalPage data={data} />}
+          {page >= 3 && operativePages[page - 3] && (
             <OperativesPage
               data={data}
-              operatives={operativePages[page - 2]}
-              pageNo={page - 1}
+              operatives={operativePages[page - 3]}
+              pageNo={page - 2}
               pageTotal={operativePages.length}
             />
           )}
@@ -267,7 +283,103 @@ function PageHeader({ title, lastUpdated }: { title: string; lastUpdated: string
   );
 }
 
-// ── Page 2: Team goal ────────────────────────────────────────────────────────
+// ── Page 2: Due out (next 48 hours + overdue) ───────────────────────────────
+function fmtDueDay(dateStr: string): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+const DUE_STATUS = {
+  overdue: { color: "#ef4444", label: "OVERDUE" },
+  today: { color: "#f59e0b", label: "DUE TODAY" },
+  soon: { color: "#3b82f6", label: "NEXT 48 HRS" },
+} as const;
+
+function DueOutPage({ data }: { data: TvData }) {
+  const d = data.dueOut;
+  return (
+    <div className="flex flex-col h-full gap-5">
+      <PageHeader title="Due Out — Next 48 Hours" lastUpdated={data.lastUpdated} />
+
+      <div className="grid grid-cols-4 gap-5">
+        <SummaryTile label="Overdue" value={d.overdueCount} color={DUE_STATUS.overdue.color} testId="tile-overdue" />
+        <SummaryTile label="Due today" value={d.todayCount} color={DUE_STATUS.today.color} testId="tile-due-today" />
+        <SummaryTile label="Next 48 hrs" value={d.soonCount} color={DUE_STATUS.soon.color} testId="tile-soon" />
+        <SummaryTile label="Garments to make" value={d.garmentsRemaining} color="#e2e8f0" testId="tile-garments" />
+      </div>
+
+      <div className="flex-1 min-h-0 rounded-2xl bg-slate-900/70 ring-1 ring-slate-700/60 p-6 overflow-hidden">
+        {d.jobs.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-4xl text-emerald-400 font-bold">
+            Nothing due in the next 48 hours — all clear!
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-x-8 gap-y-3 content-start">
+            {d.jobs.map((j) => {
+              const s = DUE_STATUS[j.status];
+              return (
+                <div
+                  key={j.id}
+                  className="flex items-center gap-4 rounded-xl px-4 py-3"
+                  style={{ backgroundColor: `${s.color}1a`, border: `2px solid ${s.color}55` }}
+                  data-testid={`row-dueout-${j.id}`}
+                >
+                  <div
+                    className="text-lg font-black px-3 py-1 rounded-md whitespace-nowrap"
+                    style={{ backgroundColor: s.color, color: "#0f172a" }}
+                  >
+                    {j.status === "overdue" ? `WAS DUE ${fmtDueDay(j.dueDate).toUpperCase()}` : j.status === "today" ? "DUE TODAY" : fmtDueDay(j.dueDate).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-2xl font-bold truncate">{j.jobName}</div>
+                    <div className="text-xl text-slate-400 truncate">{j.customer}</div>
+                  </div>
+                  <div className="text-right whitespace-nowrap">
+                    <div className="text-3xl font-black" style={{ color: s.color }}>
+                      {num(j.garmentsRemaining)}
+                    </div>
+                    <div className="text-base text-slate-400">left to make</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {d.totalJobs > d.jobs.length && (
+          <div className="text-center text-2xl text-slate-400 mt-4">
+            + {d.totalJobs - d.jobs.length} more jobs due out
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  color,
+  testId,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  testId: string;
+}) {
+  return (
+    <div
+      className="rounded-2xl bg-slate-900/70 ring-1 ring-slate-700/60 p-5 flex items-center gap-5"
+      data-testid={testId}
+    >
+      <div className="font-black leading-none" style={{ fontSize: 64, color }}>
+        {num(value)}
+      </div>
+      <div className="text-2xl text-slate-300 font-semibold leading-tight">{label}</div>
+    </div>
+  );
+}
+
+// ── Page 3: Team goal ────────────────────────────────────────────────────────
 function TeamGoalPage({ data }: { data: TvData }) {
   const g = data.teamGoal;
   const top = g.contributors.slice(0, 8);

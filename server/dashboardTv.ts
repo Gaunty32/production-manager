@@ -680,6 +680,46 @@ export async function buildDashboardTvData() {
     .filter((o) => o.garmentsLastWeek > 0 || o.garmentsThisWeek > 0 || o.jobsToDoCount > 0)
     .sort((a, b) => b.garmentsThisWeek - a.garmentsThisWeek || b.garmentsLastWeek - a.garmentsLastWeek);
 
+  // ── Section 12: Due out — next 48 hours, plus anything overdue ─────────────
+  const in48Str = londonDateStr(new Date(today.getTime() + 2 * 86400000));
+  const dueOutJobs: {
+    id: string;
+    customer: string;
+    jobName: string;
+    dueDate: string;
+    garmentsRemaining: number;
+    status: "overdue" | "today" | "soon";
+  }[] = [];
+  for (const j of jobs) {
+    if (j.completed || j.status === "pending_customer_approval") continue;
+    const due = dueDateStr(j.id, j);
+    if (!due || due > in48Str) continue;
+    let garmentsRemaining = 0;
+    for (const li of lineItemsByJob.get(j.id) ?? []) {
+      garmentsRemaining += remainingForLineItem(li);
+    }
+    dueOutJobs.push({
+      id: j.id,
+      customer: customerName.get(j.customerId) ?? "",
+      jobName: j.jobName,
+      dueDate: due,
+      garmentsRemaining,
+      status: due < todayStr ? "overdue" : due === todayStr ? "today" : "soon",
+    });
+  }
+  // Most urgent first: earliest due date, biggest remaining workload first within a day
+  dueOutJobs.sort(
+    (a, b) => a.dueDate.localeCompare(b.dueDate) || b.garmentsRemaining - a.garmentsRemaining,
+  );
+  const dueOut = {
+    overdueCount: dueOutJobs.filter((x) => x.status === "overdue").length,
+    todayCount: dueOutJobs.filter((x) => x.status === "today").length,
+    soonCount: dueOutJobs.filter((x) => x.status === "soon").length,
+    garmentsRemaining: dueOutJobs.reduce((s, x) => s + x.garmentsRemaining, 0),
+    totalJobs: dueOutJobs.length,
+    jobs: dueOutJobs.slice(0, 12),
+  };
+
   return {
     lastUpdated: londonTimeHHMM(now),
     todaysProduction: {
@@ -705,5 +745,6 @@ export async function buildDashboardTvData() {
     alerts,
     teamGoal,
     operatives,
+    dueOut,
   };
 }
