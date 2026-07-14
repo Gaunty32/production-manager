@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Pause, Play } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Maximize, Minimize, Pause, Play } from "lucide-react";
 
 interface TvData {
   lastUpdated: string;
@@ -223,6 +223,25 @@ export default function DashboardTv() {
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
   const [navNonce, setNavNonce] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    try {
+      if (document.fullscreenElement) {
+        void document.exitFullscreen();
+      } else {
+        void document.documentElement.requestFullscreen();
+      }
+    } catch {
+      // Fullscreen not supported on this browser — nothing else to do
+    }
+  };
 
   const goToPage = (target: number) => {
     setPage(((target % pageCount) + pageCount) % pageCount);
@@ -351,6 +370,14 @@ export default function DashboardTv() {
               aria-label={paused ? "Resume rotation" : "Pause rotation"}
             >
               {paused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              className="flex items-center justify-center rounded-full w-10 h-10 bg-slate-800/80 ring-1 ring-slate-700 text-slate-300 hover:bg-slate-700"
+              data-testid="button-fullscreen"
+              aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+            >
+              {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
             </button>
             {paused && (
               <span className="text-lg font-semibold text-amber-400" data-testid="text-paused">
