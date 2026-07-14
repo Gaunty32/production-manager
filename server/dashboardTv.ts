@@ -731,6 +731,90 @@ export async function buildDashboardTvData() {
     jobs: dueOutJobs.slice(0, 12),
   };
 
+  // ── Section 13: Today's plan — who does what today, on which machine ───────
+  const fmtMin = (mins: number) =>
+    `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+
+  type PlanRow = {
+    jobLabel: string;
+    machine: string | null;
+    operator: string | null;
+    start: string;
+    end: string;
+    startMin: number;
+    remaining: number;
+    quantity: number;
+    done: boolean;
+  };
+
+  const todaysScheds = schedules
+    .filter((sc) => londonDateStr(new Date(sc.scheduledDate)) === todayStr)
+    .sort((a, b) => a.startTime - b.startTime);
+
+  const planByPerson = new Map<string, PlanRow[]>();
+  const planByMachine = new Map<number, PlanRow[]>();
+  const seenPersonItem = new Set<string>();
+  const seenMachineItem = new Set<string>();
+
+  for (const sc of todaysScheds) {
+    const job = jobById.get(sc.jobId);
+    if (!job || job.completed || job.status === "pending_customer_approval") continue;
+    const li = sc.lineItemId ? lineItemById.get(sc.lineItemId) : null;
+    const remaining = li ? remainingForLineItem(li) : 0;
+    const done = li ? li.completed || remaining <= 0 : false;
+    const cust = customerName.get(job.customerId) ?? "";
+    const jobLabel = cust ? `${cust} — ${job.jobName}` : job.jobName;
+    const row: PlanRow = {
+      jobLabel,
+      machine: machineById.get(sc.machineId)?.name ?? null,
+      operator: sc.staffId ? staffName.get(sc.staffId) ?? null : null,
+      start: fmtMin(sc.startTime),
+      end: fmtMin(sc.endTime),
+      startMin: sc.startTime,
+      remaining,
+      quantity: li?.quantity ?? 0,
+      done,
+    };
+
+    const itemKey = sc.lineItemId ?? `${sc.jobId}:${sc.startTime}:${sc.id}`;
+    if (sc.staffId) {
+      const pKey = `${sc.staffId}:${itemKey}`;
+      if (!seenPersonItem.has(pKey)) {
+        seenPersonItem.add(pKey);
+        const arr = planByPerson.get(sc.staffId) ?? [];
+        arr.push(row);
+        planByPerson.set(sc.staffId, arr);
+      }
+    }
+    const mKey = `${sc.machineId}:${itemKey}`;
+    if (!seenMachineItem.has(mKey)) {
+      seenMachineItem.add(mKey);
+      const arr = planByMachine.get(sc.machineId) ?? [];
+      arr.push(row);
+      planByMachine.set(sc.machineId, arr);
+    }
+  }
+
+  const todaysPlan = {
+    people: Array.from(planByPerson.entries())
+      .map(([staffId, rows]) => ({
+        name: staffName.get(staffId) ?? "Unknown",
+        doneCount: rows.filter((r) => r.done).length,
+        totalCount: rows.length,
+        garmentsRemaining: rows.reduce((s, r) => s + r.remaining, 0),
+        items: rows.slice(0, 6),
+      }))
+      .sort((a, b) => b.garmentsRemaining - a.garmentsRemaining || b.totalCount - a.totalCount),
+    machines: machines
+      .filter((m) => m.isActive)
+      .map((m) => ({
+        name: m.name,
+        items: (planByMachine.get(m.id) ?? []).slice(0, 4),
+        totalCount: (planByMachine.get(m.id) ?? []).length,
+      }))
+      .filter((m) => m.items.length > 0),
+  };
+
   return {
     lastUpdated: londonTimeHHMM(now),
     todaysProduction: {
@@ -757,5 +841,6 @@ export async function buildDashboardTvData() {
     teamGoal,
     operatives,
     dueOut,
+    todaysPlan,
   };
 }

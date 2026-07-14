@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Pause, Play } from "lucide-react";
 
 interface TvData {
   lastUpdated: string;
@@ -78,6 +78,28 @@ interface TvData {
       status: "overdue" | "today" | "soon";
     }[];
   };
+  todaysPlan: {
+    people: {
+      name: string;
+      doneCount: number;
+      totalCount: number;
+      garmentsRemaining: number;
+      items: PlanItem[];
+    }[];
+    machines: { name: string; items: PlanItem[]; totalCount: number }[];
+  };
+}
+
+interface PlanItem {
+  jobLabel: string;
+  machine: string | null;
+  operator: string | null;
+  start: string;
+  end: string;
+  startMin: number;
+  remaining: number;
+  quantity: number;
+  done: boolean;
 }
 
 interface DisciplineCapacity {
@@ -170,7 +192,7 @@ export default function DashboardTv() {
   });
 
   const operativePages = useMemo(() => chunk(data?.operatives ?? [], 4), [data?.operatives]);
-  const pageCount = data ? 3 + operativePages.length : 1;
+  const pageCount = data ? 4 + operativePages.length : 1;
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
   const [navNonce, setNavNonce] = useState(0);
@@ -246,13 +268,14 @@ export default function DashboardTv() {
       <div className="flex flex-col h-full">
         <div className="flex-1 min-h-0">
           {page === 0 && <OpsPage data={data} />}
-          {page === 1 && <DueOutPage data={data} />}
-          {page === 2 && <TeamGoalPage data={data} />}
-          {page >= 3 && operativePages[page - 3] && (
+          {page === 1 && <TodaysPlanPage data={data} />}
+          {page === 2 && <DueOutPage data={data} />}
+          {page === 3 && <TeamGoalPage data={data} />}
+          {page >= 4 && operativePages[page - 4] && (
             <OperativesPage
               data={data}
-              operatives={operativePages[page - 3]}
-              pageNo={page - 2}
+              operatives={operativePages[page - 4]}
+              pageNo={page - 3}
               pageTotal={operativePages.length}
             />
           )}
@@ -320,6 +343,169 @@ function PageHeader({ title, lastUpdated }: { title: string; lastUpdated: string
       <div className="text-2xl text-slate-400" data-testid="text-last-updated">
         Last updated {lastUpdated}
       </div>
+    </div>
+  );
+}
+
+// ── Page: Today's plan — per-person to-do list + machine line-up ─────────────
+function PlanItemRow({ item, showMachine }: { item: PlanItem; showMachine: boolean }) {
+  return (
+    <div className="flex items-start gap-3" data-testid="row-plan-item">
+      {item.done ? (
+        <CheckCircle2 className="w-6 h-6 shrink-0 mt-0.5" style={{ color: STATUS_COLOR.green }} />
+      ) : (
+        <Circle className="w-6 h-6 shrink-0 mt-0.5 text-slate-600" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div
+          className={`text-xl truncate ${item.done ? "text-slate-500 line-through" : "text-slate-200"}`}
+        >
+          {item.jobLabel}
+        </div>
+        <div className="flex items-center gap-2 text-base">
+          <span className="text-slate-500 whitespace-nowrap">{item.start}</span>
+          {showMachine && item.machine && (
+            <span className="text-slate-400 whitespace-nowrap rounded-md bg-slate-800 ring-1 ring-slate-700 px-2 py-0.5">
+              {item.machine}
+            </span>
+          )}
+        </div>
+      </div>
+      <span
+        className={`whitespace-nowrap text-right font-semibold text-xl mt-0.5 ${
+          item.done ? "text-slate-500" : "text-amber-400"
+        }`}
+      >
+        {item.done ? "Done" : `${num(item.remaining)} pcs`}
+      </span>
+    </div>
+  );
+}
+
+function TodaysPlanPage({ data }: { data: TvData }) {
+  const plan = data.todaysPlan;
+  const nothing = plan.people.length === 0 && plan.machines.length === 0;
+
+  const peopleShown = plan.people.slice(0, 6);
+  const morePeople = plan.people.length - peopleShown.length;
+  const itemsPerPerson = peopleShown.length <= 2 ? 6 : peopleShown.length <= 4 ? 4 : 3;
+
+  const machinesShown = plan.machines.slice(0, 6);
+  const moreMachines = plan.machines.length - machinesShown.length;
+  const itemsPerMachine = machinesShown.length <= 3 ? 4 : 2;
+
+  return (
+    <div className="flex flex-col h-full gap-5">
+      <PageHeader title="Today's Plan" lastUpdated={data.lastUpdated} />
+
+      {nothing ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-5xl font-bold text-slate-300 mb-4">Nothing scheduled for today yet</div>
+            <div className="text-2xl text-slate-500">
+              Jobs booked on the Machine Schedule will appear here.
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-12 gap-5 flex-1 min-h-0">
+          {/* By person */}
+          <Panel title="By Person" className="col-span-7 min-h-0">
+            {plan.people.length === 0 ? (
+              <div className="text-2xl text-slate-500">
+                No one is assigned to today's scheduled jobs yet.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 h-full overflow-hidden">
+                <div className="grid grid-cols-2 gap-4 content-start flex-1 min-h-0 overflow-hidden">
+                  {peopleShown.map((p) => (
+                    <div
+                      key={p.name}
+                      className="rounded-xl bg-slate-800/60 ring-1 ring-slate-700/60 p-4 flex flex-col gap-2 min-w-0"
+                      data-testid={`card-plan-person-${p.name}`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-2xl font-bold truncate">{p.name}</div>
+                        <div className="text-xl whitespace-nowrap">
+                          <span className="text-emerald-400 font-bold">{p.doneCount}</span>
+                          <span className="text-slate-500"> / {p.totalCount} done</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {p.items.slice(0, itemsPerPerson).map((item, i) => (
+                          <PlanItemRow key={i} item={item} showMachine />
+                        ))}
+                        {p.totalCount > Math.min(p.items.length, itemsPerPerson) && (
+                          <div className="text-lg text-slate-500 pl-9">
+                            +{p.totalCount - Math.min(p.items.length, itemsPerPerson)} more
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {morePeople > 0 && (
+                  <div className="text-lg text-slate-500 shrink-0">
+                    +{morePeople} more {morePeople === 1 ? "person" : "people"} with scheduled work
+                  </div>
+                )}
+              </div>
+            )}
+          </Panel>
+
+          {/* By machine */}
+          <Panel title="On the Machines" className="col-span-5 min-h-0">
+            {plan.machines.length === 0 ? (
+              <div className="text-2xl text-slate-500">No machines have jobs booked for today.</div>
+            ) : (
+              <div className="flex flex-col gap-4 h-full overflow-hidden">
+                {machinesShown.map((m) => (
+                  <div key={m.name} className="min-w-0" data-testid={`section-plan-machine-${m.name}`}>
+                    <div className="text-2xl font-bold mb-1.5">{m.name}</div>
+                    <div className="flex flex-col gap-1.5">
+                      {m.items.slice(0, itemsPerMachine).map((item, i) => (
+                        <div key={i} className="flex items-center gap-3 text-xl">
+                          {item.done ? (
+                            <CheckCircle2
+                              className="w-6 h-6 shrink-0"
+                              style={{ color: STATUS_COLOR.green }}
+                            />
+                          ) : (
+                            <Circle className="w-6 h-6 shrink-0 text-slate-600" />
+                          )}
+                          <span className="text-slate-500 whitespace-nowrap">
+                            {item.start}–{item.end}
+                          </span>
+                          <span
+                            className={`truncate flex-1 min-w-0 ${
+                              item.done ? "text-slate-500 line-through" : "text-slate-200"
+                            }`}
+                          >
+                            {item.jobLabel}
+                          </span>
+                          {item.operator && (
+                            <span className="text-slate-400 whitespace-nowrap text-lg">{item.operator}</span>
+                          )}
+                        </div>
+                      ))}
+                      {m.totalCount > Math.min(m.items.length, itemsPerMachine) && (
+                        <div className="text-lg text-slate-500 pl-9">
+                          +{m.totalCount - Math.min(m.items.length, itemsPerMachine)} more
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {moreMachines > 0 && (
+                  <div className="text-lg text-slate-500 shrink-0">
+                    +{moreMachines} more {moreMachines === 1 ? "machine" : "machines"} with jobs today
+                  </div>
+                )}
+              </div>
+            )}
+          </Panel>
+        </div>
+      )}
     </div>
   );
 }
