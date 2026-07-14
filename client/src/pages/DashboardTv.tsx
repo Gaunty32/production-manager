@@ -76,6 +76,7 @@ interface TvData {
       dueDate: string;
       garmentsRemaining: number;
       status: "overdue" | "today" | "soon";
+      allocatedTo: string[];
     }[];
   };
   todaysPlan: {
@@ -532,7 +533,7 @@ function DueOutPage({ data }: { data: TvData }) {
         <SummaryTile label="Overdue" value={d.overdueCount} color={DUE_STATUS.overdue.color} testId="tile-overdue" />
         <SummaryTile label="Due today" value={d.todayCount} color={DUE_STATUS.today.color} testId="tile-due-today" />
         <SummaryTile label="Next 48 hrs" value={d.soonCount} color={DUE_STATUS.soon.color} testId="tile-soon" />
-        <SummaryTile label="Garments to make" value={d.garmentsRemaining} color="#e2e8f0" testId="tile-garments" />
+        <SummaryTile label="Garments outstanding" value={d.garmentsRemaining} color="#e2e8f0" testId="tile-garments" />
       </div>
 
       <div className="flex-1 min-h-0 rounded-2xl bg-slate-900/70 ring-1 ring-slate-700/60 p-6 overflow-hidden">
@@ -559,13 +560,18 @@ function DueOutPage({ data }: { data: TvData }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-2xl font-bold truncate">{j.jobName}</div>
-                    <div className="text-xl text-slate-400 truncate">{j.customer}</div>
+                    <div className="text-xl text-slate-400 truncate">
+                      {j.customer}
+                      {j.allocatedTo.length > 0 && (
+                        <span className="text-slate-300"> · {j.allocatedTo.join(", ")}</span>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right whitespace-nowrap">
                     <div className="text-3xl font-black" style={{ color: s.color }}>
                       {num(j.garmentsRemaining)}
                     </div>
-                    <div className="text-base text-slate-400">left to make</div>
+                    <div className="text-base text-slate-400">outstanding</div>
                   </div>
                 </div>
               );

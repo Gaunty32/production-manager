@@ -689,6 +689,7 @@ export async function buildDashboardTvData() {
     dueDate: string;
     garmentsRemaining: number;
     status: "overdue" | "today" | "soon";
+    allocatedTo: string[];
   }[] = [];
   const customerById = new Map(customers.map((c) => [c.id, c]));
   for (const j of jobs) {
@@ -706,8 +707,17 @@ export async function buildDashboardTvData() {
     // All line items done = job is effectively finished, just not flagged yet
     if (items.length > 0 && items.every((li) => li.completed)) continue;
     let garmentsRemaining = 0;
+    const allocatedTo: string[] = [];
     for (const li of items) {
       garmentsRemaining += remainingForLineItem(li);
+      // Who's allocated: line item operator first, else the machine's default operator
+      if (!li.completed) {
+        const opId =
+          li.operatorId ??
+          (li.machineId ? machineById.get(li.machineId)?.defaultOperatorId : null);
+        const opName = opId ? staffName.get(opId) : null;
+        if (opName && !allocatedTo.includes(opName)) allocatedTo.push(opName);
+      }
     }
     dueOutJobs.push({
       id: j.id,
@@ -716,6 +726,7 @@ export async function buildDashboardTvData() {
       dueDate: due,
       garmentsRemaining,
       status: due < todayStr ? "overdue" : due === todayStr ? "today" : "soon",
+      allocatedTo,
     });
   }
   // Most urgent first: earliest due date, biggest remaining workload first within a day
