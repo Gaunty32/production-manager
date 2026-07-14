@@ -185,7 +185,21 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 export default function DashboardTv() {
-  const token = useMemo(() => new URLSearchParams(window.location.search).get("token") ?? "", []);
+  // Read the token from the URL; remember it so a TV that has loaded the
+  // dashboard once can come back to plain /dashboard-tv and still work
+  // (Firestick/TV browsers often drop the query string from history).
+  const token = useMemo(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("token") ?? "";
+    try {
+      if (fromUrl) {
+        localStorage.setItem("tv-dashboard-token", fromUrl);
+        return fromUrl;
+      }
+      return localStorage.getItem("tv-dashboard-token") ?? "";
+    } catch {
+      return fromUrl;
+    }
+  }, []);
 
   const { data, isLoading, isError, error } = useQuery<TvData>({
     queryKey: ["/api/dashboard-tv/data", token],
