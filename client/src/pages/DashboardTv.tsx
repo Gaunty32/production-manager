@@ -159,11 +159,11 @@ function utilColor(pct: number): string {
   return STATUS_COLOR.green;
 }
 
-function effColor(pct: number | null): string {
-  if (pct === null) return "#94a3b8";
-  if (pct >= 100) return STATUS_COLOR.green;
-  if (pct >= 80) return STATUS_COLOR.amber;
-  return STATUS_COLOR.red;
+function effTarget(pct: number | null): { label: string; color: string; arrow: string } | null {
+  if (pct === null) return null;
+  if (pct >= 110) return { label: "Above target", color: STATUS_COLOR.green, arrow: "▲" };
+  if (pct >= 90) return { label: "On target", color: STATUS_COLOR.green, arrow: "●" };
+  return { label: "Below target", color: STATUS_COLOR.red, arrow: "▼" };
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -728,13 +728,18 @@ function OperativesPage({
           >
             <div className="flex items-center justify-between gap-4 mb-3">
               <div className="text-4xl font-black truncate">{o.name}</div>
-              <div
-                className="text-4xl font-black"
-                style={{ color: effColor(o.efficiencyPercent) }}
-                title="Efficiency vs estimate (last week)"
-              >
-                {o.efficiencyPercent !== null ? `${o.efficiencyPercent}%` : "—"}
-              </div>
+              {(() => {
+                const t = effTarget(o.efficiencyPercent);
+                return t ? (
+                  <div
+                    className="text-3xl font-black whitespace-nowrap"
+                    style={{ color: t.color }}
+                    title="Output vs target (last week)"
+                  >
+                    {t.arrow} {t.label}
+                  </div>
+                ) : null;
+              })()}
             </div>
             <div className="flex items-end gap-10 mb-3">
               <div>
