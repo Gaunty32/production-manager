@@ -9,6 +9,11 @@ import {
 
 const TZ = "Europe/London";
 
+// Last-week efficiency barely changes, so cache it briefly instead of running
+// the full productivity report for every staff member on every 60s TV poll.
+const efficiencyCache = new Map<string, { at: number; byStaff: Map<string, number | null> }>();
+const EFFICIENCY_TTL_MS = 10 * 60 * 1000;
+
 function londonDateStr(d: Date): string {
   // en-CA renders as YYYY-MM-DD
   return d.toLocaleDateString("en-CA", { timeZone: TZ });
@@ -529,6 +534,152 @@ export async function buildDashboardTvData() {
   const severityRank = { red: 0, amber: 1, blue: 2 } as const;
   alerts.sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
 
+  // ── Section 10: Team goal (shared target) ──────────────────────────────────
+  // Week boundaries (Mon–Sun, London). `today` is noon UTC on the London date,
+  // so getUTCDay() lines up with the London day of week.
+  const dow = today.getUTCDay(); // 0 = Sunday
+  const mondayOffset = (dow + 6) % 7;
+  const thisMonday = new Date(today.getTime() - mondayOffset * 86400000);
+  const thisMondayStr = londonDateStr(thisMonday);
+  const thisSundayStr = londonDateStr(new Date(thisMonday.getTime() + 6 * 86400000));
+  const lastMondayStr = londonDateStr(new Date(thisMonday.getTime() - 7 * 86400000));
+  const lastSundayStr = londonDateStr(new Date(thisMonday.getTime() - 86400000));
+
+  // Everything still to produce across the whole queue (all non-completed jobs
+  // in production, excluding those waiting on the customer).
+  let queueGarments = 0;
+  let queueJobs = 0;
+  for (const j of jobs) {
+    if (j.completed || j.status === "pending_customer_approval") continue;
+    let jobRemaining = 0;
+    for (const li of lineItemsByJob.get(j.id) ?? []) {
+      jobRemaining += remainingForLineItem(li);
+    }
+    if (jobRemaining > 0) {
+      queueGarments += jobRemaining;
+      queueJobs++;
+    }
+  }
+
+  // Garments produced in a date range, credited per person. Production entries
+  // are the source of truth; line items completed with NO entries at all fall
+  // back to completedById (mirrors the Staff Productivity report).
+  const entriesForItem = new Set(productionEntries.map((e) => e.lineItemId));
+  const garmentsInRange = (startStr: string, endStr: string) => {
+    const byStaff = new Map<string, number>();
+    let total = 0;
+    for (const e of productionEntries) {
+      const d = londonDateStr(new Date(e.workDate));
+      if (d >= startStr && d <= endStr) {
+        const qty = e.quantityCompleted ?? 0;
+        total += qty;
+        if (e.staffId) byStaff.set(e.staffId, (byStaff.get(e.staffId) ?? 0) + qty);
+      }
+    }
+    for (const li of allLineItems) {
+      if (!li.completed || !li.completedAt) continue;
+      if (entriesForItem.has(li.id)) continue;
+      const d = londonDateStr(new Date(li.completedAt));
+      if (d >= startStr && d <= endStr) {
+        total += li.quantity;
+        if (li.completedById) {
+          byStaff.set(li.completedById, (byStaff.get(li.completedById) ?? 0) + li.quantity);
+        }
+      }
+    }
+    return { total, byStaff };
+  };
+
+  const thisWeek = garmentsInRange(thisMondayStr, thisSundayStr);
+  const lastWeek = garmentsInRange(lastMondayStr, lastSundayStr);
+
+  const activeStaff = staff.filter((s) => s.active !== false);
+
+  const teamGoal = {
+    queueGarments,
+    queueJobs,
+    completedThisWeek: thisWeek.total,
+    completedLastWeek: lastWeek.total,
+    contributors: activeStaff
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        garmentsThisWeek: thisWeek.byStaff.get(s.id) ?? 0,
+      }))
+      .filter((c) => c.garmentsThisWeek > 0)
+      .sort((a, b) => b.garmentsThisWeek - a.garmentsThisWeek),
+  };
+
+  // ── Section 11: Operative panels ────────────────────────────────────────────
+  // Upcoming scheduled work per person (today onwards), soonest first.
+  const upcomingByStaff = new Map<string, { jobLabel: string; date: string }[]>();
+  const upcomingCountByStaff = new Map<string, number>();
+  const lineItemById = new Map(allLineItems.map((li) => [li.id, li]));
+  const jobById = new Map(jobs.map((j) => [j.id, j]));
+  const sortedUpcoming = [...schedules]
+    .map((sc) => ({ sc, dateStr: londonDateStr(new Date(sc.scheduledDate)) }))
+    .filter(({ dateStr }) => dateStr >= todayStr)
+    .sort((a, b) => a.dateStr.localeCompare(b.dateStr) || a.sc.startTime - b.sc.startTime);
+  for (const { sc, dateStr } of sortedUpcoming) {
+    if (!sc.staffId) continue;
+    const li = sc.lineItemId ? lineItemById.get(sc.lineItemId) : null;
+    if (li && remainingForLineItem(li) <= 0) continue; // already done
+    const job = jobById.get(sc.jobId);
+    if (!job || job.completed) continue;
+    upcomingCountByStaff.set(sc.staffId, (upcomingCountByStaff.get(sc.staffId) ?? 0) + 1);
+    const arr = upcomingByStaff.get(sc.staffId) ?? [];
+    if (arr.length < 4) {
+      const cust = customerName.get(job.customerId) ?? "";
+      const label = cust ? `${cust} — ${job.jobName}` : job.jobName;
+      // Skip duplicates of the same job on the same day
+      if (!arr.some((x) => x.jobLabel === label && x.date === dateStr)) {
+        arr.push({ jobLabel: label, date: dateStr });
+      }
+    }
+    upcomingByStaff.set(sc.staffId, arr);
+  }
+
+  // Efficiency (actual vs estimated, last complete week) per person — same
+  // engine as the Staff Productivity report. Cached for a few minutes since
+  // last week's figures don't change between TV polls.
+  let effByStaff: Map<string, number | null>;
+  const cachedEff = efficiencyCache.get(lastMondayStr);
+  if (cachedEff && Date.now() - cachedEff.at < EFFICIENCY_TTL_MS) {
+    effByStaff = cachedEff.byStaff;
+  } else {
+    const productivityResults = await Promise.all(
+      activeStaff.map((s) =>
+        storage
+          .getStaffProductivity({
+            staffId: s.id,
+            startDate: lastMondayStr,
+            endDate: lastSundayStr,
+            timezone: TZ,
+          })
+          .catch(() => null),
+      ),
+    );
+    effByStaff = new Map(
+      activeStaff.map((s, idx) => [s.id, productivityResults[idx]?.summary?.efficiencyPercent ?? null]),
+    );
+    efficiencyCache.clear();
+    efficiencyCache.set(lastMondayStr, { at: Date.now(), byStaff: effByStaff });
+  }
+
+  const operatives = activeStaff
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      garmentsLastWeek: lastWeek.byStaff.get(s.id) ?? 0,
+      garmentsThisWeek: thisWeek.byStaff.get(s.id) ?? 0,
+      efficiencyPercent: effByStaff.get(s.id) ?? null,
+      jobsToDo: upcomingByStaff.get(s.id) ?? [],
+      jobsToDoCount: upcomingCountByStaff.get(s.id) ?? 0,
+    }))
+    // Only show people with something to see: work done recently or work queued
+    .filter((o) => o.garmentsLastWeek > 0 || o.garmentsThisWeek > 0 || o.jobsToDoCount > 0)
+    .sort((a, b) => b.garmentsThisWeek - a.garmentsThisWeek || b.garmentsLastWeek - a.garmentsLastWeek);
+
   return {
     lastUpdated: londonTimeHHMM(now),
     todaysProduction: {
@@ -552,5 +703,7 @@ export async function buildDashboardTvData() {
     value,
     team,
     alerts,
+    teamGoal,
+    operatives,
   };
 }

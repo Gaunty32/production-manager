@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { calculateProductionMetrics } from "@shared/machines";
+import { minutesBetween, suspiciousReason, fmtMins } from "@/components/BulkCompleteDialog";
 import type { JobLineItem, Staff, ProductionEntry } from "@shared/schema";
 
 interface RecordProductionDialogProps {
@@ -42,9 +44,12 @@ export function RecordProductionDialog({
   const queryClient = useQueryClient();
   
   const [quantityCompleted, setQuantityCompleted] = useState("");
-  const [productionTimeMinutes, setProductionTimeMinutes] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [finishTime, setFinishTime] = useState("");
   const [selectedStaffId, setSelectedStaffId] = useState(currentUserId || "");
   const [workDate, setWorkDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  // Suspicious-time acknowledgement: first submit shows a warning, second goes through.
+  const [warned, setWarned] = useState(false);
   
   const { data: staff = [] } = useQuery<Staff[]>({
     queryKey: ["/api/staff"],
@@ -70,7 +75,9 @@ export function RecordProductionDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/production-entries"] });
       toast({ title: "Production recorded successfully" });
       setQuantityCompleted("");
-      setProductionTimeMinutes("");
+      setStartTime("");
+      setFinishTime("");
+      setWarned(false);
     },
     onError: (error: Error) => {
       toast({ title: "Failed to record production", description: error.message, variant: "destructive" });
@@ -92,19 +99,30 @@ export function RecordProductionDialog({
     },
   });
   
+  // Estimate scaled to the quantity entered in this session (same stitch-count
+  // formula as elsewhere), used as a hint and for the suspicious-time check.
+  const sessionQty = parseInt(quantityCompleted);
+  const sessionEstimate =
+    Number.isFinite(sessionQty) && sessionQty > 0
+      ? calculateProductionMetrics(sessionQty, lineItem.stitchCount, lineItem.machineId)?.totalTimeMinutes ?? null
+      : null;
+  const sessionMinutes = minutesBetween(startTime, finishTime);
+  const invalidRange = !!startTime && !!finishTime && sessionMinutes == null;
+  const suspicious =
+    sessionMinutes != null ? suspiciousReason(sessionMinutes, sessionEstimate) : null;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     const qty = parseInt(quantityCompleted);
-    const time = parseInt(productionTimeMinutes);
     
     if (isNaN(qty) || qty <= 0) {
       toast({ title: "Please enter a valid quantity", variant: "destructive" });
       return;
     }
     
-    if (isNaN(time) || time <= 0) {
-      toast({ title: "Please enter a valid production time", variant: "destructive" });
+    if (sessionMinutes == null || sessionMinutes <= 0) {
+      toast({ title: "Please enter valid start and finish times", variant: "destructive" });
       return;
     }
     
@@ -123,11 +141,17 @@ export function RecordProductionDialog({
       return;
     }
     
+    // Suspicious times need an explicit second click to go through.
+    if (suspicious && !warned) {
+      setWarned(true);
+      return;
+    }
+    
     createEntryMutation.mutate({
       lineItemId: lineItem.id,
       staffId: selectedStaffId,
       quantityCompleted: qty,
-      productionTimeMinutes: time,
+      productionTimeMinutes: sessionMinutes,
       workDate,
     });
   };
@@ -210,28 +234,69 @@ export function RecordProductionDialog({
                   min="1"
                   max={remainingQty}
                   value={quantityCompleted}
-                  onChange={(e) => setQuantityCompleted(e.target.value)}
+                  onChange={(e) => {
+                    setQuantityCompleted(e.target.value);
+                    setWarned(false);
+                  }}
                   placeholder={`Max ${remainingQty}`}
                   data-testid="input-quantity-completed"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="time" className="flex items-center gap-1">
+                <Label className="flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" />
-                  Production Time (mins)
+                  Start / Finish
                 </Label>
-                <Input
-                  id="time"
-                  type="number"
-                  min="1"
-                  value={productionTimeMinutes}
-                  onChange={(e) => setProductionTimeMinutes(e.target.value)}
-                  placeholder="Minutes worked"
-                  data-testid="input-production-time"
-                />
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => {
+                      setStartTime(e.target.value);
+                      setWarned(false);
+                    }}
+                    data-testid="input-start-time"
+                  />
+                  <Input
+                    type="time"
+                    value={finishTime}
+                    onChange={(e) => {
+                      setFinishTime(e.target.value);
+                      setWarned(false);
+                    }}
+                    data-testid="input-finish-time"
+                  />
+                </div>
+                <div className="text-xs" data-testid="text-session-duration">
+                  {invalidRange ? (
+                    <span className="text-destructive">Start and finish can't be the same</span>
+                  ) : sessionMinutes != null ? (
+                    <span className="font-medium">
+                      = {fmtMins(sessionMinutes)}
+                      {sessionEstimate != null && (
+                        <span className="text-muted-foreground font-normal"> (est. {fmtMins(sessionEstimate)})</span>
+                      )}
+                    </span>
+                  ) : sessionEstimate != null ? (
+                    <span className="text-muted-foreground">est. {fmtMins(sessionEstimate)}</span>
+                  ) : null}
+                </div>
               </div>
             </div>
+            
+            {warned && suspicious && (
+              <div
+                className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-muted-foreground"
+                data-testid="warning-suspicious-time"
+              >
+                <span className="font-medium text-amber-600 dark:text-amber-400">
+                  Please double-check:
+                </span>{" "}
+                the time entered ({fmtMins(sessionMinutes ?? 0)}) {suspicious}. If it's right,
+                press the button again to save.
+              </div>
+            )}
             
             <Button 
               type="submit" 
@@ -239,7 +304,11 @@ export function RecordProductionDialog({
               disabled={createEntryMutation.isPending}
               data-testid="button-submit-production"
             >
-              {createEntryMutation.isPending ? "Recording..." : "Record Production"}
+              {createEntryMutation.isPending
+                ? "Recording..."
+                : warned && suspicious
+                  ? "Save anyway"
+                  : "Record Production"}
             </Button>
           </form>
           

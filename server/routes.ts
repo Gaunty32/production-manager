@@ -1686,6 +1686,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Data Quality report: completed line items whose recorded production time
+  // looks unreliable — missing/zero, or exactly equal to the system estimate
+  // (a tell-tale sign the estimate was copied instead of the real time).
+  app.get("/api/reports/data-quality", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const querySchema = z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      });
+      const params = querySchema.parse(req.query);
+      if (params.startDate > params.endDate) {
+        return res.status(400).json({ error: "Start date must be before end date" });
+      }
+
+      const [allLineItems, allJobs, customers, machines, staffList] = await Promise.all([
+        storage.getAllJobLineItems(),
+        storage.getJobs(),
+        storage.getCustomers(),
+        storage.getMachines(),
+        storage.getStaff(),
+      ]);
+      const jobMap = new Map(allJobs.map(j => [j.id, j]));
+      const customerMap = new Map(customers.map(c => [c.id, c.name]));
+      const machineMap = new Map(machines.map(m => [m.id, m]));
+      const staffMap = new Map(staffList.map(s => [s.id, s.name]));
+
+      const londonDate = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+
+      const completedInRange = allLineItems.filter(li => {
+        if (!li.completed || !li.completedAt) return false;
+        const dateStr = londonDate(new Date(li.completedAt));
+        return dateStr >= params.startDate && dateStr <= params.endDate;
+      });
+
+      type Issue = "missing" | "matches_estimate";
+      const rows: Array<{
+        lineItemId: string;
+        jobNumber: number | null;
+        jobName: string;
+        customerName: string;
+        description: string | null;
+        quantity: number;
+        machineName: string | null;
+        completedDate: string;
+        completedBy: string | null;
+        actualMinutes: number | null;
+        estimatedMinutes: number | null;
+        issue: Issue;
+      }> = [];
+
+      const flaggedByStaff = new Map<string, { name: string; flagged: number; total: number }>();
+      const bumpStaff = (id: string | null, flagged: boolean) => {
+        const key = id ?? "unknown";
+        const entry = flaggedByStaff.get(key) ?? {
+          name: id ? staffMap.get(id) ?? "Unknown" : "Not recorded",
+          flagged: 0,
+          total: 0,
+        };
+        entry.total++;
+        if (flagged) entry.flagged++;
+        flaggedByStaff.set(key, entry);
+      };
+
+      let missingCount = 0;
+      let matchesEstimateCount = 0;
+
+      for (const li of completedInRange) {
+        const actual = li.actualProductionTimeMinutes;
+
+        // Estimate using the same formula as the Accuracy tab (only when we
+        // have the inputs to compute it).
+        let estimate: number | null = null;
+        if (li.stitchCount > 0 && li.quantity > 0 && li.machineId !== null) {
+          const machine: any = machineMap.get(li.machineId);
+          const heads = machine?.heads || 6;
+          const spm = machine?.stitchesPerMinute || 750;
+          const changeover = machine?.changeoverTimeMinutes || 3;
+          const multiplier = machine?.schedulingMultiplier ?? 1;
+          const runs = Math.ceil(li.quantity / heads);
+          estimate = Math.ceil((runs * ((li.stitchCount / spm) + changeover) * multiplier) / 10) * 10;
+        }
+
+        let issue: Issue | null = null;
+        if (actual === null || actual === undefined || actual <= 0) {
+          issue = "missing";
+        } else if (estimate !== null && actual === estimate) {
+          issue = "matches_estimate";
+        }
+
+        bumpStaff(li.completedById ?? null, issue !== null);
+        if (!issue) continue;
+        if (issue === "missing") missingCount++;
+        else matchesEstimateCount++;
+
+        const job = jobMap.get(li.jobId);
+        rows.push({
+          lineItemId: li.id,
+          jobNumber: (job as any)?.jobNumber ?? null,
+          jobName: job?.jobName ?? "Unknown",
+          customerName: job ? customerMap.get(job.customerId) ?? "Unknown" : "Unknown",
+          description: li.description ?? null,
+          quantity: li.quantity,
+          machineName: li.machineId !== null ? (machineMap.get(li.machineId) as any)?.name ?? `Machine ${li.machineId}` : null,
+          completedDate: londonDate(new Date(li.completedAt!)),
+          completedBy: li.completedById ? staffMap.get(li.completedById) ?? "Unknown" : null,
+          actualMinutes: actual ?? null,
+          estimatedMinutes: estimate,
+          issue,
+        });
+      }
+
+      rows.sort((a, b) => b.completedDate.localeCompare(a.completedDate));
+
+      const byStaff = Array.from(flaggedByStaff.entries())
+        .map(([id, s]) => ({ staffId: id, name: s.name, flagged: s.flagged, total: s.total }))
+        .filter(s => s.total > 0)
+        .sort((a, b) => b.flagged - a.flagged);
+
+      res.json({
+        summary: {
+          totalCompleted: completedInRange.length,
+          flagged: rows.length,
+          missing: missingCount,
+          matchesEstimate: matchesEstimateCount,
+          cleanPercent:
+            completedInRange.length > 0
+              ? Math.round(((completedInRange.length - rows.length) / completedInRange.length) * 100)
+              : null,
+        },
+        byStaff,
+        rows,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error building data quality report:", error);
+      res.status(500).json({ error: "Failed to build data quality report" });
+    }
+  });
+
   // Customer-specific weekly trend (output + invoiced value) — used by Customers page chart
   app.get("/api/reports/all-customers-weekly-trend", isStaffAuthenticated, async (req: any, res) => {
     try {

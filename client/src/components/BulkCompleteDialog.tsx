@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MachineBadge } from "@/components/MachineBadge";
-import { CheckCircle2, Users, X, Plus } from "lucide-react";
+import { CheckCircle2, Users, X, Plus, AlertTriangle } from "lucide-react";
 import { calculateProductionMetrics } from "@shared/machines";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -42,10 +42,16 @@ interface BulkCompleteDialogProps {
   onSuccess?: () => void;
 }
 
+interface TimeRange {
+  start: string;
+  finish: string;
+}
+
 interface ContributorRow {
   staffId: string;
   quantity: string;
-  minutes: string;
+  start: string;
+  finish: string;
 }
 
 interface LineItemProgress {
@@ -58,6 +64,37 @@ function estimatedMinutes(li: JobLineItem): number | null {
   return metrics ? metrics.totalTimeMinutes : null;
 }
 
+// Minutes between two HH:MM clock times on the same day. Returns null when
+// either value is missing or the finish isn't after the start.
+export function minutesBetween(start: string, finish: string): number | null {
+  if (!start || !finish) return null;
+  const [sh, sm] = start.split(":").map(Number);
+  const [fh, fm] = finish.split(":").map(Number);
+  if (![sh, sm, fh, fm].every(Number.isFinite)) return null;
+  const s = sh * 60 + sm;
+  const f = fh * 60 + fm;
+  if (f === s) return null;
+  // Overnight span: finishing "earlier" than the start means the shift crossed midnight.
+  return f > s ? f - s : f - s + 24 * 60;
+}
+
+// Flags production times that look wrong against the system estimate:
+// exactly the estimate (probably copied), or wildly above/below it.
+export function suspiciousReason(minutes: number, est: number | null): string | null {
+  if (est == null || est <= 0) return null;
+  if (minutes === est) return "exactly matches the estimate";
+  if (minutes > est * 2) return `more than double the estimate (${est} min)`;
+  if (minutes < est * 0.5) return `less than half the estimate (${est} min)`;
+  return null;
+}
+
+export function fmtMins(mins: number): string {
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 export function BulkCompleteDialog({
   open,
   onOpenChange,
@@ -67,7 +104,9 @@ export function BulkCompleteDialog({
 }: BulkCompleteDialogProps) {
   const { toast } = useToast();
   const [operatorId, setOperatorId] = useState<string>("");
-  const [times, setTimes] = useState<Record<string, string>>({});
+  // Per-line-item start/finish clock times. Deliberately NOT pre-filled with
+  // the estimate — real times must come from the worksheet.
+  const [ranges, setRanges] = useState<Record<string, TimeRange>>({});
   // Per-line-item team split: when present, that item is completed by several
   // members, each credited their own quantity + time.
   const [splits, setSplits] = useState<Record<string, ContributorRow[]>>({});
@@ -75,6 +114,9 @@ export function BulkCompleteDialog({
   // production entries but leave the line item open.
   const [partials, setPartials] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
+  // Suspicious-time acknowledgement: first submit click shows the warnings,
+  // second click ("Save anyway") goes through.
+  const [warned, setWarned] = useState(false);
 
   // Partial production already recorded against each line item (possibly by
   // several people). Team splits must validate against what's REMAINING, not
@@ -99,27 +141,31 @@ export function BulkCompleteDialog({
     Math.max(0, item.lineItem.quantity - (recordedByItem[item.lineItem.id] ?? 0));
 
   // When the dialog opens, seed the operator (if every item shares one) and
-  // pre-fill each time field with the system's estimate so common cases are a
-  // single click.
+  // clear all time fields — times must be typed in from the worksheet.
   useEffect(() => {
     if (!open) return;
     const operatorIds = Array.from(
       new Set(items.map((i) => i.defaultOperatorId).filter((id): id is string => !!id))
     );
     setOperatorId(operatorIds.length === 1 ? operatorIds[0] : "");
-    const seeded: Record<string, string> = {};
-    for (const i of items) {
-      const est = estimatedMinutes(i.lineItem);
-      seeded[i.lineItem.id] = est != null ? String(est) : "";
-    }
-    setTimes(seeded);
+    setRanges({});
     setSplits({});
     setPartials({});
+    setWarned(false);
   }, [open, items]);
 
   const sortedStaff = staff.filter((s) => s.active !== false).sort((a, b) => a.name.localeCompare(b.name));
 
+  const setRange = (lineItemId: string, field: keyof TimeRange, value: string) => {
+    setWarned(false);
+    setRanges((prev) => {
+      const existing = prev[lineItemId] ?? { start: "", finish: "" };
+      return { ...prev, [lineItemId]: { ...existing, [field]: value } };
+    });
+  };
+
   const toggleSplit = (item: BulkCompleteItem) => {
+    setWarned(false);
     setSplits((prev) => {
       const next = { ...prev };
       if (next[item.lineItem.id]) {
@@ -130,14 +176,15 @@ export function BulkCompleteDialog({
           return np;
         });
       } else {
-        const est = times[item.lineItem.id] ?? "";
+        const range = ranges[item.lineItem.id];
         next[item.lineItem.id] = [
           {
             staffId: operatorId || item.defaultOperatorId || "",
             quantity: String(remainingFor(item)),
-            minutes: est,
+            start: range?.start ?? "",
+            finish: range?.finish ?? "",
           },
-          { staffId: "", quantity: "", minutes: "" },
+          { staffId: "", quantity: "", start: "", finish: "" },
         ];
       }
       return next;
@@ -150,6 +197,7 @@ export function BulkCompleteDialog({
     field: keyof ContributorRow,
     value: string
   ) => {
+    setWarned(false);
     setSplits((prev) => {
       const rows = prev[lineItemId] ? [...prev[lineItemId]] : [];
       rows[index] = { ...rows[index], [field]: value };
@@ -160,11 +208,12 @@ export function BulkCompleteDialog({
   const addSplitRow = (lineItemId: string) => {
     setSplits((prev) => ({
       ...prev,
-      [lineItemId]: [...(prev[lineItemId] || []), { staffId: "", quantity: "", minutes: "" }],
+      [lineItemId]: [...(prev[lineItemId] || []), { staffId: "", quantity: "", start: "", finish: "" }],
     }));
   };
 
   const removeSplitRow = (lineItemId: string, index: number) => {
+    setWarned(false);
     setSplits((prev) => {
       const rows = (prev[lineItemId] || []).filter((_, i) => i !== index);
       if (rows.length === 0) {
@@ -184,8 +233,8 @@ export function BulkCompleteDialog({
     if (!rows || rows.length === 0) return false;
     for (const r of rows) {
       const q = Number(r.quantity);
-      const m = Number(r.minutes);
-      if (!r.staffId || !Number.isFinite(q) || q <= 0 || !Number.isFinite(m) || m <= 0) {
+      const m = minutesBetween(r.start, r.finish);
+      if (!r.staffId || !Number.isFinite(q) || q <= 0 || m == null || m <= 0) {
         return false;
       }
     }
@@ -200,29 +249,59 @@ export function BulkCompleteDialog({
   };
 
   const nonSplitItems = items.filter((i) => !splits[i.lineItem.id]);
+  const nonSplitMinutes = (item: BulkCompleteItem): number | null => {
+    const r = ranges[item.lineItem.id];
+    return r ? minutesBetween(r.start, r.finish) : null;
+  };
   const allNonSplitTimesValid = nonSplitItems.every((i) => {
-    const v = times[i.lineItem.id];
-    const n = Number(v);
-    return v !== "" && Number.isFinite(n) && n > 0;
+    const m = nonSplitMinutes(i);
+    return m != null && m > 0;
   });
   const allSplitsValid = items.filter((i) => splits[i.lineItem.id]).every(splitValid);
   const operatorOk = nonSplitItems.length === 0 || !!operatorId;
   const canSubmit =
     operatorOk && items.length > 0 && allNonSplitTimesValid && allSplitsValid && !submitting;
 
+  // Suspicious-time check across all items (only when everything is valid).
+  const suspiciousItems: { label: string; reason: string }[] = [];
+  if (allNonSplitTimesValid && allSplitsValid) {
+    for (const item of items) {
+      const est = estimatedMinutes(item.lineItem);
+      const rows = splits[item.lineItem.id];
+      if (rows) {
+        const totalMins = rows.reduce((s, r) => s + (minutesBetween(r.start, r.finish) ?? 0), 0);
+        const reason = suspiciousReason(totalMins, est);
+        if (reason) suspiciousItems.push({ label: `${item.customerName} — ${item.jobName}`, reason: `${fmtMins(totalMins)} ${reason}` });
+      } else {
+        const mins = nonSplitMinutes(item);
+        if (mins != null) {
+          const reason = suspiciousReason(mins, est);
+          if (reason) suspiciousItems.push({ label: `${item.customerName} — ${item.jobName}`, reason: `${fmtMins(mins)} ${reason}` });
+        }
+      }
+    }
+  }
+
   const partialCount = items.filter((i) => splits[i.lineItem.id] && partials[i.lineItem.id]).length;
   const completeCount = items.length - partialCount;
 
   const submitLabel = submitting
     ? "Saving…"
-    : partialCount > 0 && completeCount > 0
-      ? `Complete ${completeCount}, record progress on ${partialCount}`
-      : partialCount > 0
-        ? `Record progress on ${partialCount} item${partialCount !== 1 ? "s" : ""}`
-        : `Mark ${items.length} complete`;
+    : warned && suspiciousItems.length > 0
+      ? "Save anyway"
+      : partialCount > 0 && completeCount > 0
+        ? `Complete ${completeCount}, record progress on ${partialCount}`
+        : partialCount > 0
+          ? `Record progress on ${partialCount} item${partialCount !== 1 ? "s" : ""}`
+          : `Mark ${items.length} complete`;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
+    // Suspicious times need an explicit second click to go through.
+    if (suspiciousItems.length > 0 && !warned) {
+      setWarned(true);
+      return;
+    }
     setSubmitting(true);
     const completedAt = new Date().toISOString();
     const workDate = format(new Date(), "yyyy-MM-dd");
@@ -243,7 +322,7 @@ export function BulkCompleteDialog({
               machineId: item.lineItem.machineId ?? null,
               workDate,
               quantityCompleted: Math.round(Number(r.quantity)),
-              productionTimeMinutes: Math.round(Number(r.minutes)),
+              productionTimeMinutes: minutesBetween(r.start, r.finish) ?? 0,
               notes: null,
             });
           }
@@ -257,12 +336,12 @@ export function BulkCompleteDialog({
             contributors: rows.map((r) => ({
               staffId: r.staffId,
               quantity: Math.round(Number(r.quantity)),
-              minutes: Math.round(Number(r.minutes)),
+              minutes: minutesBetween(r.start, r.finish) ?? 0,
             })),
           });
           completed++;
         } else {
-          const minutes = Math.round(Number(times[item.lineItem.id]));
+          const minutes = nonSplitMinutes(item) ?? 0;
           await apiRequest("PATCH", `/api/job-line-items/${item.lineItem.id}`, {
             completed: true,
             completedById: operatorId,
@@ -311,10 +390,10 @@ export function BulkCompleteDialog({
             Complete {items.length} line item{items.length !== 1 ? "s" : ""}
           </DialogTitle>
           <DialogDescription>
-            Pick the operator who completed these, confirm each production time, then mark
-            them all complete in one go. Times are pre-filled with the estimate — adjust any
-            that differ. Use "Team" to split an item between several members — and tick
-            "Part complete" if the team only finished some of it.
+            Pick the operator, then enter the start and finish times from the worksheet for
+            each item — the system works out the production time. Use "Team" to split an
+            item between several members, and tick "Part complete" if the team only
+            finished some of it.
           </DialogDescription>
         </DialogHeader>
 
@@ -343,13 +422,17 @@ export function BulkCompleteDialog({
               const remaining = remainingFor(item);
               const qtyTotal = splitQtyTotal(item.lineItem.id);
               const qtyRemaining = remaining - qtyTotal;
+              const est = estimatedMinutes(item.lineItem);
+              const range = ranges[item.lineItem.id];
+              const mins = nonSplitMinutes(item);
+              const invalidRange = !!range?.start && !!range?.finish && mins == null;
               return (
                 <div
                   key={item.lineItem.id}
                   className="p-3 space-y-2"
                   data-testid={`row-bulk-complete-${item.lineItem.id}`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium">{item.jobName}</div>
                       <div className="truncate text-xs text-muted-foreground">
@@ -359,21 +442,6 @@ export function BulkCompleteDialog({
                       </div>
                     </div>
                     <MachineBadge machineId={item.lineItem.machineId} />
-                    {!rows && (
-                      <div className="flex items-center gap-1.5">
-                        <Input
-                          type="number"
-                          min={1}
-                          value={times[item.lineItem.id] ?? ""}
-                          onChange={(e) =>
-                            setTimes((prev) => ({ ...prev, [item.lineItem.id]: e.target.value }))
-                          }
-                          className="w-20 text-right font-mono"
-                          data-testid={`input-time-${item.lineItem.id}`}
-                        />
-                        <span className="text-xs text-muted-foreground">mins</span>
-                      </div>
-                    )}
                     <Button
                       variant={rows ? "secondary" : "outline"}
                       size="sm"
@@ -385,10 +453,47 @@ export function BulkCompleteDialog({
                     </Button>
                   </div>
 
+                  {!rows && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-14">Started</span>
+                      <Input
+                        type="time"
+                        value={range?.start ?? ""}
+                        onChange={(e) => setRange(item.lineItem.id, "start", e.target.value)}
+                        className="w-28 font-mono"
+                        data-testid={`input-start-${item.lineItem.id}`}
+                      />
+                      <span className="text-xs text-muted-foreground">Finished</span>
+                      <Input
+                        type="time"
+                        value={range?.finish ?? ""}
+                        onChange={(e) => setRange(item.lineItem.id, "finish", e.target.value)}
+                        className="w-28 font-mono"
+                        data-testid={`input-finish-${item.lineItem.id}`}
+                      />
+                      <span
+                        className={`text-xs ${invalidRange ? "text-destructive" : mins != null ? "font-medium" : "text-muted-foreground"}`}
+                        data-testid={`text-duration-${item.lineItem.id}`}
+                      >
+                        {invalidRange
+                          ? "Start and finish can't be the same"
+                          : mins != null
+                            ? `= ${fmtMins(mins)}`
+                            : est != null
+                              ? `est. ${fmtMins(est)}`
+                              : ""}
+                        {mins != null && est != null ? (
+                          <span className="text-muted-foreground font-normal"> (est. {fmtMins(est)})</span>
+                        ) : null}
+                      </span>
+                    </div>
+                  )}
+
                   {rows && (
                     <div className="rounded-md bg-muted/50 p-2 space-y-2">
                       <div className="text-xs text-muted-foreground">
-                        Split between team members — each gets their own quantity and time.
+                        Split between team members — each gets their own quantity and start/finish times.
+                        {est != null && <span> Estimate for the whole item: {fmtMins(est)}.</span>}
                         {!isPartial && qtyRemaining !== 0 && (
                           <span className={qtyRemaining > 0 ? " text-amber-600 dark:text-amber-400" : " text-destructive"}>
                             {" "}
@@ -404,57 +509,77 @@ export function BulkCompleteDialog({
                           </span>
                         )}
                       </div>
-                      {rows.map((row, index) => (
-                        <div
-                          key={index}
-                          className="flex flex-wrap items-center gap-1.5"
-                          data-testid={`row-contributor-${item.lineItem.id}-${index}`}
-                        >
-                          <div className="min-w-[140px] flex-1">
-                            <Select
-                              value={row.staffId}
-                              onValueChange={(v) => updateSplitRow(item.lineItem.id, index, "staffId", v)}
-                            >
-                              <SelectTrigger data-testid={`select-contributor-staff-${item.lineItem.id}-${index}`}>
-                                <SelectValue placeholder="Team member" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {sortedStaff.map((s) => (
-                                  <SelectItem key={s.id} value={s.id}>
-                                    {s.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <Input
-                            type="number"
-                            min={1}
-                            placeholder="Qty"
-                            value={row.quantity}
-                            onChange={(e) => updateSplitRow(item.lineItem.id, index, "quantity", e.target.value)}
-                            className="w-20 text-right font-mono"
-                            data-testid={`input-contributor-qty-${item.lineItem.id}-${index}`}
-                          />
-                          <Input
-                            type="number"
-                            min={1}
-                            placeholder="Mins"
-                            value={row.minutes}
-                            onChange={(e) => updateSplitRow(item.lineItem.id, index, "minutes", e.target.value)}
-                            className="w-20 text-right font-mono"
-                            data-testid={`input-contributor-mins-${item.lineItem.id}-${index}`}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeSplitRow(item.lineItem.id, index)}
-                            data-testid={`button-remove-contributor-${item.lineItem.id}-${index}`}
+                      {rows.map((row, index) => {
+                        const rowMins = minutesBetween(row.start, row.finish);
+                        const rowInvalid = !!row.start && !!row.finish && rowMins == null;
+                        return (
+                          <div
+                            key={index}
+                            className="flex flex-wrap items-center gap-1.5"
+                            data-testid={`row-contributor-${item.lineItem.id}-${index}`}
                           >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+                            <div className="min-w-[140px] flex-1">
+                              <Select
+                                value={row.staffId}
+                                onValueChange={(v) => updateSplitRow(item.lineItem.id, index, "staffId", v)}
+                              >
+                                <SelectTrigger data-testid={`select-contributor-staff-${item.lineItem.id}-${index}`}>
+                                  <SelectValue placeholder="Team member" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {sortedStaff.map((s) => (
+                                    <SelectItem key={s.id} value={s.id}>
+                                      {s.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Input
+                              type="number"
+                              min={1}
+                              placeholder="Qty"
+                              value={row.quantity}
+                              onChange={(e) => updateSplitRow(item.lineItem.id, index, "quantity", e.target.value)}
+                              className="w-20 text-right font-mono"
+                              data-testid={`input-contributor-qty-${item.lineItem.id}-${index}`}
+                            />
+                            <Input
+                              type="time"
+                              value={row.start}
+                              onChange={(e) => updateSplitRow(item.lineItem.id, index, "start", e.target.value)}
+                              className="w-28 font-mono"
+                              title="Start time"
+                              data-testid={`input-contributor-start-${item.lineItem.id}-${index}`}
+                            />
+                            <Input
+                              type="time"
+                              value={row.finish}
+                              onChange={(e) => updateSplitRow(item.lineItem.id, index, "finish", e.target.value)}
+                              className="w-28 font-mono"
+                              title="Finish time"
+                              data-testid={`input-contributor-finish-${item.lineItem.id}-${index}`}
+                            />
+                            <span className="text-xs w-16 text-right">
+                              {rowInvalid ? (
+                                <span className="text-destructive">Invalid</span>
+                              ) : rowMins != null ? (
+                                fmtMins(rowMins)
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeSplitRow(item.lineItem.id, index)}
+                              data-testid={`button-remove-contributor-${item.lineItem.id}-${index}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <Button
                           variant="outline"
@@ -485,6 +610,28 @@ export function BulkCompleteDialog({
               );
             })}
           </div>
+
+          {warned && suspiciousItems.length > 0 && (
+            <div
+              className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 space-y-1"
+              data-testid="warning-suspicious-times"
+            >
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4" />
+                Please double-check these times
+              </div>
+              <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-0.5">
+                {suspiciousItems.map((s, i) => (
+                  <li key={i}>
+                    <span className="font-medium">{s.label}</span>: {s.reason}
+                  </li>
+                ))}
+              </ul>
+              <div className="text-xs text-muted-foreground">
+                If the times are right, press "Save anyway".
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -499,6 +646,7 @@ export function BulkCompleteDialog({
           <Button
             onClick={handleSubmit}
             disabled={!canSubmit}
+            variant={warned && suspiciousItems.length > 0 ? "destructive" : "default"}
             data-testid="button-bulk-complete-confirm"
           >
             <CheckCircle2 className="h-4 w-4 mr-2" />

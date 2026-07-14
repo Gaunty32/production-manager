@@ -13,10 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DemoAmount } from "@/components/DemoText";
 import { Calendar } from "@/components/ui/calendar";
-import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw, Gauge, Printer, Factory } from "lucide-react";
+import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw, Gauge, Printer, Factory, ShieldAlert } from "lucide-react";
 import { ProductionWeekSummary } from "@/components/ProductionWeekSummary";
 import { KeyMetricsTab } from "@/components/KeyMetricsTab";
 import { StaffProductivityTab } from "@/components/StaffProductivityTab";
+import { DataQualityTab } from "@/components/DataQualityTab";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -810,6 +811,10 @@ function WeeklyReportsContent() {
             <Clock className="h-4 w-4 mr-2" />
             Lead Times
           </TabsTrigger>
+          <TabsTrigger value="data-quality" data-testid="tab-data-quality">
+            <ShieldAlert className="h-4 w-4 mr-2" />
+            Data Quality
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="key-metrics" className="space-y-4">
@@ -818,6 +823,10 @@ function WeeklyReportsContent() {
 
         <TabsContent value="staff-productivity" className="space-y-4">
           <StaffProductivityTab />
+        </TabsContent>
+
+        <TabsContent value="data-quality" className="space-y-4">
+          <DataQualityTab />
         </TabsContent>
 
         <TabsContent value="production-week" className="space-y-4">
