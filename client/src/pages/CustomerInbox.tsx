@@ -36,6 +36,7 @@ import {
   FileText,
   MailOpen,
   Clock,
+  Home,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -747,7 +748,25 @@ export default function CustomerInbox() {
               </div>
             </>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setLocation("/customer/dashboard")}
+              title="Portal home"
+              data-testid="button-portal-home"
+            >
+              <Home className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setLocation("/customer/submit")}
+              data-testid="button-submit-new-job"
+            >
+              <Plus className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Submit New Job</span>
+            </Button>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
