@@ -690,12 +690,23 @@ export async function buildDashboardTvData() {
     garmentsRemaining: number;
     status: "overdue" | "today" | "soon";
   }[] = [];
+  const customerById = new Map(customers.map((c) => [c.id, c]));
   for (const j of jobs) {
     if (j.completed || j.status === "pending_customer_approval") continue;
+    // Mirror the Production Queue / Deadline Alerts lifecycle exclusions:
+    // invoiced (or ready-to-invoice) jobs are finished commercially even if
+    // status/line-item flags never got updated, and advance-payment customers
+    // awaiting payment aren't in production yet.
+    if (j.invoiceStatus === "invoiced" || j.invoiceStatus === "ready" || j.invoicedAt) continue;
+    const cust = customerById.get(j.customerId);
+    if (cust?.requiresAdvancePayment && !j.paymentReceived) continue;
     const due = dueDateStr(j.id, j);
     if (!due || due > in48Str) continue;
+    const items = lineItemsByJob.get(j.id) ?? [];
+    // All line items done = job is effectively finished, just not flagged yet
+    if (items.length > 0 && items.every((li) => li.completed)) continue;
     let garmentsRemaining = 0;
-    for (const li of lineItemsByJob.get(j.id) ?? []) {
+    for (const li of items) {
       garmentsRemaining += remainingForLineItem(li);
     }
     dueOutJobs.push({
