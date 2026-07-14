@@ -89,6 +89,18 @@ interface TvData {
     }[];
     machines: { name: string; items: PlanItem[]; totalCount: number }[];
   };
+  upNext: {
+    totalCount: number;
+    rows: {
+      id: string;
+      jobLabel: string;
+      quantity: number;
+      person: string | null;
+      machine: string | null;
+      dueDate: string | null;
+      status: "overdue" | "today" | "tomorrow" | "later";
+    }[];
+  };
 }
 
 interface PlanItem {
@@ -193,7 +205,7 @@ export default function DashboardTv() {
   });
 
   const operativePages = useMemo(() => chunk(data?.operatives ?? [], 4), [data?.operatives]);
-  const pageCount = data ? 4 + operativePages.length : 1;
+  const pageCount = data ? 5 + operativePages.length : 1;
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
   const [navNonce, setNavNonce] = useState(0);
@@ -272,7 +284,7 @@ export default function DashboardTv() {
           {page === 1 && <TodaysPlanPage data={data} />}
           {page === 2 && <DueOutPage data={data} />}
           {page === 3 && <TeamGoalPage data={data} />}
-          {page >= 4 && operativePages[page - 4] && (
+          {page >= 4 && page < 4 + operativePages.length && operativePages[page - 4] && (
             <OperativesPage
               data={data}
               operatives={operativePages[page - 4]}
@@ -280,6 +292,7 @@ export default function DashboardTv() {
               pageTotal={operativePages.length}
             />
           )}
+          {page === 4 + operativePages.length && <UpNextPage data={data} />}
         </div>
         {pageCount > 1 && (
           <div className="flex items-center justify-center gap-4 pt-4" data-testid="page-dots">
@@ -582,6 +595,78 @@ function DueOutPage({ data }: { data: TvData }) {
           <div className="text-center text-2xl text-slate-400 mt-4">
             + {d.totalJobs - d.jobs.length} more jobs due out
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Final page: Up Next — the jobs to be done next ──────────────────────────
+const UP_NEXT_STATUS = {
+  overdue: { color: "#ef4444", label: "OVERDUE", flash: true },
+  today: { color: "#ef4444", label: "DUE TODAY", flash: true },
+  tomorrow: { color: "#22c55e", label: "TOMORROW", flash: false },
+  later: { color: "#94a3b8", label: "", flash: false },
+} as const;
+
+function UpNextPage({ data }: { data: TvData }) {
+  const u = data.upNext;
+  return (
+    <div className="flex flex-col h-full gap-5">
+      <PageHeader title="Up Next" lastUpdated={data.lastUpdated} />
+
+      <div className="flex-1 min-h-0 rounded-2xl bg-slate-900/70 ring-1 ring-slate-700/60 p-6 overflow-hidden flex flex-col">
+        {u.rows.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-4xl text-emerald-400 font-bold">
+            Nothing outstanding — all caught up!
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-[1fr_170px_260px_260px_300px] gap-4 px-4 pb-3 text-xl font-bold text-slate-400 uppercase tracking-wider">
+              <div>Job</div>
+              <div className="text-right">Quantity</div>
+              <div>Person</div>
+              <div>Machine</div>
+              <div className="text-right">Due out</div>
+            </div>
+            <div className="flex flex-col gap-2 min-h-0">
+              {u.rows.map((r) => {
+                const s = UP_NEXT_STATUS[r.status];
+                return (
+                  <div
+                    key={r.id}
+                    className={`grid grid-cols-[1fr_170px_260px_260px_300px] gap-4 items-center rounded-xl px-4 py-3${s.flash ? " animate-pulse" : ""}`}
+                    style={{
+                      backgroundColor: `${s.color}${r.status === "later" ? "14" : "26"}`,
+                      border: `2px solid ${s.color}${r.status === "later" ? "33" : "77"}`,
+                    }}
+                    data-testid={`row-upnext-${r.id}`}
+                  >
+                    <div className="text-2xl font-bold truncate">{r.jobLabel}</div>
+                    <div className="text-2xl font-black text-right" style={{ color: r.status === "later" ? "#e2e8f0" : s.color }}>
+                      {num(r.quantity)}
+                    </div>
+                    <div className="text-2xl text-slate-200 truncate">{r.person ?? "—"}</div>
+                    <div className="text-2xl text-slate-200 truncate">{r.machine ?? "—"}</div>
+                    <div className="text-2xl font-black text-right whitespace-nowrap" style={{ color: s.color }}>
+                      {r.dueDate
+                        ? r.status === "overdue"
+                          ? `WAS DUE ${fmtDueDay(r.dueDate).toUpperCase()}`
+                          : r.status === "today"
+                            ? "DUE TODAY"
+                            : fmtDueDay(r.dueDate).toUpperCase()
+                        : "NO DATE"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {u.totalCount > u.rows.length && (
+              <div className="text-center text-2xl text-slate-400 mt-3">
+                + {u.totalCount - u.rows.length} more in the queue
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

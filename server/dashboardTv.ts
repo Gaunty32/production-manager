@@ -826,6 +826,64 @@ export async function buildDashboardTvData() {
       .filter((m) => m.items.length > 0),
   };
 
+  // ── Section 14: Up next — the jobs to be done next, most urgent first ──────
+  type UpNextRow = {
+    id: string;
+    jobLabel: string;
+    quantity: number;
+    person: string | null;
+    machine: string | null;
+    dueDate: string | null;
+    status: "overdue" | "today" | "tomorrow" | "later";
+  };
+  const upNextRows: UpNextRow[] = [];
+  for (const j of jobs) {
+    if (j.completed || j.status === "pending_customer_approval") continue;
+    if (j.invoiceStatus === "invoiced" || j.invoiceStatus === "ready" || j.invoicedAt) continue;
+    const cust = customerById.get(j.customerId);
+    if (cust?.requiresAdvancePayment && !j.paymentReceived) continue;
+    const due = dueDateStr(j.id, j);
+    const custName = customerName.get(j.customerId) ?? "";
+    const jobLabel = custName ? `${custName} — ${j.jobName}` : j.jobName;
+    for (const li of lineItemsByJob.get(j.id) ?? []) {
+      if (li.completed) continue;
+      const remaining = remainingForLineItem(li);
+      if (remaining <= 0) continue;
+      const opId =
+        li.operatorId ??
+        (li.machineId ? machineById.get(li.machineId)?.defaultOperatorId : null);
+      upNextRows.push({
+        id: li.id,
+        jobLabel,
+        quantity: remaining,
+        person: opId ? staffName.get(opId) ?? null : null,
+        machine: li.machineId ? machineById.get(li.machineId)?.name ?? null : null,
+        dueDate: due,
+        status:
+          due === null
+            ? "later"
+            : due < todayStr
+              ? "overdue"
+              : due === todayStr
+                ? "today"
+                : due === tomorrowStr
+                  ? "tomorrow"
+                  : "later",
+      });
+    }
+  }
+  // Earliest due date first (no date = last), biggest outstanding first within a day
+  upNextRows.sort((a, b) => {
+    if (a.dueDate === null && b.dueDate === null) return b.quantity - a.quantity;
+    if (a.dueDate === null) return 1;
+    if (b.dueDate === null) return -1;
+    return a.dueDate.localeCompare(b.dueDate) || b.quantity - a.quantity;
+  });
+  const upNext = {
+    totalCount: upNextRows.length,
+    rows: upNextRows.slice(0, 11),
+  };
+
   return {
     lastUpdated: londonTimeHHMM(now),
     todaysProduction: {
@@ -853,5 +911,6 @@ export async function buildDashboardTvData() {
     operatives,
     dueOut,
     todaysPlan,
+    upNext,
   };
 }
