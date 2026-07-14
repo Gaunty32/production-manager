@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
+import { format } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -45,6 +48,11 @@ interface ContributorRow {
   minutes: string;
 }
 
+interface LineItemProgress {
+  totalQuantityCompleted: number;
+  totalMinutes: number;
+}
+
 function estimatedMinutes(li: JobLineItem): number | null {
   const metrics = calculateProductionMetrics(li.quantity, li.stitchCount, li.machineId);
   return metrics ? metrics.totalTimeMinutes : null;
@@ -63,7 +71,32 @@ export function BulkCompleteDialog({
   // Per-line-item team split: when present, that item is completed by several
   // members, each credited their own quantity + time.
   const [splits, setSplits] = useState<Record<string, ContributorRow[]>>({});
+  // Per-line-item "part complete" flag: record the team's progress as partial
+  // production entries but leave the line item open.
+  const [partials, setPartials] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  // Partial production already recorded against each line item (possibly by
+  // several people). Team splits must validate against what's REMAINING, not
+  // the full quantity, or part-completed items can never be finished.
+  const progressQueries = useQueries({
+    queries: items.map((i) => ({
+      queryKey: ["/api/line-items", i.lineItem.id, "progress"] as const,
+      enabled: open,
+      // Always fetch fresh remaining quantities when the dialog opens — the
+      // app-wide default of staleTime: Infinity would otherwise show stale
+      // progress after someone else records work.
+      staleTime: 0,
+      refetchOnMount: "always" as const,
+    })),
+  });
+  const recordedByItem: Record<string, number> = {};
+  items.forEach((i, idx) => {
+    const data = progressQueries[idx]?.data as LineItemProgress | undefined;
+    recordedByItem[i.lineItem.id] = data?.totalQuantityCompleted ?? 0;
+  });
+  const remainingFor = (item: BulkCompleteItem) =>
+    Math.max(0, item.lineItem.quantity - (recordedByItem[item.lineItem.id] ?? 0));
 
   // When the dialog opens, seed the operator (if every item shares one) and
   // pre-fill each time field with the system's estimate so common cases are a
@@ -81,6 +114,7 @@ export function BulkCompleteDialog({
     }
     setTimes(seeded);
     setSplits({});
+    setPartials({});
   }, [open, items]);
 
   const sortedStaff = staff.filter((s) => s.active !== false).sort((a, b) => a.name.localeCompare(b.name));
@@ -90,12 +124,17 @@ export function BulkCompleteDialog({
       const next = { ...prev };
       if (next[item.lineItem.id]) {
         delete next[item.lineItem.id];
+        setPartials((p) => {
+          const np = { ...p };
+          delete np[item.lineItem.id];
+          return np;
+        });
       } else {
         const est = times[item.lineItem.id] ?? "";
         next[item.lineItem.id] = [
           {
             staffId: operatorId || item.defaultOperatorId || "",
-            quantity: String(item.lineItem.quantity),
+            quantity: String(remainingFor(item)),
             minutes: est,
           },
           { staffId: "", quantity: "", minutes: "" },
@@ -150,7 +189,14 @@ export function BulkCompleteDialog({
         return false;
       }
     }
-    return splitQtyTotal(item.lineItem.id) === item.lineItem.quantity;
+    const total = splitQtyTotal(item.lineItem.id);
+    const remaining = remainingFor(item);
+    if (partials[item.lineItem.id]) {
+      // Part complete: any amount up to what's remaining is fine.
+      return total > 0 && total <= remaining;
+    }
+    // Full completion: the split must cover exactly what's left to produce.
+    return total === remaining;
   };
 
   const nonSplitItems = items.filter((i) => !splits[i.lineItem.id]);
@@ -164,17 +210,47 @@ export function BulkCompleteDialog({
   const canSubmit =
     operatorOk && items.length > 0 && allNonSplitTimesValid && allSplitsValid && !submitting;
 
+  const partialCount = items.filter((i) => splits[i.lineItem.id] && partials[i.lineItem.id]).length;
+  const completeCount = items.length - partialCount;
+
+  const submitLabel = submitting
+    ? "Saving…"
+    : partialCount > 0 && completeCount > 0
+      ? `Complete ${completeCount}, record progress on ${partialCount}`
+      : partialCount > 0
+        ? `Record progress on ${partialCount} item${partialCount !== 1 ? "s" : ""}`
+        : `Mark ${items.length} complete`;
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     const completedAt = new Date().toISOString();
+    const workDate = format(new Date(), "yyyy-MM-dd");
     let completed = 0;
+    let progressed = 0;
     const failures: string[] = [];
 
     for (const item of items) {
       const rows = splits[item.lineItem.id];
       try {
-        if (rows) {
+        if (rows && partials[item.lineItem.id]) {
+          // Part complete: record each member's work as a partial production
+          // entry. The line item stays open.
+          for (const r of rows) {
+            await apiRequest("POST", "/api/production-entries", {
+              lineItemId: item.lineItem.id,
+              staffId: r.staffId,
+              machineId: item.lineItem.machineId ?? null,
+              workDate,
+              quantityCompleted: Math.round(Number(r.quantity)),
+              productionTimeMinutes: Math.round(Number(r.minutes)),
+              notes: null,
+            });
+          }
+          progressed++;
+          queryClient.invalidateQueries({ queryKey: ["/api/line-items", item.lineItem.id, "progress"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/line-items", item.lineItem.id, "production-entries"] });
+        } else if (rows) {
           await apiRequest("PATCH", `/api/job-line-items/${item.lineItem.id}`, {
             completed: true,
             completedAt,
@@ -184,6 +260,7 @@ export function BulkCompleteDialog({
               minutes: Math.round(Number(r.minutes)),
             })),
           });
+          completed++;
         } else {
           const minutes = Math.round(Number(times[item.lineItem.id]));
           await apiRequest("PATCH", `/api/job-line-items/${item.lineItem.id}`, {
@@ -192,14 +269,15 @@ export function BulkCompleteDialog({
             actualProductionTimeMinutes: minutes,
             completedAt,
           });
+          completed++;
         }
-        completed++;
       } catch (e) {
         failures.push(`${item.customerName} — ${item.jobName}`);
       }
     }
 
     queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/production-entries"] });
     setSubmitting(false);
 
     const failureList =
@@ -207,11 +285,15 @@ export function BulkCompleteDialog({
         ? `${failures.slice(0, 3).join("; ")} and ${failures.length - 3} more`
         : failures.join("; ");
 
+    const successParts: string[] = [];
+    if (completed > 0) successParts.push(`Marked ${completed} line item${completed !== 1 ? "s" : ""} as complete`);
+    if (progressed > 0) successParts.push(`recorded partial progress on ${progressed} item${progressed !== 1 ? "s" : ""}`);
+
     toast({
-      title: failures.length ? "Partially completed" : "Success",
+      title: failures.length ? "Some items failed" : "Success",
       description: failures.length
-        ? `Completed ${completed} item${completed !== 1 ? "s" : ""}, ${failures.length} failed: ${failureList}`
-        : `Marked ${completed} line item${completed !== 1 ? "s" : ""} as complete.`,
+        ? `${successParts.join(", ") || "Nothing saved"}. ${failures.length} failed: ${failureList}`
+        : `${successParts.join(", ")}.`,
       variant: failures.length ? "destructive" : undefined,
     });
 
@@ -231,7 +313,8 @@ export function BulkCompleteDialog({
           <DialogDescription>
             Pick the operator who completed these, confirm each production time, then mark
             them all complete in one go. Times are pre-filled with the estimate — adjust any
-            that differ. Use "Team" to split an item between several members.
+            that differ. Use "Team" to split an item between several members — and tick
+            "Part complete" if the team only finished some of it.
           </DialogDescription>
         </DialogHeader>
 
@@ -255,8 +338,11 @@ export function BulkCompleteDialog({
           <div className="max-h-[45vh] overflow-y-auto rounded-md border border-border divide-y divide-border">
             {items.map((item) => {
               const rows = splits[item.lineItem.id];
+              const isPartial = !!partials[item.lineItem.id];
+              const recorded = recordedByItem[item.lineItem.id] ?? 0;
+              const remaining = remainingFor(item);
               const qtyTotal = splitQtyTotal(item.lineItem.id);
-              const qtyRemaining = item.lineItem.quantity - qtyTotal;
+              const qtyRemaining = remaining - qtyTotal;
               return (
                 <div
                   key={item.lineItem.id}
@@ -268,6 +354,7 @@ export function BulkCompleteDialog({
                       <div className="truncate text-sm font-medium">{item.jobName}</div>
                       <div className="truncate text-xs text-muted-foreground">
                         {item.customerName} • Qty {item.lineItem.quantity}
+                        {recorded > 0 ? ` • ${recorded} already recorded, ${remaining} remaining` : ""}
                         {item.lineItem.description ? ` • ${item.lineItem.description}` : ""}
                       </div>
                     </div>
@@ -302,12 +389,18 @@ export function BulkCompleteDialog({
                     <div className="rounded-md bg-muted/50 p-2 space-y-2">
                       <div className="text-xs text-muted-foreground">
                         Split between team members — each gets their own quantity and time.
-                        {qtyRemaining !== 0 && (
+                        {!isPartial && qtyRemaining !== 0 && (
                           <span className={qtyRemaining > 0 ? " text-amber-600 dark:text-amber-400" : " text-destructive"}>
                             {" "}
                             {qtyRemaining > 0
-                              ? `${qtyRemaining} of ${item.lineItem.quantity} still to allocate.`
-                              : `${-qtyRemaining} over the quantity of ${item.lineItem.quantity}.`}
+                              ? `${qtyRemaining} of ${remaining} still to allocate.`
+                              : `${-qtyRemaining} over the remaining quantity of ${remaining}.`}
+                          </span>
+                        )}
+                        {isPartial && qtyRemaining < 0 && (
+                          <span className="text-destructive">
+                            {" "}
+                            {`${-qtyRemaining} over the remaining quantity of ${remaining}.`}
                           </span>
                         )}
                       </div>
@@ -362,15 +455,30 @@ export function BulkCompleteDialog({
                           </Button>
                         </div>
                       ))}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => addSplitRow(item.lineItem.id)}
-                        data-testid={`button-add-contributor-${item.lineItem.id}`}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add member
-                      </Button>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addSplitRow(item.lineItem.id)}
+                          data-testid={`button-add-contributor-${item.lineItem.id}`}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add member
+                        </Button>
+                        <label
+                          className="flex items-center gap-2 text-xs cursor-pointer select-none"
+                          data-testid={`label-partial-${item.lineItem.id}`}
+                        >
+                          <Checkbox
+                            checked={isPartial}
+                            onCheckedChange={(v) =>
+                              setPartials((prev) => ({ ...prev, [item.lineItem.id]: v === true }))
+                            }
+                            data-testid={`checkbox-partial-${item.lineItem.id}`}
+                          />
+                          Part complete — save progress but leave the item open
+                        </label>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -394,9 +502,7 @@ export function BulkCompleteDialog({
             data-testid="button-bulk-complete-confirm"
           >
             <CheckCircle2 className="h-4 w-4 mr-2" />
-            {submitting
-              ? "Completing…"
-              : `Mark ${items.length} complete`}
+            {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

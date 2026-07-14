@@ -5744,6 +5744,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { insertProductionEntrySchema } = await import("@shared/schema");
       const data = insertProductionEntrySchema.parse(req.body);
+
+      // Never allow recording more than what's left to produce on the line
+      // item (guards against stale clients submitting outdated remainders).
+      const lineItem = await storage.getJobLineItem(data.lineItemId);
+      if (!lineItem) {
+        return res.status(404).json({ error: "Line item not found" });
+      }
+      const progress = await storage.getLineItemProgress(data.lineItemId);
+      const remaining = lineItem.quantity - (progress?.totalQuantityCompleted ?? 0);
+      if (data.quantityCompleted > remaining) {
+        return res.status(400).json({
+          error: remaining > 0
+            ? `Only ${remaining} of ${lineItem.quantity} remain on this line item (${progress?.totalQuantityCompleted ?? 0} already recorded).`
+            : `This line item's full quantity of ${lineItem.quantity} has already been recorded.`,
+        });
+      }
+
       const entry = await storage.createProductionEntry(data);
       res.json(entry);
     } catch (error) {
