@@ -282,6 +282,35 @@ export interface IStorage {
     }>;
   }>;
 
+  getStaffProductivity(params: { staffId: string; startDate: string; endDate: string; timezone?: string }): Promise<{
+    staff: { id: string; name: string } | null;
+    summary: {
+      sessions: number;
+      itemsWorked: number;
+      totalQuantity: number;
+      totalActualMinutes: number;
+      comparableActualMinutes: number;
+      comparableExpectedMinutes: number;
+      efficiencyPercent: number | null;
+    };
+    rows: Array<{
+      workDate: string;
+      jobNumber: number | null;
+      jobName: string;
+      customerName: string;
+      description: string | null;
+      jobType: string;
+      stitchCount: number;
+      machineId: number | null;
+      machineName: string | null;
+      quantity: number;
+      actualMinutes: number;
+      expectedMinutes: number | null;
+      efficiencyPercent: number | null;
+      source: "entry" | "completion";
+    }>;
+  }>;
+
   getAllCustomersWeeklyTrend(params: { weeks?: number; endDate?: Date; timezone?: string; topN?: number }): Promise<{
     weeks: Array<{ weekStart: string; weekEnd: string }>;
     customers: Array<{
@@ -2256,6 +2285,189 @@ export class DatabaseStorage implements IStorage {
     }));
 
     return { weekly, rolling, deliveryJobs };
+  }
+
+  async getStaffProductivity(params: { staffId: string; startDate: string; endDate: string; timezone?: string }): Promise<{
+    staff: { id: string; name: string } | null;
+    summary: {
+      sessions: number;
+      itemsWorked: number;
+      totalQuantity: number;
+      totalActualMinutes: number;
+      comparableActualMinutes: number;
+      comparableExpectedMinutes: number;
+      efficiencyPercent: number | null;
+    };
+    rows: Array<{
+      workDate: string;
+      jobNumber: number | null;
+      jobName: string;
+      customerName: string;
+      description: string | null;
+      jobType: string;
+      stitchCount: number;
+      machineId: number | null;
+      machineName: string | null;
+      quantity: number;
+      actualMinutes: number;
+      expectedMinutes: number | null;
+      efficiencyPercent: number | null;
+      source: "entry" | "completion";
+    }>;
+  }> {
+    const { staffId, startDate, endDate, timezone = 'Europe/London' } = params;
+
+    const staffResult = await db.execute(sql`
+      SELECT id, name FROM staff WHERE id = ${staffId}
+    `);
+    const staffRow = staffResult.rows[0] as any;
+    if (!staffRow) {
+      return {
+        staff: null,
+        summary: {
+          sessions: 0, itemsWorked: 0, totalQuantity: 0, totalActualMinutes: 0,
+          comparableActualMinutes: 0, comparableExpectedMinutes: 0, efficiencyPercent: null,
+        },
+        rows: [],
+      };
+    }
+
+    // Primary source: production_entries (partial/daily work sessions).
+    // Fallback: line items completed by this staff member that have NO production
+    // entries at all (from anyone) — otherwise we'd double count.
+    const result = await db.execute(sql`
+      SELECT
+        DATE((pe.work_date AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::text AS work_date,
+        j.job_number,
+        j.job_name,
+        c.name AS customer_name,
+        jli.description,
+        jli.job_type,
+        jli.stitch_count,
+        COALESCE(pe.machine_id, jli.machine_id) AS machine_id,
+        pe.quantity_completed AS quantity,
+        pe.production_time_minutes AS actual_minutes,
+        'entry' AS source
+      FROM production_entries pe
+      INNER JOIN job_line_items jli ON jli.id = pe.line_item_id
+      INNER JOIN jobs j ON j.id = jli.job_id
+      INNER JOIN customers c ON c.id = j.customer_id
+      WHERE pe.staff_id = ${staffId}
+        AND DATE((pe.work_date AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) >= ${startDate}::date
+        AND DATE((pe.work_date AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) <= ${endDate}::date
+
+      UNION ALL
+
+      SELECT
+        DATE((jli.completed_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::text AS work_date,
+        j.job_number,
+        j.job_name,
+        c.name AS customer_name,
+        jli.description,
+        jli.job_type,
+        jli.stitch_count,
+        jli.machine_id,
+        jli.quantity,
+        COALESCE(jli.actual_production_time_minutes, 0) AS actual_minutes,
+        'completion' AS source
+      FROM job_line_items jli
+      INNER JOIN jobs j ON j.id = jli.job_id
+      INNER JOIN customers c ON c.id = j.customer_id
+      WHERE jli.completed_by_id = ${staffId}
+        AND jli.completed = true
+        AND jli.completed_at IS NOT NULL
+        AND DATE((jli.completed_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) >= ${startDate}::date
+        AND DATE((jli.completed_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) <= ${endDate}::date
+        AND NOT EXISTS (
+          SELECT 1 FROM production_entries pe2 WHERE pe2.line_item_id = jli.id
+        )
+
+      ORDER BY work_date, job_number
+    `);
+
+    // Distinct line items worked (needs a second lightweight pass with ids)
+    const itemsResult = await db.execute(sql`
+      SELECT COUNT(DISTINCT line_item_id) AS items FROM (
+        SELECT pe.line_item_id
+        FROM production_entries pe
+        WHERE pe.staff_id = ${staffId}
+          AND DATE((pe.work_date AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) >= ${startDate}::date
+          AND DATE((pe.work_date AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) <= ${endDate}::date
+        UNION
+        SELECT jli.id
+        FROM job_line_items jli
+        WHERE jli.completed_by_id = ${staffId}
+          AND jli.completed = true
+          AND jli.completed_at IS NOT NULL
+          AND DATE((jli.completed_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) >= ${startDate}::date
+          AND DATE((jli.completed_at AT TIME ZONE 'UTC') AT TIME ZONE ${timezone}) <= ${endDate}::date
+          AND NOT EXISTS (SELECT 1 FROM production_entries pe2 WHERE pe2.line_item_id = jli.id)
+      ) t
+    `);
+
+    const machines = await this.getMachines();
+    const machineMap = new Map(machines.map((m: any) => [m.id, m]));
+
+    const rows = result.rows.map((row: any) => {
+      const machineId = row.machine_id != null ? parseInt(row.machine_id) : null;
+      const machine: any = machineId != null ? machineMap.get(machineId) : null;
+      const quantity = parseInt(row.quantity) || 0;
+      const stitchCount = parseInt(row.stitch_count) || 0;
+      const actualMinutes = parseInt(row.actual_minutes) || 0;
+
+      // Expected time uses the same formula as the Accuracy tab, scaled to the
+      // quantity produced in this session.
+      let expectedMinutes: number | null = null;
+      if (stitchCount > 0 && quantity > 0 && machineId != null) {
+        const heads = machine?.heads || 6;
+        const spm = machine?.stitchesPerMinute || 750;
+        const changeover = machine?.changeoverTimeMinutes || 3;
+        const multiplier = machine?.schedulingMultiplier ?? 1;
+        const runs = Math.ceil(quantity / heads);
+        expectedMinutes = Math.ceil((runs * ((stitchCount / spm) + changeover) * multiplier) / 10) * 10;
+      }
+
+      const efficiencyPercent = expectedMinutes != null && actualMinutes > 0
+        ? Math.round((expectedMinutes / actualMinutes) * 100)
+        : null;
+
+      return {
+        workDate: row.work_date,
+        jobNumber: row.job_number != null ? parseInt(row.job_number) : null,
+        jobName: row.job_name,
+        customerName: row.customer_name,
+        description: row.description ?? null,
+        jobType: row.job_type,
+        stitchCount,
+        machineId,
+        machineName: machine ? machine.name : (machineId != null ? `Machine ${machineId}` : null),
+        quantity,
+        actualMinutes,
+        expectedMinutes,
+        efficiencyPercent,
+        source: row.source as "entry" | "completion",
+      };
+    });
+
+    const comparable = rows.filter(r => r.expectedMinutes != null && r.actualMinutes > 0);
+    const comparableActualMinutes = comparable.reduce((s, r) => s + r.actualMinutes, 0);
+    const comparableExpectedMinutes = comparable.reduce((s, r) => s + (r.expectedMinutes || 0), 0);
+
+    return {
+      staff: { id: staffRow.id, name: staffRow.name },
+      summary: {
+        sessions: rows.length,
+        itemsWorked: parseInt((itemsResult.rows[0] as any)?.items) || 0,
+        totalQuantity: rows.reduce((s, r) => s + r.quantity, 0),
+        totalActualMinutes: rows.reduce((s, r) => s + r.actualMinutes, 0),
+        comparableActualMinutes,
+        comparableExpectedMinutes,
+        efficiencyPercent: comparableActualMinutes > 0
+          ? Math.round((comparableExpectedMinutes / comparableActualMinutes) * 100)
+          : null,
+      },
+      rows,
+    };
   }
 
   async getAllCustomersWeeklyTrend(params: { weeks?: number; endDate?: Date; timezone?: string; topN?: number }): Promise<{

@@ -1636,6 +1636,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Staff productivity report — actual vs expected output for a staff member over a date range
+  app.get("/api/reports/staff-productivity", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const querySchema = z.object({
+        staffId: z.string().min(1),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      });
+      const params = querySchema.parse(req.query);
+
+      if (params.startDate > params.endDate) {
+        return res.status(400).json({ error: "Start date must be before end date" });
+      }
+
+      const data = await storage.getStaffProductivity({
+        staffId: params.staffId,
+        startDate: params.startDate,
+        endDate: params.endDate,
+        timezone: 'Europe/London',
+      });
+
+      if (!data.staff) {
+        return res.status(404).json({ error: "Staff member not found" });
+      }
+
+      res.json(data);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching staff productivity:", error);
+      res.status(500).json({ error: "Failed to fetch staff productivity" });
+    }
+  });
+
   // Customer-specific weekly trend (output + invoiced value) — used by Customers page chart
   app.get("/api/reports/all-customers-weekly-trend", isStaffAuthenticated, async (req: any, res) => {
     try {

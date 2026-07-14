@@ -16,6 +16,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw, Gauge, Printer, Factory } from "lucide-react";
 import { ProductionWeekSummary } from "@/components/ProductionWeekSummary";
 import { KeyMetricsTab } from "@/components/KeyMetricsTab";
+import { StaffProductivityTab } from "@/components/StaffProductivityTab";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -740,6 +741,10 @@ export default function WeeklyReports() {
             <Users className="h-4 w-4 mr-2" />
             Staff Performance
           </TabsTrigger>
+          <TabsTrigger value="staff-productivity" data-testid="tab-staff-productivity">
+            <Target className="h-4 w-4 mr-2" />
+            Staff Productivity
+          </TabsTrigger>
           <TabsTrigger value="errors" data-testid="tab-errors">
             <AlertTriangle className="h-4 w-4 mr-2" />
             Error Tracking
@@ -776,6 +781,10 @@ export default function WeeklyReports() {
 
         <TabsContent value="key-metrics" className="space-y-4">
           <KeyMetricsTab />
+        </TabsContent>
+
+        <TabsContent value="staff-productivity" className="space-y-4">
+          <StaffProductivityTab />
         </TabsContent>
 
         <TabsContent value="production-week" className="space-y-4">
