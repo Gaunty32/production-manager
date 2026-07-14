@@ -709,6 +709,13 @@ export function canViewPrices(userRole: string | undefined): boolean {
 export function isSuperAdmin(userRole: string | undefined): boolean {
   return userRole === UserRole.SUPER_ADMIN;
 }
+
+// Helper function to check if a user can view the reports pages.
+// Admin and above only. The demo account keeps access so prospects can see
+// the reporting features (financial figures are masked for demo).
+export function canViewReports(userRole: string | undefined): boolean {
+  return userRole === UserRole.SUPER_ADMIN || userRole === UserRole.ADMIN || userRole === "demo";
+}
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
 export type InsertStaff = z.infer<typeof insertStaffSchema>;

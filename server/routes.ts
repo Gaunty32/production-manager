@@ -47,7 +47,7 @@ import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthe
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
 import { registerCasualShiftRoutes } from "./casualShiftRoutes";
 import { registerPurchasingRoutes } from "./purchasingRoutes";
-import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, updateMachineSchema, insertTaskSchema, type Job } from "@shared/schema";
+import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, canViewReports, updateMachineSchema, insertTaskSchema, type Job } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
@@ -1530,6 +1530,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Weekly Performance Report API (requires staff authentication and price view permission)
+  // All report endpoints are restricted to admin and above.
+  // The demo account keeps access so prospects can see reporting (figures masked).
+  app.use("/api/reports", isStaffAuthenticated, async (req: any, res, next) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !canViewReports(user.role)) {
+        return res.status(403).json({ error: "You do not have permission to view reports" });
+      }
+      next();
+    } catch (error) {
+      console.error("Report access check error:", error);
+      res.status(500).json({ error: "Failed to verify report access" });
+    }
+  });
+
   app.get("/api/reports/weekly-performance", isStaffAuthenticated, async (req: any, res) => {
     try {
       // Check authorization - only users who can view prices can access this report

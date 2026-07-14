@@ -21,6 +21,8 @@ import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { canViewReports } from "@shared/schema";
 
 type DatePreset = "this-week" | "last-week" | "last-4-weeks" | "last-12-weeks" | "custom";
 
@@ -210,6 +212,37 @@ function getPresetDateRange(preset: DatePreset): DateRange {
 }
 
 export default function WeeklyReports() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="h-full overflow-y-auto p-6">
+        <Skeleton className="h-8 w-64 mb-4" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  if (!user || !canViewReports(user.role)) {
+    return (
+      <div className="h-full overflow-y-auto p-6">
+        <Card className="max-w-md mx-auto mt-12">
+          <CardContent className="pt-6 text-center space-y-2">
+            <AlertCircle className="h-10 w-10 mx-auto text-muted-foreground" />
+            <p className="font-medium" data-testid="text-reports-no-access">Reports are restricted</p>
+            <p className="text-sm text-muted-foreground">
+              Only admins and above can view reports. Please contact an administrator if you need access.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return <WeeklyReportsContent />;
+}
+
+function WeeklyReportsContent() {
   const { toast } = useToast();
   const [selectedPreset, setSelectedPreset] = useState<DatePreset>("last-12-weeks");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("all");

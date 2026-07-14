@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DemoText } from "@/components/DemoText";
 import { format, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, subMonths, parseISO } from "date-fns";
-import { Gauge, Clock, Package, ClipboardList } from "lucide-react";
+import { Gauge, Clock, Package, ClipboardList, Printer } from "lucide-react";
 import type { Staff } from "@shared/schema";
 
 interface ProductivityRow {
@@ -141,11 +141,58 @@ export function StaffProductivityTab() {
 
   const summary = data?.summary;
 
+  const handlePrint = () => {
+    document.body.classList.add("print-staff-productivity");
+    const cleanup = () => {
+      document.body.classList.remove("print-staff-productivity");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+    setTimeout(cleanup, 2000);
+  };
+
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3">
+    <div className="space-y-4" id="staff-productivity-report">
+      <style>{`
+        @media print {
+          body.print-staff-productivity * { visibility: hidden !important; }
+          body.print-staff-productivity #staff-productivity-report,
+          body.print-staff-productivity #staff-productivity-report * { visibility: visible !important; }
+          body.print-staff-productivity #staff-productivity-report {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+          }
+          body.print-staff-productivity #staff-productivity-report .no-print { display: none !important; visibility: hidden !important; }
+          body.print-staff-productivity #sp-print-header { display: block !important; margin-bottom: 12px; }
+          body.print-staff-productivity #staff-productivity-report table tr { page-break-inside: avoid; break-inside: avoid; }
+          body.print-staff-productivity #staff-productivity-report .card, 
+          body.print-staff-productivity #staff-productivity-report [class*="card"] { break-inside: avoid; page-break-inside: avoid; }
+        }
+      `}</style>
+      <div id="sp-print-header" className="hidden">
+        <h1 className="text-xl font-bold">Staff Productivity Report</h1>
+        {data?.staff && (
+          <p className="text-sm text-muted-foreground">
+            {data.staff.name} — {safeFormatDate(startDate, "d MMM yyyy")} to {safeFormatDate(endDate, "d MMM yyyy")}
+          </p>
+        )}
+      </div>
+      <Card className="no-print">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
           <CardTitle className="text-base">Staff Productivity Report</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            disabled={!staffId || !data || data.rows.length === 0}
+            data-testid="button-print-productivity"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-3">

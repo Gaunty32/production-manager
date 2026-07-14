@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import { isSuperAdmin, canViewPrices } from "@shared/schema";
+import { isSuperAdmin, canViewPrices, canViewReports } from "@shared/schema";
 import type { Machine } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import type { Job } from "@shared/schema";
@@ -124,8 +124,11 @@ export function AppSidebar() {
             <SidebarMenu>
               {menuItems
                 .filter(item => {
-                  if (item.url === "/invoicing" || item.url === "/reports/weekly") {
+                  if (item.url === "/invoicing") {
                     return userCanViewPrices;
+                  }
+                  if (item.url === "/reports/weekly") {
+                    return canViewReports(user?.role);
                   }
                   return true;
                 })
