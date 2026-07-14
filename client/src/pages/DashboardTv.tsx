@@ -79,7 +79,7 @@ const STATUS_COLOR: Record<string, string> = {
   none: "#475569",
 };
 
-const PAGE_SECONDS = 20;
+const PAGE_SECONDS = 60;
 
 function gbp(n: number): string {
   return new Intl.NumberFormat("en-GB", {
