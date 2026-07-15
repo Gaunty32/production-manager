@@ -178,12 +178,6 @@ function effTarget(pct: number | null): { label: string; color: string; arrow: s
   return { label: "Below target", color: STATUS_COLOR.red, arrow: "▼" };
 }
 
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
-
 export default function DashboardTv() {
   // Read the token from the URL; remember it so a TV that has loaded the
   // dashboard once can come back to plain /dashboard-tv and still work
@@ -218,8 +212,8 @@ export default function DashboardTv() {
     retry: false,
   });
 
-  const operativePages = useMemo(() => chunk(data?.operatives ?? [], 4), [data?.operatives]);
-  const pageCount = data ? 5 + operativePages.length : 1;
+  const hasTeamPage = (data?.operatives?.length ?? 0) > 0;
+  const pageCount = data ? 5 + (hasTeamPage ? 1 : 0) : 1;
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
   const [navNonce, setNavNonce] = useState(0);
@@ -317,15 +311,8 @@ export default function DashboardTv() {
           {page === 1 && <TodaysPlanPage data={data} />}
           {page === 2 && <DueOutPage data={data} />}
           {page === 3 && <TeamGoalPage data={data} />}
-          {page >= 4 && page < 4 + operativePages.length && operativePages[page - 4] && (
-            <OperativesPage
-              data={data}
-              operatives={operativePages[page - 4]}
-              pageNo={page - 3}
-              pageTotal={operativePages.length}
-            />
-          )}
-          {page === 4 + operativePages.length && <UpNextPage data={data} />}
+          {hasTeamPage && page === 4 && <OperativesPage data={data} />}
+          {page === 4 + (hasTeamPage ? 1 : 0) && <UpNextPage data={data} />}
         </div>
         {pageCount > 1 && (
           <div className="flex items-center justify-center gap-4 pt-4" data-testid="page-dots">
@@ -827,38 +814,42 @@ function TeamGoalPage({ data }: { data: TvData }) {
   );
 }
 
-// ── Page 3+: Operative cards ─────────────────────────────────────────────────
-function OperativesPage({
-  data,
-  operatives,
-  pageNo,
-  pageTotal,
-}: {
-  data: TvData;
-  operatives: TvData["operatives"];
-  pageNo: number;
-  pageTotal: number;
-}) {
+// ── Page 5: Our Team — all operatives on one screen ──────────────────────────
+function OperativesPage({ data }: { data: TvData }) {
+  const operatives = data.operatives;
+  const n = operatives.length;
+  const cols = n <= 4 ? 2 : n <= 6 ? 3 : 4;
+  const rows = Math.ceil(n / cols);
+  const compact = rows >= 2 && cols >= 3;
+  const jobsShown = compact ? 2 : rows >= 2 ? 3 : 4;
+
   return (
     <div className="flex flex-col h-full gap-5">
-      <PageHeader
-        title={`Our Team${pageTotal > 1 ? ` (${pageNo} of ${pageTotal})` : ""}`}
-        lastUpdated={data.lastUpdated}
-      />
-      <div className="grid grid-cols-2 grid-rows-2 gap-5 flex-1 min-h-0">
+      <PageHeader title="Our Team" lastUpdated={data.lastUpdated} />
+      <div
+        className="grid gap-5 flex-1 min-h-0"
+        style={{
+          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+        }}
+      >
         {operatives.map((o) => (
           <div
             key={o.id}
-            className="flex flex-col rounded-2xl bg-slate-900/70 ring-1 ring-slate-700/60 p-6 min-h-0"
+            className={`flex flex-col rounded-2xl bg-slate-900/70 ring-1 ring-slate-700/60 min-h-0 ${
+              compact ? "p-4" : "p-6"
+            }`}
             data-testid={`card-operative-${o.id}`}
           >
-            <div className="flex items-center justify-between gap-4 mb-3">
-              <div className="text-4xl font-black truncate">{o.name}</div>
+            <div className={`flex items-center justify-between gap-3 ${compact ? "mb-2" : "mb-3"}`}>
+              <div className={`${compact ? "text-2xl" : "text-4xl"} font-black truncate`}>
+                {o.name}
+              </div>
               {(() => {
                 const t = effTarget(o.efficiencyPercent);
                 return t ? (
                   <div
-                    className="text-3xl font-black whitespace-nowrap"
+                    className={`${compact ? "text-lg" : "text-3xl"} font-black whitespace-nowrap`}
                     style={{ color: t.color }}
                     title="Output vs target (last week)"
                   >
@@ -867,31 +858,48 @@ function OperativesPage({
                 ) : null;
               })()}
             </div>
-            <div className="flex items-end gap-10 mb-3">
+            <div className={`flex items-end ${compact ? "gap-5 mb-2" : "gap-10 mb-3"}`}>
               <div>
-                <div className="text-6xl font-black text-emerald-400 leading-none">
+                <div
+                  className={`${compact ? "text-4xl" : "text-6xl"} font-black text-emerald-400 leading-none`}
+                >
                   {num(o.garmentsThisWeek)}
                 </div>
-                <div className="text-lg text-slate-400 mt-1">garments this week</div>
+                <div className={`${compact ? "text-sm" : "text-lg"} text-slate-400 mt-1`}>
+                  garments this week
+                </div>
               </div>
               <div>
-                <div className="text-4xl font-bold text-slate-300 leading-none">
+                <div
+                  className={`${compact ? "text-2xl" : "text-4xl"} font-bold text-slate-300 leading-none`}
+                >
                   {num(o.garmentsLastWeek)}
                 </div>
-                <div className="text-lg text-slate-500 mt-1">last week</div>
+                <div className={`${compact ? "text-sm" : "text-lg"} text-slate-500 mt-1`}>
+                  last week
+                </div>
               </div>
               <div>
-                <div className="text-4xl font-bold text-amber-400 leading-none">
+                <div
+                  className={`${compact ? "text-2xl" : "text-4xl"} font-bold text-amber-400 leading-none`}
+                >
                   {num(o.jobsToDoCount)}
                 </div>
-                <div className="text-lg text-slate-500 mt-1">jobs lined up</div>
+                <div className={`${compact ? "text-sm" : "text-lg"} text-slate-500 mt-1`}>
+                  jobs lined up
+                </div>
               </div>
             </div>
             <div className="flex-1 min-h-0 overflow-hidden">
               {o.jobsToDo.length > 0 ? (
                 <div className="flex flex-col gap-1.5">
-                  {o.jobsToDo.map((j, i) => (
-                    <div key={i} className="flex items-center justify-between gap-3 text-xl">
+                  {o.jobsToDo.slice(0, jobsShown).map((j, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-center justify-between gap-3 ${
+                        compact ? "text-base" : "text-xl"
+                      }`}
+                    >
                       <span className="truncate text-slate-300">{j.jobLabel}</span>
                       <span className="text-slate-500 whitespace-nowrap">
                         {new Date(`${j.date}T12:00:00Z`).toLocaleDateString("en-GB", {
@@ -902,9 +910,16 @@ function OperativesPage({
                       </span>
                     </div>
                   ))}
+                  {o.jobsToDo.length > jobsShown && (
+                    <div className={`${compact ? "text-sm" : "text-lg"} text-slate-500`}>
+                      +{o.jobsToDo.length - jobsShown} more
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="text-xl text-slate-500">Nothing scheduled yet</div>
+                <div className={`${compact ? "text-base" : "text-xl"} text-slate-500`}>
+                  Nothing scheduled yet
+                </div>
               )}
             </div>
           </div>
