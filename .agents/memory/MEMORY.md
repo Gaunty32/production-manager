@@ -45,3 +45,4 @@
 - [Auth session patterns](auth-session-patterns.md) — staff=userId (regenerates), customer=customerUserId (legacy login does NOT regenerate); any new login path MUST regenerate before attaching id. OTP lives in login_codes table.
 - [Server hot-reload gap](server-hot-reload-gap.md) — backend edits may not auto-reload in dev; restart the workflow before curl-testing new server behavior or you test stale code.
 - [External tokened embeds](external-tokened-embeds.md) — cross-app TV embeds: tokened URL goes in an env var served via the token-gated data endpoint, never hardcoded in client code.
+- [Firestick keep-awake](firestick-keep-awake.md) — hidden 1px videos are ignored by Silk; screensaver defence needs a visible (background-coloured) video + wake-lock retry loop.

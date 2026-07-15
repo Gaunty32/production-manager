@@ -177,23 +177,31 @@ function effTarget(pct: number | null): { label: string; color: string; arrow: s
 // Keep the TV awake. Firestick/Silk starts the screensaver after a few
 // minutes without input, hiding the dashboard. Two defences:
 // 1. Screen Wake Lock API (asks the browser to keep the screen on),
-//    re-acquired whenever the page becomes visible again.
-// 2. A hidden, muted, always-playing video fed from a tiny off-screen
-//    canvas stream — active media playback stops most TV browsers from
-//    idling even when the Wake Lock API is unavailable.
+//    re-acquired whenever the page becomes visible again AND retried on a
+//    timer, because Fire OS can silently release it.
+// 2. A muted, always-playing video fed from a canvas stream. TV browsers
+//    only honour "video is playing, keep the screen on" when the video is
+//    genuinely visible at a reasonable size — a 1px hidden video gets
+//    ignored. So the video is 320x180 in the bottom-left corner, painting
+//    the exact same colour as the page background (slate-950), making it
+//    invisible to the eye but "real" to the browser.
 function useKeepAwake(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
 
-    // --- 1. Screen Wake Lock ---
-    let wakeLock: { release: () => Promise<void> } | null = null;
+    // --- 1. Screen Wake Lock (with periodic re-acquire) ---
+    let wakeLock: { released?: boolean; release: () => Promise<void> } | null = null;
     let disposed = false;
     const requestLock = async () => {
       try {
         const nav = navigator as Navigator & {
-          wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> };
+          wakeLock?: {
+            request: (
+              type: "screen",
+            ) => Promise<{ released?: boolean; release: () => Promise<void> }>;
+          };
         };
-        if (nav.wakeLock) {
+        if (nav.wakeLock && document.visibilityState === "visible") {
           const lock = await nav.wakeLock.request("screen");
           if (disposed) {
             void lock.release().catch(() => {});
@@ -210,34 +218,52 @@ function useKeepAwake(enabled: boolean) {
     };
     void requestLock();
     document.addEventListener("visibilitychange", onVisibility);
+    // Fire OS can drop the lock without telling us — re-request every 30s.
+    const lockTimer = setInterval(() => {
+      if (!wakeLock || wakeLock.released) void requestLock();
+    }, 30000);
 
-    // --- 2. Hidden playing video (canvas stream, no media file needed) ---
+    // --- 2. Visible-but-invisible playing video (canvas stream) ---
     let video: HTMLVideoElement | null = null;
     let drawTimer: ReturnType<typeof setInterval> | null = null;
+    const retryPlay = () => {
+      if (video && video.paused) void video.play().catch(() => {});
+    };
     try {
       const canvas = document.createElement("canvas");
-      canvas.width = 16;
-      canvas.height = 16;
+      canvas.width = 320;
+      canvas.height = 180;
       const ctx = canvas.getContext("2d");
       if (ctx && typeof canvas.captureStream === "function") {
         let tick = 0;
-        // Redraw once a second so the stream keeps producing frames.
-        drawTimer = setInterval(() => {
+        // Redraw a few times a second so the stream keeps producing frames.
+        // Alternate between two imperceptibly different near-identical
+        // shades of the page background so frames are never "static".
+        const paint = () => {
           tick = (tick + 1) % 2;
-          ctx.fillStyle = tick ? "#000001" : "#000000";
-          ctx.fillRect(0, 0, 16, 16);
-        }, 1000);
+          ctx.fillStyle = tick ? "#020617" : "#030618";
+          ctx.fillRect(0, 0, 320, 180);
+        };
+        paint();
+        drawTimer = setInterval(paint, 500);
         video = document.createElement("video");
         video.muted = true;
         video.setAttribute("playsinline", "");
-        video.srcObject = canvas.captureStream(1);
+        video.srcObject = canvas.captureStream(5);
         video.style.position = "fixed";
-        video.style.width = "1px";
-        video.style.height = "1px";
-        video.style.opacity = "0";
+        video.style.left = "0";
+        video.style.bottom = "0";
+        video.style.width = "320px";
+        video.style.height = "180px";
         video.style.pointerEvents = "none";
+        video.style.zIndex = "0";
         document.body.appendChild(video);
         void video.play().catch(() => {});
+        // Autoplay can be blocked until the first remote/mouse input —
+        // retry on any interaction.
+        window.addEventListener("pointerdown", retryPlay);
+        window.addEventListener("keydown", retryPlay);
+        document.addEventListener("visibilitychange", retryPlay);
       }
     } catch {
       // Best effort only
@@ -246,8 +272,12 @@ function useKeepAwake(enabled: boolean) {
     return () => {
       disposed = true;
       document.removeEventListener("visibilitychange", onVisibility);
+      clearInterval(lockTimer);
       if (wakeLock) void wakeLock.release().catch(() => {});
       if (drawTimer) clearInterval(drawTimer);
+      window.removeEventListener("pointerdown", retryPlay);
+      window.removeEventListener("keydown", retryPlay);
+      document.removeEventListener("visibilitychange", retryPlay);
       if (video) {
         video.pause();
         video.srcObject = null;
