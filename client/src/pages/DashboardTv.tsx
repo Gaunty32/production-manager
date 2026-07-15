@@ -303,6 +303,30 @@ export default function DashboardTv() {
   const [navNonce, setNavNonce] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Auto-hide the on-screen controls: invisible during normal display,
+  // fade in for a few seconds when someone moves the mouse / presses a
+  // key or remote button, and stay visible while rotation is paused.
+  const [controlsAwake, setControlsAwake] = useState(true);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const wake = () => {
+      setControlsAwake(true);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setControlsAwake(false), 5000);
+    };
+    wake();
+    window.addEventListener("mousemove", wake);
+    window.addEventListener("pointerdown", wake);
+    window.addEventListener("keydown", wake);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("mousemove", wake);
+      window.removeEventListener("pointerdown", wake);
+      window.removeEventListener("keydown", wake);
+    };
+  }, []);
+  const controlsVisible = controlsAwake || paused;
+
   useEffect(() => {
     const onChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onChange);
@@ -401,7 +425,12 @@ export default function DashboardTv() {
           {page === 3 + orderOffset + (hasTeamPage ? 1 : 0) && <UpNextPage data={data} />}
         </div>
         {pageCount > 1 && (
-          <div className="flex items-center justify-center gap-4 pt-4" data-testid="page-dots">
+          <div
+            className={`flex items-center justify-center gap-4 pt-4 transition-opacity duration-500 ${
+              controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+            }`}
+            data-testid="page-dots"
+          >
             <button
               onClick={() => goToPage(page - 1)}
               className="flex items-center justify-center rounded-full w-10 h-10 bg-slate-800/80 ring-1 ring-slate-700 text-slate-300 hover:bg-slate-700"
