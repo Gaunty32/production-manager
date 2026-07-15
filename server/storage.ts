@@ -133,6 +133,7 @@ export interface IStorage {
   
   getStaffShifts(staffId?: string, startDate?: Date, endDate?: Date): Promise<StaffShift[]>;
   createStaffShift(shift: InsertStaffShift): Promise<StaffShift>;
+  saveOvernightStaffShift(evening: InsertStaffShift, morning: InsertStaffShift, updateShiftId?: string): Promise<StaffShift[]>;
   updateStaffShift(id: string, shift: Partial<StaffShift>): Promise<StaffShift>;
   deleteStaffShift(id: string): Promise<void>;
   
@@ -707,6 +708,72 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return shift;
+  }
+
+  // Overnight shifts (e.g. 20:00–06:00) are stored as two rows: an evening
+  // part ending at midnight and a morning part on the following day. Saving
+  // both in one transaction means we never end up with half a shift.
+  async saveOvernightStaffShift(
+    evening: InsertStaffShift,
+    morning: InsertStaffShift,
+    updateShiftId?: string,
+  ): Promise<StaffShift[]> {
+    return await db.transaction(async (tx) => {
+      let eveningShift: StaffShift;
+      if (updateShiftId) {
+        const [updated] = await tx
+          .update(staffShifts)
+          .set({ ...evening, date: new Date(evening.date) })
+          .where(eq(staffShifts.id, updateShiftId))
+          .returning();
+        if (!updated) throw new Error("Shift not found");
+        eveningShift = updated;
+      } else {
+        const [created] = await tx
+          .insert(staffShifts)
+          .values({ ...evening, date: new Date(evening.date) })
+          .returning();
+        eveningShift = created;
+      }
+
+      const morningDate = new Date(morning.date);
+
+      // Only when EDITING an existing shift: if an identical morning row is
+      // already there (i.e. this overnight shift was saved before and is being
+      // re-saved), reuse it instead of creating a duplicate. New shifts always
+      // insert their own morning row so unrelated shifts are never merged.
+      if (updateShiftId) {
+        const morningIsRecurring = morning.isRecurring ?? false;
+        const morningDays = morning.recurringDaysOfWeek ?? null;
+        const candidates = await tx
+          .select()
+          .from(staffShifts)
+          .where(
+            and(
+              eq(staffShifts.staffId, morning.staffId),
+              eq(staffShifts.startTime, morning.startTime),
+              eq(staffShifts.endTime, morning.endTime),
+              eq(staffShifts.isRecurring, morningIsRecurring),
+            ),
+          );
+        const duplicate = candidates.find((s) => {
+          if (s.id === eveningShift.id) return false;
+          const sameDays =
+            JSON.stringify([...(s.recurringDaysOfWeek ?? [])].sort()) ===
+            JSON.stringify([...(morningDays ?? [])].sort());
+          if (!sameDays) return false;
+          // Recurring rows match by day-of-week; one-off rows must be the same date.
+          return morningIsRecurring ? true : s.date.getTime() === morningDate.getTime();
+        });
+        if (duplicate) return [eveningShift, duplicate];
+      }
+
+      const [morningShift] = await tx
+        .insert(staffShifts)
+        .values({ ...morning, date: morningDate })
+        .returning();
+      return [eveningShift, morningShift];
+    });
   }
 
   async updateStaffShift(id: string, updates: Partial<StaffShift>): Promise<StaffShift> {

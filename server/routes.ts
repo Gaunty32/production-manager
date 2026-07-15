@@ -6096,6 +6096,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Save an overnight shift (crosses midnight) as two rows in one transaction:
+  // evening part until midnight + morning part on the following day.
+  app.post("/api/staff-shifts/overnight", isStaffAuthenticated, async (req, res) => {
+    try {
+      const overnightSchema = z.object({
+        evening: insertStaffShiftSchema,
+        morning: insertStaffShiftSchema,
+        updateShiftId: z.string().optional(),
+      });
+      const { evening, morning, updateShiftId } = overnightSchema.parse(req.body);
+      const shifts = await storage.saveOvernightStaffShift(evening, morning, updateShiftId);
+      res.json(shifts);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({
+          error: error instanceof Error ? error.message : "Failed to save overnight shift",
+        });
+      }
+    }
+  });
+
   app.patch("/api/staff-shifts/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateStaffShiftSchema.parse(req.body);

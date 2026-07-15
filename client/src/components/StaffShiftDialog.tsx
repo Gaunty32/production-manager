@@ -59,10 +59,12 @@ const shiftFormSchema = z.object({
     const [endHours, endMins] = data.endTime.split(':').map(Number);
     const startMinutes = startHours * 60 + startMins;
     const endMinutes = endHours * 60 + endMins;
-    return startMinutes < endMinutes;
+    // End before (or equal to) start means the shift crosses midnight —
+    // that's allowed and saved as two parts. Only identical times are invalid.
+    return startMinutes !== endMinutes;
   },
   {
-    message: "End time must be after start time",
+    message: "Start and end time can't be the same",
     path: ["endTime"],
   }
 ).refine(
@@ -88,6 +90,7 @@ interface StaffShiftDialogProps {
 
 export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialogProps) {
   const [open, setOpen] = useState(false);
+  const [isSavingOvernight, setIsSavingOvernight] = useState(false);
   const { toast } = useToast();
 
   const { data: staff = [] } = useQuery<Staff[]>({
@@ -95,6 +98,9 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
   });
 
   const minutesToTime = (minutes: number): string => {
+    // 1440 (end of day) isn't valid for a time input — show it as 00:00,
+    // which the save logic converts back to 1440 (midnight finish).
+    if (minutes >= 1440) return "00:00";
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
@@ -173,16 +179,81 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
     },
   });
 
+  const addOneDay = (dateStr: string): string => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const next = new Date(Date.UTC(y, m - 1, d + 1));
+    return next.toISOString().split('T')[0];
+  };
+
   const onSubmit = async (values: ShiftFormValues) => {
+    const startMinutes = timeToMinutes(values.startTime);
+    let endMinutes = timeToMinutes(values.endTime);
+    if (endMinutes === 0) endMinutes = 1440; // finishing at midnight = end of same day
+
+    const recurringDays = values.isRecurring && values.selectedDays.length > 0
+      ? values.selectedDays
+      : null;
+
+    // Overnight shift (e.g. 20:00 – 06:00): the scheduler works one day at a
+    // time, so save it as two parts — evening until midnight on the selected
+    // day(s), then midnight to finish time on the following day(s).
+    if (endMinutes < startMinutes) {
+      const eveningPart = {
+        staffId: values.staffId,
+        date: values.date,
+        startTime: startMinutes,
+        endTime: 1440,
+        isRecurring: values.isRecurring,
+        recurringDaysOfWeek: recurringDays,
+      };
+      const morningPart = {
+        staffId: values.staffId,
+        date: addOneDay(values.date),
+        startTime: 0,
+        endTime: endMinutes,
+        isRecurring: values.isRecurring,
+        recurringDaysOfWeek: recurringDays
+          ? recurringDays.map((d) => (d + 1) % 7).sort((a, b) => a - b)
+          : null,
+      };
+
+      setIsSavingOvernight(true);
+      try {
+        // Single request — the server saves both parts in one transaction, so
+        // we never end up with half an overnight shift. When editing, the
+        // existing row becomes the evening part.
+        await apiRequest("POST", "/api/staff-shifts/overnight", {
+          evening: eveningPart,
+          morning: morningPart,
+          updateShiftId: shift?.id,
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/staff-shifts"] });
+        setOpen(false);
+        form.reset();
+        toast({
+          title: "Overnight shift saved",
+          description: "Saved as two parts: evening until midnight, then midnight to finish time the next day.",
+        });
+        onSuccess?.();
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error?.message || "Failed to save overnight shift",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSavingOvernight(false);
+      }
+      return;
+    }
+
     const data = {
       staffId: values.staffId,
       date: values.date,
-      startTime: timeToMinutes(values.startTime),
-      endTime: timeToMinutes(values.endTime),
+      startTime: startMinutes,
+      endTime: endMinutes,
       isRecurring: values.isRecurring,
-      recurringDaysOfWeek: values.isRecurring && values.selectedDays.length > 0 
-        ? values.selectedDays 
-        : null,
+      recurringDaysOfWeek: recurringDays,
     };
 
     if (shift) {
@@ -200,6 +271,14 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
 
   const isRecurring = form.watch("isRecurring");
   const selectedDays = form.watch("selectedDays");
+  const watchedStart = form.watch("startTime");
+  const watchedEnd = form.watch("endTime");
+  const isOvernight = (() => {
+    if (!/^\d{2}:\d{2}$/.test(watchedStart) || !/^\d{2}:\d{2}$/.test(watchedEnd)) return false;
+    const s = timeToMinutes(watchedStart);
+    const e = timeToMinutes(watchedEnd);
+    return e !== 0 && e < s;
+  })();
 
   const toggleDay = (dayValue: number) => {
     const currentDays = form.getValues("selectedDays");
@@ -310,6 +389,13 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
               />
             </div>
 
+            {isOvernight && (
+              <p className="text-xs text-muted-foreground rounded-md border p-2" data-testid="text-overnight-hint">
+                Overnight shift: finishes at {watchedEnd} the next morning. It will be saved as
+                two parts — evening until midnight, then midnight to {watchedEnd} the following day.
+              </p>
+            )}
+
             <FormField
               control={form.control}
               name="selectedDays"
@@ -410,10 +496,10 @@ export function StaffShiftDialog({ trigger, shift, onSuccess }: StaffShiftDialog
               </Button>
               <Button
                 type="submit"
-                disabled={createMutation.isPending || updateMutation.isPending}
+                disabled={createMutation.isPending || updateMutation.isPending || isSavingOvernight}
                 data-testid="button-save"
               >
-                {shift ? "Update" : "Create"} Shift
+                {isSavingOvernight ? "Saving..." : `${shift ? "Update" : "Create"} Shift`}
               </Button>
             </div>
           </form>
