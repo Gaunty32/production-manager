@@ -174,6 +174,89 @@ function effTarget(pct: number | null): { label: string; color: string; arrow: s
   return { label: "Below target", color: STATUS_COLOR.red, arrow: "▼" };
 }
 
+// Keep the TV awake. Firestick/Silk starts the screensaver after a few
+// minutes without input, hiding the dashboard. Two defences:
+// 1. Screen Wake Lock API (asks the browser to keep the screen on),
+//    re-acquired whenever the page becomes visible again.
+// 2. A hidden, muted, always-playing video fed from a tiny off-screen
+//    canvas stream — active media playback stops most TV browsers from
+//    idling even when the Wake Lock API is unavailable.
+function useKeepAwake(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+
+    // --- 1. Screen Wake Lock ---
+    let wakeLock: { release: () => Promise<void> } | null = null;
+    let disposed = false;
+    const requestLock = async () => {
+      try {
+        const nav = navigator as Navigator & {
+          wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> };
+        };
+        if (nav.wakeLock) {
+          const lock = await nav.wakeLock.request("screen");
+          if (disposed) {
+            void lock.release().catch(() => {});
+          } else {
+            wakeLock = lock;
+          }
+        }
+      } catch {
+        // Wake lock unsupported or denied — the video fallback still applies
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void requestLock();
+    };
+    void requestLock();
+    document.addEventListener("visibilitychange", onVisibility);
+
+    // --- 2. Hidden playing video (canvas stream, no media file needed) ---
+    let video: HTMLVideoElement | null = null;
+    let drawTimer: ReturnType<typeof setInterval> | null = null;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 16;
+      canvas.height = 16;
+      const ctx = canvas.getContext("2d");
+      if (ctx && typeof canvas.captureStream === "function") {
+        let tick = 0;
+        // Redraw once a second so the stream keeps producing frames.
+        drawTimer = setInterval(() => {
+          tick = (tick + 1) % 2;
+          ctx.fillStyle = tick ? "#000001" : "#000000";
+          ctx.fillRect(0, 0, 16, 16);
+        }, 1000);
+        video = document.createElement("video");
+        video.muted = true;
+        video.setAttribute("playsinline", "");
+        video.srcObject = canvas.captureStream(1);
+        video.style.position = "fixed";
+        video.style.width = "1px";
+        video.style.height = "1px";
+        video.style.opacity = "0";
+        video.style.pointerEvents = "none";
+        document.body.appendChild(video);
+        void video.play().catch(() => {});
+      }
+    } catch {
+      // Best effort only
+    }
+
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (wakeLock) void wakeLock.release().catch(() => {});
+      if (drawTimer) clearInterval(drawTimer);
+      if (video) {
+        video.pause();
+        video.srcObject = null;
+        video.remove();
+      }
+    };
+  }, [enabled]);
+}
+
 export default function DashboardTv() {
   // Read the token from the URL; remember it so a TV that has loaded the
   // dashboard once can come back to plain /dashboard-tv and still work
@@ -190,6 +273,9 @@ export default function DashboardTv() {
       return fromUrl;
     }
   }, []);
+
+  // Stop Firestick/Silk from starting the screensaver while the dashboard is up.
+  useKeepAwake(!!token);
 
   const { data, isLoading, isError, error } = useQuery<TvData>({
     queryKey: ["/api/dashboard-tv/data", token],
