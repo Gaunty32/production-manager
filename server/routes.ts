@@ -6241,6 +6241,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/job-schedules", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertJobScheduleSchema.parse(req.body);
+      // Never allow new work to be booked against a leaver (active=false)
+      if (data.staffId) {
+        const staffMember = (await storage.getStaff()).find(s => s.id === data.staffId);
+        if (staffMember && staffMember.active === false) {
+          return res.status(400).json({ error: "This staff member has left and cannot be scheduled" });
+        }
+      }
       const schedule = await storage.createJobSchedule(data);
       res.json(schedule);
     } catch (error) {
@@ -6258,6 +6265,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
+      // Never allow work to be reassigned to a leaver (active=false)
+      if (typeof updates.staffId === "string" && updates.staffId) {
+        const staffMember = (await storage.getStaff()).find(s => s.id === updates.staffId);
+        if (staffMember && staffMember.active === false) {
+          return res.status(400).json({ error: "This staff member has left and cannot be scheduled" });
+        }
+      }
       const schedule = await storage.updateJobSchedule(req.params.id, updates);
       res.json(schedule);
     } catch (error) {
@@ -6433,7 +6447,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allJobs = await storage.getJobs();
       const allLineItems = await storage.getAllJobLineItems();
       const existingSchedules = await storage.getJobSchedules();
-      const staff = await storage.getStaff();
+      // Only active staff can be auto-scheduling candidates — leavers keep
+      // their history but must never be assigned new work.
+      const staff = (await storage.getStaff()).filter(s => s.active !== false);
+      const activeStaffIds = new Set(staff.map(s => s.id));
       const customersForSchedule = await storage.getCustomers();
       const customerMapForSchedule = new Map(customersForSchedule.map(c => [c.id, c]));
       
@@ -6477,6 +6494,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ad.toDateString() === date.toDateString() ||
             (a.isRecurring && a.recurringDaysOfWeek?.includes(date.getDay()));
           if (!matches || seen.has(a.staffId)) continue;
+          if (!activeStaffIds.has(a.staffId)) continue;
           seen.add(a.staffId);
           ids.push(a.staffId);
         }
@@ -6755,6 +6773,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]);
 
       const staffById = new Map(allStaff.map(s => [s.id, s]));
+      // Inactive staff (leavers) must never appear as operators on the sheet,
+      // even if old allocations or a machine's default operator still point at them.
+      const isActiveStaff = (id: string | null | undefined) =>
+        !!id && staffById.get(id)?.active !== false;
       const lineItemById = new Map(allLineItems.map(li => [li.id, li]));
       const jobById = new Map(allJobs.map(j => [j.id, j]));
       const customerById = new Map(customers.map(c => [c.id, c]));
@@ -6795,6 +6817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             (a.isRecurring && a.recurringDaysOfWeek?.includes(date.getDay()));
           if (!matches) continue;
           if (seen.has(a.staffId)) continue;
+          if (!isActiveStaff(a.staffId)) continue;
           seen.add(a.staffId);
           names.push(staffById.get(a.staffId)?.name ?? "Unknown");
         }
@@ -6804,7 +6827,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const machinesOut = allMachines
         .filter(m => m.isActive)
         .map(machine => {
-          const operator = machine.defaultOperatorId ? staffById.get(machine.defaultOperatorId) : undefined;
+          const operator = isActiveStaff(machine.defaultOperatorId)
+            ? staffById.get(machine.defaultOperatorId!)
+            : undefined;
 
           // Per-day operators from the Staff Allocations table; falls back to the
           // machine's default operator on days with no specific allocation.
@@ -6985,6 +7010,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const staffOut = allStaff
+        // Leavers (active=false) never get a column, even if old allocations
+        // or schedules still reference them.
+        .filter(s => s.active !== false)
         .filter(s => relevantStaffIds.has(s.id))
         .map(member => {
           const machinesByDate: Record<string, string[]> = {};

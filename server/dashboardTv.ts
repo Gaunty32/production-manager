@@ -126,6 +126,9 @@ export async function buildDashboardTvData() {
 
   const customerName = new Map(customers.map((c) => [c.id, c.name]));
   const staffName = new Map(staff.map((s) => [s.id, s.name]));
+  // Leavers (active=false) keep their names for historical rows, but must never
+  // be shown as today's operators or get a Today's Plan checklist.
+  const activeStaffIdSet = new Set(staff.filter((s) => s.active !== false).map((s) => s.id));
   const machineById = new Map(machines.map((m) => [m.id, m]));
 
   // Line items grouped by job
@@ -238,6 +241,7 @@ export async function buildDashboardTvData() {
     if (!m.isActive) continue;
     const coverage: TimeSlot[] = [];
     for (const s of staff) {
+      if (!activeStaffIdSet.has(s.id)) continue;
       if (onHolidayToday.has(s.id)) continue;
       const avail = getStaffAvailableSlots(today, s.id, shifts);
       if (avail.length === 0) continue;
@@ -273,13 +277,14 @@ export async function buildDashboardTvData() {
   const operatorNowForMachine = (machineId: number): string | null => {
     const m = machineById.get(machineId);
     // Default operator takes precedence when configured (mirrors machine sheet behaviour)
-    if (m?.defaultOperatorId && !onHolidayToday.has(m.defaultOperatorId)) {
+    if (m?.defaultOperatorId && activeStaffIdSet.has(m.defaultOperatorId) && !onHolidayToday.has(m.defaultOperatorId)) {
       const avail = getStaffAvailableSlots(today, m.defaultOperatorId, shifts);
       if (avail.some((sl) => sl.startTime <= nowMin && nowMin < sl.endTime)) {
         return staffName.get(m.defaultOperatorId) ?? null;
       }
     }
     for (const s of staff) {
+      if (!activeStaffIdSet.has(s.id)) continue;
       if (onHolidayToday.has(s.id)) continue;
       const allocSlots = getStaffMachineAllocationSlots(today, machineId, s.id, allocations);
       const onShiftNow = () =>
@@ -293,7 +298,9 @@ export async function buildDashboardTvData() {
         if (onShiftNow()) return s.name;
       }
     }
-    if (m?.defaultOperatorId) return staffName.get(m.defaultOperatorId) ?? null;
+    if (m?.defaultOperatorId && activeStaffIdSet.has(m.defaultOperatorId)) {
+      return staffName.get(m.defaultOperatorId) ?? null;
+    }
     return null;
   };
 
@@ -315,7 +322,9 @@ export async function buildDashboardTvData() {
           const cust = customerName.get(job.customerId) ?? "";
           currentJobLabel = cust ? `${cust} — ${job.jobName}` : job.jobName;
         }
-        operator = staffName.get(current.staffId) ?? null;
+        operator = activeStaffIdSet.has(current.staffId)
+          ? staffName.get(current.staffId) ?? null
+          : null;
       }
       if (!operator) operator = operatorNowForMachine(m.id);
 
@@ -476,6 +485,7 @@ export async function buildDashboardTvData() {
   // ── Section 8: Active Team ───────────────────────────────────────────────────
   const onShiftNow: string[] = [];
   for (const s of staff) {
+    if (!activeStaffIdSet.has(s.id)) continue;
     if (onHolidayToday.has(s.id)) continue;
     const avail = getStaffAvailableSlots(today, s.id, shifts);
     if (avail.some((sl) => sl.startTime <= nowMin && nowMin < sl.endTime)) {
@@ -715,7 +725,7 @@ export async function buildDashboardTvData() {
         const opId =
           li.operatorId ??
           (li.machineId ? machineById.get(li.machineId)?.defaultOperatorId : null);
-        const opName = opId ? staffName.get(opId) : null;
+        const opName = opId && activeStaffIdSet.has(opId) ? staffName.get(opId) : null;
         if (opName && !allocatedTo.includes(opName)) allocatedTo.push(opName);
       }
     }
@@ -778,6 +788,7 @@ export async function buildDashboardTvData() {
       const matches =
         ad.toDateString() === today.toDateString() ||
         (a.isRecurring && a.recurringDaysOfWeek?.includes(today.getDay()));
+      if (!activeStaffIdSet.has(a.staffId)) continue;
       if (matches && !ids.includes(a.staffId)) ids.push(a.staffId);
     }
     return ids;
@@ -794,7 +805,10 @@ export async function buildDashboardTvData() {
     const row: PlanRow = {
       jobLabel,
       machine: machineById.get(sc.machineId)?.name ?? null,
-      operator: sc.staffId ? staffName.get(sc.staffId) ?? null : null,
+      operator:
+        sc.staffId && activeStaffIdSet.has(sc.staffId)
+          ? staffName.get(sc.staffId) ?? null
+          : null,
       start: fmtMin(sc.startTime),
       end: fmtMin(sc.endTime),
       startMin: sc.startTime,
@@ -805,7 +819,7 @@ export async function buildDashboardTvData() {
 
     const itemKey = sc.lineItemId ?? `${sc.jobId}:${sc.startTime}:${sc.id}`;
     const assignees = new Set<string>(staffAllocatedToMachineToday(sc.machineId));
-    if (sc.staffId) assignees.add(sc.staffId);
+    if (sc.staffId && activeStaffIdSet.has(sc.staffId)) assignees.add(sc.staffId);
     for (const staffId of Array.from(assignees)) {
       const pKey = `${staffId}:${itemKey}`;
       if (!seenPersonItem.has(pKey)) {
@@ -874,7 +888,7 @@ export async function buildDashboardTvData() {
         id: li.id,
         jobLabel,
         quantity: remaining,
-        person: opId ? staffName.get(opId) ?? null : null,
+        person: opId && activeStaffIdSet.has(opId) ? staffName.get(opId) ?? null : null,
         machine: li.machineId ? machineById.get(li.machineId)?.name ?? null : null,
         dueDate: due,
         status:
