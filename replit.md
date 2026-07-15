@@ -35,7 +35,7 @@
 
 ## TV Dashboard (`/dashboard-tv`)
 - For the Firestick TV. Token-protected (`tv-dashboard-token`), auto-refreshes every 60s, fullscreen toggle.
-- Rotation (60s per page; final page holds 180s): **Today's Plan** → **Due Out — Next 48 Hours** → **Team Goal** → **Our Team** (only if operatives exist) → **Up Next** (always last).
+- Rotation (60s per page; final page holds 180s): **Today's Plan** → **Order System Production** (embedded iframe of the other app's tokened TV display; URL lives in the `ORDER_SYSTEM_TV_URL` env var, served to the client via the TV data endpoint — never hardcode it in client code; page only appears when the env var is set) → **Due Out — Next 48 Hours** → **Team Goal** → **Our Team** (only if operatives exist) → **Up Next** (always last).
 - Today's Plan: per-person checklists of today's scheduled items + per-machine line-up (section 13 `todaysPlan` in `server/dashboardTv.ts`).
 - Due Out: overdue/due today/next 48h tiles + colour-coded job rows with allocated person (`dueOut`, max 12 rows).
 - Team Goal: garments/jobs left, this week vs last week, contributor bars (`teamGoal`).

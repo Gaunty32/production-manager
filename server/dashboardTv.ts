@@ -912,5 +912,9 @@ export async function buildDashboardTvData() {
     dueOut,
     todaysPlan,
     upNext,
+    // Order System (wardrobe) TV display URL — kept server-side so the
+    // tokened link never ships in the client bundle. Only handed out to
+    // callers that already passed the TV dashboard token check.
+    orderSystemUrl: process.env.ORDER_SYSTEM_TV_URL || null,
   };
 }

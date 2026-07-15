@@ -45,6 +45,7 @@ integrations = ["javascript_database:1.0.0", "javascript_log_in_with_replit:1.0.
 
 [userenv.shared]
 BASE_URL = "https://production.selectbranding.co.uk"
+ORDER_SYSTEM_TV_URL = "https://wardrobe.selectbranding.co.uk/tv-display?token=81b7bbcbf03cb828288507c2dd8980354c4f412d97c58343144cde673a690a9340d4c2db8e5937bdff7813bd697e1ed2"
 
 [postMerge]
 path = "scripts/post-merge.sh"

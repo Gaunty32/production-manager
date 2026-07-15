@@ -4,6 +4,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Maximize, Minimize, Pa
 
 interface TvData {
   lastUpdated: string;
+  orderSystemUrl: string | null;
   todaysProduction: {
     ordersDueToday: number;
     ordersCompletedToday: number;
@@ -208,7 +209,9 @@ export default function DashboardTv() {
   });
 
   const hasTeamPage = (data?.operatives?.length ?? 0) > 0;
-  const pageCount = data ? 4 + (hasTeamPage ? 1 : 0) : 1;
+  const hasOrderPage = !!data?.orderSystemUrl;
+  const orderOffset = hasOrderPage ? 1 : 0;
+  const pageCount = data ? 4 + orderOffset + (hasTeamPage ? 1 : 0) : 1;
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
   const [navNonce, setNavNonce] = useState(0);
@@ -305,10 +308,11 @@ export default function DashboardTv() {
       <div className="flex flex-col h-full">
         <div className="flex-1 min-h-0">
           {page === 0 && <TodaysPlanPage data={data} />}
-          {page === 1 && <DueOutPage data={data} />}
-          {page === 2 && <TeamGoalPage data={data} />}
-          {hasTeamPage && page === 3 && <OperativesPage data={data} />}
-          {page === 3 + (hasTeamPage ? 1 : 0) && <UpNextPage data={data} />}
+          {hasOrderPage && page === 1 && <OrderSystemPage url={data.orderSystemUrl!} />}
+          {page === 1 + orderOffset && <DueOutPage data={data} />}
+          {page === 2 + orderOffset && <TeamGoalPage data={data} />}
+          {hasTeamPage && page === 3 + orderOffset && <OperativesPage data={data} />}
+          {page === 3 + orderOffset + (hasTeamPage ? 1 : 0) && <UpNextPage data={data} />}
         </div>
         {pageCount > 1 && (
           <div className="flex items-center justify-center gap-4 pt-4" data-testid="page-dots">
@@ -544,6 +548,20 @@ function TodaysPlanPage({ data }: { data: TvData }) {
           </Panel>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Order System (wardrobe) production screen — embedded ───────────────────
+function OrderSystemPage({ url }: { url: string }) {
+  return (
+    <div className="h-full rounded-2xl overflow-hidden ring-1 ring-slate-700/60 bg-slate-900/70">
+      <iframe
+        src={url}
+        title="Order System — Production Today's Plan"
+        className="w-full h-full border-0"
+        data-testid="iframe-order-system"
+      />
     </div>
   );
 }
