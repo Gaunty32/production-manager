@@ -943,11 +943,16 @@ function OperativesPage({ data }: { data: TvData }) {
   );
 }
 
+// Many TVs "overscan": they zoom the picture slightly and crop the outer
+// edges, cutting off text near the borders. Shrink the whole dashboard to
+// this fraction of the screen so everything stays inside the TV-safe zone.
+const TV_SAFE_AREA = 0.94;
+
 function Scaler({ children }: { children: React.ReactNode }) {
   const [scale, setScale] = useState(1);
   useEffect(() => {
     const compute = () =>
-      setScale(Math.min(window.innerWidth / 1920, window.innerHeight / 1080));
+      setScale(Math.min(window.innerWidth / 1920, window.innerHeight / 1080) * TV_SAFE_AREA);
     compute();
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
