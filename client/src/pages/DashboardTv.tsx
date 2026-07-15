@@ -577,7 +577,7 @@ function TodaysPlanPage({ data }: { data: TvData }) {
   const morePeople = plan.people.length - peopleShown.length;
   // Full-width layout: up to 4 people fit in 2 columns, more in 3 columns.
   const cols = peopleShown.length <= 4 ? 2 : 3;
-  const itemsPerPerson = peopleShown.length <= 2 ? 5 : peopleShown.length <= 4 ? 3 : 4;
+  const itemsPerPerson = peopleShown.length <= 2 ? 5 : 3;
 
   return (
     <div className="flex flex-col h-full gap-5">
@@ -751,7 +751,7 @@ function UpNextPage({ data }: { data: TvData }) {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-[1fr_170px_260px_260px_300px] gap-4 px-4 pb-3 text-xl font-bold text-slate-400 uppercase tracking-wider">
+            <div className="grid grid-cols-[1fr_150px_220px_220px_280px] gap-4 px-4 pb-3 text-xl font-bold text-slate-400 uppercase tracking-wider">
               <div>Job</div>
               <div className="text-right">Quantity</div>
               <div>Person</div>
@@ -764,7 +764,7 @@ function UpNextPage({ data }: { data: TvData }) {
                 return (
                   <div
                     key={r.id}
-                    className={`grid grid-cols-[1fr_170px_260px_260px_300px] gap-4 items-center rounded-xl px-4 py-3${s.flash ? " animate-pulse" : ""}`}
+                    className={`grid grid-cols-[1fr_150px_220px_220px_280px] gap-4 items-center rounded-xl px-4 py-3${s.flash ? " animate-pulse" : ""}`}
                     style={{
                       backgroundColor: `${s.color}${r.status === "later" ? "14" : "26"}`,
                       border: `2px solid ${s.color}${r.status === "later" ? "33" : "77"}`,
@@ -829,7 +829,7 @@ function SummaryTile({
 // ── Page 3: Team goal ────────────────────────────────────────────────────────
 function TeamGoalPage({ data }: { data: TvData }) {
   const g = data.teamGoal;
-  const top = g.contributors.slice(0, 8);
+  const top = g.contributors.slice(0, 6);
   const maxGarments = Math.max(1, ...top.map((c) => c.garmentsThisWeek));
   const delta = g.completedThisWeek - g.completedLastWeek;
 
@@ -844,7 +844,7 @@ function TeamGoalPage({ data }: { data: TvData }) {
             <div className="flex flex-col items-center justify-center h-full text-center">
               <div
                 className="font-black leading-none text-white"
-                style={{ fontSize: 200 }}
+                style={{ fontSize: 180 }}
                 data-testid="text-queue-garments"
               >
                 {num(g.queueGarments)}
@@ -1037,10 +1037,10 @@ const TV_SAFE_AREA = 0.94;
 
 // The dashboard is designed on a fixed canvas and scaled to fill the TV.
 // A smaller canvas means everything (text, numbers, icons) renders LARGER
-// on screen — 1600x900 makes it all ~20% bigger than the old 1920x1080,
+// on screen — 1366x768 makes it all ~40% bigger than the old 1920x1080,
 // for comfortable reading from across the room.
-const DESIGN_WIDTH = 1600;
-const DESIGN_HEIGHT = 900;
+const DESIGN_WIDTH = 1366;
+const DESIGN_HEIGHT = 768;
 
 function Scaler({ children }: { children: React.ReactNode }) {
   const [scale, setScale] = useState(1);
