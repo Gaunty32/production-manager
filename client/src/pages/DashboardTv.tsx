@@ -516,11 +516,11 @@ function TodaysPlanPage({ data }: { data: TvData }) {
 
   const peopleShown = plan.people.slice(0, 6);
   const morePeople = plan.people.length - peopleShown.length;
-  const itemsPerPerson = peopleShown.length <= 2 ? 6 : peopleShown.length <= 4 ? 4 : 3;
+  const itemsPerPerson = peopleShown.length <= 2 ? 5 : peopleShown.length <= 4 ? 3 : 2;
 
-  const machinesShown = plan.machines.slice(0, 6);
+  const machinesShown = plan.machines.slice(0, 5);
   const moreMachines = plan.machines.length - machinesShown.length;
-  const itemsPerMachine = machinesShown.length <= 3 ? 4 : 2;
+  const itemsPerMachine = machinesShown.length <= 3 ? 3 : 2;
 
   return (
     <div className="flex flex-col h-full gap-5">
@@ -1034,11 +1034,21 @@ function OperativesPage({ data }: { data: TvData }) {
 // this fraction of the screen so everything stays inside the TV-safe zone.
 const TV_SAFE_AREA = 0.94;
 
+// The dashboard is designed on a fixed canvas and scaled to fill the TV.
+// A smaller canvas means everything (text, numbers, icons) renders LARGER
+// on screen — 1600x900 makes it all ~20% bigger than the old 1920x1080,
+// for comfortable reading from across the room.
+const DESIGN_WIDTH = 1600;
+const DESIGN_HEIGHT = 900;
+
 function Scaler({ children }: { children: React.ReactNode }) {
   const [scale, setScale] = useState(1);
   useEffect(() => {
     const compute = () =>
-      setScale(Math.min(window.innerWidth / 1920, window.innerHeight / 1080) * TV_SAFE_AREA);
+      setScale(
+        Math.min(window.innerWidth / DESIGN_WIDTH, window.innerHeight / DESIGN_HEIGHT) *
+          TV_SAFE_AREA,
+      );
     compute();
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
@@ -1048,8 +1058,8 @@ function Scaler({ children }: { children: React.ReactNode }) {
       <div
         className="bg-slate-950 text-white p-8"
         style={{
-          width: 1920,
-          height: 1080,
+          width: DESIGN_WIDTH,
+          height: DESIGN_HEIGHT,
           transform: `scale(${scale})`,
           transformOrigin: "center center",
           flexShrink: 0,

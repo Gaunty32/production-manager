@@ -749,7 +749,7 @@ export async function buildDashboardTvData() {
     soonCount: dueOutJobs.filter((x) => x.status === "soon").length,
     garmentsRemaining: dueOutJobs.reduce((s, x) => s + x.garmentsRemaining, 0),
     totalJobs: dueOutJobs.length,
-    jobs: dueOutJobs.slice(0, 12),
+    jobs: dueOutJobs.slice(0, 10),
   };
 
   // ── Section 13: Today's plan — who does what today, on which machine ───────
@@ -913,7 +913,7 @@ export async function buildDashboardTvData() {
   });
   const upNext = {
     totalCount: upNextRows.length,
-    rows: upNextRows.slice(0, 11),
+    rows: upNextRows.slice(0, 9),
   };
 
   return {
