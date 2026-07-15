@@ -166,12 +166,6 @@ function Panel({
   );
 }
 
-function utilColor(pct: number): string {
-  if (pct >= 100) return STATUS_COLOR.red;
-  if (pct >= 85) return STATUS_COLOR.amber;
-  return STATUS_COLOR.green;
-}
-
 function effTarget(pct: number | null): { label: string; color: string; arrow: string } | null {
   if (pct === null) return null;
   if (pct >= 110) return { label: "Above target", color: STATUS_COLOR.green, arrow: "▲" };
@@ -214,7 +208,7 @@ export default function DashboardTv() {
   });
 
   const hasTeamPage = (data?.operatives?.length ?? 0) > 0;
-  const pageCount = data ? 5 + (hasTeamPage ? 1 : 0) : 1;
+  const pageCount = data ? 4 + (hasTeamPage ? 1 : 0) : 1;
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
   const [navNonce, setNavNonce] = useState(0);
@@ -310,12 +304,11 @@ export default function DashboardTv() {
     <Scaler>
       <div className="flex flex-col h-full">
         <div className="flex-1 min-h-0">
-          {page === 0 && <OpsPage data={data} />}
-          {page === 1 && <TodaysPlanPage data={data} />}
-          {page === 2 && <DueOutPage data={data} />}
-          {page === 3 && <TeamGoalPage data={data} />}
-          {hasTeamPage && page === 4 && <OperativesPage data={data} />}
-          {page === 4 + (hasTeamPage ? 1 : 0) && <UpNextPage data={data} />}
+          {page === 0 && <TodaysPlanPage data={data} />}
+          {page === 1 && <DueOutPage data={data} />}
+          {page === 2 && <TeamGoalPage data={data} />}
+          {hasTeamPage && page === 3 && <OperativesPage data={data} />}
+          {page === 3 + (hasTeamPage ? 1 : 0) && <UpNextPage data={data} />}
         </div>
         {pageCount > 1 && (
           <div className="flex items-center justify-center gap-4 pt-4" data-testid="page-dots">
@@ -932,200 +925,6 @@ function OperativesPage({ data }: { data: TvData }) {
   );
 }
 
-// ── Page 1: Operations board ─────────────────────────────────────────────────
-const ALERT_ORDER: Record<string, number> = { red: 0, amber: 1, blue: 2 };
-
-function OpsPage({ data }: { data: TvData }) {
-  const tp = data.todaysProduction;
-  const dt = data.dailyTarget;
-  const alerts = [...data.alerts].sort(
-    (a, b) => ALERT_ORDER[a.severity] - ALERT_ORDER[b.severity] || b.count - a.count,
-  );
-  const shownAlerts = alerts.slice(0, 4);
-
-  return (
-    <div className="flex flex-col h-full gap-5">
-      <PageHeader title="Production — Today" lastUpdated={data.lastUpdated} />
-
-      {/* Headline numbers */}
-      <div className="grid grid-cols-4 gap-5">
-        <SummaryTile label="Due today" value={tp.ordersDueToday} color="#e2e8f0" testId="tile-ops-due-today" />
-        <SummaryTile
-          label="Completed today"
-          value={tp.ordersCompletedToday}
-          color={STATUS_COLOR.green}
-          testId="tile-ops-completed"
-        />
-        <SummaryTile
-          label="Overdue"
-          value={tp.ordersOverdue}
-          color={tp.ordersOverdue > 0 ? STATUS_COLOR.red : "#e2e8f0"}
-          testId="tile-ops-overdue"
-        />
-        <SummaryTile
-          label="Garments left today"
-          value={tp.garmentsRemainingToday}
-          color={STATUS_COLOR.amber}
-          testId="tile-ops-garments-left"
-        />
-      </div>
-
-      {/* Main content */}
-      <div className="grid grid-cols-12 gap-5 flex-1 min-h-0">
-        {/* Machines — compact rows, scales with any number of machines */}
-        <Panel title="Machines" className="col-span-8 min-h-0">
-          <div className="flex flex-col justify-evenly h-full">
-            {data.machines.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center gap-5 py-1"
-                data-testid={`card-machine-${m.id}`}
-              >
-                <div className="w-56 text-3xl font-bold truncate">{m.name}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xl text-slate-300 truncate">
-                    {m.currentJob ?? <span className="text-slate-500">Idle</span>}
-                    {m.operator ? (
-                      <span className="text-slate-500"> · {m.operator}</span>
-                    ) : (
-                      <span className="text-red-400"> · No operator</span>
-                    )}
-                  </div>
-                  <div className="h-3 w-full rounded-full bg-slate-800 overflow-hidden mt-1.5">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.min(100, m.hasCapacity ? m.utilisation : 0)}%`,
-                        backgroundColor: m.hasCapacity ? utilColor(m.utilisation) : STATUS_COLOR.none,
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="w-40 text-right text-xl text-slate-400 whitespace-nowrap">
-                  <span className="text-emerald-400 font-bold">{m.itemsCompletedToday}</span> done ·{" "}
-                  <span className="text-amber-400 font-bold">{m.itemsRemainingToday}</span> left
-                </div>
-                <div
-                  className="w-24 text-right text-3xl font-black"
-                  style={{ color: m.hasCapacity ? utilColor(m.utilisation) : STATUS_COLOR.none }}
-                >
-                  {m.hasCapacity ? `${m.utilisation}%` : "—"}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
-
-        {/* Right column: target + capacity */}
-        <div className="col-span-4 flex flex-col gap-5 min-h-0">
-          <Panel title="Daily Target">
-            <div className="flex items-end justify-between gap-4 mb-4">
-              <div>
-                <div
-                  className="font-black leading-none"
-                  style={{ fontSize: 88, color: dt.percent >= 100 ? STATUS_COLOR.green : "#ffffff" }}
-                  data-testid="text-target-percent"
-                >
-                  {dt.percent}%
-                </div>
-              </div>
-              <div className="text-right pb-1">
-                <div className="text-3xl font-bold text-emerald-400">{num(dt.completed)}</div>
-                <div className="text-xl text-slate-400">of {num(dt.target)} garments</div>
-              </div>
-            </div>
-            <div className="h-8 w-full rounded-full bg-slate-800 overflow-hidden ring-1 ring-slate-700">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${Math.min(100, dt.percent)}%`,
-                  backgroundColor: dt.percent >= 100 ? STATUS_COLOR.green : "#3b82f6",
-                }}
-              />
-            </div>
-          </Panel>
-
-          <Panel title="Capacity Remaining" className="flex-1">
-            <div className="flex flex-col gap-4 h-full justify-center">
-              <CapacityRow label="Embroidery" cap={data.capacity.embroidery} />
-              <CapacityRow label="Print" cap={data.capacity.print} />
-              <CapacityRow label="Packing" cap={data.capacity.packing} />
-            </div>
-          </Panel>
-
-          <Panel title="Quality">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-baseline gap-3">
-                <div
-                  className="font-black leading-none text-6xl"
-                  style={{
-                    color:
-                      data.quality.daysSinceLastError === null || data.quality.daysSinceLastError >= 7
-                        ? STATUS_COLOR.green
-                        : data.quality.daysSinceLastError >= 1
-                        ? STATUS_COLOR.amber
-                        : STATUS_COLOR.red,
-                  }}
-                  data-testid="text-days-since-error"
-                >
-                  {data.quality.daysSinceLastError ?? "—"}
-                </div>
-                <div className="text-xl text-slate-400">days since last error</div>
-              </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold text-white">
-                  {data.serviceLevel.onTimeDispatchPercent === null
-                    ? "—"
-                    : `${data.serviceLevel.onTimeDispatchPercent}%`}
-                </div>
-                <div className="text-lg text-slate-400">on-time this month</div>
-              </div>
-            </div>
-          </Panel>
-        </div>
-      </div>
-
-      {/* Bottom strip: alerts + team, one calm row */}
-      <div className="flex items-center gap-4 rounded-2xl bg-slate-900/70 ring-1 ring-slate-700/60 px-6 py-4">
-        {shownAlerts.length === 0 ? (
-          <div className="text-2xl font-bold text-emerald-400">All clear — no production issues</div>
-        ) : (
-          <div className="flex items-center gap-3 flex-1 min-w-0 overflow-hidden">
-            {shownAlerts.map((a, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 rounded-xl px-4 py-2 ring-1 whitespace-nowrap"
-                style={{
-                  backgroundColor: `${STATUS_COLOR[a.severity === "blue" ? "none" : a.severity]}22`,
-                  borderColor: STATUS_COLOR[a.severity === "blue" ? "none" : a.severity],
-                }}
-                data-testid={`alert-${i}`}
-              >
-                <span className="text-xl font-semibold">{a.label}</span>
-                <span
-                  className="text-2xl font-black"
-                  style={{ color: STATUS_COLOR[a.severity === "blue" ? "none" : a.severity] }}
-                >
-                  {a.count}
-                </span>
-              </div>
-            ))}
-            {alerts.length > shownAlerts.length && (
-              <span className="text-xl text-slate-400 whitespace-nowrap">
-                +{alerts.length - shownAlerts.length} more
-              </span>
-            )}
-          </div>
-        )}
-        <div className="ml-auto flex items-center gap-3 whitespace-nowrap">
-          <span className="text-4xl font-black text-emerald-400">{data.team.onShiftCount}</span>
-          <span className="text-xl text-slate-400">on shift</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function Scaler({ children }: { children: React.ReactNode }) {
   const [scale, setScale] = useState(1);
   useEffect(() => {
@@ -1148,33 +947,6 @@ function Scaler({ children }: { children: React.ReactNode }) {
         }}
       >
         {children}
-      </div>
-    </div>
-  );
-}
-
-function CapacityRow({ label, cap }: { label: string; cap: DisciplineCapacity | null }) {
-  if (!cap || cap.status === "none") {
-    return (
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-2xl font-semibold">{label}</span>
-        <span className="text-xl text-slate-500">No data</span>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-2xl font-semibold">{label}</span>
-        <span className="text-2xl font-bold" style={{ color: STATUS_COLOR[cap.status] }}>
-          {cap.remainingHours}h left
-        </span>
-      </div>
-      <div className="h-4 w-full rounded-full bg-slate-800 overflow-hidden">
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${Math.min(100, cap.utilisation)}%`, backgroundColor: STATUS_COLOR[cap.status] }}
-        />
       </div>
     </div>
   );
