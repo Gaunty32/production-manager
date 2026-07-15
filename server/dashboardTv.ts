@@ -767,6 +767,22 @@ export async function buildDashboardTvData() {
   const seenPersonItem = new Set<string>();
   const seenMachineItem = new Set<string>();
 
+  // Everyone allocated to a machine today (Staff Allocations — specific date or
+  // recurring day-of-week). A job scheduled on a shared machine appears on
+  // EVERY allocated person's checklist, not just the one the scheduler picked.
+  const staffAllocatedToMachineToday = (machineId: number): string[] => {
+    const ids: string[] = [];
+    for (const a of allocations) {
+      if (a.machineId !== machineId) continue;
+      const ad = new Date(a.date);
+      const matches =
+        ad.toDateString() === today.toDateString() ||
+        (a.isRecurring && a.recurringDaysOfWeek?.includes(today.getDay()));
+      if (matches && !ids.includes(a.staffId)) ids.push(a.staffId);
+    }
+    return ids;
+  };
+
   for (const sc of todaysScheds) {
     const job = jobById.get(sc.jobId);
     if (!job || job.completed || job.status === "pending_customer_approval") continue;
@@ -788,13 +804,15 @@ export async function buildDashboardTvData() {
     };
 
     const itemKey = sc.lineItemId ?? `${sc.jobId}:${sc.startTime}:${sc.id}`;
-    if (sc.staffId) {
-      const pKey = `${sc.staffId}:${itemKey}`;
+    const assignees = new Set<string>(staffAllocatedToMachineToday(sc.machineId));
+    if (sc.staffId) assignees.add(sc.staffId);
+    for (const staffId of Array.from(assignees)) {
+      const pKey = `${staffId}:${itemKey}`;
       if (!seenPersonItem.has(pKey)) {
         seenPersonItem.add(pKey);
-        const arr = planByPerson.get(sc.staffId) ?? [];
+        const arr = planByPerson.get(staffId) ?? [];
         arr.push(row);
-        planByPerson.set(sc.staffId, arr);
+        planByPerson.set(staffId, arr);
       }
     }
     const mKey = `${sc.machineId}:${itemKey}`;

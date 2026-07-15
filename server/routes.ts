@@ -6924,12 +6924,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return names;
       };
 
+      // A job scheduled on a machine belongs to EVERYONE allocated to that
+      // machine on that day (Staff Allocations — specific date or recurring
+      // day-of-week), plus the staff member the scheduler picked. Shared jobs
+      // therefore appear on every allocated person's list.
+      const staffIdsForSchedule = new Map<string, Set<string>>();
+      for (const s of schedules) {
+        const ids = new Set<string>();
+        if (s.staffId) ids.add(s.staffId);
+        const sd = new Date(s.scheduledDate);
+        for (const a of allocations) {
+          if (a.machineId !== s.machineId) continue;
+          const ad = new Date(a.date);
+          const matches =
+            ad.toDateString() === sd.toDateString() ||
+            (a.isRecurring && a.recurringDaysOfWeek?.includes(sd.getDay()));
+          if (matches) ids.add(a.staffId);
+        }
+        staffIdsForSchedule.set(s.id, ids);
+      }
+
       // Only show staff who are relevant to production in this window: anyone with
       // a scheduled job or a machine allocation. Avoids cluttering with office
       // staff who never run a machine.
       const relevantStaffIds = new Set<string>();
-      for (const s of schedules) {
-        if (s.staffId) relevantStaffIds.add(s.staffId);
+      for (const ids of Array.from(staffIdsForSchedule.values())) {
+        for (const id of Array.from(ids)) relevantStaffIds.add(id);
       }
       for (const { date } of windowDays) {
         for (const a of allocations) {
@@ -6951,7 +6971,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           const jobsForStaff = schedules
-            .filter(s => s.staffId === member.id)
+            .filter(s => staffIdsForSchedule.get(s.id)?.has(member.id))
             .map(s => {
               const lineItem = s.lineItemId ? lineItemById.get(s.lineItemId) : undefined;
               const job = jobById.get(s.jobId);

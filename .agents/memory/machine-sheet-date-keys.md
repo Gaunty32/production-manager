@@ -41,3 +41,16 @@ allocation applies if `machineId` matches AND
 `a.isRecurring && a.recurringDaysOfWeek?.includes(day.getDay())`), with
 `getDay()` 0=Sun..6=Sat. Auto-scheduling already restricts candidates to allocated
 staff then prefers the default operator — same precedence, kept in sync.
+
+## Shared-machine fan-out (jobs on multiple people's lists)
+A schedule row has ONE `staffId`, but the job belongs to EVERYONE allocated to
+its machine on that day: per-person views (staff-sheet endpoint → staff view +
+printed staff job lists, and TV Today's Plan checklists) must union the
+schedule's `staffId` with all machine-day allocated staff, deduped per person+item.
+
+**Why:** user requirement (July 2026) — two people share a machine, both need
+the job on their printed list and TV checklist. Filtering on `staffId` alone
+silently drops the second person.
+
+**How to apply:** any NEW per-person job listing must use this fan-out rule,
+not `schedule.staffId === member.id` alone.
