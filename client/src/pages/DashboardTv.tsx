@@ -131,6 +131,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const PAGE_SECONDS = 60;
+const UP_NEXT_SECONDS = 180;
 
 function gbp(n: number): string {
   return new Intl.NumberFormat("en-GB", {
@@ -244,11 +245,13 @@ export default function DashboardTv() {
 
   useEffect(() => {
     if (pageCount <= 1 || paused) return;
-    const t = setInterval(() => {
+    const upNextIndex = pageCount - 1;
+    const seconds = page === upNextIndex ? UP_NEXT_SECONDS : PAGE_SECONDS;
+    const t = setTimeout(() => {
       setPage((p) => (p + 1) % pageCount);
-    }, PAGE_SECONDS * 1000);
-    return () => clearInterval(t);
-  }, [pageCount, paused, navNonce]);
+    }, seconds * 1000);
+    return () => clearTimeout(t);
+  }, [page, pageCount, paused, navNonce]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
