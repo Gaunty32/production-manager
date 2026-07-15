@@ -1356,6 +1356,19 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         } as any);
         setShippingDialogOpen(false);
       }}
+      onHold={async () => {
+        // Complete the order WITHOUT shipping details: the customer has another
+        // order still in production, so this one waits to ship with it later.
+        const currentData = form.getValues();
+        await handleSubmit({
+          ...currentData,
+          completed: true,
+          completedById: currentUserStaff?.id || null,
+          shippingMethod: null,
+          dhlTrackingNumber: null,
+        } as any);
+        setShippingDialogOpen(false);
+      }}
     />
     {open && completionDialogIndex !== null && (() => {
       const item = lineItems[completionDialogIndex];

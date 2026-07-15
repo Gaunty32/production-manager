@@ -85,6 +85,9 @@ interface ShippingInfoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: ShippingFormData) => void;
+  // Complete the order WITHOUT shipping details — used when the customer has
+  // another order still in production and this one will ship with it later.
+  onHold?: () => Promise<void> | void;
   isPending?: boolean;
   currentJobId: string;
   customerId: string;
@@ -98,6 +101,7 @@ export function ShippingInfoDialog({
   open,
   onOpenChange,
   onSubmit,
+  onHold,
   isPending = false,
   currentJobId,
   customerId,
@@ -218,6 +222,19 @@ export function ShippingInfoDialog({
         ? prev.filter(id => id !== jobId)
         : [...prev, jobId]
     );
+  };
+
+  const handleHold = async () => {
+    if (!onHold || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onHold();
+      form.reset();
+      setSelectedConsolidatedJobs([]);
+      setSelectedExistingShipment(null);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -492,7 +509,15 @@ export function ShippingInfoDialog({
               </>
             )}
 
-            <DialogFooter>
+            {onHold && (
+              <p className="text-xs text-muted-foreground">
+                Waiting on another order for this customer? Use "Hold — ship later" to mark
+                this one complete without shipping details. It stays in the Completed section
+                marked as awaiting despatch, ready to consolidate when the other order is done.
+              </p>
+            )}
+
+            <DialogFooter className="flex-wrap gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -502,6 +527,18 @@ export function ShippingInfoDialog({
               >
                 Cancel
               </Button>
+              {onHold && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleHold}
+                  disabled={isPending || isSubmitting}
+                  data-testid="button-hold-shipping"
+                >
+                  <PackageCheck className="h-4 w-4 mr-2" />
+                  {isSubmitting || isPending ? "Saving..." : "Hold — ship later"}
+                </Button>
+              )}
               <Button
                 type="submit"
                 disabled={isPending || isSubmitting}
