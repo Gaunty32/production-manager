@@ -364,6 +364,111 @@ function buildPrintDocument(
 </html>`;
 }
 
+// Estimated production time from the scheduled slot, e.g. "1h 30m".
+function minutesToDuration(mins: number): string {
+  if (mins <= 0) return "—";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+// Build the "staff job lists" hand-out: one page per staff member with every
+// job allocated to them, sorted by due date, plus a blank Actual time column
+// for them to fill in by hand.
+function buildStaffJobListDocument(staffData: StaffSheetResponse): string {
+  const printedOn = format(new Date(), "EEEE d MMM yyyy, HH:mm");
+
+  const sections = staffData.staff
+    .map((member) => {
+      const jobs = [...member.jobs].sort((a, b) => {
+        const da = a.requiredDispatchDate
+          ? parseDateKey(a.requiredDispatchDate.slice(0, 10)).getTime()
+          : Infinity;
+        const db = b.requiredDispatchDate
+          ? parseDateKey(b.requiredDispatchDate.slice(0, 10)).getTime()
+          : Infinity;
+        if (da !== db) return da - db;
+        if (a.dateKey !== b.dateKey) return a.dateKey < b.dateKey ? -1 : 1;
+        return a.startTime - b.startTime;
+      });
+
+      const rows = jobs.length
+        ? jobs
+            .map(
+              (job) => `<tr>
+                <td>${escapeHtml(formatDue(job.requiredDispatchDate))}</td>
+                <td>${escapeHtml(job.jobName)}</td>
+                <td>${escapeHtml(job.customerName)}</td>
+                <td class="num">${job.quantity ?? "—"}</td>
+                <td class="num">${minutesToDuration(job.endTime - job.startTime)}</td>
+                <td class="actual"></td>
+              </tr>`,
+            )
+            .join("")
+        : "";
+
+      const body = jobs.length
+        ? `<table>
+            <thead>
+              <tr>
+                <th style="width:12%">Due date</th>
+                <th style="width:30%">Job</th>
+                <th style="width:24%">Customer</th>
+                <th class="num" style="width:8%">Qty</th>
+                <th class="num" style="width:11%">Est. time</th>
+                <th style="width:15%">Actual time</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>`
+        : `<p class="empty">No jobs allocated.</p>`;
+
+      return `<section class="machine">
+        <div class="machine-header">
+          <h2>${escapeHtml(member.staffName)}</h2>
+          <span class="operator">${jobs.length} job${jobs.length === 1 ? "" : "s"}</span>
+        </div>
+        ${body}
+      </section>`;
+    })
+    .join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Staff Job Lists</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: #555; font-size: 12px; margin: 0 0 16px; }
+  section.machine { page-break-after: always; break-after: page; }
+  section.machine:last-child { page-break-after: auto; break-after: auto; }
+  .machine-header { display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 2px solid #111; padding-bottom: 6px; margin-bottom: 12px; gap: 12px; }
+  .machine-header h2 { font-size: 18px; margin: 0; }
+  .operator { font-size: 14px; font-weight: bold; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #fafafa; }
+  td.num, th.num { text-align: right; }
+  td.actual { height: 26px; }
+  .empty { color: #777; font-style: italic; font-size: 12px; }
+  @page { margin: 1cm; size: A4 portrait; }
+</style>
+</head>
+<body>
+  <h1>Staff Job Lists</h1>
+  <p class="subtitle">Printed ${printedOn}</p>
+  ${sections || '<p class="empty">No staff with scheduled jobs.</p>'}
+  <script>window.onload = function () { window.print(); };</script>
+</body>
+</html>`;
+}
+
 function openPrintWindow(html: string): void {
   const win = window.open("", "_blank");
   if (!win) return;
@@ -435,6 +540,32 @@ export function MachineScheduleBoard() {
     );
   };
 
+  // Print one page per staff member listing their allocated jobs. Opens the
+  // window synchronously (before any await) so popup blockers don't eat it,
+  // then fetches the staff sheet if the staff view hasn't loaded it yet.
+  const [staffListPrinting, setStaffListPrinting] = useState(false);
+  const handlePrintStaffLists = async () => {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    setStaffListPrinting(true);
+    try {
+      let data = staffData;
+      if (!data) {
+        const res = await fetch(`/api/scheduling/staff-sheet?days=${DAYS_PARAM}`, {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("Failed to load staff schedule");
+        data = (await res.json()) as StaffSheetResponse;
+      }
+      win.document.write(buildStaffJobListDocument(data));
+      win.document.close();
+    } catch {
+      win.close();
+    } finally {
+      setStaffListPrinting(false);
+    }
+  };
+
   const handlePrintColumn = (column: BoardColumn) => {
     if (!board) return;
     openPrintWindow(
@@ -483,6 +614,16 @@ export function MachineScheduleBoard() {
           >
             <Printer className="h-4 w-4 mr-2" />
             Print all
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handlePrintStaffLists}
+            disabled={staffListPrinting}
+            data-testid="button-print-staff-lists"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Staff job lists
           </Button>
         </div>
       </CardHeader>
