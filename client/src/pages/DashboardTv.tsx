@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Maximize, Minimize, Pause, Play } from "lucide-react";
+import { CheckCircle2, Circle } from "lucide-react";
 
 interface TvData {
   lastUpdated: string;
@@ -331,38 +331,10 @@ export default function DashboardTv() {
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
   const [navNonce, setNavNonce] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Auto-hide the on-screen controls: invisible during normal display,
-  // fade in for a few seconds when someone moves the mouse / presses a
-  // key or remote button, and stay visible while rotation is paused.
-  const [controlsAwake, setControlsAwake] = useState(true);
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const wake = () => {
-      setControlsAwake(true);
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => setControlsAwake(false), 5000);
-    };
-    wake();
-    window.addEventListener("mousemove", wake);
-    window.addEventListener("pointerdown", wake);
-    window.addEventListener("keydown", wake);
-    return () => {
-      if (timer) clearTimeout(timer);
-      window.removeEventListener("mousemove", wake);
-      window.removeEventListener("pointerdown", wake);
-      window.removeEventListener("keydown", wake);
-    };
-  }, []);
-  const controlsVisible = controlsAwake || paused;
-
-  useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-
+  // No on-screen buttons — the TV stays clean. Navigation still works from
+  // the remote/keyboard: left/right arrows change page, space pauses,
+  // "f" toggles full screen.
   const toggleFullscreen = () => {
     try {
       if (document.fullscreenElement) {
@@ -373,11 +345,6 @@ export default function DashboardTv() {
     } catch {
       // Fullscreen not supported on this browser — nothing else to do
     }
-  };
-
-  const goToPage = (target: number) => {
-    setPage(((target % pageCount) + pageCount) % pageCount);
-    setNavNonce((n) => n + 1);
   };
 
   useEffect(() => {
@@ -401,6 +368,8 @@ export default function DashboardTv() {
       } else if (e.key === " " || e.key === "Spacebar") {
         e.preventDefault();
         setPaused((p) => !p);
+      } else if (e.key === "f" || e.key === "F") {
+        toggleFullscreen();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -445,7 +414,7 @@ export default function DashboardTv() {
 
   return (
     <Scaler>
-      <div className="flex flex-col h-full">
+      <div className="relative flex flex-col h-full">
         <div className="flex-1 min-h-0">
           {page === 0 && <TodaysPlanPage data={data} />}
           {hasOrderPage && page === 1 && <OrderSystemPage url={data.orderSystemUrl!} />}
@@ -454,68 +423,12 @@ export default function DashboardTv() {
           {hasTeamPage && page === 3 + orderOffset && <OperativesPage data={data} />}
           {page === 3 + orderOffset + (hasTeamPage ? 1 : 0) && <UpNextPage data={data} />}
         </div>
-        {pageCount > 1 && (
+        {paused && (
           <div
-            className={`flex items-center justify-center gap-4 pt-4 transition-opacity duration-500 ${
-              controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
-            }`}
-            data-testid="page-dots"
+            className="absolute bottom-4 right-6 rounded-full bg-amber-500/20 ring-1 ring-amber-500 px-5 py-2 text-lg font-semibold text-amber-400"
+            data-testid="text-paused"
           >
-            <button
-              onClick={() => goToPage(page - 1)}
-              className="flex items-center justify-center rounded-full w-10 h-10 bg-slate-800/80 ring-1 ring-slate-700 text-slate-300 hover:bg-slate-700"
-              data-testid="button-page-prev"
-              aria-label="Previous screen"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-            {Array.from({ length: pageCount }).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => goToPage(i)}
-                className="rounded-full transition-all"
-                style={{
-                  width: i === page ? 28 : 12,
-                  height: 12,
-                  backgroundColor: i === page ? "#3b82f6" : "#334155",
-                }}
-                data-testid={`button-page-dot-${i}`}
-                aria-label={`Go to screen ${i + 1}`}
-              />
-            ))}
-            <button
-              onClick={() => goToPage(page + 1)}
-              className="flex items-center justify-center rounded-full w-10 h-10 bg-slate-800/80 ring-1 ring-slate-700 text-slate-300 hover:bg-slate-700"
-              data-testid="button-page-next"
-              aria-label="Next screen"
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
-            <button
-              onClick={() => setPaused((p) => !p)}
-              className={`flex items-center justify-center rounded-full w-10 h-10 ring-1 ${
-                paused
-                  ? "bg-amber-500/20 ring-amber-500 text-amber-400"
-                  : "bg-slate-800/80 ring-slate-700 text-slate-300 hover:bg-slate-700"
-              }`}
-              data-testid="button-page-pause"
-              aria-label={paused ? "Resume rotation" : "Pause rotation"}
-            >
-              {paused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
-            </button>
-            <button
-              onClick={toggleFullscreen}
-              className="flex items-center justify-center rounded-full w-10 h-10 bg-slate-800/80 ring-1 ring-slate-700 text-slate-300 hover:bg-slate-700"
-              data-testid="button-fullscreen"
-              aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
-            >
-              {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
-            </button>
-            {paused && (
-              <span className="text-lg font-semibold text-amber-400" data-testid="text-paused">
-                Paused
-              </span>
-            )}
+            Paused
           </div>
         )}
       </div>
