@@ -756,13 +756,15 @@ function SummaryTile({
 }) {
   return (
     <div
-      className="rounded-2xl bg-slate-900/70 ring-1 ring-slate-700/60 p-5 flex items-center gap-5"
+      className="rounded-2xl bg-slate-900/70 ring-1 ring-slate-700/60 p-5 flex items-center gap-4 overflow-hidden"
       data-testid={testId}
     >
-      <div className="font-black leading-none" style={{ fontSize: 64, color }}>
+      <div className="font-black leading-none shrink-0" style={{ fontSize: 56, color }}>
         {num(value)}
       </div>
-      <div className="text-2xl text-slate-300 font-semibold leading-tight">{label}</div>
+      <div className="flex-1 min-w-0 text-2xl text-slate-300 font-semibold leading-tight break-words">
+        {label}
+      </div>
     </div>
   );
 }
