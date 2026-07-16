@@ -1033,6 +1033,31 @@ export const customerJobSubmissionSchema = z.object({
   logoType: z.enum(["repeat_logo", "new_logo", "new_logo_files_supplied"]).default("repeat_logo"),
 });
 
+// Customer edit of a submission that is still awaiting staff review.
+// Same fields as the original submission, minus logoType (files/logo setup
+// changes go through chat with staff).
+export const customerJobEditSchema = z.object({
+  jobName: z.string().min(1, "Job name is required"),
+  poNumber: z.string().optional(),
+  quantity: z.number().int().min(1).optional().nullable(),
+  notes: z.string().optional(),
+  deliveryAddress: z.string().optional(),
+  requiredDispatchDate: z.string().min(1, "Despatch date is required").refine(
+    (val) => {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const minDate = new Date(today);
+      minDate.setDate(minDate.getDate() + 1);
+      d.setHours(0, 0, 0, 0);
+      return d >= minDate;
+    },
+    { message: "Despatch date must be in the future" }
+  ),
+});
+export type CustomerJobEdit = z.infer<typeof customerJobEditSchema>;
+
 export type InsertCustomerUser = z.infer<typeof insertCustomerUserSchema>;
 export type CustomerUser = typeof customerUsers.$inferSelect;
 export type CustomerLogin = z.infer<typeof customerLoginSchema>;

@@ -47,7 +47,7 @@ import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthe
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
 import { registerCasualShiftRoutes } from "./casualShiftRoutes";
 import { registerPurchasingRoutes } from "./purchasingRoutes";
-import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, canViewReports, updateMachineSchema, insertTaskSchema, type Job } from "@shared/schema";
+import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, customerJobEditSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, canViewReports, updateMachineSchema, insertTaskSchema, type Job } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
@@ -3827,6 +3827,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: error.errors });
       } else {
         res.status(500).json({ error: "Failed to create job submission" });
+      }
+    }
+  });
+
+  // Customer Portal - Edit a submission that is still awaiting staff review.
+  // Once staff have accepted the job it can no longer be edited from the portal.
+  app.patch("/api/customer-portal/jobs/:jobId", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) {
+        return res.status(404).json({ error: "Customer user not found" });
+      }
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      if (job.status !== 'pending_customer_approval') {
+        return res.status(400).json({ error: "This order has already been accepted and can no longer be edited. Please message us instead." });
+      }
+
+      const data = customerJobEditSchema.parse(req.body);
+
+      const updated = await storage.updateJob(job.id, {
+        jobName: data.jobName,
+        poNumber: data.poNumber || null,
+        quantity: data.quantity ?? 0,
+        notes: data.notes || null,
+        deliveryAddress: data.deliveryAddress || job.deliveryAddress || null,
+        requiredDispatchDate: new Date(data.requiredDispatchDate) as any,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error editing pending job submission:", error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update submission" });
       }
     }
   });

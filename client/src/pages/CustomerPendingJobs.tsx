@@ -1,10 +1,33 @@
 import { goBack } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { customerJobEditSchema, type CustomerJobEdit } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Clock, FileText, MessageSquare, Package } from "lucide-react";
+import { ArrowLeft, Clock, FileText, MessageSquare, Package, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -16,11 +39,174 @@ type Job = {
   quantity: number;
   requiredDispatchDate: string | null;
   notes: string | null;
+  deliveryAddress?: string | null;
   status: string;
   submittedAt: string;
   files?: { id: string; fileName: string }[];
   messages?: { id: string }[];
 };
+
+function EditSubmissionDialog({ job, onClose }: { job: Job; onClose: () => void }) {
+  const { toast } = useToast();
+
+  const form = useForm<CustomerJobEdit>({
+    resolver: zodResolver(customerJobEditSchema),
+    defaultValues: {
+      jobName: job.jobName,
+      poNumber: job.poNumber ?? "",
+      quantity: job.quantity || undefined,
+      notes: job.notes ?? "",
+      deliveryAddress: job.deliveryAddress ?? "",
+      requiredDispatchDate: job.requiredDispatchDate
+        ? job.requiredDispatchDate.slice(0, 10)
+        : "",
+    },
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: CustomerJobEdit) => {
+      const res = await apiRequest("PATCH", `/api/customer-portal/jobs/${job.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/jobs/pending"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/customer-portal/jobs/${job.id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/jobs", job.id] });
+      toast({ title: "Order updated", description: "Your changes have been saved." });
+      onClose();
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Couldn't save changes",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit order</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit((data) => saveMutation.mutate(data))}
+            className="space-y-4"
+          >
+            <FormField
+              control={form.control}
+              name="jobName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Order name</FormLabel>
+                  <FormControl>
+                    <Input {...field} data-testid="input-edit-jobname" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="poNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>PO number (optional)</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-po" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantity</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(e.target.value === "" ? null : Number(e.target.value))
+                        }
+                        data-testid="input-edit-quantity"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="requiredDispatchDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Required despatch date</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} data-testid="input-edit-date" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="deliveryAddress"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Delivery address</FormLabel>
+                  <FormControl>
+                    <Textarea rows={2} {...field} data-testid="input-edit-address" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes (optional)</FormLabel>
+                  <FormControl>
+                    <Textarea rows={3} {...field} data-testid="input-edit-notes" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                data-testid="button-edit-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={saveMutation.isPending}
+                data-testid="button-edit-save"
+              >
+                {saveMutation.isPending ? "Saving..." : "Save changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 type CustomerUser = {
   email: string;
@@ -31,6 +217,7 @@ type CustomerUser = {
 export default function CustomerPendingJobs() {
   const [, setLocation] = useLocation();
   const { isImpersonating } = usePermissions();
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
 
   const { data: customerUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
@@ -126,13 +313,27 @@ export default function CustomerPendingJobs() {
                         </p>
                       )}
                     </div>
-                    <Badge
-                      variant="secondary"
-                      className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200"
-                    >
-                      <Clock className="h-3 w-3 mr-1" />
-                      Pending Review
-                    </Badge>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge
+                        variant="secondary"
+                        className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200"
+                      >
+                        <Clock className="h-3 w-3 mr-1" />
+                        Pending Review
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingJob(job);
+                        }}
+                        data-testid={`button-edit-${job.id}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5 mr-1" />
+                        Edit
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -183,6 +384,10 @@ export default function CustomerPendingJobs() {
           </div>
         )}
       </main>
+
+      {editingJob && (
+        <EditSubmissionDialog job={editingJob} onClose={() => setEditingJob(null)} />
+      )}
     </div>
   );
 }
