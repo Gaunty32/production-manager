@@ -890,7 +890,7 @@ export async function buildDashboardTvData() {
     if (cust?.requiresAdvancePayment && !j.paymentReceived) continue;
     const due = dueDateStr(j.id, j);
     const custName = customerName.get(j.customerId) ?? "";
-    const jobLabel = custName ? `${custName} — ${j.jobName}` : j.jobName;
+    const jobLabel = custName ? `${j.jobName} — ${custName}` : j.jobName;
     for (const li of lineItemsByJob.get(j.id) ?? []) {
       if (li.completed) continue;
       const remaining = remainingForLineItem(li);
