@@ -39,7 +39,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon, Plus, Trash2, Info } from "lucide-react";
+import { CalendarIcon, Plus, Trash2, Info, Users, X } from "lucide-react";
 import { format, isPast, isToday, differenceInCalendarDays } from "date-fns";
 import { MachineSuggestions } from "@/components/MachineSuggestions";
 import { cn } from "@/lib/utils";
@@ -64,6 +64,9 @@ type LineItem = {
   completedById: string | null;
   completedAt: string | null;
   actualProductionTimeMinutes: number | null;
+  // Team effort: several people completed this item together. Sent to the
+  // server on save so each person is credited their own quantity + time.
+  contributors?: { staffId: string; quantity: number; minutes: number }[] | null;
   machineId: number | null;
   operatorId?: string | null;
   scheduleSuggestion?: {
@@ -318,11 +321,32 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const [draftCompletedById, setDraftCompletedById] = useState<string | null>(null);
   const [draftCompletedAt, setDraftCompletedAt] = useState<string | null>(null);
   const [draftMinutes, setDraftMinutes] = useState<number | null>(null);
+  // Team effort: when on, the single "Completed By" is replaced by a list of
+  // people, each with their own quantity and time.
+  const [draftTeamMode, setDraftTeamMode] = useState(false);
+  const [draftTeam, setDraftTeam] = useState<{ staffId: string; quantity: string; minutes: number | null }[]>([]);
 
   // Don't leave the completion popup open if the parent edit dialog is closed.
   useEffect(() => {
     if (!open) setCompletionDialogIndex(null);
   }, [open]);
+
+  // Partial production already recorded against the line item being completed.
+  // Team splits must validate against what's REMAINING, not the full quantity,
+  // or part-completed items could never be finished as a team.
+  const completionItem = completionDialogIndex !== null ? lineItems[completionDialogIndex] : null;
+  const completionProgressQuery = useQuery<{ totalQuantityCompleted: number }>({
+    queryKey: ["/api/line-items", completionItem?.id ?? "", "progress"],
+    enabled: !!completionItem?.id,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+  const completionRemaining = completionItem
+    ? Math.max(
+        0,
+        completionItem.quantity - (completionProgressQuery.data?.totalQuantityCompleted ?? 0),
+      )
+    : 0;
 
   const staffNameById = (id: string | null) =>
     id ? staff.find((s) => s.id === id)?.name ?? null : null;
@@ -341,7 +365,17 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     );
     setDraftCompletedAt(item.completedAt || new Date().toISOString());
     setDraftMinutes(item.actualProductionTimeMinutes ?? est);
+    setDraftTeamMode(false);
+    setDraftTeam([]);
     setCompletionDialogIndex(index);
+  };
+
+  const startTeamMode = () => {
+    setDraftTeamMode(true);
+    setDraftTeam([
+      { staffId: draftCompletedById || "", quantity: String(completionRemaining), minutes: null },
+      { staffId: "", quantity: "", minutes: null },
+    ]);
   };
 
   const commitCompletion = () => {
@@ -351,6 +385,72 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     if (!item) return;
     const isEmbroidery =
       item.jobType === "Embroidery" || item.jobType === "Embroidery Initials/Name";
+    if (draftTeamMode) {
+      // Team effort: every row needs a person, a quantity, and a time, and
+      // the quantities must add up to the line item quantity.
+      const rows = draftTeam.filter((r) => r.staffId || r.quantity || r.minutes);
+      if (rows.length < 2) {
+        toast({
+          title: "Add the team",
+          description: "A team effort needs at least two people. Use 'Riding solo' to switch back to one person.",
+          variant: "destructive",
+        });
+        return;
+      }
+      for (const r of rows) {
+        const q = Number(r.quantity);
+        if (!r.staffId || !Number.isInteger(q) || q <= 0 || r.minutes === null || r.minutes <= 0) {
+          toast({
+            title: "Team details incomplete",
+            description: "Each person needs a name, a whole-number quantity, and their time.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+      const ids = rows.map((r) => r.staffId);
+      if (new Set(ids).size !== ids.length) {
+        toast({
+          title: "Duplicate person",
+          description: "Each person can only appear once in the team.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const total = rows.reduce((s, r) => s + Number(r.quantity), 0);
+      if (total !== completionRemaining) {
+        const recorded = completionProgressQuery.data?.totalQuantityCompleted ?? 0;
+        toast({
+          title: "Quantities don't add up",
+          description:
+            recorded > 0
+              ? `The team's quantities add up to ${total}, but only ${completionRemaining} of ${item.quantity} remain (${recorded} already recorded as partial production). Please adjust the split.`
+              : `The team's quantities add up to ${total}, but this line item is ${item.quantity}. Please adjust the split.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      const contributors = rows.map((r) => ({
+        staffId: r.staffId,
+        quantity: Number(r.quantity),
+        minutes: r.minutes as number,
+      }));
+      // Mirror what the server derives: main credit to the largest quantity,
+      // total time = everyone's time added together.
+      const primary = contributors.reduce((best, c) => (c.quantity > best.quantity ? c : best), contributors[0]);
+      const updated = [...lineItems];
+      updated[index] = {
+        ...item,
+        completed: true,
+        completedById: primary.staffId,
+        completedAt: draftCompletedAt || new Date().toISOString(),
+        actualProductionTimeMinutes: contributors.reduce((s, c) => s + c.minutes, 0),
+        contributors,
+      };
+      setLineItems(updated);
+      setCompletionDialogIndex(null);
+      return;
+    }
     if (isEmbroidery && !draftCompletedById) {
       toast({
         title: "Completed By required",
@@ -374,6 +474,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       completedById: draftCompletedById,
       completedAt: draftCompletedAt || new Date().toISOString(),
       actualProductionTimeMinutes: draftMinutes,
+      contributors: null,
     };
     setLineItems(updated);
     setCompletionDialogIndex(null);
@@ -394,6 +495,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
       updated[index].completedById = null;
       updated[index].completedAt = null;
       updated[index].actualProductionTimeMinutes = null;
+      updated[index].contributors = null;
     }
     
     setLineItems(updated);
@@ -558,6 +660,11 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               machineId: item.machineId || null,
               operatorId: item.operatorId || null,
               actualProductionTimeMinutes: item.actualProductionTimeMinutes,
+              // Team effort: the server credits each person their own
+              // quantity + time via production entries.
+              ...(item.completed && item.contributors && item.contributors.length > 0
+                ? { contributors: item.contributors }
+                : {}),
             });
           } else {
             // Create new line item
@@ -1385,28 +1492,166 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div>
-                <label className="text-xs text-muted-foreground">
-                  Completed By
-                  {isEmbroidery && <span className="text-destructive ml-1">*</span>}
-                </label>
-                <Select
-                  value={draftCompletedById || "unassigned"}
-                  onValueChange={(value) =>
-                    setDraftCompletedById(value === "unassigned" ? null : value)
-                  }
-                >
-                  <SelectTrigger className="mt-1" data-testid="select-completion-completed-by">
-                    <SelectValue placeholder="Select staff" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Not assigned</SelectItem>
-                    {staff.filter((s) => s.active !== false || s.id === draftCompletedById).map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}{s.active === false ? " (disabled)" : ""}</SelectItem>
+              {!draftTeamMode ? (
+                <div>
+                  <div className="flex items-end justify-between gap-2">
+                    <label className="text-xs text-muted-foreground">
+                      Completed By
+                      {isEmbroidery && <span className="text-destructive ml-1">*</span>}
+                    </label>
+                    {item.id && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={startTeamMode}
+                        data-testid="button-completion-team"
+                      >
+                        <Users className="w-4 h-4 mr-1" />
+                        Team effort
+                      </Button>
+                    )}
+                  </div>
+                  <Select
+                    value={draftCompletedById || "unassigned"}
+                    onValueChange={(value) =>
+                      setDraftCompletedById(value === "unassigned" ? null : value)
+                    }
+                  >
+                    <SelectTrigger className="mt-1" data-testid="select-completion-completed-by">
+                      <SelectValue placeholder="Select staff" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Not assigned</SelectItem>
+                      {staff.filter((s) => s.active !== false || s.id === draftCompletedById).map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}{s.active === false ? " (disabled)" : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-end justify-between gap-2">
+                    <label className="text-xs text-muted-foreground">
+                      Team effort — who did what
+                      <span className="text-destructive ml-1">*</span>
+                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setDraftTeamMode(false); setDraftTeam([]); }}
+                      data-testid="button-completion-solo"
+                    >
+                      Riding solo
+                    </Button>
+                  </div>
+                  <div className="space-y-2 mt-1">
+                    {draftTeam.map((row, ri) => (
+                      <div key={ri} className="flex items-center gap-2" data-testid={`row-team-member-${ri}`}>
+                        <Select
+                          value={row.staffId || "none"}
+                          onValueChange={(value) =>
+                            setDraftTeam((prev) => prev.map((r, i) => i === ri ? { ...r, staffId: value === "none" ? "" : value } : r))
+                          }
+                        >
+                          <SelectTrigger className="flex-1 min-w-0" data-testid={`select-team-member-${ri}`}>
+                            <SelectValue placeholder="Person" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Person…</SelectItem>
+                            {staff.filter((s) => s.active !== false || s.id === row.staffId).map((s) => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}{s.active === false ? " (disabled)" : ""}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={row.quantity}
+                          onChange={(e) =>
+                            setDraftTeam((prev) => prev.map((r, i) => i === ri ? { ...r, quantity: e.target.value } : r))
+                          }
+                          placeholder="Qty"
+                          className="w-20 font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          data-testid={`input-team-qty-${ri}`}
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          value={row.minutes === null ? "" : Math.floor(row.minutes / 60)}
+                          onChange={(e) => {
+                            const hours = parseInt(e.target.value) || 0;
+                            setDraftTeam((prev) => prev.map((r, i) => {
+                              if (i !== ri) return r;
+                              const mins = (r.minutes ?? 0) % 60;
+                              const total = hours * 60 + mins;
+                              return { ...r, minutes: total > 0 ? total : null };
+                            }));
+                          }}
+                          placeholder="hrs"
+                          className="w-16 font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          data-testid={`input-team-hours-${ri}`}
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          max="59"
+                          value={row.minutes === null ? "" : row.minutes % 60}
+                          onChange={(e) => {
+                            const mins = Math.min(59, parseInt(e.target.value) || 0);
+                            setDraftTeam((prev) => prev.map((r, i) => {
+                              if (i !== ri) return r;
+                              const hours = Math.floor((r.minutes ?? 0) / 60);
+                              const total = hours * 60 + mins;
+                              return { ...r, minutes: total > 0 ? total : null };
+                            }));
+                          }}
+                          placeholder="mins"
+                          className="w-16 font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          data-testid={`input-team-mins-${ri}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDraftTeam((prev) => prev.filter((_, i) => i !== ri))}
+                          disabled={draftTeam.length <= 2}
+                          data-testid={`button-team-remove-${ri}`}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDraftTeam((prev) => [...prev, { staffId: "", quantity: "", minutes: null }])}
+                        data-testid="button-team-add"
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add person
+                      </Button>
+                      {(() => {
+                        const total = draftTeam.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+                        const ok = total === completionRemaining;
+                        return (
+                          <span
+                            className={`text-xs ${ok ? "text-muted-foreground" : "text-destructive"}`}
+                            data-testid="text-team-total"
+                          >
+                            {total} of {completionRemaining}
+                            {completionRemaining !== item.quantity ? ` outstanding (of ${item.quantity})` : ""}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="text-xs text-muted-foreground">Completed Date</label>
                 <Popover>
@@ -1433,7 +1678,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                   </PopoverContent>
                 </Popover>
               </div>
-              {isEmbroidery && (
+              {isEmbroidery && !draftTeamMode && (
                 <div>
                   <label className="text-xs text-muted-foreground">
                     Production Time
