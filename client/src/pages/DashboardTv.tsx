@@ -257,6 +257,10 @@ function useKeepAwake(enabled: boolean) {
         video.style.height = "180px";
         video.style.pointerEvents = "none";
         video.style.zIndex = "0";
+        // Practically invisible so it never covers dashboard data, but not
+        // opacity:0 / display:none — those make browsers treat the video as
+        // hidden and ignore its keep-awake effect.
+        video.style.opacity = "0.01";
         document.body.appendChild(video);
         void video.play().catch(() => {});
         // Autoplay can be blocked until the first remote/mouse input —
