@@ -29,6 +29,8 @@ interface MachineSheetJob {
   position: string | null;
   quantity: number | null;
   stitchCount: number | null;
+  estimatedMinutes: number | null;
+  carriedOver?: boolean;
 }
 
 interface MachineSheet {
@@ -65,6 +67,8 @@ interface StaffSheetJob {
   position: string | null;
   quantity: number | null;
   stitchCount: number | null;
+  estimatedMinutes: number | null;
+  carriedOver?: boolean;
 }
 
 interface StaffSheet {
@@ -105,6 +109,8 @@ interface BoardJob {
   position: string | null;
   quantity: number | null;
   stitchCount: number | null;
+  estimatedMinutes: number | null;
+  carriedOver: boolean;
   contextLabel: string;
 }
 
@@ -160,6 +166,8 @@ function toBoardData(
           position: j.position,
           quantity: j.quantity,
           stitchCount: j.stitchCount,
+          estimatedMinutes: j.estimatedMinutes ?? null,
+          carriedOver: j.carriedOver ?? false,
           contextLabel: j.operatorName,
         })),
       })),
@@ -187,6 +195,8 @@ function toBoardData(
         position: j.position,
         quantity: j.quantity,
         stitchCount: j.stitchCount,
+        estimatedMinutes: j.estimatedMinutes ?? null,
+        carriedOver: j.carriedOver ?? false,
         contextLabel: j.machineName,
       })),
     })),
@@ -281,7 +291,7 @@ function buildColumnSection(
           const rows = group.jobs
             .map((job) => {
               return `<tr>
-                <td>${minutesToLabel(job.startTime)}–${minutesToLabel(job.endTime)}</td>
+                <td class="num">${minutesToDuration(job.estimatedMinutes ?? (job.endTime - job.startTime))}</td>
                 <td>${job.jobNumber ?? "—"}</td>
                 <td>${escapeHtml(job.customerName)}</td>
                 <td>${escapeHtml(job.jobName)}</td>
@@ -297,7 +307,7 @@ function buildColumnSection(
             <table>
               <thead>
                 <tr>
-                  <th>Time</th><th>Job #</th><th>Customer</th><th>Job</th>
+                  <th class="num">Est. time</th><th>Job #</th><th>Customer</th><th>Job</th>
                   <th>${escapeHtml(labels.jobContext)}</th>
                   <th>Due</th><th class="num">Qty</th><th class="num">Stitches</th>
                 </tr>
@@ -402,7 +412,7 @@ function buildStaffJobListDocument(staffData: StaffSheetResponse): string {
                 <td>${escapeHtml(job.jobName)}</td>
                 <td>${escapeHtml(job.customerName)}</td>
                 <td class="num">${job.quantity ?? "—"}</td>
-                <td class="num">${minutesToDuration(job.endTime - job.startTime)}</td>
+                <td class="num">${minutesToDuration(job.estimatedMinutes ?? (job.endTime - job.startTime))}</td>
                 <td class="actual"></td>
               </tr>`,
             )
@@ -718,16 +728,37 @@ export function MachineScheduleBoard() {
                                     className="rounded-md border p-2 text-xs"
                                     data-testid={`job-${job.scheduleId}`}
                                   >
-                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <div className="flex justify-between gap-2">
                                       <span className="font-medium">
                                         {job.jobNumber ? `#${job.jobNumber} ` : ""}
-                                        {job.customerName}
+                                        {job.jobName}
                                       </span>
-                                      <span className="text-muted-foreground tabular-nums">
-                                        {minutesToLabel(job.startTime)}–{minutesToLabel(job.endTime)}
-                                      </span>
+                                      <div className="text-right shrink-0">
+                                        <div
+                                          className="tabular-nums font-medium"
+                                          data-testid={`text-est-${job.scheduleId}`}
+                                        >
+                                          {minutesToDuration(job.estimatedMinutes ?? (job.endTime - job.startTime))}
+                                        </div>
+                                        {job.quantity != null && (
+                                          <div className="text-muted-foreground">{job.quantity} pcs</div>
+                                        )}
+                                        {job.stitchCount != null && (
+                                          <div className="text-muted-foreground">
+                                            {job.stitchCount.toLocaleString()} stitches
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
-                                    <div className="text-muted-foreground">{job.jobName}</div>
+                                    <div className="text-muted-foreground">{job.customerName}</div>
+                                    {job.carriedOver && (
+                                      <div
+                                        className="text-amber-600 dark:text-amber-400"
+                                        data-testid={`text-carried-${job.scheduleId}`}
+                                      >
+                                        Outstanding from earlier
+                                      </div>
+                                    )}
                                     {job.contextLabel ? (
                                       <div
                                         className="flex items-center gap-1 text-muted-foreground"
@@ -747,13 +778,11 @@ export function MachineScheduleBoard() {
                                     >
                                       Due {formatDue(job.requiredDispatchDate)}
                                     </div>
-                                    <div className="text-muted-foreground">
-                                      {[job.position, job.description].filter(Boolean).join(" — ")}
-                                      {job.quantity != null ? ` · ${job.quantity} pcs` : ""}
-                                      {job.stitchCount != null
-                                        ? ` · ${job.stitchCount.toLocaleString()} st`
-                                        : ""}
-                                    </div>
+                                    {(job.position || job.description) && (
+                                      <div className="text-muted-foreground">
+                                        {[job.position, job.description].filter(Boolean).join(" — ")}
+                                      </div>
+                                    )}
                                   </li>
                                 ))}
                               </ul>

@@ -22,6 +22,8 @@
 
 - [Staff active flag](staff-active-flag.md) — leavers get active=false (never delete: wipes history); every NEW staff picker & scheduling candidate list must filter it, historical views must NOT.
 
+- [Sheet carry-over](sheet-carry-over.md) — unfinished past bookings fold into today on machine/staff sheets; carried rows belong to TODAY's allocated staff, not the original past staffId.
+
 - [Machine-sheet day keys & operators](machine-sheet-date-keys.md) — server owns the yyyy-MM-dd dateKey (never recompute client-side: UTC vs local diverges); per-day operator = Staff Allocations, defaultOperatorId only a fallback.
 
 - [Print machine convention](print-machine-convention.md) — Print jobs force-routed to machine id 6 (operator Mollie); won't appear on the timeline until the operator has staff shifts (scheduler gates slots on shifts).

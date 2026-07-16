@@ -6744,6 +6744,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Machine Sheet — per-machine list of scheduled jobs + operator for the next N days
   // Used by the printable "pill view" handouts on the main screen.
+  // Shared by machine-sheet and staff-sheet: fold unfinished past-day bookings
+  // into today's list. A past schedule is carried over when its line item is
+  // still outstanding, has no booking today-or-later, and the job is still live.
+  // Only the most recent past booking per line item is kept (no duplicates).
+  function buildCarryOver<S extends { id: string; scheduledDate: Date | string; lineItemId: string | null; jobId: string }>(
+    rawSchedules: S[],
+    startDate: Date,
+    lineItemById: Map<string, { id: string; completed: boolean | null }>,
+    jobById: Map<string, { status: string }>,
+  ): { schedules: S[]; carriedIds: Set<string> } {
+    const dayTime = (d: Date | string) => new Date(d).setHours(0, 0, 0, 0);
+    const isPast = (d: Date | string) => dayTime(d) < startDate.getTime();
+    const hasCurrentBooking = new Set<string>();
+    for (const s of rawSchedules) {
+      if (!isPast(s.scheduledDate) && s.lineItemId) hasCurrentBooking.add(s.lineItemId);
+    }
+    const LIVE_STATUSES = new Set(["pending", "production"]);
+    const carryByLineItem = new Map<string, S>();
+    for (const s of rawSchedules) {
+      if (!isPast(s.scheduledDate) || !s.lineItemId) continue;
+      const li = lineItemById.get(s.lineItemId);
+      if (!li || li.completed || hasCurrentBooking.has(li.id)) continue;
+      const job = jobById.get(s.jobId);
+      if (!job || !LIVE_STATUSES.has(job.status)) continue;
+      const prev = carryByLineItem.get(li.id);
+      if (
+        !prev ||
+        dayTime(s.scheduledDate) > dayTime(prev.scheduledDate) ||
+        (dayTime(s.scheduledDate) === dayTime(prev.scheduledDate) &&
+          (s as any).startTime > (prev as any).startTime)
+      ) {
+        carryByLineItem.set(li.id, s);
+      }
+    }
+    const carriedIds = new Set(Array.from(carryByLineItem.values()).map(s => s.id));
+    return {
+      schedules: rawSchedules.filter(s => !isPast(s.scheduledDate) || carriedIds.has(s.id)),
+      carriedIds,
+    };
+  }
+
   app.get("/api/scheduling/machine-sheet", isStaffAuthenticated, async (req, res) => {
     try {
       // `days=all` shows every scheduled job from today onward (no upper bound);
@@ -6762,10 +6803,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDate.setHours(23, 59, 59, 999);
       }
 
-      const [allMachines, allStaff, schedules, allLineItems, allJobs, customers, allocations] = await Promise.all([
+      // Look back 30 days so unfinished work booked on past days can be carried
+      // forward onto today's sheet instead of silently disappearing.
+      const lookbackStart = new Date(startDate);
+      lookbackStart.setDate(lookbackStart.getDate() - 30);
+
+      const [allMachines, allStaff, rawSchedules, allLineItems, allJobs, customers, allocations] = await Promise.all([
         storage.getMachines(),
         storage.getStaff(),
-        storage.getJobSchedules(undefined, undefined, undefined, startDate, endDate),
+        storage.getJobSchedules(undefined, undefined, undefined, lookbackStart, endDate),
         storage.getAllJobLineItems(),
         storage.getJobs(),
         storage.getCustomers(),
@@ -6780,6 +6826,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lineItemById = new Map(allLineItems.map(li => [li.id, li]));
       const jobById = new Map(allJobs.map(j => [j.id, j]));
       const customerById = new Map(customers.map(c => [c.id, c]));
+      const machineById = new Map(allMachines.map(m => [m.id, m]));
+
+      // Carry-over: a past-day schedule whose line item is still outstanding (and
+      // has no booking today or later) is shown under TODAY, flagged carriedOver.
+      const { schedules, carriedIds } = buildCarryOver(rawSchedules, startDate, lineItemById, jobById);
+
+      // Estimated production time for a line item on its machine (same formula
+      // used everywhere else in the app).
+      const estimateMinutes = (li: typeof allLineItems[number]): number | null => {
+        if (!li.machineId || li.stitchCount <= 0 || li.quantity <= 0) return null;
+        const machine = machineById.get(li.machineId);
+        const heads = machine?.heads || 6;
+        const spm = machine?.stitchesPerMinute || 750;
+        const changeover = machine?.changeoverTimeMinutes || 3;
+        const multiplier = machine?.schedulingMultiplier ?? 1;
+        const runs = Math.ceil(li.quantity / heads);
+        return Math.ceil((runs * ((li.stitchCount / spm) + changeover) * multiplier) / 10) * 10;
+      };
 
       // Build the list of calendar days in the window (local time, matching the
       // yyyy-MM-dd keys the frontend derives from each job's date).
@@ -6850,10 +6914,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const job = jobById.get(s.jobId);
               const customer = job ? customerById.get(job.customerId) : undefined;
               const sched = staffById.get(s.staffId);
+              const carried = carriedIds.has(s.id);
               return {
                 scheduleId: s.id,
                 date: s.scheduledDate,
-                dateKey: ymd(new Date(s.scheduledDate)),
+                // Carried-over work is shown under today, not its original past day.
+                dateKey: carried ? ymd(startDate) : ymd(new Date(s.scheduledDate)),
+                carriedOver: carried,
                 startTime: s.startTime,
                 endTime: s.endTime,
                 operatorId: s.staffId,
@@ -6867,6 +6934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 position: lineItem?.position ?? null,
                 quantity: lineItem?.quantity ?? null,
                 stitchCount: lineItem?.stitchCount ?? null,
+                estimatedMinutes: lineItem ? estimateMinutes(lineItem) : null,
               };
             })
             .sort((a, b) => {
@@ -6919,10 +6987,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDate.setHours(23, 59, 59, 999);
       }
 
-      const [allMachines, allStaff, schedules, allLineItems, allJobs, customers, allocations] = await Promise.all([
+      // Same 30-day lookback as the machine sheet so unfinished past work is
+      // carried forward onto today's list.
+      const lookbackStart = new Date(startDate);
+      lookbackStart.setDate(lookbackStart.getDate() - 30);
+
+      const [allMachines, allStaff, rawSchedules, allLineItems, allJobs, customers, allocations] = await Promise.all([
         storage.getMachines(),
         storage.getStaff(),
-        storage.getJobSchedules(undefined, undefined, undefined, startDate, endDate),
+        storage.getJobSchedules(undefined, undefined, undefined, lookbackStart, endDate),
         storage.getAllJobLineItems(),
         storage.getJobs(),
         storage.getCustomers(),
@@ -6934,6 +7007,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lineItemById = new Map(allLineItems.map(li => [li.id, li]));
       const jobById = new Map(allJobs.map(j => [j.id, j]));
       const customerById = new Map(customers.map(c => [c.id, c]));
+
+      const { schedules, carriedIds } = buildCarryOver(rawSchedules, startDate, lineItemById, jobById);
+
+      const estimateMinutes = (li: typeof allLineItems[number]): number | null => {
+        if (!li.machineId || li.stitchCount <= 0 || li.quantity <= 0) return null;
+        const machine = machineById.get(li.machineId);
+        const heads = machine?.heads || 6;
+        const spm = machine?.stitchesPerMinute || 750;
+        const changeover = machine?.changeoverTimeMinutes || 3;
+        const multiplier = machine?.schedulingMultiplier ?? 1;
+        const runs = Math.ceil(li.quantity / heads);
+        return Math.ceil((runs * ((li.stitchCount / spm) + changeover) * multiplier) / 10) * 10;
+      };
 
       const ymd = (d: Date) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -6979,8 +7065,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const staffIdsForSchedule = new Map<string, Set<string>>();
       for (const s of schedules) {
         const ids = new Set<string>();
-        if (s.staffId) ids.add(s.staffId);
-        const sd = new Date(s.scheduledDate);
+        const isCarried = carriedIds.has(s.id);
+        // Carried-over work belongs to whoever runs the machine TODAY, not to
+        // whoever was booked on the original past day.
+        if (s.staffId && !isCarried) ids.add(s.staffId);
+        const sd = isCarried ? startDate : new Date(s.scheduledDate);
         for (const a of allocations) {
           if (a.machineId !== s.machineId) continue;
           const ad = new Date(a.date);
@@ -7028,10 +7117,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const job = jobById.get(s.jobId);
               const customer = job ? customerById.get(job.customerId) : undefined;
               const machine = machineById.get(s.machineId);
+              const carried = carriedIds.has(s.id);
               return {
                 scheduleId: s.id,
                 date: s.scheduledDate,
-                dateKey: ymd(new Date(s.scheduledDate)),
+                dateKey: carried ? ymd(startDate) : ymd(new Date(s.scheduledDate)),
+                carriedOver: carried,
                 startTime: s.startTime,
                 endTime: s.endTime,
                 machineId: s.machineId,
@@ -7045,6 +7136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 position: lineItem?.position ?? null,
                 quantity: lineItem?.quantity ?? null,
                 stitchCount: lineItem?.stitchCount ?? null,
+                estimatedMinutes: lineItem ? estimateMinutes(lineItem) : null,
               };
             })
             .sort((a, b) => {
