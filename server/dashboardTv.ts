@@ -638,7 +638,7 @@ export async function buildDashboardTvData() {
     if (!job || job.completed) continue;
     upcomingCountByStaff.set(sc.staffId, (upcomingCountByStaff.get(sc.staffId) ?? 0) + 1);
     const arr = upcomingByStaff.get(sc.staffId) ?? [];
-    if (arr.length < 4) {
+    if (arr.length < 6) {
       const cust = customerName.get(job.customerId) ?? "";
       const label = cust ? `${cust} — ${job.jobName}` : job.jobName;
       // Skip duplicates of the same job on the same day

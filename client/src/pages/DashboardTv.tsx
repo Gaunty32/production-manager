@@ -836,7 +836,7 @@ function OperativesPage({ data }: { data: TvData }) {
   const cols = n <= 4 ? 2 : n <= 6 ? 3 : 4;
   const rows = Math.ceil(n / cols);
   const compact = rows >= 2 && cols >= 3;
-  const jobsShown = compact ? 2 : rows >= 2 ? 3 : 4;
+  const jobsShown = compact ? 4 : rows >= 2 ? 5 : 6;
 
   return (
     <div className="flex flex-col h-full gap-5">
