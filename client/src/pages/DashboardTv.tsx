@@ -107,6 +107,9 @@ interface TvData {
 
 interface PlanItem {
   jobLabel: string;
+  jobName?: string;
+  customer?: string | null;
+  estMinutes?: number;
   machine: string | null;
   operator: string | null;
   start: string;
@@ -458,6 +461,14 @@ function PageHeader({ title, lastUpdated }: { title: string; lastUpdated: string
 }
 
 // ── Page: Today's plan — per-person to-do list + machine line-up ─────────────
+function formatEstTime(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
 function PlanItemRow({ item, showMachine }: { item: PlanItem; showMachine: boolean }) {
   return (
     <div className="flex items-start gap-3" data-testid="row-plan-item">
@@ -468,12 +479,19 @@ function PlanItemRow({ item, showMachine }: { item: PlanItem; showMachine: boole
       )}
       <div className="flex-1 min-w-0">
         <div
-          className={`text-xl truncate ${item.done ? "text-slate-500 line-through" : "text-slate-200"}`}
+          className={`text-xl font-semibold truncate ${item.done ? "text-slate-500 line-through" : "text-slate-200"}`}
         >
-          {item.jobLabel}
+          {item.jobName || item.jobLabel}
         </div>
-        <div className="flex items-center gap-2 text-base">
-          <span className="text-slate-500 whitespace-nowrap">{item.start}</span>
+        <div className="flex items-center gap-2 text-base min-w-0">
+          {item.customer && (
+            <span className="text-slate-500 truncate">{item.customer}</span>
+          )}
+          {typeof item.estMinutes === "number" && item.estMinutes > 0 && (
+            <span className="text-slate-400 whitespace-nowrap">
+              est. {formatEstTime(item.estMinutes)}
+            </span>
+          )}
           {showMachine && item.machine && (
             <span className="text-slate-400 whitespace-nowrap rounded-md bg-slate-800 ring-1 ring-slate-700 px-2 py-0.5">
               {item.machine}

@@ -758,6 +758,9 @@ export async function buildDashboardTvData() {
 
   type PlanRow = {
     jobLabel: string;
+    jobName: string;
+    customer: string | null;
+    estMinutes: number;
     machine: string | null;
     operator: string | null;
     start: string;
@@ -804,6 +807,9 @@ export async function buildDashboardTvData() {
     const jobLabel = cust ? `${cust} — ${job.jobName}` : job.jobName;
     const row: PlanRow = {
       jobLabel,
+      jobName: job.jobName,
+      customer: cust || null,
+      estMinutes: Math.max(0, sc.endTime - sc.startTime),
       machine: machineById.get(sc.machineId)?.name ?? null,
       operator:
         sc.staffId && activeStaffIdSet.has(sc.staffId)
@@ -818,8 +824,14 @@ export async function buildDashboardTvData() {
     };
 
     const itemKey = sc.lineItemId ?? `${sc.jobId}:${sc.startTime}:${sc.id}`;
-    const assignees = new Set<string>(staffAllocatedToMachineToday(sc.machineId));
-    if (sc.staffId && activeStaffIdSet.has(sc.staffId)) assignees.add(sc.staffId);
+    // If the scheduler picked a specific person, the item belongs to them
+    // alone. Only fan out to everyone allocated to the machine when the
+    // booking has no named person.
+    const assignees = new Set<string>(
+      sc.staffId && activeStaffIdSet.has(sc.staffId)
+        ? [sc.staffId]
+        : staffAllocatedToMachineToday(sc.machineId),
+    );
     for (const staffId of Array.from(assignees)) {
       const pKey = `${staffId}:${itemKey}`;
       if (!seenPersonItem.has(pKey)) {
