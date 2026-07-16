@@ -876,6 +876,8 @@ export async function buildDashboardTvData() {
   type UpNextRow = {
     id: string;
     jobLabel: string;
+    customer: string;
+    jobType: string;
     quantity: number;
     person: string | null;
     machine: string | null;
@@ -890,7 +892,7 @@ export async function buildDashboardTvData() {
     if (cust?.requiresAdvancePayment && !j.paymentReceived) continue;
     const due = dueDateStr(j.id, j);
     const custName = customerName.get(j.customerId) ?? "";
-    const jobLabel = custName ? `${j.jobName} — ${custName}` : j.jobName;
+    const jobLabel = j.jobName;
     for (const li of lineItemsByJob.get(j.id) ?? []) {
       if (li.completed) continue;
       const remaining = remainingForLineItem(li);
@@ -901,6 +903,8 @@ export async function buildDashboardTvData() {
       upNextRows.push({
         id: li.id,
         jobLabel,
+        customer: custName,
+        jobType: (li.jobType ?? "").toLowerCase(),
         quantity: remaining,
         person: opId && activeStaffIdSet.has(opId) ? staffName.get(opId) ?? null : null,
         machine: li.machineId ? machineById.get(li.machineId)?.name ?? null : null,

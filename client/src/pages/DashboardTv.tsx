@@ -96,6 +96,8 @@ interface TvData {
     rows: {
       id: string;
       jobLabel: string;
+      customer: string;
+      jobType: string;
       quantity: number;
       person: string | null;
       machine: string | null;
@@ -672,6 +674,13 @@ function DueOutPage({ data }: { data: TvData }) {
 }
 
 // ── Final page: Up Next — the jobs to be done next ──────────────────────────
+// Job-type colours for the Up Next job names
+const JOB_TYPE_COLORS: Record<string, string> = {
+  embroidery: "#60a5fa", // blue
+  print: "#fbbf24", // amber
+  dtf: "#f472b6", // pink
+};
+
 const UP_NEXT_STATUS = {
   overdue: { color: "#ef4444", label: "OVERDUE", flash: true },
   today: { color: "#ef4444", label: "DUE TODAY", flash: true },
@@ -692,8 +701,9 @@ function UpNextPage({ data }: { data: TvData }) {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-[1fr_150px_220px_220px_280px] gap-4 px-4 pb-3 text-xl font-bold text-slate-400 uppercase tracking-wider">
+            <div className="grid grid-cols-[1.2fr_0.8fr_150px_200px_200px_240px] gap-4 px-4 pb-3 text-xl font-bold text-slate-400 uppercase tracking-wider">
               <div>Job</div>
+              <div>Customer</div>
               <div className="text-right">Quantity</div>
               <div>Person</div>
               <div>Machine</div>
@@ -705,14 +715,20 @@ function UpNextPage({ data }: { data: TvData }) {
                 return (
                   <div
                     key={r.id}
-                    className={`grid grid-cols-[1fr_150px_220px_220px_280px] gap-4 items-center rounded-xl px-4 py-3${s.flash ? " animate-pulse" : ""}`}
+                    className={`grid grid-cols-[1.2fr_0.8fr_150px_200px_200px_240px] gap-4 items-center rounded-xl px-4 py-3${s.flash ? " animate-pulse" : ""}`}
                     style={{
                       backgroundColor: `${s.color}${r.status === "later" ? "14" : "26"}`,
                       border: `2px solid ${s.color}${r.status === "later" ? "33" : "77"}`,
                     }}
                     data-testid={`row-upnext-${r.id}`}
                   >
-                    <div className="text-2xl font-bold truncate">{r.jobLabel}</div>
+                    <div
+                      className="text-2xl font-bold leading-tight break-words"
+                      style={{ color: JOB_TYPE_COLORS[r.jobType] ?? "#e2e8f0" }}
+                    >
+                      {r.jobLabel}
+                    </div>
+                    <div className="text-2xl text-slate-300 truncate">{r.customer || "—"}</div>
                     <div className="text-2xl font-black text-right" style={{ color: r.status === "later" ? "#e2e8f0" : s.color }}>
                       {num(r.quantity)}
                     </div>
