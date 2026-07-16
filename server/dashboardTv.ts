@@ -714,8 +714,10 @@ export async function buildDashboardTvData() {
     const due = dueDateStr(j.id, j);
     if (!due || due > in48Str) continue;
     const items = lineItemsByJob.get(j.id) ?? [];
-    // All line items done = job is effectively finished, just not flagged yet
-    if (items.length > 0 && items.every((li) => li.completed)) continue;
+    // All line items done = job is effectively finished, just not flagged yet.
+    // "Done" means either ticked complete OR nothing outstanding (fully
+    // produced via partial entries) — same rule as the Production Queue.
+    if (items.length > 0 && items.every((li) => li.completed || remainingForLineItem(li) <= 0)) continue;
     let garmentsRemaining = 0;
     const allocatedTo: string[] = [];
     for (const li of items) {
