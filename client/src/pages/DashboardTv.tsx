@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Circle } from "lucide-react";
+import sbsLogo from "@assets/logo_transparent.png";
 
 interface TvData {
   lastUpdated: string;
@@ -443,7 +444,12 @@ export default function DashboardTv() {
 function PageHeader({ title, lastUpdated }: { title: string; lastUpdated: string }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <div className="text-5xl font-black tracking-tight">{title}</div>
+      <div className="flex items-center gap-5">
+        <div className="bg-white rounded-md px-3 py-1.5 flex items-center">
+          <img src={sbsLogo} alt="Select Branding Solutions" className="h-12 w-auto" data-testid="img-tv-logo" />
+        </div>
+        <div className="text-5xl font-black tracking-tight">{title}</div>
+      </div>
       <div className="text-2xl text-slate-400" data-testid="text-last-updated">
         Last updated {lastUpdated}
       </div>
@@ -748,7 +754,6 @@ function TeamGoalPage({ data }: { data: TvData }) {
   const g = data.teamGoal;
   const top = g.contributors.slice(0, 6);
   const maxGarments = Math.max(1, ...top.map((c) => c.garmentsThisWeek));
-  const delta = g.completedThisWeek - g.completedLastWeek;
 
   return (
     <div className="flex flex-col h-full gap-5">
@@ -787,15 +792,7 @@ function TeamGoalPage({ data }: { data: TvData }) {
               >
                 {num(g.completedThisWeek)}
               </div>
-              <div className="pb-2">
-                <div
-                  className="text-3xl font-bold"
-                  style={{ color: delta >= 0 ? STATUS_COLOR.green : STATUS_COLOR.amber }}
-                >
-                  {delta >= 0 ? "▲" : "▼"} {num(Math.abs(delta))}
-                </div>
-                <div className="text-xl text-slate-400">vs last week ({num(g.completedLastWeek)})</div>
-              </div>
+              <div className="pb-3 text-2xl text-slate-400">garments finished</div>
             </div>
           </Panel>
 
