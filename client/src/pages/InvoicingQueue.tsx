@@ -1497,12 +1497,12 @@ export default function InvoicingQueue() {
   const isLoading = jobsLoading || customersLoading;
 
   return (
-    <div className="h-full overflow-auto p-6">
+    <div className="h-full overflow-auto p-4 sm:p-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Draft Invoicing Queue</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Draft Invoicing Queue</h1>
               <p className="text-muted-foreground mt-2">
                 Review and consolidate completed orders by customer for invoice generation
               </p>
@@ -1619,8 +1619,8 @@ export default function InvoicingQueue() {
               return (
                 <Card key={customerId} data-testid={`invoice-group-${customerId}`}>
                   <CardHeader>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3 flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 flex-1 min-w-[240px]">
                         {customerJobs.length > 0 && (
                           <Checkbox
                             checked={allSelected}
@@ -1644,9 +1644,9 @@ export default function InvoicingQueue() {
                           </CardDescription>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                         {canViewPrices(user?.role) && (
-                          <div className="text-right">
+                          <div className="text-right mr-auto sm:mr-0">
                             <p className="text-sm text-muted-foreground">
                               {canInvoiceLogoSetupsOnly ? "Logo Set-up Total" : "Selected Total"}
                             </p>
@@ -1745,15 +1745,15 @@ export default function InvoicingQueue() {
                               data-testid={`checkbox-job-${job.id}`}
                             />
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1">
-                                  <h4 className="font-semibold">{job.jobName}</h4>
+                              <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
+                                <div className="flex-1 min-w-[180px]">
+                                  <h4 className="font-semibold break-words">{job.jobName}</h4>
                                   {job.poNumber && (
                                     <p className="text-sm text-muted-foreground mt-1">
                                       PO: {job.poNumber}
                                     </p>
                                   )}
-                                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                                     {job.requiredDispatchDate && (
                                       <div className="flex items-center gap-1">
                                         <Calendar className="h-3 w-3" />
@@ -1778,8 +1778,8 @@ export default function InvoicingQueue() {
                                     const jobCustomer = customers.find(c => c.id === job.customerId);
                                     const pricingTable = jobCustomer?.pricingTable2026 ? "2026" : jobCustomer?.pricingTable2025 ? "2025" : null;
                                     return (
-                                      <div className="mt-3 overflow-hidden rounded-md border">
-                                        <table className="w-full text-xs">
+                                      <div className="mt-3 overflow-x-auto rounded-md border">
+                                        <table className="w-full min-w-[420px] text-xs">
                                           <thead>
                                             <tr className="bg-muted/50 border-b">
                                               <th className="text-left px-3 py-2 font-medium text-muted-foreground">Description</th>
@@ -1857,8 +1857,8 @@ export default function InvoicingQueue() {
                                   })()}
                                   {job.shippingMethod && (
                                     <div className="flex flex-col gap-1 mt-2 text-sm">
-                                      <div className="flex items-center gap-2">
-                                        <Truck className="h-3 w-3 text-muted-foreground" />
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Truck className="h-3 w-3 text-muted-foreground shrink-0" />
                                         <span className="text-muted-foreground">
                                           {job.shippingMethod === 'free_local' && 'Free local delivery — Tim delivers Tuesdays & Fridays before lunchtime'}
                                           {job.shippingMethod === 'customer_collection' && 'Customer Collection'}
@@ -1900,7 +1900,7 @@ export default function InvoicingQueue() {
                                         </div>
                                       )}
                                       {job.packageCount && job.packageType && (
-                                        <div className="flex items-center gap-2 ml-5">
+                                        <div className="flex flex-wrap items-center gap-2 ml-5">
                                           <Package className="h-3 w-3 text-muted-foreground" />
                                           <span className="text-muted-foreground">
                                             {job.packageCount} {job.packageType === 'boxes' ? (job.packageCount === 1 ? 'Box' : 'Boxes') : (job.packageCount === 1 ? 'Bag' : 'Bags')}
@@ -1965,8 +1965,8 @@ export default function InvoicingQueue() {
                                     <div className="mt-4 space-y-2">
                                       <p className="text-sm font-medium text-muted-foreground">Manual Pricing Required:</p>
                                       {lineItems.filter(item => needsManualPrice(item)).map(item => (
-                                        <div key={item.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-md">
-                                          <div className="flex-1">
+                                        <div key={item.id} className="flex flex-wrap items-center gap-3 p-3 bg-muted/50 rounded-md">
+                                          <div className="flex-1 min-w-[160px]">
                                             <p className="text-sm font-medium">
                                               {item.description || `${item.quantity} units @ ${item.stitchCount.toLocaleString()} stitches`}
                                             </p>
@@ -2137,8 +2137,8 @@ export default function InvoicingQueue() {
                                 </Button>
                               )}
                             </div>
-                            <div className="rounded-lg border overflow-hidden">
-                              <table className="w-full text-sm" data-testid={`table-invoice-preview-${customerId}`}>
+                            <div className="rounded-lg border overflow-x-auto">
+                              <table className="w-full min-w-[560px] text-sm" data-testid={`table-invoice-preview-${customerId}`}>
                                 <thead>
                                   <tr className="bg-muted/50">
                                     <th className="text-left p-2 font-medium text-muted-foreground">Item Code</th>
