@@ -1893,8 +1893,8 @@ export default function InvoicingQueue() {
                                         )}
                                       </div>
                                       {consolidatedJobs.length > 0 && (
-                                        <div className="flex items-center gap-2 ml-5">
-                                          <span className="text-muted-foreground">
+                                        <div className="flex flex-wrap items-center gap-2 ml-5 min-w-0">
+                                          <span className="text-muted-foreground break-words">
                                             Consolidated with: {consolidatedJobs.map(cj => cj.jobName).join(', ')}
                                           </span>
                                         </div>
