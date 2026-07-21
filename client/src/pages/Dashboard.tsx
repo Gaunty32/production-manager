@@ -550,16 +550,21 @@ export default function Dashboard() {
     }
   });
 
-  // Calculate key metrics for at-a-glance view
+  // Calculate key metrics for at-a-glance view.
+  // Jobs with no line items are still "Awaiting Line Items" (not in production),
+  // and jobs whose line items are all done are finished — neither counts here.
+  const countsForDeadlines = (job: (typeof allProductionJobs)[number]) =>
+    !!job.lineItems && job.lineItems.length > 0 && job.lineItems.some(item => !item.completed);
+
   const overdueOrders = allProductionJobs.filter(job => {
-    if (!job.requiredDispatchDate) return false;
+    if (!job.requiredDispatchDate || !countsForDeadlines(job)) return false;
     const dispatchDate = new Date(job.requiredDispatchDate);
     return isPast(dispatchDate) && !isToday(dispatchDate);
   });
   
   // Jobs due today
   const jobsDueToday = allProductionJobs.filter(job => {
-    if (!job.requiredDispatchDate) return false;
+    if (!job.requiredDispatchDate || !countsForDeadlines(job)) return false;
     const dispatchDate = new Date(job.requiredDispatchDate);
     return isToday(dispatchDate);
   });
@@ -570,7 +575,7 @@ export default function Dashboard() {
   const day3End = endOfDay(addDays(now, 3));
   
   const jobsDueIn3Days = allProductionJobs.filter(job => {
-    if (!job.requiredDispatchDate) return false;
+    if (!job.requiredDispatchDate || !countsForDeadlines(job)) return false;
     const dispatchDate = new Date(job.requiredDispatchDate);
     // Within calendar day 3 from now
     return dispatchDate >= day3Start && dispatchDate <= day3End;
