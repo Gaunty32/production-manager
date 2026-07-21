@@ -63,7 +63,7 @@ import type { Customer, Job, JobWithLineItems, JobLineItem, Staff, LogoSetup, Us
 import { canViewPrices } from "@shared/schema";
 import { useParams, useLocation } from "wouter";
 import { isPast, isToday, format, addDays, startOfDay, endOfDay } from "date-fns";
-import { getPrice, getPrintPrice, getFlatRatePrice, getBaggingPrice, calculateJobPrice, type PricingTable } from "@shared/pricing";
+import { calculateJobPrice, type PricingTable } from "@shared/pricing";
 import { getCustomerColorClasses } from "@shared/colors";
 
 export default function Dashboard() {
@@ -611,60 +611,6 @@ export default function Dashboard() {
     );
   });
 
-  // Calculate total quantity and total value for production queue
-  const productionQueueMetrics = (() => {
-    let totalQuantity = 0;
-    let totalValue = 0;
-
-    allProductionJobs.forEach(job => {
-      if (job.lineItems) {
-        // Get customer for this job to determine pricing table
-        const customer = customers.find(c => c.id === job.customerId);
-        
-        // Determine pricing table: use 2025 if explicitly set, otherwise 2026 if explicitly set, otherwise default to 2026
-        let pricingTable: PricingTable = "2026";
-        if (customer?.pricingTable2025) {
-          pricingTable = "2025";
-        } else if (customer?.pricingTable2026) {
-          pricingTable = "2026";
-        }
-
-        job.lineItems.forEach(lineItem => {
-          totalQuantity += lineItem.quantity || 0;
-
-          // Calculate price based on job type
-          try {
-            let itemPrice: number | "POA" = 0;
-
-            if (lineItem.jobType === "Bagging") {
-              const result = getBaggingPrice(lineItem.quantity, pricingTable);
-              itemPrice = result.totalPrice;
-            } else if (lineItem.jobType === "Print Initials/Name" || lineItem.jobType === "Embroidery Initials/Name") {
-              const result = getFlatRatePrice(lineItem.quantity, lineItem.jobType);
-              itemPrice = result.totalPrice;
-            } else if (lineItem.jobType === "Print" && lineItem.stitchCount) {
-              const result = getPrintPrice(lineItem.quantity, lineItem.stitchCount, pricingTable);
-              itemPrice = result.totalPrice;
-            } else if (lineItem.stitchCount) {
-              // Embroidery or Other with stitch count
-              const result = getPrice(lineItem.quantity, lineItem.stitchCount, pricingTable);
-              itemPrice = result.totalPrice; // Can be "POA"
-            }
-
-            // Only add to total if it's a number (not POA)
-            if (typeof itemPrice === "number") {
-              totalValue += itemPrice;
-            }
-          } catch (error) {
-            // Skip items that can't be priced (e.g., missing data, invalid params)
-          }
-        });
-      }
-    });
-
-    return { totalQuantity, totalValue };
-  })();
-
   // Calculate the amount due for a single job. Uses the exact same pricing as
   // the customer portal (calculateJobPrice + the customer's pricing table) so
   // the staff figure always matches what the customer sees. Returns the numeric
@@ -687,9 +633,20 @@ export default function Dashboard() {
 
     let amount = 0;
     let hasPoa = false;
+
+    // Items that need a stitch count (embroidery/print) but don't have one
+    // can't be priced — flag them as POA instead of silently pricing at £0.
+    const needsStitchCount = (li: (typeof lineItems)[number]) =>
+      li.jobType !== "Bagging" &&
+      li.jobType !== "Print Initials/Name" &&
+      li.jobType !== "Embroidery Initials/Name";
+    const priceable = lineItems.filter(li => !needsStitchCount(li) || (li.stitchCount || 0) > 0);
+    if (priceable.length < lineItems.length) hasPoa = true;
+    if (priceable.length === 0) return { amount: 0, hasPoa };
+
     try {
       const { lineItemPrices } = calculateJobPrice(
-        lineItems.map(li => ({
+        priceable.map(li => ({
           quantity: li.quantity,
           stitchCount: li.stitchCount || 0,
           jobType: li.jobType || undefined,
@@ -709,6 +666,26 @@ export default function Dashboard() {
     }
     return { amount, hasPoa };
   };
+
+  // Total quantity and total value for the production queue. Uses the exact
+  // same per-customer pricing as the customer portal/invoicing so the value
+  // matches what will actually be charged.
+  const productionQueueMetrics = (() => {
+    let totalQuantity = 0;
+    let totalValue = 0;
+    let hasUnpriced = false;
+
+    allProductionJobs.forEach(job => {
+      (job.lineItems ?? []).forEach(lineItem => {
+        totalQuantity += lineItem.quantity || 0;
+      });
+      const { amount, hasPoa } = calculateJobAmountDue(job);
+      totalValue += amount;
+      if (hasPoa) hasUnpriced = true;
+    });
+
+    return { totalQuantity, totalValue, hasUnpriced };
+  })();
 
   // Apply active filter to production jobs
   const allDisplayedJobs = (() => {
@@ -941,6 +918,11 @@ export default function Dashboard() {
                     <h3 className="text-3xl font-bold text-foreground mt-2" data-testid="text-total-value">
                       <DemoAmount value={productionQueueMetrics.totalValue} />
                     </h3>
+                    {productionQueueMetrics.hasUnpriced && (
+                      <p className="text-xs text-muted-foreground mt-1" data-testid="text-total-value-poa-note">
+                        + some POA items not included
+                      </p>
+                    )}
                   </div>
                   <div className="h-12 w-12 bg-green-500/10 rounded-full flex items-center justify-center">
                     <Coins className="h-6 w-6 text-green-500" />
