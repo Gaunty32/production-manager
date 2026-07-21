@@ -576,27 +576,21 @@ export default function Dashboard() {
     return dispatchDate >= day3Start && dispatchDate <= day3End;
   });
   
-  // Calculate quantities (sum of all line items, fallback to job quantity if no line items)
-  const overdueQuantity = overdueOrders.reduce((sum, job) => {
-    const jobQuantity = job.lineItems && job.lineItems.length > 0
-      ? job.lineItems.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0)
+  // Calculate quantities — only garments still outstanding (skip completed line
+  // items; fall back to job quantity only when the job has no line items)
+  const outstandingQuantity = (job: (typeof allProductionJobs)[number]) =>
+    job.lineItems && job.lineItems.length > 0
+      ? job.lineItems.reduce(
+          (itemSum, item) => itemSum + (item.completed ? 0 : item.quantity || 0),
+          0,
+        )
       : job.quantity || 0;
-    return sum + jobQuantity;
-  }, 0);
-  
-  const dueTodayQuantity = jobsDueToday.reduce((sum, job) => {
-    const jobQuantity = job.lineItems && job.lineItems.length > 0
-      ? job.lineItems.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0)
-      : job.quantity || 0;
-    return sum + jobQuantity;
-  }, 0);
-  
-  const dueIn3DaysQuantity = jobsDueIn3Days.reduce((sum, job) => {
-    const jobQuantity = job.lineItems && job.lineItems.length > 0
-      ? job.lineItems.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0)
-      : job.quantity || 0;
-    return sum + jobQuantity;
-  }, 0);
+
+  const overdueQuantity = overdueOrders.reduce((sum, job) => sum + outstandingQuantity(job), 0);
+
+  const dueTodayQuantity = jobsDueToday.reduce((sum, job) => sum + outstandingQuantity(job), 0);
+
+  const dueIn3DaysQuantity = jobsDueIn3Days.reduce((sum, job) => sum + outstandingQuantity(job), 0);
   
   const pendingLogoSetups = logoSetups.filter(ls => !ls.approved);
   
