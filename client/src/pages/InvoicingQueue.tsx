@@ -1155,7 +1155,7 @@ export default function InvoicingQueue() {
       previewLines.push({
         description: `Logo Set-Up - ${logo.jobName}`,
         quantity: 1,
-        unitPrice: 10,
+        unitPrice: 12,
         itemCode: "-",
       });
     }
@@ -1230,11 +1230,11 @@ export default function InvoicingQueue() {
       }
     });
 
-    // Add approved logo setup charges (£10 each) if any jobs are selected for this customer
+    // Add approved logo setup charges (£12 each) if any jobs are selected for this customer
     if (selectedCustomerJobs.length > 0) {
       const customerId = selectedCustomerJobs[0].customerId;
       const approvedLogos = getCustomerApprovedLogos(customerId);
-      total += approvedLogos.length * 10;
+      total += approvedLogos.length * 12;
     }
 
     // If any item is TBA or POA, return that
@@ -1257,7 +1257,7 @@ export default function InvoicingQueue() {
 
     // Add all approved logo setups
     const allApprovedLogos = logoSetups.filter(ls => ls.approved);
-    total += allApprovedLogos.length * 10;
+    total += allApprovedLogos.length * 12;
 
     return total;
   })();
