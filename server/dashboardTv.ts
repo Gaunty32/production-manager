@@ -776,8 +776,21 @@ export async function buildDashboardTvData() {
     done: boolean;
   };
 
+  // Today's bookings, plus unfinished work booked on PAST days that was never
+  // completed — it carries over into today (same rule as the machine sheets).
+  const isCarryOver = (sc: (typeof schedules)[number]) => {
+    const d = londonDateStr(new Date(sc.scheduledDate));
+    if (d >= todayStr) return false;
+    if (!sc.lineItemId) return false;
+    const li = lineItemById.get(sc.lineItemId);
+    if (!li || li.completed) return false;
+    return remainingForLineItem(li) > 0;
+  };
+
   const todaysScheds = schedules
-    .filter((sc) => londonDateStr(new Date(sc.scheduledDate)) === todayStr)
+    .filter(
+      (sc) => londonDateStr(new Date(sc.scheduledDate)) === todayStr || isCarryOver(sc),
+    )
     .sort((a, b) => a.startTime - b.startTime);
 
   const planByPerson = new Map<string, PlanRow[]>();
@@ -831,11 +844,21 @@ export async function buildDashboardTvData() {
     const itemKey = sc.lineItemId ?? `${sc.jobId}:${sc.startTime}:${sc.id}`;
     // If the scheduler picked a specific person, the item belongs to them
     // alone. Only fan out to everyone allocated to the machine when the
-    // booking has no named person.
+    // booking has no named person. Carried-over work from past days belongs
+    // to whoever is on the machine TODAY, not the person originally booked —
+    // fall back to the original person only if nobody is allocated today.
+    const carriedOver = londonDateStr(new Date(sc.scheduledDate)) !== todayStr;
+    const todaysAllocated = carriedOver ? staffAllocatedToMachineToday(sc.machineId) : [];
     const assignees = new Set<string>(
-      sc.staffId && activeStaffIdSet.has(sc.staffId)
-        ? [sc.staffId]
-        : staffAllocatedToMachineToday(sc.machineId),
+      carriedOver
+        ? todaysAllocated.length > 0
+          ? todaysAllocated
+          : sc.staffId && activeStaffIdSet.has(sc.staffId)
+            ? [sc.staffId]
+            : []
+        : sc.staffId && activeStaffIdSet.has(sc.staffId)
+          ? [sc.staffId]
+          : staffAllocatedToMachineToday(sc.machineId),
     );
     for (const staffId of Array.from(assignees)) {
       const pKey = `${staffId}:${itemKey}`;
