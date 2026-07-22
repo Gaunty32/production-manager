@@ -36,8 +36,8 @@ function DualPrice({ price }: { price: number }) {
   return (
     <div className="leading-tight">
       <div>£{price.toFixed(2)}</div>
-      <div className="text-xs text-primary font-medium whitespace-nowrap">
-        £{(price + SEPTEMBER_INCREASE).toFixed(2)} from 1 Sep
+      <div className="text-xs text-primary font-medium">
+        £{(price + SEPTEMBER_INCREASE).toFixed(2)}
       </div>
     </div>
   );
@@ -69,7 +69,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
         <div className="p-3 bg-primary/10 rounded-md text-sm text-center" data-testid="banner-september-prices">
           <span className="font-medium text-foreground">Price update:</span>{" "}
           <span className="text-muted-foreground">
-            new prices take effect from <span className="font-medium text-foreground">1st September</span>. Both current and new prices are shown below.
+            the price shown in <span className="text-primary font-medium">purple</span> applies from <span className="font-medium text-foreground">1st September</span>.
           </span>
         </div>
         
