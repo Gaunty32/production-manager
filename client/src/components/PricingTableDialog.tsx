@@ -29,6 +29,20 @@ const DTF_SIZE_LABELS = [
   { key: "A3", label: "A3", sublabel: "" },
 ];
 
+// From 1st September all prices increase by £0.20 — show both until then
+const SEPTEMBER_INCREASE = 0.2;
+
+function DualPrice({ price }: { price: number }) {
+  return (
+    <div className="leading-tight">
+      <div>£{price.toFixed(2)}</div>
+      <div className="text-xs text-primary font-medium whitespace-nowrap">
+        £{(price + SEPTEMBER_INCREASE).toFixed(2)} from 1 Sep
+      </div>
+    </div>
+  );
+}
+
 export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
   const stitchHeaders = PRICING_2026[0].prices
     .filter(p => p.maxStitches !== null)
@@ -51,6 +65,13 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
             Price per item (excluding VAT)
           </DialogDescription>
         </DialogHeader>
+
+        <div className="p-3 bg-primary/10 rounded-md text-sm text-center" data-testid="banner-september-prices">
+          <span className="font-medium text-foreground">Price update:</span>{" "}
+          <span className="text-muted-foreground">
+            new prices take effect from <span className="font-medium text-foreground">1st September</span>. Both current and new prices are shown below.
+          </span>
+        </div>
         
         <Tabs defaultValue="embroidery" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4">
@@ -93,7 +114,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
                         const price = priceEntry?.price;
                         return (
                           <td key={stitches} className="border border-border px-2 py-1.5 text-center">
-                            {typeof price === "number" ? `£${price.toFixed(2)}` : price || "-"}
+                            {typeof price === "number" ? <DualPrice price={price} /> : price || "-"}
                           </td>
                         );
                       })}
@@ -191,7 +212,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
                       </td>
                       {DTF_SIZE_LABELS.map(size => (
                         <td key={size.key} className="border border-border px-3 py-1.5 text-center">
-                          £{tier.prices[size.key as keyof typeof tier.prices].toFixed(2)}
+                          <DualPrice price={tier.prices[size.key as keyof typeof tier.prices]} />
                         </td>
                       ))}
                     </tr>
