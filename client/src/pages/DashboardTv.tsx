@@ -793,7 +793,7 @@ function TeamGoalPage({ data }: { data: TvData }) {
 
   return (
     <div className="flex flex-col h-full gap-5">
-      <PageHeader title="Team Goal — We Win Together" lastUpdated={data.lastUpdated} />
+      <PageHeader title="This Week's Team Goal" lastUpdated={data.lastUpdated} />
 
       <div className="grid grid-cols-12 gap-5 flex-1 min-h-0">
         {/* Big shared goal */}
