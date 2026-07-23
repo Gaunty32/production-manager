@@ -485,9 +485,9 @@ function PlanItemRow({ item, showMachine }: { item: PlanItem; showMachine: boole
         >
           {item.jobName || item.jobLabel}
         </div>
-        <div className="flex items-center gap-2 text-base min-w-0">
+        <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-base min-w-0">
           {item.customer && (
-            <span className="text-slate-500 truncate">{item.customer}</span>
+            <span className="text-slate-500">{item.customer}</span>
           )}
           {typeof item.estMinutes === "number" && item.estMinutes > 0 && (
             <span className="text-slate-400 whitespace-nowrap">
