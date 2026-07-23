@@ -919,34 +919,49 @@ export async function buildDashboardTvData() {
     const due = dueDateStr(j.id, j);
     const custName = customerName.get(j.customerId) ?? "";
     const jobLabel = j.jobName;
+    // One row per job: total the outstanding quantity across ALL its
+    // unfinished line items rather than a row per line item.
+    let totalRemaining = 0;
+    let firstId: string | null = null;
+    let jobType = "";
+    let person: string | null = null;
+    let machine: string | null = null;
     for (const li of lineItemsByJob.get(j.id) ?? []) {
       if (li.completed) continue;
       const remaining = remainingForLineItem(li);
       if (remaining <= 0) continue;
-      const opId =
-        li.operatorId ??
-        (li.machineId ? machineById.get(li.machineId)?.defaultOperatorId : null);
-      upNextRows.push({
-        id: li.id,
-        jobLabel,
-        customer: custName,
-        jobType: (li.jobType ?? "").toLowerCase(),
-        quantity: remaining,
-        person: opId && activeStaffIdSet.has(opId) ? staffName.get(opId) ?? null : null,
-        machine: li.machineId ? machineById.get(li.machineId)?.name ?? null : null,
-        dueDate: due,
-        status:
-          due === null
-            ? "later"
-            : due < todayStr
-              ? "overdue"
-              : due === todayStr
-                ? "today"
-                : due === tomorrowStr
-                  ? "tomorrow"
-                  : "later",
-      });
+      totalRemaining += remaining;
+      if (firstId === null) {
+        firstId = li.id;
+        jobType = (li.jobType ?? "").toLowerCase();
+        const opId =
+          li.operatorId ??
+          (li.machineId ? machineById.get(li.machineId)?.defaultOperatorId : null);
+        person = opId && activeStaffIdSet.has(opId) ? staffName.get(opId) ?? null : null;
+        machine = li.machineId ? machineById.get(li.machineId)?.name ?? null : null;
+      }
     }
+    if (firstId === null) continue;
+    upNextRows.push({
+      id: firstId,
+      jobLabel,
+      customer: custName,
+      jobType,
+      quantity: totalRemaining,
+      person,
+      machine,
+      dueDate: due,
+      status:
+        due === null
+          ? "later"
+          : due < todayStr
+            ? "overdue"
+            : due === todayStr
+              ? "today"
+              : due === tomorrowStr
+                ? "tomorrow"
+                : "later",
+    });
   }
   // Earliest due date first (no date = last), biggest outstanding first within a day
   upNextRows.sort((a, b) => {
