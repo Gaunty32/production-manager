@@ -12,7 +12,7 @@ import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import { calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
 import { getCustomerColorClasses } from "@shared/colors";
-import { calculateJobPrice, formatPrice, getPrice } from "@shared/pricing";
+import { calculateJobPrice, formatPrice, getPrice, requiresStitchCount } from "@shared/pricing";
 import type { JobLineItem, Customer } from "@shared/schema";
 
 interface JobRowProps {
@@ -67,6 +67,8 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, onP
   const jobPrice = customer && job.lineItems && job.lineItems.length > 0 ? (() => {
     const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
     if (!pricingTable) return null;
+    // Any line item still waiting on a stitch count means the job can't be priced yet
+    if (job.lineItems.some(li => requiresStitchCount(li.jobType) && !li.stitchCount)) return null;
     try {
       return calculateJobPrice(job.lineItems, pricingTable);
     } catch (error) {
@@ -206,6 +208,8 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, onP
                       // Check if it's a flat-rate job type
                       if (item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name") {
                         unitPrice = "£2.50";
+                      } else if (requiresStitchCount(item.jobType) && !item.stitchCount) {
+                        unitPrice = null; // stitch count TBA
                       } else {
                         const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
                         unitPrice = formatPrice(pricing.unitPrice);

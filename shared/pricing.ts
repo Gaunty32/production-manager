@@ -283,6 +283,16 @@ export const PRINT_PRICING_2026: PrintPricingTier[] = [
   },
 ];
 
+// Job types priced without a stitch count (flat rate, per-bag, or print size code)
+export function requiresStitchCount(jobType?: string | null): boolean {
+  return (
+    jobType !== "Bagging" &&
+    jobType !== "Print" &&
+    jobType !== "Print Initials/Name" &&
+    jobType !== "Embroidery Initials/Name"
+  );
+}
+
 export interface PriceLookupResult {
   unitPrice: number | "POA";
   totalPrice: number | "POA";
