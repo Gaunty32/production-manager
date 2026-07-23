@@ -360,9 +360,9 @@ export default function DemoAccess() {
                       </tr>
                     );
                   })}
-                  {/* 1000+ row */}
+                  {/* 2,501+ row */}
                   <tr className="border-t bg-muted/10">
-                    <td className="px-4 py-3 font-semibold">1,000+</td>
+                    <td className="px-4 py-3 font-semibold">2,501+</td>
                     <td colSpan={6} className="px-3 py-3 text-center text-muted-foreground text-sm">
                       Price on application — <button type="button" onClick={scrollToForm} className="underline hover:text-foreground transition-colors">get in touch</button>
                     </td>

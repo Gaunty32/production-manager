@@ -99,7 +99,7 @@ export const PRICING_2025: PricingTier[] = [
   },
   {
     minQty: 600,
-    maxQty: 999,
+    maxQty: 2500,
     prices: [
       { maxStitches: 3000, price: 0.85 },
       { maxStitches: 5000, price: 0.95 },
@@ -113,7 +113,7 @@ export const PRICING_2025: PricingTier[] = [
     ],
   },
   {
-    minQty: 1000,
+    minQty: 2501,
     maxQty: null,
     prices: [
       { maxStitches: null, price: "POA" },
@@ -192,7 +192,7 @@ export const PRICING_2026: PricingTier[] = [
   },
   {
     minQty: 600,
-    maxQty: 999,
+    maxQty: 2500,
     prices: [
       { maxStitches: 5000, price: 1.05 },
       { maxStitches: 7500, price: 1.15 },
@@ -208,7 +208,7 @@ export const PRICING_2026: PricingTier[] = [
     ],
   },
   {
-    minQty: 1000,
+    minQty: 2501,
     maxQty: null,
     prices: [
       { maxStitches: null, price: "POA" },
@@ -322,7 +322,7 @@ export function getPrice(
     throw new Error(`No price found for stitch count ${stitchCount}`);
   }
 
-  const tierLabel = `${tier.minQty}-${tier.maxQty || "999+"}`;
+  const tierLabel = tier.maxQty === null ? `${tier.minQty}+` : `${tier.minQty}-${tier.maxQty}`;
   const highestBreakpoint = tier.prices
     .map((p) => p.maxStitches)
     .filter((m): m is number => m !== null)

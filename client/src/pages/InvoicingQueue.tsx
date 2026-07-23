@@ -959,7 +959,7 @@ export default function InvoicingQueue() {
   };
 
   const needsManualPrice = (lineItem: LineItem) => {
-    return lineItem.quantity >= 1000 || lineItem.stitchCount >= 50000;
+    return lineItem.quantity >= 2501 || lineItem.stitchCount >= 50000;
   };
 
   const buildInvoicePreviewLines = (customerJobs: Job[], customerId: string) => {
@@ -1329,7 +1329,7 @@ export default function InvoicingQueue() {
     if (lineItemsNeedingPrices.length > 0) {
       toast({
         title: "Manual Prices Required",
-        description: "Please enter manual prices for all items with 1000+ units or 50,000+ stitches",
+        description: "Please enter manual prices for all items with 2,501+ units or 50,000+ stitches",
         variant: "destructive",
       });
       return;
@@ -1971,8 +1971,8 @@ export default function InvoicingQueue() {
                                               {item.description || `${item.quantity} units @ ${item.stitchCount.toLocaleString()} stitches`}
                                             </p>
                                             <p className="text-xs text-muted-foreground mt-1">
-                                              {item.quantity >= 1000 ? `${item.quantity.toLocaleString()} units (1000+)` : ''}
-                                              {item.quantity >= 1000 && item.stitchCount >= 50000 ? ' • ' : ''}
+                                              {item.quantity >= 2501 ? `${item.quantity.toLocaleString()} units (2,501+)` : ''}
+                                              {item.quantity >= 2501 && item.stitchCount >= 50000 ? ' • ' : ''}
                                               {item.stitchCount >= 50000 ? `${item.stitchCount.toLocaleString()} stitches (50,000+)` : ''}
                                             </p>
                                           </div>
