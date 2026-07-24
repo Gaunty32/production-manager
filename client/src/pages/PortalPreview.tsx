@@ -246,7 +246,7 @@ function fmtDate(str: string) {
 const DEMO_POSTCODE = "LS28 6AB";
 
 function dpdUrl(tracking: string) {
-  return `https://track.dpd.co.uk/search?reference=${encodeURIComponent(tracking)}&postcode=${encodeURIComponent(DEMO_POSTCODE)}`;
+  return `https://track.dpdlocal.co.uk/search?reference=${encodeURIComponent(tracking)}&postcode=${encodeURIComponent(DEMO_POSTCODE)}`;
 }
 
 // ─── Sub-views ────────────────────────────────────────────────────────────────
