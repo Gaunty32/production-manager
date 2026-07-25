@@ -51,7 +51,7 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail, buildBroadcastEmailHtml, sendBroadcastEmail } from "./emailService";
+import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendWebsiteEnquiryEmails, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail, buildBroadcastEmailHtml, sendBroadcastEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 
@@ -630,6 +630,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } : null,
         },
       });
+    }
+  });
+
+  // Public: website enquiry form (no auth required)
+  app.post("/api/enquiry", async (req, res) => {
+    const schema = z.object({
+      name: z.string().min(1, "Name is required").max(150),
+      company: z.string().max(200).default(""),
+      email: z.string().email("Invalid email address"),
+      phone: z.string().max(50).default(""),
+      service: z.string().max(100).default(""),
+      message: z.string().max(4000).default(""),
+      // Honeypot — real users never fill this in
+      website: z.string().optional(),
+    });
+    try {
+      const data = schema.parse(req.body);
+      // Honeypot triggered: pretend success so bots don't learn anything
+      if (data.website) {
+        return res.json({ success: true });
+      }
+      // trust proxy is set, so req.ip is the real client IP resolved by Express
+      const ip = req.ip || "unknown";
+      if (!checkRateLimit(`enquiry:${ip}`, 5, 60 * 60 * 1000)) {
+        return res.status(429).json({ error: "Too many enquiries — please try again later or email info@selectbranding.co.uk" });
+      }
+
+      const baseUrl = getBaseUrl();
+      await sendWebsiteEnquiryEmails({
+        name: data.name,
+        company: data.company,
+        email: data.email,
+        phone: data.phone,
+        service: data.service,
+        message: data.message,
+        demoUrl: `${baseUrl}/portal-preview`,
+      });
+
+      // Sync contact to HighLevel (fire-and-forget — never block the response)
+      const hlApiKey = process.env.HIGHLEVEL_API_KEY;
+      const hlLocationId = process.env.HIGHLEVEL_LOCATION_ID;
+      if (hlApiKey && hlLocationId) {
+        const nameParts = data.name.trim().split(/\s+/);
+        fetch("https://rest.gohighlevel.com/v1/contacts/", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${hlApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            firstName: nameParts[0],
+            lastName: nameParts.slice(1).join(" ") || undefined,
+            email: data.email,
+            ...(data.phone ? { phone: data.phone } : {}),
+            ...(data.company ? { companyName: data.company } : {}),
+            tags: ["website-enquiry"],
+            source: "Select Branding Website",
+          }),
+        })
+          .then(async (r) => {
+            const body = await r.json().catch(() => ({}));
+            if (!r.ok) {
+              console.error("[HighLevel] Enquiry contact creation failed:", r.status, JSON.stringify(body));
+            } else {
+              console.log("[HighLevel] Enquiry contact created:", body?.contact?.id ?? body?.id ?? "ok");
+            }
+          })
+          .catch((err) => console.error("[HighLevel] Network error:", err));
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Website enquiry error:", error);
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: error.errors[0]?.message || "Invalid input" });
+      }
+      res.status(500).json({ error: "Failed to send enquiry — please email info@selectbranding.co.uk" });
     }
   });
 

@@ -29,6 +29,7 @@ import HolidayManagement from "@/pages/HolidayManagement";
 import Landing from "@/pages/Landing";
 import CustomerLogin from "@/pages/CustomerLogin";
 import StaffLogin from "@/pages/StaffLogin";
+import Home from "@/pages/Home";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import CustomerDashboard from "@/pages/CustomerDashboard";
@@ -119,6 +120,28 @@ function StaffRouter() {
   );
 }
 
+function StaffLoginGate() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      setLocation("/dashboard");
+    }
+  }, [isLoading, isAuthenticated, setLocation]);
+
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) return null;
+  return <StaffLogin />;
+}
+
 function AppRouter() {
   useVersionCheck();
 
@@ -144,6 +167,7 @@ function AppRouter() {
         {/* Public Routes - No Authentication Required */}
         <Route path="/dashboard-tv" component={DashboardTv} />
         <Route path="/portal-preview" component={PortalPreview} />
+        <Route path="/staff-login" component={StaffLoginGate} />
         <Route path="/demo-access" component={DemoAccess} />
         <Route path="/demo" component={DemoPortal} />
         <Route path="/forgot-password" component={ForgotPassword} />
@@ -229,6 +253,11 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   }
 
   if (!isAuthenticated) {
+    // Anonymous visitors on the root URL see the public marketing site;
+    // deep links to staff pages still show the staff login.
+    if (location === "/") {
+      return <Home />;
+    }
     return <StaffLogin />;
   }
 

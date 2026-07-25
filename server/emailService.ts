@@ -848,6 +848,79 @@ export async function sendDemoAccessEmail(params: {
   }
 }
 
+// Strip CR/LF and control characters so user input can never inject email headers
+function cleanHeader(text: string): string {
+  return text.replace(/[\r\n\x00-\x1f\x7f]/g, ' ').trim();
+}
+
+export async function sendWebsiteEnquiryEmails(params: {
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  service: string;
+  message: string;
+  demoUrl: string;
+}): Promise<void> {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const from = fromEmail || 'info@selectbranding.co.uk';
+
+  const safeName = sanitizeHtml(params.name);
+  const safeFirst = sanitizeHtml(params.name.split(' ')[0] || params.name);
+  const safeMessage = sanitizeHtml(params.message);
+
+  // 1. Internal notification to the sales inbox
+  const internalBody = `
+    <h2 style="margin:0 0 18px;font-size:18px;color:#18181b;">New website enquiry</h2>
+    ${infoTable([
+      { label: 'Name', value: safeName },
+      { label: 'Company', value: sanitizeHtml(params.company) || '—' },
+      { label: 'Email', value: sanitizeHtml(params.email) },
+      { label: 'Phone', value: sanitizeHtml(params.phone) || '—' },
+      { label: 'Interested in', value: sanitizeHtml(params.service) || '—' },
+    ])}
+    ${params.message ? `<p style="margin:0 0 8px;font-weight:600;">Message:</p><p style="margin:0 0 18px;white-space:pre-wrap;">${safeMessage}</p>` : ''}
+    ${muted('This lead has also been added to HighLevel with the tag "website-enquiry".')}
+  `;
+  const internal = await sendEmail(client, {
+    from,
+    to: 'info@selectbranding.co.uk',
+    replyTo: params.email,
+    subject: `Website enquiry — ${cleanHeader(params.name)}${params.company ? ` (${cleanHeader(params.company)})` : ''}`,
+    html: brandedEmail(internalBody),
+  });
+  if (internal.error) {
+    throw new Error(`Failed to send enquiry notification: ${JSON.stringify(internal.error)}`);
+  }
+
+  // 2. Confirmation to the prospect (best-effort — don't fail the request if this bounces)
+  const confirmBody = `
+    <p style="margin:0 0 18px;">Hi ${safeFirst},</p>
+    <p style="margin:0 0 18px;">
+      Thanks for getting in touch with <strong>Select Branding Solutions</strong> — we've received
+      your enquiry and one of the team will come back to you shortly, usually the same working day.
+    </p>
+    <p style="margin:0 0 18px;">
+      In the meantime, you can explore a live demo of our customer portal — the same order tracking,
+      messaging and invoicing system our customers use every day.
+    </p>
+    ${ctaButton(params.demoUrl, 'Explore the Customer Portal')}
+    <p style="margin:0 0 8px;">
+      Best wishes,<br />
+      <strong>The Select Branding Solutions Team</strong>
+    </p>
+  `;
+  const confirm = await sendEmail(client, {
+    from,
+    to: params.email,
+    subject: 'Thanks for your enquiry — Select Branding Solutions',
+    html: brandedEmail(confirmBody),
+  });
+  if (confirm.error) {
+    console.error('[Enquiry] Confirmation email failed:', JSON.stringify(confirm.error));
+  }
+}
+
 export async function sendReEngagementEmail(customer: {
   name: string;
   email: string;
