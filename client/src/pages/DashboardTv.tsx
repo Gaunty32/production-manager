@@ -338,8 +338,15 @@ export default function DashboardTv() {
   const hasOrderPage = !!data?.orderSystemUrl;
   const orderOffset = hasOrderPage ? 1 : 0;
   const pageCount = data ? 4 + orderOffset + (hasTeamPage ? 1 : 0) : 1;
-  const [page, setPage] = useState(0);
-  const [paused, setPaused] = useState(false);
+  // Optional ?page=N override — pins the TV to one page (also handy for setup/debugging)
+  const pinnedPage = (() => {
+    const raw = new URLSearchParams(window.location.search).get("page");
+    if (raw === null) return null;
+    const n = parseInt(raw, 10);
+    return Number.isNaN(n) ? null : n;
+  })();
+  const [page, setPage] = useState(pinnedPage ?? 0);
+  const [paused, setPaused] = useState(pinnedPage !== null);
   const [navNonce, setNavNonce] = useState(0);
 
   // No on-screen buttons — the TV stays clean. Navigation still works from
@@ -780,10 +787,10 @@ function SummaryTile({
       className="rounded-2xl bg-slate-900/70 ring-1 ring-slate-700/60 p-5 flex items-center gap-4 overflow-hidden"
       data-testid={testId}
     >
-      <div className="font-black leading-none shrink-0" style={{ fontSize: 56, color }}>
+      <div className="font-black leading-none shrink-0" style={{ fontSize: num(value).length > 4 ? 44 : 56, color }}>
         {num(value)}
       </div>
-      <div className="flex-1 min-w-0 text-2xl text-slate-300 font-semibold leading-tight break-words">
+      <div className="flex-1 min-w-0 text-xl text-slate-300 font-semibold leading-tight">
         {label}
       </div>
     </div>
