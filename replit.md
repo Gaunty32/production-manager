@@ -6,6 +6,7 @@
 
 - Preferred communication style: simple, everyday language (non-technical user). Remind them to Republish after each feature.
 - Wording: never use the phrase "to make" in the app — use "outstanding" instead (e.g. "Garments outstanding", "150 outstanding").
+- Do NOT propose follow-up/next tasks — the user finds them distracting (requested 29 Jul 2026).
 
 # Tech Stack
 
