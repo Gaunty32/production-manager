@@ -383,7 +383,7 @@ export default function Dashboard() {
     const staffMember = staff.find((s) => s.id === job.completedById);
     return {
       ...job,
-      customerName: customer?.name || "Unknown",
+      customerName: customer?.name || (job as any).customerName || "Unknown",
       completedByName: staffMember?.name || null,
     };
   });
@@ -616,6 +616,13 @@ export default function Dashboard() {
   // the staff figure always matches what the customer sees. Returns the numeric
   // total of priced line items, and whether any line item is POA.
   const calculateJobAmountDue = (job: JobWithLineItems): { amount: number; hasPoa: boolean } => {
+    // Prefer the server-computed figure — it uses the exact same pricing as the
+    // customer portal and doesn't depend on the client-side customer list being
+    // loaded/in sync, which previously caused "£0.00 + POA" for priceable jobs.
+    const serverAmount = (job as any).amountDue;
+    if (typeof serverAmount === "number") {
+      return { amount: serverAmount, hasPoa: (job as any).amountDuePoa === true };
+    }
     const customer = customers.find(c => c.id === job.customerId);
     // Same resolution order as the customer portal: 2026 first, then 2025.
     const pricingTable: PricingTable | null = customer?.pricingTable2026

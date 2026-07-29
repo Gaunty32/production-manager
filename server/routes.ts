@@ -5401,10 +5401,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobsWithLineItems = await Promise.all(
         jobs.map(async (job) => {
           const customer = customerMap.get(job.customerId);
+          const lineItems = await storage.getJobLineItems(job.id);
+
+          // Server-computed amount due — identical pricing to the customer portal,
+          // so staff always see the same figure the customer sees regardless of
+          // client-side data races.
+          const pricingTable = customer?.pricingTable2026 ? "2026" : customer?.pricingTable2025 ? "2025" : null;
+          let amountDue = 0;
+          let amountDuePoa = !pricingTable && lineItems.length > 0;
+          if (pricingTable && lineItems.length > 0) {
+            const needsStitchCount = (li: typeof lineItems[number]) =>
+              li.jobType !== "Bagging" &&
+              li.jobType !== "Print Initials/Name" &&
+              li.jobType !== "Embroidery Initials/Name";
+            const priceable = lineItems.filter(li => !needsStitchCount(li) || (li.stitchCount || 0) > 0);
+            if (priceable.length < lineItems.length) amountDuePoa = true;
+            if (priceable.length > 0) {
+              try {
+                const { lineItemPrices } = calculateJobPrice(
+                  priceable.map(li => ({ quantity: li.quantity, stitchCount: li.stitchCount || 0, jobType: li.jobType || undefined })),
+                  pricingTable
+                );
+                for (const p of lineItemPrices) {
+                  if (typeof p.totalPrice === "number") amountDue += p.totalPrice;
+                  else amountDuePoa = true;
+                }
+              } catch {
+                amountDuePoa = true;
+              }
+            }
+          }
+
           return {
             ...job,
-            lineItems: await storage.getJobLineItems(job.id),
+            lineItems,
+            customerName: customer?.name ?? null,
             customerRequiresAdvancePayment: customer?.requiresAdvancePayment ?? false,
+            amountDue,
+            amountDuePoa,
           };
         })
       );
