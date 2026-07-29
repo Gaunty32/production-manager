@@ -518,9 +518,11 @@ function TodaysPlanPage({ data }: { data: TvData }) {
 
   const peopleShown = plan.people.slice(0, 6);
   const morePeople = plan.people.length - peopleShown.length;
-  // Full-width layout: up to 4 people fit in 2 columns, more in 3 columns.
+  // Full-width layout: up to 3 people fit on one row; more wrap into a second row.
   const cols = peopleShown.length <= 4 ? 2 : 3;
-  const itemsPerPerson = peopleShown.length <= 2 ? 5 : 3;
+  const rows = Math.ceil(peopleShown.length / cols);
+  // With two rows each card gets half the height — show fewer items so nothing clips.
+  const itemsPerPerson = peopleShown.length <= 2 ? 5 : rows === 1 ? 3 : 2;
 
   return (
     <div className="flex flex-col h-full gap-5">
@@ -540,13 +542,16 @@ function TodaysPlanPage({ data }: { data: TvData }) {
           <Panel title="By Person" className="flex-1 min-h-0">
             <div className="flex flex-col gap-3 h-full overflow-hidden">
               <div
-                className="grid gap-4 content-start flex-1 min-h-0 overflow-hidden"
-                style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+                className="grid gap-4 flex-1 min-h-0 overflow-hidden"
+                style={{
+                  gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                  gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+                }}
               >
                 {peopleShown.map((p) => (
                     <div
                       key={p.name}
-                      className="rounded-xl bg-slate-800/60 ring-1 ring-slate-700/60 p-4 flex flex-col gap-2 min-w-0"
+                      className="rounded-xl bg-slate-800/60 ring-1 ring-slate-700/60 p-4 flex flex-col gap-2 min-w-0 min-h-0 overflow-hidden"
                       data-testid={`card-plan-person-${p.name}`}
                     >
                       <div className="flex items-center justify-between gap-3">
