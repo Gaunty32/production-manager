@@ -1147,9 +1147,11 @@ export default function Dashboard() {
                           <TableCell className="text-right">
                             {(() => {
                               const { amount, hasPoa } = calculateJobAmountDue(job as JobWithLineItems);
+                              const amountIncVat = amount * 1.2;
                               return (
                                 <span className="text-sm font-medium tabular-nums" data-testid={`text-amount-due-${job.id}`}>
-                                  <DemoAmount value={amount} />{hasPoa ? ' + POA' : ''}
+                                  <DemoAmount value={amountIncVat} />{hasPoa ? ' + POA' : ''}
+                                  <span className="block text-xs font-normal text-muted-foreground">inc. VAT</span>
                                 </span>
                               );
                             })()}
