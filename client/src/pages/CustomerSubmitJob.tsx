@@ -443,7 +443,7 @@ export default function CustomerSubmitJob() {
                           p.jobName.toLowerCase().includes(inputVal.toLowerCase())
                         )
                       : [...previousJobNames]
-                    ).sort((a, b) => a.jobName.localeCompare(b.jobName)).slice(0, 8);
+                    ).sort((a, b) => a.jobName.localeCompare(b.jobName));
 
                     return (
                       <FormItem>
