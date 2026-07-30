@@ -555,12 +555,17 @@ export async function buildDashboardTvData() {
   const lastMondayStr = londonDateStr(new Date(thisMonday.getTime() - 7 * 86400000));
   const lastSundayStr = londonDateStr(new Date(thisMonday.getTime() - 86400000));
 
-  // Everything still to produce across the whole queue (all non-completed jobs
-  // in production, excluding those waiting on the customer).
+  // Everything still to produce across the whole queue. Mirrors the staff
+  // Production Queue filters (Dashboard.tsx): skip completed jobs, jobs waiting
+  // on the customer, invoiced/ready jobs, and jobs awaiting advance payment.
+  const queueCustomerById = new Map(customers.map((c) => [c.id, c]));
   let queueGarments = 0;
   let queueJobs = 0;
   for (const j of jobs) {
     if (j.completed || j.status === "pending_customer_approval") continue;
+    if (j.invoiceStatus === "invoiced" || j.invoiceStatus === "ready") continue;
+    const cust = queueCustomerById.get(j.customerId);
+    if (cust?.requiresAdvancePayment && !j.paymentReceived) continue;
     let jobRemaining = 0;
     for (const li of lineItemsByJob.get(j.id) ?? []) {
       jobRemaining += remainingForLineItem(li);
