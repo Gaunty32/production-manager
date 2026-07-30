@@ -147,6 +147,9 @@ export default function Home() {
             <button onClick={() => scrollTo("contact")} className="text-muted-foreground hover:text-foreground" data-testid="link-contact">Get a Quote</button>
           </nav>
           <div className="flex items-center gap-2">
+            <Link href="/staff-login" className="hidden text-sm font-medium text-muted-foreground hover:text-foreground sm:block" data-testid="link-staff-signin">
+              Staff Sign In
+            </Link>
             <Link href="/customer/login">
               <Button variant="outline" size="sm" data-testid="button-signin">Customer Sign In</Button>
             </Link>
