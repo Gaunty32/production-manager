@@ -708,7 +708,7 @@ export default function StaffJobDetail() {
               </CardHeader>
               <CardContent className="flex-1 flex flex-col min-h-0 p-0">
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-4">
                   {isLoadingMessages ? (
                     <p className="text-center text-muted-foreground text-sm">Loading messages...</p>
                   ) : messages.length === 0 ? (
@@ -739,7 +739,7 @@ export default function StaffJobDetail() {
                             return (
                               <>
                                 {displayText && (
-                                  <p className="text-sm whitespace-pre-wrap break-words">{displayText}</p>
+                                  <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{displayText}</p>
                                 )}
                                 {fileMatches.map((f, fi) => (
                                   <a

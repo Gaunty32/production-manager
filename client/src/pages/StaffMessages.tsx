@@ -1553,7 +1553,7 @@ export default function StaffMessages() {
           )}
 
           {/* Messages area */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-6 space-y-3">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 pt-4 pb-6 space-y-3">
             {isLoadingMessages ? (
               <LoadingSpinner />
             ) : messages.length === 0 ? (
@@ -1702,7 +1702,7 @@ export default function StaffMessages() {
                       )}
                     </div>
                     {/* Bubble */}
-                    <div className={`max-w-[72%] ${editingMsgId === msg.id ? "min-w-[300px]" : ""} ${isStaff ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
+                    <div className={`max-w-[72%] min-w-0 ${editingMsgId === msg.id ? "min-w-[300px]" : ""} ${isStaff ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
                       {msg.isInternal && showAvatar && (
                         <p className={`text-[10px] font-semibold px-1 ${isStaff ? "text-right text-muted-foreground" : "text-muted-foreground"}`}>
                           <span className="ml-1.5 inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
@@ -1771,7 +1771,7 @@ export default function StaffMessages() {
                           return (
                             <>
                               {displayText && (
-                                <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{renderMessageContent(displayText)}</p>
+                                <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed">{renderMessageContent(displayText)}</p>
                               )}
                               {!hasVisibleContent && (
                                 <p className="text-sm italic opacity-60">(no content)</p>

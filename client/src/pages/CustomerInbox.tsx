@@ -1163,7 +1163,7 @@ export default function CustomerInbox() {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3" onScroll={() => newMessageBanner && setNewMessageBanner(false)}>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-3" onScroll={() => newMessageBanner && setNewMessageBanner(false)}>
               {isLoadingMessages ? (
                 <LoadingSpinner />
               ) : selected.type === "direct" && directMessagesError ? (
@@ -1255,11 +1255,11 @@ export default function CustomerInbox() {
                             </span>
                           )}
                         </div>
-                        <div className={`max-w-[82%] sm:max-w-[72%] flex flex-col gap-0.5 ${isCustomer ? "items-end" : "items-start"}`}>
+                        <div className={`max-w-[82%] sm:max-w-[72%] min-w-0 flex flex-col gap-0.5 ${isCustomer ? "items-end" : "items-start"}`}>
                           {/* name moved under avatar */}
                           <div className={`rounded-2xl px-4 py-2.5 ${isCustomer ? "bg-blue-500 text-white rounded-br-sm" : "bg-orange-400 text-white rounded-bl-sm"}`}>
                             {(msg.message || "").replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim() && (
-                              <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{(msg.message || "").replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim()}</p>
+                              <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed">{(msg.message || "").replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim()}</p>
                             )}
                             {msg.imageUrl && (
                               <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mt-2">
