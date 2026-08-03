@@ -434,9 +434,12 @@ export default function StaffMessages() {
   const messages = selected?.type === "job" ? jobMessages : directMessages;
   const isLoadingMessages = selected?.type === "job" ? isLoadingJobMsgs : isLoadingDirectMsgs;
 
-  // Auto-select first conversation per tab on load
+  // Auto-select first conversation per tab on load — desktop only. On mobile
+  // the list and chat share the screen, so auto-selecting would (a) skip the
+  // list and (b) instantly undo the back button (setSelected(null) → effect
+  // re-selects the first conversation).
   useEffect(() => {
-    if (tab === "direct" && !directId) {
+    if (tab === "direct" && !directId && window.innerWidth >= 640) {
       const firstActive = directConversations.find(c => !c.archivedByStaff);
       if (firstActive) {
         setSelected({ type: "direct", conversationId: firstActive.id });

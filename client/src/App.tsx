@@ -279,7 +279,7 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   return (
     <DemoModeContext.Provider value={isDemoMode}>
       <SidebarProvider defaultOpen={true} style={style as React.CSSProperties}>
-        <div className="flex h-screen w-full">
+        <div className="flex h-screen h-dvh w-full">
           <AppSidebar />
           <div className="flex flex-col flex-1 min-w-0">
             {isDemoMode && (
