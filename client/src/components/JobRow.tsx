@@ -12,7 +12,7 @@ import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import { calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
 import { getCustomerColorClasses } from "@shared/colors";
-import { calculateJobPrice, formatPrice, getPrice, requiresStitchCount } from "@shared/pricing";
+import { calculateJobPrice, formatPrice, getPrice, chargedQuantity, requiresStitchCount } from "@shared/pricing";
 import type { JobLineItem, Customer } from "@shared/schema";
 
 interface JobRowProps {
@@ -211,7 +211,7 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, onP
                       } else if (requiresStitchCount(item.jobType) && !item.stitchCount) {
                         unitPrice = null; // stitch count TBA
                       } else {
-                        const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
+                        const pricing = getPrice(chargedQuantity(item.quantity), item.stitchCount, pricingTable);
                         unitPrice = formatPrice(pricing.unitPrice);
                       }
                     } catch (error) {

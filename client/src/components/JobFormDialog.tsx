@@ -5,7 +5,7 @@ import { insertJobSchema, type Customer } from "@shared/schema";
 import { suggestMachine } from "@shared/machines";
 import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
-import { getPrice, getPrintPrice, formatPrice, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
+import { getPrice, getPrintPrice, formatPrice, chargedQuantity, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
@@ -312,7 +312,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
             return null;
           }
           // Use print pricing
-          const pricing = getPrintPrice(item.quantity, item.stitchCount, pricingTable);
+          const pricing = getPrintPrice(chargedQuantity(item.quantity), item.stitchCount, pricingTable);
           return {
             ...pricing,
             lineTotal: pricing.totalPrice as number,
@@ -323,7 +323,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
             return null;
           }
           // Use embroidery pricing
-          const pricing = getPrice(item.quantity, item.stitchCount, pricingTable);
+          const pricing = getPrice(chargedQuantity(item.quantity), item.stitchCount, pricingTable);
           return {
             ...pricing,
             lineTotal: pricing.totalPrice as number | "POA",

@@ -449,13 +449,49 @@ export function getBaggingPrice(
   };
 }
 
+// ── Minimum order quantity (from 1st September 2026) ────────────────────────
+// Orders of fewer than MIN_ORDER_QTY items per logo are charged at the
+// MIN_ORDER_QTY-item price. Applies to embroidery and print line items only
+// (not bagging or initials/name add-ons).
+export const MIN_ORDER_QTY = 6;
+export const MIN_ORDER_QTY_START = new Date("2026-09-01T00:00:00+01:00");
+
+export function isMinOrderQtyActive(now: Date = new Date()): boolean {
+  return now >= MIN_ORDER_QTY_START;
+}
+
+/** Quantity a line item is charged at once the minimum order quantity applies. */
+export function chargedQuantity(quantity: number, now: Date = new Date()): number {
+  return isMinOrderQtyActive(now) && quantity > 0 && quantity < MIN_ORDER_QTY
+    ? MIN_ORDER_QTY
+    : quantity;
+}
+
+/** Job types the minimum order quantity does NOT apply to. */
+const MOQ_EXEMPT_JOB_TYPES = ["Bagging", "Print Initials/Name", "Embroidery Initials/Name"];
+
+/**
+ * Quantity a line item is billed at (invoices, previews). Applies the minimum
+ * order quantity to embroidery/print items only — never bagging or
+ * initials/name add-ons. Keep in sync with calculateJobPrice.
+ */
+export function billedQuantity(
+  item: { quantity: number; jobType?: string | null },
+  now: Date = new Date()
+): number {
+  if (item.jobType && MOQ_EXEMPT_JOB_TYPES.includes(item.jobType)) return item.quantity;
+  return chargedQuantity(item.quantity, now);
+}
+
 export function calculateJobPrice(
   lineItems: Array<{ quantity: number; stitchCount: number; jobType?: string }>,
-  pricingTable: PricingTable = "2026"
+  pricingTable: PricingTable = "2026",
+  now: Date = new Date()
 ): {
   lineItemPrices: (PriceLookupResult | PrintPriceLookupResult | FlatRatePriceLookupResult)[];
   totalPrice: number | "POA";
 } {
+  const moqActive = isMinOrderQtyActive(now);
   const lineItemPrices = lineItems.map((item) => {
     // For bagging (30p or 40p per item based on pricing table)
     if (item.jobType === "Bagging") {
@@ -465,12 +501,14 @@ export function calculateJobPrice(
     if (item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name") {
       return getFlatRatePrice(item.quantity, item.jobType);
     }
+    // Minimum order quantity: charge small runs as MIN_ORDER_QTY items
+    const chargedQty = moqActive ? billedQuantity(item, now) : item.quantity;
     // For print jobs, use print pricing
     if (item.jobType === "Print") {
-      return getPrintPrice(item.quantity, item.stitchCount, pricingTable);
+      return getPrintPrice(chargedQty, item.stitchCount, pricingTable);
     }
     // For embroidery and other types, use standard pricing
-    return getPrice(item.quantity, item.stitchCount, pricingTable);
+    return getPrice(chargedQty, item.stitchCount, pricingTable);
   });
 
   // If any line item is POA, the whole job is POA

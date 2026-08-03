@@ -69,7 +69,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
         <div className="p-3 bg-primary/10 rounded-md text-sm text-center" data-testid="banner-september-prices">
           <span className="font-medium text-foreground">Price update:</span>{" "}
           <span className="text-muted-foreground">
-            the price shown in <span className="text-primary font-medium">purple</span> applies from <span className="font-medium text-foreground">1st September</span>.
+            the price shown in <span className="text-primary font-medium">purple</span> applies from <span className="font-medium text-foreground">1st September</span>, along with a <span className="font-medium text-foreground">6-item minimum per logo</span>.
           </span>
         </div>
         
@@ -81,6 +81,13 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
           
           {/* Embroidery Pricing Tab */}
           <TabsContent value="embroidery" className="space-y-4">
+            <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-minimum-order">
+              <p className="font-medium mb-1">Minimum order: 6 items per logo <span className="text-primary font-normal">(from 1st September)</span></p>
+              <p className="text-muted-foreground">
+                Orders of 1&ndash;5 items are charged at the 6-item price for that stitch count. Example: 3 polos with a 4,000-stitch logo = 6 &times; the &lt;5,000 unit price.
+              </p>
+            </div>
+
             <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-stitch-count-key">
               <p className="font-medium mb-1">Stitch Count Key</p>
               <p className="text-muted-foreground">
@@ -107,7 +114,9 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
                       <td className="border border-border px-2 py-1.5 font-medium whitespace-nowrap">
                         {tier.maxQty === null 
                           ? `${tier.minQty}+` 
-                          : `${tier.minQty}-${tier.maxQty}`}
+                          : idx === 0
+                            ? `Up to ${tier.maxQty}`
+                            : `${tier.minQty}-${tier.maxQty}`}
                       </td>
                       {stitchHeaders.map(stitches => {
                         const priceEntry = tier.prices.find(p => p.maxStitches === stitches);
@@ -178,6 +187,13 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
           
           {/* DTF Print and Apply Pricing Tab */}
           <TabsContent value="dtf" className="space-y-4">
+            <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-dtf-minimum-order">
+              <p className="font-medium mb-1">Minimum order: 6 items per logo <span className="text-primary font-normal">(from 1st September)</span></p>
+              <p className="text-muted-foreground">
+                Orders of 1&ndash;5 items are charged at the 6-item price for that print size.
+              </p>
+            </div>
+
             <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-dtf-logo-size">
               <p className="font-medium mb-1">Logo Size</p>
               <p className="text-muted-foreground">

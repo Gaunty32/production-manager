@@ -12,7 +12,7 @@ import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import { calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
 import { getCustomerColorClasses } from "@shared/colors";
-import { formatPrice, getPrice, requiresStitchCount } from "@shared/pricing";
+import { formatPrice, getPrice, chargedQuantity, requiresStitchCount } from "@shared/pricing";
 import type { JobLineItem, Customer } from "@shared/schema";
 import { DemoText } from "@/components/DemoText";
 
@@ -103,8 +103,8 @@ export function LineItemRow({
         // Stitch count still TBA — can't price yet
         return null;
       } else {
-        const pricing = getPrice(lineItem.quantity, lineItem.stitchCount, pricingTable);
-        return typeof pricing.unitPrice === 'number' ? pricing.unitPrice * lineItem.quantity : null;
+        const pricing = getPrice(chargedQuantity(lineItem.quantity), lineItem.stitchCount, pricingTable);
+        return typeof pricing.unitPrice === 'number' ? pricing.unitPrice * chargedQuantity(lineItem.quantity) : null;
       }
     } catch (error) {
       console.error("Failed to calculate line item price:", error);

@@ -42,7 +42,7 @@ import {
 import { z } from "zod";
 import { xeroService } from "./xero";
 import { dpdService } from "./dpd";
-import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
+import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantity, MIN_ORDER_QTY } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
 import { registerCasualShiftRoutes } from "./casualShiftRoutes";
@@ -8508,12 +8508,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (jobTypeLower === "other") {
           itemCode = "OTHER";
         }
-        
+
+        // Minimum order quantity (from 1st Sept): bill small runs at 6 items
+        const billedQty = billedQuantity(lineItem);
+        if (billedQty !== lineItem.quantity) {
+          description = description
+            ? `${description} (minimum order ${MIN_ORDER_QTY})`
+            : `Minimum order ${MIN_ORDER_QTY}`;
+        }
+
         return {
           jobName: job.jobName,
           poNumber: job.poNumber,
           description,
-          quantity: lineItem.quantity,
+          quantity: billedQty,
           unitPrice,
           stitchCount: lineItem.stitchCount,
           itemCode,
@@ -8774,8 +8782,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             unitPrice = 0;
           }
           
+          // Minimum order quantity (from 1st Sept): bill small runs at 6 items
+          const billedQty = billedQuantity(lineItem);
+
           // Accumulate per-job invoice total
-          jobInvoiceTotals[job.id] = (jobInvoiceTotals[job.id] || 0) + (lineItem.quantity || 0) * unitPrice;
+          jobInvoiceTotals[job.id] = (jobInvoiceTotals[job.id] || 0) + (billedQty || 0) * unitPrice;
 
           const jobTypeLower = lineItem.jobType?.toLowerCase() || '';
           let itemCode = "Emb";
@@ -8793,12 +8804,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else if (jobTypeLower === "other") {
             itemCode = "OTHER";
           }
-          
+
+          if (billedQty !== lineItem.quantity) {
+            description = description
+              ? `${description} (minimum order ${MIN_ORDER_QTY})`
+              : `Minimum order ${MIN_ORDER_QTY}`;
+          }
+
           lineItemsWithPricing.push({
             jobName: job.jobName,
             poNumber: job.poNumber,
             description,
-            quantity: lineItem.quantity,
+            quantity: billedQty,
             unitPrice,
             stitchCount: lineItem.stitchCount,
             itemCode,

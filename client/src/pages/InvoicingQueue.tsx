@@ -10,7 +10,7 @@ import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Pale
 import { CustomerPickingSlip } from "@/components/CustomerPickingSlip";
 import type { JobLineItem } from "@shared/schema";
 import { format } from "date-fns";
-import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE } from "@shared/pricing";
+import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantity } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
@@ -1065,7 +1065,7 @@ export default function InvoicingQueue() {
           }
         }
         
-        previewLines.push({ description, quantity: lineItem.quantity, unitPrice, itemCode, lineItemId: lineItem.id });
+        previewLines.push({ description, quantity: billedQuantity(lineItem), unitPrice, itemCode, lineItemId: lineItem.id });
       });
       
       if (shipmentLastIndex.get(shipmentKey) === i) {
