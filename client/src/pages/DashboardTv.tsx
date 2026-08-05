@@ -91,6 +91,17 @@ interface TvData {
     }[];
     machines: { name: string; items: PlanItem[]; totalCount: number }[];
   };
+  operatorWorkload?: {
+    unallocatedJobs: number;
+    blockedJobs: number;
+    operators: {
+      name: string;
+      jobs: number;
+      itemsRemaining: number;
+      atRisk: number;
+      earliestDue: string | null;
+    }[];
+  };
   upNext: {
     totalCount: number;
     rows: {
@@ -531,9 +542,46 @@ function TodaysPlanPage({ data }: { data: TvData }) {
   // With two rows each card gets half the height — show fewer items so nothing clips.
   const itemsPerPerson = peopleShown.length <= 2 ? 5 : rows === 1 ? 3 : 2;
 
+  const workload = data.operatorWorkload;
+  const workloadShown = (workload?.operators ?? []).slice(0, 8);
+
   return (
     <div className="flex flex-col h-full gap-5">
       <PageHeader title="Today's Plan" lastUpdated={data.lastUpdated} />
+
+      {workload && (workloadShown.length > 0 || workload.unallocatedJobs > 0 || workload.blockedJobs > 0) && (
+        <div className="flex items-stretch gap-3 shrink-0" data-testid="strip-operator-workload">
+          {workloadShown.map((o) => (
+            <div
+              key={o.name}
+              className="flex-1 min-w-0 rounded-xl bg-slate-800/60 ring-1 ring-slate-700/60 px-3 py-2"
+              data-testid={`card-owner-${o.name}`}
+            >
+              <div className="text-lg font-bold truncate">{o.name}</div>
+              <div className="text-base text-slate-400 whitespace-nowrap">
+                {o.jobs} {o.jobs === 1 ? "job" : "jobs"} · {num(o.itemsRemaining)} pcs
+                {o.atRisk > 0 && <span className="text-red-400 font-bold"> · {o.atRisk} at risk</span>}
+              </div>
+            </div>
+          ))}
+          {workload.unallocatedJobs > 0 && (
+            <div className="rounded-xl bg-amber-500/15 ring-1 ring-amber-500/40 px-3 py-2" data-testid="card-owner-unallocated">
+              <div className="text-lg font-bold text-amber-400">No owner</div>
+              <div className="text-base text-amber-300/80 whitespace-nowrap">
+                {workload.unallocatedJobs} {workload.unallocatedJobs === 1 ? "job" : "jobs"}
+              </div>
+            </div>
+          )}
+          {workload.blockedJobs > 0 && (
+            <div className="rounded-xl bg-red-500/15 ring-1 ring-red-500/40 px-3 py-2" data-testid="card-owner-blocked">
+              <div className="text-lg font-bold text-red-400">Blocked</div>
+              <div className="text-base text-red-300/80 whitespace-nowrap">
+                {workload.blockedJobs} {workload.blockedJobs === 1 ? "job" : "jobs"}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {nothing ? (
         <div className="flex-1 flex items-center justify-center">

@@ -105,6 +105,15 @@ export const jobs = pgTable("jobs", {
   paymentReceivedById: varchar("payment_received_by_id").references(() => users.id),
   depositAmountPaid: real("deposit_amount_paid").notNull().default(0),
   depositLastPaidAt: timestamp("deposit_last_paid_at"),
+  // Operator-led allocation (Stage 1): people own jobs, machines provide capacity.
+  // Existing machineId acts as the CONFIRMED machine; recommendation is recorded separately.
+  responsibleOperatorId: varchar("responsible_operator_id").references(() => staff.id, { onDelete: "set null" }),
+  allocationStatus: text("allocation_status").notNull().default("unallocated"), // unallocated | allocated | blocked
+  blockedReason: text("blocked_reason"),
+  recommendedMachineId: integer("recommended_machine_id"),
+  machineOverrideReason: text("machine_override_reason"),
+  allocatedById: varchar("allocated_by_id").references(() => users.id),
+  allocatedAt: timestamp("allocated_at"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {

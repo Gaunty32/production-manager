@@ -56,6 +56,8 @@ import FeatureRequests from "@/pages/FeatureRequests";
 import Tasks from "@/pages/Tasks";
 import SummerShifts from "@/pages/SummerShifts";
 import Purchasing from "@/pages/Purchasing";
+import AllocationBoard from "@/pages/AllocationBoard";
+import MyQueue from "@/pages/MyQueue";
 import CasualLogin from "@/pages/CasualLogin";
 import CasualSetPin from "@/pages/CasualSetPin";
 import CasualDashboard from "@/pages/CasualDashboard";
@@ -99,6 +101,8 @@ function StaffRouter() {
       <Route path="/schedule"><Schedule /></Route>
       <Route path="/holidays"><HolidayManagement /></Route>
       <Route path="/leaderboard"><Leaderboard /></Route>
+      <Route path="/allocation"><AllocationBoard /></Route>
+      <Route path="/my-queue"><MyQueue /></Route>
       <Route path="/invoicing"><InvoicingQueue /></Route>
       <Route path="/reports/weekly"><WeeklyReports /></Route>
       <Route path="/holding-area"><StaffHoldingArea /></Route>

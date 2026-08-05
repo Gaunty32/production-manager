@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun, Tv, ShoppingCart, Mail } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun, Tv, ShoppingCart, Mail, UsersRound, ListTodo } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -28,6 +28,8 @@ import logoImage from "@assets/logo_transparent.png";
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "All Orders", url: "/orders", icon: ClipboardList },
+  { title: "Allocation", url: "/allocation", icon: UsersRound },
+  { title: "My Queue", url: "/my-queue", icon: ListTodo },
   { title: "Holding Area", url: "/holding-area", icon: Inbox },
   { title: "Messages", url: "/messages", icon: MessageSquare },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
@@ -129,6 +131,9 @@ export function AppSidebar() {
                   }
                   if (item.url === "/reports/weekly") {
                     return canViewReports(user?.role);
+                  }
+                  if (item.url === "/allocation") {
+                    return ["super_admin", "admin", "manager"].includes(user?.role ?? "");
                   }
                   return true;
                 })

@@ -5491,6 +5491,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Operator-led allocation (Stage 1) ──────────────────────────────────────
+  const isAllocationManager = (role: string) => ["super_admin", "admin", "manager"].includes(role);
+
+  const requireAllocationManager = async (req: any, res: any): Promise<boolean> => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !isAllocationManager(user.role)) {
+      res.status(403).json({ message: "Only production managers can use allocation tools" });
+      return false;
+    }
+    return true;
+  };
+
+  app.get("/api/allocation/board", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      if (!(await requireAllocationManager(req, res))) return;
+      const { getAllocationBoard } = await import("./allocation");
+      res.json(await getAllocationBoard());
+    } catch (error) {
+      console.error("Allocation board error:", error);
+      res.status(500).json({ message: "Failed to load allocation board" });
+    }
+  });
+
+  app.get("/api/allocation/summary", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      if (!(await requireAllocationManager(req, res))) return;
+      const { getAllocationSummary } = await import("./allocation");
+      res.json(await getAllocationSummary());
+    } catch (error) {
+      console.error("Allocation summary error:", error);
+      res.status(500).json({ message: "Failed to load allocation summary" });
+    }
+  });
+
+  app.get("/api/allocation/recommend/:jobId", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      if (!(await requireAllocationManager(req, res))) return;
+      const { recommendMachineForJob } = await import("./allocation");
+      res.json(await recommendMachineForJob(req.params.jobId));
+    } catch (error) {
+      console.error("Machine recommendation error:", error);
+      res.status(500).json({ message: "Failed to recommend a machine" });
+    }
+  });
+
+  const allocateJobSchema = z.object({
+    responsibleOperatorId: z.string().nullable().optional(),
+    machineId: z.number().int().positive().nullable().optional(),
+    machineOverrideReason: z.string().max(500).nullable().optional(),
+    blockedReason: z.string().max(500).nullable().optional(),
+  });
+
+  app.post("/api/jobs/:id/allocate", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !isAllocationManager(user.role)) {
+        return res.status(403).json({ message: "Only production managers can allocate jobs" });
+      }
+      const data = allocateJobSchema.parse(req.body);
+      const { allocateJob } = await import("./allocation");
+      const updated = await allocateJob(req.params.id, { ...data, allocatedById: user.id });
+      res.json(updated);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid allocation", errors: error.errors });
+      }
+      console.error("Allocate job error:", error);
+      res.status(500).json({ message: error.message || "Failed to allocate job" });
+    }
+  });
+
+  // Personal operator queue: own queue by default; managers can view anyone's
+  app.get("/api/my-queue", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user) return res.status(401).json({ message: "Not authenticated" });
+      const { getOperatorQueue } = await import("./allocation");
+      const requestedStaffId = typeof req.query.staffId === "string" ? req.query.staffId : null;
+      let staffId = requestedStaffId;
+      const allStaff = await storage.getStaff();
+      const ownStaff = allStaff.find(s => s.userId === user.id) ?? null;
+      if (staffId && staffId !== ownStaff?.id && !isAllocationManager(user.role)) {
+        return res.status(403).json({ message: "You can only view your own queue" });
+      }
+      if (!staffId) staffId = ownStaff?.id ?? null;
+      if (!staffId) return res.status(404).json({ message: "No staff record is linked to your login" });
+      res.json(await getOperatorQueue(staffId));
+    } catch (error) {
+      console.error("Operator queue error:", error);
+      res.status(500).json({ message: "Failed to load operator queue" });
+    }
+  });
+
   app.patch("/api/jobs/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;

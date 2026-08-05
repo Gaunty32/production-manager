@@ -527,7 +527,17 @@ export async function buildDashboardTvData() {
   }
   const waitingCustomer = jobs.filter((j) => j.status === "pending_customer_approval").length;
 
+  // Operator-led allocation: production-ready jobs must not sit ownerless
+  const unallocatedJobs = jobs.filter(
+    (j) => isActive(j) && j.allocationStatus !== "blocked" && !j.responsibleOperatorId,
+  ).length;
+  const blockedJobs = jobs.filter((j) => isActive(j) && j.allocationStatus === "blocked").length;
+
   if (ordersOverdue > 0) alerts.push({ severity: "red", label: "Orders overdue", count: ordersOverdue });
+  if (blockedJobs > 0)
+    alerts.push({ severity: "red", label: "Blocked jobs", count: blockedJobs });
+  if (unallocatedJobs > 0)
+    alerts.push({ severity: "amber", label: "Jobs with no owner", count: unallocatedJobs });
   if (dueTodayNotStarted > 0)
     alerts.push({ severity: "red", label: "Due today, not started", count: dueTodayNotStarted });
   if (ordersAtRisk > 0)
@@ -883,6 +893,29 @@ export async function buildDashboardTvData() {
     }
   }
 
+  // ── Operator workload (operator-led allocation) ────────────────────────────
+  // One row per active operator: jobs they own, items remaining, at-risk count.
+  const workloadByOperator = new Map<string, { jobs: number; itemsRemaining: number; atRisk: number; earliestDue: string | null }>();
+  for (const j of jobs) {
+    if (!isActive(j) || !j.responsibleOperatorId || !activeStaffIdSet.has(j.responsibleOperatorId)) continue;
+    const w = workloadByOperator.get(j.responsibleOperatorId) ?? { jobs: 0, itemsRemaining: 0, atRisk: 0, earliestDue: null };
+    w.jobs++;
+    for (const li of lineItemsByJob.get(j.id) ?? []) {
+      if (!li.completed) w.itemsRemaining += remainingForLineItem(li);
+    }
+    const due = dueDateStr(j.id, j);
+    if (due && due <= todayStr) w.atRisk++;
+    if (due && (w.earliestDue === null || due < w.earliestDue)) w.earliestDue = due;
+    workloadByOperator.set(j.responsibleOperatorId, w);
+  }
+  const operatorWorkload = {
+    unallocatedJobs,
+    blockedJobs,
+    operators: Array.from(workloadByOperator.entries())
+      .map(([staffId, w]) => ({ name: staffName.get(staffId) ?? "Unknown", ...w }))
+      .sort((a, b) => b.itemsRemaining - a.itemsRemaining),
+  };
+
   const todaysPlan = {
     people: Array.from(planByPerson.entries())
       .map(([staffId, rows]) => ({
@@ -1007,6 +1040,7 @@ export async function buildDashboardTvData() {
     operatives,
     dueOut,
     todaysPlan,
+    operatorWorkload,
     upNext,
     // Order System (wardrobe) TV display URL — kept server-side so the
     // tokened link never ships in the client bundle. Only handed out to
