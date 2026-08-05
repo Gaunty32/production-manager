@@ -8,6 +8,46 @@ const connectors = new ReplitConnectors();
 const PARENT_FOLDER_ID = "13oC0VXOyvtX88BpSUDf7alZHE6LSw_SH";
 const CALCULATIONS_SHEET_NAME = "Calculations";
 
+// ── Rate limiting + retry ────────────────────────────────────────────────────
+// Google Sheets caps read requests at 10/sec per user. When several customer
+// panels load at once, uncontrolled parallel calls blow through that cap.
+// All Google API calls go through googleApiJson(): a queue that spaces
+// requests ~150ms apart and retries automatically on rate-limit errors.
+const REQUEST_GAP_MS = 150;
+let requestChain: Promise<void> = Promise.resolve();
+
+function throttle(): Promise<void> {
+  const next = requestChain.then(() => new Promise<void>(r => setTimeout(r, REQUEST_GAP_MS)));
+  requestChain = next.catch(() => {});
+  return next;
+}
+
+const isRateLimitError = (status: number, err: any): boolean =>
+  status === 429 || err?.code === 429 || /rate limit/i.test(String(err?.message || ""));
+
+async function googleApiJson(connector: string, path: string, init: { method: string; headers?: Record<string, string>; body?: string }): Promise<any> {
+  const MAX_ATTEMPTS = 4;
+  for (let attempt = 1; ; attempt++) {
+    await throttle();
+    const response = await connectors.proxy(connector, path, init);
+    const data = await response.json().catch(() => ({}));
+    const rateLimited = isRateLimitError(response.status, data?.error);
+    if (rateLimited && attempt < MAX_ATTEMPTS) {
+      const retryAfter = parseInt(response.headers?.get?.("Retry-After") || "0", 10);
+      const waitMs = Math.max(retryAfter * 1000, attempt * 1500);
+      console.warn(`[Google] Rate limited (attempt ${attempt}/${MAX_ATTEMPTS}), retrying in ${waitMs}ms: ${path.slice(0, 80)}`);
+      await new Promise(r => setTimeout(r, waitMs));
+      continue;
+    }
+    return data;
+  }
+}
+
+// The parent folder listing is identical for every customer — cache it briefly
+// so a page of customer panels costs one Drive listing call, not one each.
+let folderCache: { at: number; folders: { id: string; name: string }[] } | null = null;
+const FOLDER_CACHE_TTL_MS = 5 * 60 * 1000;
+
 export interface DriveSheetRow {
   rowIndex: number;   // 0-based index in the sheet (used for hiding)
   id: string;
@@ -37,15 +77,19 @@ function normaliseName(s: string) {
 
 // Find the customer's subfolder inside the Contract Embroidery parent folder
 async function findCustomerFolderId(customerName: string): Promise<{ folderId: string; folderName: string } | null> {
-  const response = await connectors.proxy(
-    "google-drive",
-    `/drive/v3/files?q='${PARENT_FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=200`,
-    { method: "GET" }
-  );
-  const data = await response.json();
-  if (data.error) throw new Error(`Drive API error: ${data.error.message}`);
-
-  const folders: { id: string; name: string }[] = data.files || [];
+  let folders: { id: string; name: string }[];
+  if (folderCache && Date.now() - folderCache.at < FOLDER_CACHE_TTL_MS) {
+    folders = folderCache.folders;
+  } else {
+    const data = await googleApiJson(
+      "google-drive",
+      `/drive/v3/files?q='${PARENT_FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=200`,
+      { method: "GET" }
+    );
+    if (data.error) throw new Error(`Drive API error: ${data.error.message}`);
+    folders = data.files || [];
+    folderCache = { at: Date.now(), folders };
+  }
   const needle = normaliseName(customerName);
 
   // 1. Exact normalised match
@@ -64,12 +108,11 @@ async function findCustomerFolderId(customerName: string): Promise<{ folderId: s
 
 // Find the (first) Google Sheets file inside a customer folder
 async function findSpreadsheetInFolder(folderId: string): Promise<{ spreadsheetId: string; name: string } | null> {
-  const response = await connectors.proxy(
+  const data = await googleApiJson(
     "google-drive",
     `/drive/v3/files?q='${folderId}'+in+parents+and+mimeType='application/vnd.google-apps.spreadsheet'+and+trashed=false&fields=files(id,name)`,
     { method: "GET" }
   );
-  const data = await response.json();
   if (data.error) throw new Error(`Drive API error: ${data.error.message}`);
 
   const files: { id: string; name: string }[] = data.files || [];
@@ -84,16 +127,12 @@ export async function getCustomerDriveRows(customerName: string): Promise<Custom
   const sheet = await findSpreadsheetInFolder(folder.folderId);
   if (!sheet) return null;
 
-  // Fetch values and row-visibility metadata in parallel
-  const [valRes, metaRes] = await Promise.all([
-    connectors.proxy("google-sheet", `/v4/spreadsheets/${sheet.spreadsheetId}/values/${CALCULATIONS_SHEET_NAME}!A:K`, { method: "GET" }),
-    connectors.proxy("google-sheet", `/v4/spreadsheets/${sheet.spreadsheetId}?includeGridData=true&fields=sheets(data(rowMetadata(hiddenByUser)),properties(title,sheetId))`, { method: "GET" }),
-  ]);
-
-  const valData = await valRes.json();
-  const metaData = await metaRes.json();
+  // Fetch values then row-visibility metadata (throttled + retried)
+  const valData = await googleApiJson("google-sheet", `/v4/spreadsheets/${sheet.spreadsheetId}/values/${CALCULATIONS_SHEET_NAME}!A:K`, { method: "GET" });
+  const metaData = await googleApiJson("google-sheet", `/v4/spreadsheets/${sheet.spreadsheetId}?includeGridData=true&fields=sheets(data(rowMetadata(hiddenByUser)),properties(title,sheetId))`, { method: "GET" });
 
   if (valData.error) throw new Error(`Sheets values error: ${valData.error.message}`);
+  if (metaData.error) throw new Error(`Sheets metadata error: ${metaData.error.message}`);
 
   const values: string[][] = valData.values || [];
 
@@ -164,7 +203,7 @@ export async function appendJobRowToCustomerSheet(
     row.notes || "",                         // K: notes
   ]];
 
-  const res = await connectors.proxy(
+  const data = await googleApiJson(
     "google-sheet",
     `/v4/spreadsheets/${sheet.spreadsheetId}/values/${CALCULATIONS_SHEET_NAME}!A:K:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     {
@@ -173,7 +212,6 @@ export async function appendJobRowToCustomerSheet(
       headers: { "Content-Type": "application/json" },
     }
   );
-  const data = await res.json();
   if (data.error) throw new Error(`Sheets append error: ${data.error.message}`);
   return true;
 }
@@ -195,7 +233,7 @@ export async function hideDriveRows(spreadsheetId: string, sheetNumericId: numbe
     },
   }));
 
-  const res = await connectors.proxy(
+  const data = await googleApiJson(
     "google-sheet",
     `/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
     {
@@ -204,6 +242,5 @@ export async function hideDriveRows(spreadsheetId: string, sheetNumericId: numbe
       headers: { "Content-Type": "application/json" },
     }
   );
-  const data = await res.json();
   if (data.error) throw new Error(`Sheets batchUpdate error: ${data.error.message}`);
 }
