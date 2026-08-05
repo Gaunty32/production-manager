@@ -9343,11 +9343,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const latest = msgs[msgs.length - 1] ?? null;
         let recipientName = "Unknown";
         let recipientType: "customer" | "staff" = "customer";
-        if (c.staffRecipientId) {
-          recipientName = userMap.get(c.staffRecipientId)?.name ?? "Staff Member";
-          recipientType = "staff";
-        } else if (c.customerId) {
+        if (c.customerId) {
+          // Customer name always wins — some conversations have both a customer
+          // and a staff recipient, and labelling those "Staff Member" hides who
+          // the customer actually is.
           recipientName = custMap.get(c.customerId)?.name ?? "Unknown";
+        } else if (c.staffRecipientId) {
+          const u = userMap.get(c.staffRecipientId);
+          recipientName = [u?.firstName, u?.lastName].filter(Boolean).join(" ") || u?.email || "Staff Member";
+          recipientType = "staff";
         }
         return { ...c, customerName: recipientName, recipientName, recipientType, unreadCount: unread, latestMessage: latest };
       }));
