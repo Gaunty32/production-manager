@@ -1,0 +1,680 @@
+# Replit Development Instruction
+
+## Production job ownership, allocation and TV-dashboard update
+
+Update the existing production planning system and existing wall-mounted TV dashboard.
+
+Do not create a completely separate production system or replace the current TV dashboard.
+
+The purpose of this development is to change production planning from being primarily machine-led to being operator-led.
+
+Each production job must have a clearly named person responsible for progressing it.
+
+The system should continue recommending and tracking the machine used, but the primary ownership field should be the allocated operator.
+
+The core principle is:
+
+**People own jobs. Machines provide production capacity.**
+
+---
+
+# Part 1: Production job data structure
+
+Update every production job to include the following fields.
+
+## Required fields
+
+* Responsible operator
+* Recommended machine
+* Confirmed machine
+* Planned production date
+* Planned shift
+* Production priority
+* Estimated production minutes
+* Estimated setup minutes
+* Estimated total minutes
+* Production status
+* Allocation status
+* Actual start time
+* Actual completion time
+* Actual production minutes
+* Quantity allocated
+* Quantity completed
+* Quantity remaining
+* Allocated by
+* Allocation timestamp
+
+## Responsible operator
+
+This must be the person accountable for progressing the job.
+
+Available options should include active production staff and:
+
+* Unallocated
+* Team allocation
+* External/temporary operator where required
+
+Only one person should be the primary responsible operator at a time.
+
+The system may also allow secondary support operators, but responsibility must not become unclear.
+
+## Recommended machine
+
+The system should recommend the most suitable machine using available job data.
+
+The recommendation should consider:
+
+* Quantity
+* Stitch count
+* Number of logos
+* Garment type
+* Frame or hoop requirements
+* Number of colours
+* Estimated run time
+* Due date
+* Machine capability
+* Machine availability
+* Operator training
+* Existing machine workload
+* Whether the job is a repeat
+* Whether another similar job is already scheduled
+
+Anna or another authorised production manager must be able to override the recommended machine.
+
+The system must record:
+
+* Original recommendation
+* Confirmed machine
+* Who changed it
+* Reason for override, using an optional note
+
+---
+
+# Part 2: Job allocation workflow
+
+When a job becomes production-ready, change the workflow to the following:
+
+1. Confirm that stock, artwork and instructions are ready.
+2. Calculate an estimated production time.
+3. Identify suitable trained operators.
+4. Review each suitable operator’s allocated workload.
+5. Recommend a responsible operator.
+6. Recommend a machine.
+7. Recommend a production date and shift.
+8. Present the recommendation to Anna or an authorised manager.
+9. Allow the manager to accept or override the recommendation.
+10. Add the job to the operator’s personal work queue.
+11. Display the job on the production TV dashboard.
+12. Recalculate operator and machine workload.
+
+A production-ready job must not disappear into a general holding list.
+
+It must either be:
+
+* Allocated
+* Awaiting allocation
+* Blocked with a clear reason
+
+---
+
+# Part 3: Production statuses
+
+Use the following statuses consistently:
+
+* Awaiting stock
+* Awaiting artwork
+* Awaiting customer response
+* Ready for allocation
+* Allocated
+* Ready to start
+* In setup
+* In production
+* Paused
+* Awaiting quality check
+* Quality issue
+* Complete
+* Ready for dispatch
+* Dispatched
+* Cancelled
+
+If a job is paused or blocked, require a reason.
+
+Possible reasons should include:
+
+* Machine issue
+* Stock issue
+* Artwork issue
+* Operator unavailable
+* Quality concern
+* Missing instruction
+* Awaiting manager decision
+* Priority job inserted
+* Other
+
+---
+
+# Part 4: Estimated production time
+
+Add an estimated production-time calculation.
+
+The first version can use a configurable formula rather than needing to be perfect immediately.
+
+The estimate should consider:
+
+* Quantity
+* Stitch count per item
+* Number of machine heads
+* Estimated machine speed
+* Expected efficiency percentage
+* Setup allowance
+* Hooping allowance
+* Thread-change allowance
+* Garment difficulty factor
+* New-job or repeat-job factor
+* Quality-check allowance
+
+Use an initial structure similar to:
+
+Estimated running minutes =
+quantity × stitch count ÷ effective stitches per minute ÷ number of active heads
+
+Then add:
+
+* Setup minutes
+* Hooping/loading allowance
+* Thread-change allowance
+* Garment difficulty allowance
+* Quality-check allowance
+
+All calculation assumptions must be editable by an administrator.
+
+Create configurable difficulty multipliers for garment types such as:
+
+* Polo or T-shirt
+* Sweatshirt or hoodie
+* Jacket
+* Hi-vis garment
+* Cap
+* Bag
+* Awkward or specialist item
+
+Do not present estimated time as guaranteed.
+
+Display it as a planning estimate.
+
+---
+
+# Part 5: Operator skills and machine permissions
+
+Create or update an operator skills matrix.
+
+For each operator, record:
+
+* Machines they are trained to operate
+* Job types they can complete
+* Whether they can set up a new job
+* Whether they can approve a sample
+* Whether they can quality-check
+* Whether they can override a machine recommendation
+* Maximum preferred simultaneous workload
+* Normal working days
+* Normal working hours
+* Availability for overtime
+* Availability for weekend work
+
+Use this information when recommending operators.
+
+Do not recommend a job to someone who is not trained for the required process unless an authorised manager overrides it.
+
+---
+
+# Part 6: Personal operator work queue
+
+Create a simple personal production screen for each operator.
+
+The screen should show:
+
+## Current job
+
+* Customer or job reference
+* Garment description
+* Quantity
+* Logo/design
+* Confirmed machine
+* Priority
+* Due date
+* Estimated completion time
+* Production instructions
+* Current status
+
+## Next jobs
+
+Show the next jobs in the order they should be completed.
+
+For each job show:
+
+* Job reference
+* Quantity
+* Machine
+* Estimated minutes
+* Due date
+* Priority
+* Any important instruction
+
+## Daily totals
+
+Show:
+
+* Jobs allocated today
+* Items allocated today
+* Estimated hours allocated
+* Jobs completed
+* Items completed
+* Estimated hours completed
+* Work remaining
+* Whether the person is on track
+
+Operators should not be able to reorder priority jobs unless they have permission.
+
+They should be able to:
+
+* Start a job
+* Pause a job
+* Add a pause reason
+* Record quantity completed
+* Send a job to quality check
+* Raise a problem
+* Request manager help
+
+The interface must work well on mobile and tablets as well as desktop screens.
+
+---
+
+# Part 7: Production manager allocation screen
+
+Create a production-manager view designed mainly for Anna.
+
+This should be the main allocation and workload-balancing screen.
+
+Display each operator as a column or workload card.
+
+For each operator show:
+
+* Working hours available
+* Estimated hours allocated
+* Percentage capacity used
+* Jobs allocated
+* Items allocated
+* Items completed
+* Work remaining
+* Earliest due date
+* Jobs at risk
+* Current machine
+* Current job
+* Current status
+
+Use visual indicators:
+
+* Green: comfortably within capacity
+* Amber: close to capacity or attention required
+* Red: overloaded, overdue or at risk
+* Grey: unavailable or not working
+
+Include an unallocated-jobs area.
+
+Anna should be able to:
+
+* Drag and drop a job to an operator
+* Change the responsible operator
+* Accept or change the recommended machine
+* Change planned production date
+* Change shift
+* Change priority
+* Split a job between operators where genuinely required
+* Move jobs between operators
+* Add management notes
+* See the impact on estimated workload immediately
+
+If a job is split, retain one primary owner and record each split quantity clearly.
+
+---
+
+# Part 8: Capacity calculations
+
+Calculate capacity separately for:
+
+* Operator hours
+* Machine hours
+* Embroidery heads
+* Shift availability
+* Daily workload
+* Weekly workload
+
+Do not assume that eight heads automatically provide the same practical capacity in every job type.
+
+The model should allow comparison of:
+
+* One 8-head machine
+* Two 4-head machines
+* Four 2-head machines
+* Other future machine configurations
+
+Add an admin-only capacity-planning area where hypothetical machines and staff can be added without affecting live production.
+
+For each scenario show estimated:
+
+* Additional weekly operating hours
+* Additional head hours
+* Additional practical output
+* Additional staff required
+* Expected machine utilisation
+* Number of simultaneous jobs
+* Likely effect on small-job lead times
+* Likely effect on large-job capacity
+
+This can initially use configurable assumptions rather than claiming to be a precise forecast.
+
+---
+
+# Part 9: Growth trigger reporting
+
+Create a weekly capacity and growth report.
+
+Use rolling four-week averages.
+
+Show:
+
+* Average items submitted per week
+* Average items completed per week
+* Average jobs submitted
+* Average jobs completed
+* Average estimated production hours
+* Operator utilisation
+* Machine utilisation
+* On-time completion percentage
+* Backlog
+* Available capacity
+* Overtime hours
+* Weekend hours
+
+Add the following initial management trigger levels:
+
+## Monitor
+
+When completed or submitted demand reaches 2,500 items per week.
+
+## Flexible labour review
+
+When submitted demand exceeds 3,000 items per week for four consecutive completed weeks.
+
+## Machine and staffing review
+
+When submitted demand approaches 3,500 items per week for four consecutive completed weeks.
+
+## Capacity expansion required
+
+When submitted demand exceeds 4,000 items per week consistently or when existing operator capacity exceeds the agreed utilisation threshold.
+
+These figures must be editable by an administrator.
+
+Do not trigger recruitment or purchasing automatically.
+
+Show a management alert recommending a review.
+
+---
+
+# Part 10: Existing TV-dashboard update
+
+Update the existing production TV dashboard rather than creating another dashboard.
+
+The main display should become operator-led.
+
+## Main team workload section
+
+Show one card or row for each active operator.
+
+Initially include:
+
+* Anna
+* Maggie
+* Dave
+* Mollie
+* Ella
+* Any other active production staff
+
+Each operator card should show:
+
+* Current job
+* Current machine
+* Jobs allocated today
+* Items allocated today
+* Items completed today
+* Items remaining today
+* Estimated hours allocated
+* Estimated time remaining
+* Percentage of daily workload completed
+* Status
+
+Use status indicators:
+
+* On track
+* Attention
+* Behind
+* Blocked
+* Complete
+* Not working
+* Weekend shift
+* Management duties
+
+Anna’s card must recognise management time.
+
+Do not show her as underperforming simply because she is allocating jobs, resolving problems or quality-checking rather than operating a machine.
+
+Allow an administrator to assign planned management hours to her shift.
+
+## Daily team progress
+
+Show:
+
+* Today’s item target
+* Items completed
+* Items remaining
+* Percentage complete
+* Jobs due today
+* Jobs completed
+* Jobs remaining
+* Estimated production hours remaining
+* Current pace versus required pace
+
+## Priority alerts
+
+Show prominently:
+
+* Overdue jobs
+* Jobs due today not started
+* Jobs likely to miss their planned completion time
+* Unallocated production-ready jobs
+* Operators with excessive workload
+* Operators with spare capacity
+* Blocked jobs
+* Machines unavailable
+* Jobs awaiting quality check
+* Jobs waiting for stock, artwork or customer response
+
+## Machine section
+
+Keep machine information as a secondary section.
+
+For each machine show:
+
+* Machine name
+* Current operator
+* Current job
+* Current status
+* Items completed today
+* Estimated utilisation
+* Next allocated job
+* Unplanned idle time
+
+The operator section should appear above the machine section.
+
+## Weekly stability section
+
+Add a simple weekly performance section showing:
+
+* Current weekly output
+* Weekly minimum target
+* Rolling four-week average
+* On-time completion percentage
+* Current backlog
+* Forecast week-end output
+* Status: below target, on target or above target
+
+## Quality section
+
+Continue to show:
+
+* Days since last customer-impacting production error
+* Errors this month
+* Jobs awaiting quality review
+* Error-free order percentage where available
+
+---
+
+# Part 11: Fair performance measurement
+
+Do not rank staff solely by items completed.
+
+The system should show context including:
+
+* Estimated production hours
+* Job difficulty
+* Machine type
+* Number of setup changes
+* Management duties
+* Quality-check duties
+* Goods-in or finishing duties
+* Hours actually worked
+
+Create an adjusted productivity measure:
+
+Actual completed estimated hours ÷ available production hours
+
+Label this carefully as a planning measure, not a payroll measure.
+
+Do not use the TV dashboard to publicly display pay, absence reasons, disciplinary information or private performance notes.
+
+---
+
+# Part 12: Historical data and reporting accuracy
+
+Retain all existing historical production data.
+
+Do not overwrite historic machine-based records.
+
+Where historical jobs do not have a responsible operator, display them as:
+
+“Historic allocation unavailable”
+
+Do not guess an operator.
+
+Check why some existing machine and staff totals may be incomplete or uneven before using them for automated decisions.
+
+The system must distinguish between:
+
+* No production completed
+* No data recorded
+* Machine not available
+* Operator not working
+
+Do not treat missing data as zero without confirmation.
+
+---
+
+# Part 13: Permissions
+
+## Production manager
+
+Can:
+
+* Allocate jobs
+* Change operators
+* Override machines
+* Change priorities
+* Change planned dates
+* View team performance
+* Add management notes
+* Approve capacity changes
+
+## Operator
+
+Can:
+
+* View their own queue
+* Start and pause jobs
+* Record progress
+* Raise problems
+* Send work to quality check
+* View the main TV dashboard
+
+## Administrator
+
+Can:
+
+* Change calculation assumptions
+* Edit trigger levels
+* Manage operator skills
+* Manage machines
+* View all reports
+* Configure dashboard cards
+* Correct data errors
+
+---
+
+# Part 14: Implementation approach
+
+Build this in stages.
+
+## Stage 1
+
+* Add responsible operator
+* Add machine recommendation and confirmed machine
+* Add personal queues
+* Add operator workload to the TV dashboard
+* Add unallocated and at-risk job alerts
+
+## Stage 2
+
+* Add estimated production time
+* Add operator skills matrix
+* Add capacity percentages
+* Add rolling four-week reports
+* Add growth alerts
+
+## Stage 3
+
+* Add scenario planning
+* Add improved automated recommendations
+* Compare planned time against actual time
+* Refine estimates using completed-job history
+
+Before changing the live production workflow:
+
+1. Back up the production database.
+2. Test the changes in a staging environment.
+3. Test with historic job copies.
+4. Confirm that existing job allocation still works.
+5. Confirm that mobile views are usable.
+6. Confirm that the TV layout works at 1920 × 1080.
+7. Allow the new allocation method to be enabled by an administrator.
+8. Do not remove the previous fields until the new workflow is proven.
+
+The final result should make it immediately clear:
+
+* Who owns every production-ready job
+* What each person should work on next
+* Which machine they should use
+* How much work each person has
+* What is likely to be late
+* Where spare capacity exists
+* Whether the business is ready to add staff, machinery or new customers
