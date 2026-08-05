@@ -11,7 +11,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { DemoText } from "@/components/DemoText";
 
 interface WeeklyOutputData {
-  weeks: Array<{ weekStart: string; submitted: number; completed: number }>;
+  weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number }>;
   machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
   staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
 }
@@ -149,8 +149,8 @@ export function WeeklyOutputTab() {
     const lines: string[] = [];
     lines.push(`Weekly Output Report,${startDate} to ${endDate}`);
     lines.push("");
-    lines.push("Week beginning,Jobs submitted,Jobs completed");
-    for (const w of data.weeks) lines.push(`${w.weekStart},${w.submitted},${w.completed}`);
+    lines.push("Week beginning,Jobs submitted,Items submitted,Jobs completed,Items completed");
+    for (const w of data.weeks) lines.push(`${w.weekStart},${w.submitted},${w.submittedQty},${w.completed},${w.completedQty}`);
     lines.push("");
     lines.push("Items completed per machine");
     lines.push(["Week beginning", ...machinePivot.cols.map(c => `"${c.label}"`)].join(","));
@@ -212,7 +212,9 @@ export function WeeklyOutputTab() {
                       <TableRow>
                         <TableHead>Week beginning</TableHead>
                         <TableHead className="text-right">Jobs submitted</TableHead>
+                        <TableHead className="text-right">Items submitted</TableHead>
                         <TableHead className="text-right">Jobs completed</TableHead>
+                        <TableHead className="text-right">Items completed</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -220,7 +222,9 @@ export function WeeklyOutputTab() {
                         <TableRow key={w.weekStart}>
                           <TableCell className="whitespace-nowrap font-medium">{fmtWeek(w.weekStart)}</TableCell>
                           <TableCell className="text-right">{w.submitted.toLocaleString()}</TableCell>
+                          <TableCell className="text-right">{w.submittedQty.toLocaleString()}</TableCell>
                           <TableCell className="text-right">{w.completed.toLocaleString()}</TableCell>
+                          <TableCell className="text-right">{w.completedQty.toLocaleString()}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-muted/40">
@@ -229,7 +233,13 @@ export function WeeklyOutputTab() {
                           {data!.weeks.reduce((s, w) => s + w.submitted, 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right font-semibold">
+                          {data!.weeks.reduce((s, w) => s + w.submittedQty, 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
                           {data!.weeks.reduce((s, w) => s + w.completed, 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {data!.weeks.reduce((s, w) => s + w.completedQty, 0).toLocaleString()}
                         </TableCell>
                       </TableRow>
                     </TableBody>

@@ -286,7 +286,7 @@ export interface IStorage {
   getOutstandingQueueQuantity(): Promise<number>;
 
   getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
-    weeks: Array<{ weekStart: string; submitted: number; completed: number }>;
+    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number }>;
     machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
     staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
   }>;
@@ -2375,19 +2375,42 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
-    weeks: Array<{ weekStart: string; submitted: number; completed: number }>;
+    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number }>;
     machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
     staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
   }> {
     const { startDate, endDate, timezone = "Europe/London" } = params;
 
-    // Jobs submitted per week (week = Monday-start, UK time)
+    // Jobs + item quantity submitted per week (week = Monday-start, UK time)
     const submittedResult = await db.execute(sql`
       SELECT date_trunc('week', j.submitted_at AT TIME ZONE ${timezone})::date AS week_start,
-             COUNT(*) AS n
+             COUNT(*) AS n,
+             COALESCE(SUM((SELECT SUM(jli.quantity) FROM job_line_items jli WHERE jli.job_id = j.id)), 0) AS qty
       FROM jobs j
       WHERE j.submitted_at IS NOT NULL
         AND (j.submitted_at AT TIME ZONE ${timezone})::date BETWEEN ${startDate}::date AND ${endDate}::date
+      GROUP BY 1
+    `);
+
+    // Item quantity completed per week: production entries are the source of
+    // truth; line items with no entries fall back to their completion date.
+    const completedQtyResult = await db.execute(sql`
+      SELECT week_start, SUM(qty) AS qty
+      FROM (
+        SELECT date_trunc('week', pe.work_date AT TIME ZONE ${timezone})::date AS week_start,
+               SUM(pe.quantity_completed) AS qty
+        FROM production_entries pe
+        WHERE (pe.work_date AT TIME ZONE ${timezone})::date BETWEEN ${startDate}::date AND ${endDate}::date
+        GROUP BY 1
+        UNION ALL
+        SELECT date_trunc('week', jli.completed_at AT TIME ZONE ${timezone})::date AS week_start,
+               SUM(jli.quantity) AS qty
+        FROM job_line_items jli
+        WHERE jli.completed AND jli.completed_at IS NOT NULL
+          AND (jli.completed_at AT TIME ZONE ${timezone})::date BETWEEN ${startDate}::date AND ${endDate}::date
+          AND NOT EXISTS (SELECT 1 FROM production_entries pe2 WHERE pe2.line_item_id = jli.id)
+        GROUP BY 1
+      ) u
       GROUP BY 1
     `);
 
@@ -2456,16 +2479,25 @@ export class DatabaseStorage implements IStorage {
     const toDateStr = (v: any) => typeof v === "string" ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10);
 
     // Merge submitted + completed into a single per-week series covering the whole range
-    const weekMap = new Map<string, { submitted: number; completed: number }>();
+    const weekMap = new Map<string, { submitted: number; completed: number; submittedQty: number; completedQty: number }>();
+    const getWeek = (wk: string) => {
+      let entry = weekMap.get(wk);
+      if (!entry) {
+        entry = { submitted: 0, completed: 0, submittedQty: 0, completedQty: 0 };
+        weekMap.set(wk, entry);
+      }
+      return entry;
+    };
     for (const row of submittedResult.rows as any[]) {
-      const wk = toDateStr(row.week_start);
-      weekMap.set(wk, { submitted: Number(row.n), completed: 0 });
+      const entry = getWeek(toDateStr(row.week_start));
+      entry.submitted = Number(row.n);
+      entry.submittedQty = Number(row.qty) || 0;
     }
     for (const row of completedResult.rows as any[]) {
-      const wk = toDateStr(row.week_start);
-      const entry = weekMap.get(wk) || { submitted: 0, completed: 0 };
-      entry.completed = Number(row.n);
-      weekMap.set(wk, entry);
+      getWeek(toDateStr(row.week_start)).completed = Number(row.n);
+    }
+    for (const row of completedQtyResult.rows as any[]) {
+      getWeek(toDateStr(row.week_start)).completedQty = Number(row.qty) || 0;
     }
     const weeks = Array.from(weekMap.entries())
       .map(([weekStart, v]) => ({ weekStart, ...v }))
