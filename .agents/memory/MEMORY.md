@@ -19,6 +19,8 @@
 
 - [Auto-scheduling behavior](auto-scheduling-behavior.md) — booking needs a job_schedule row; two eligibility paths can drift; bulk endpoint has single-flight lock; opening Machine Schedule auto-books slots (side-effect).
 
+- [Operator-led allocation](operator-allocation.md) — jobs.machineId = confirmed machine; allocationStatus derived only in allocateJob; recommendation snapshot uses the incoming operator; /api/allocation/* is manager-gated.
+
 - [Line item operator](line-item-operator.md) — operatorId falls back to machine.defaultOperatorId; keep create+update routes in parity; queue filters apply per-line-item (one row per line item).
 
 - [Staff credit attribution](staff-credit-attribution.md) — production_entries is the source of truth for per-staff credit; completedById fallback ONLY when an item has zero entries all-time, or you double count.
