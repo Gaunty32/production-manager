@@ -40,6 +40,8 @@ interface JobCard {
   awaitingArtwork: boolean;
   overdue: boolean;
   dueToday: boolean;
+  suggestedOperatorId: string | null;
+  suggestedOperatorName: string | null;
 }
 
 interface BoardData {
@@ -103,6 +105,19 @@ export default function AllocationBoard() {
     onError: (e: any) => toast({ title: "Could not update allocation", description: e.message, variant: "destructive" }),
   });
 
+  const adoptMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/allocation/adopt-suggestions", {});
+      return res.json();
+    },
+    onSuccess: (data: { assigned: number }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/allocation/board"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: `${data.assigned} job${data.assigned === 1 ? "" : "s"} assigned`, description: "Each job now belongs to the operator it was scheduled with." });
+    },
+    onError: (e: any) => toast({ title: "Could not assign jobs", description: e.message, variant: "destructive" }),
+  });
+
   const openAllocate = (job: JobCard) => {
     setSelected(job);
     setOperatorId(job.responsibleOperatorId ?? "unallocated");
@@ -146,6 +161,9 @@ export default function AllocationBoard() {
         {job.machineName && <Badge variant="outline" className="text-[10px]">{job.machineName}</Badge>}
         {job.awaitingStock && <Badge variant="outline" className="text-[10px] text-amber-600">Stock</Badge>}
         {job.awaitingArtwork && <Badge variant="outline" className="text-[10px] text-amber-600">Artwork</Badge>}
+        {!job.responsibleOperatorId && job.suggestedOperatorName && (
+          <Badge variant="outline" className="text-[10px]">Scheduled: <DemoText>{job.suggestedOperatorName}</DemoText></Badge>
+        )}
       </div>
     </button>
   );
@@ -162,9 +180,24 @@ export default function AllocationBoard() {
       {(board?.unallocated.length ?? 0) > 0 && (
         <Card className="border-amber-500/50">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <UserX className="h-4 w-4 text-amber-600" />
-              Awaiting allocation ({board!.unallocated.length})
+            <CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap">
+              <span className="flex items-center gap-2">
+                <UserX className="h-4 w-4 text-amber-600" />
+                Awaiting allocation ({board!.unallocated.length})
+              </span>
+              {board!.unallocated.some(j => j.suggestedOperatorId) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => adoptMutation.mutate()}
+                  disabled={adoptMutation.isPending}
+                  data-testid="button-adopt-suggestions"
+                >
+                  {adoptMutation.isPending
+                    ? "Assigning…"
+                    : `Assign ${board!.unallocated.filter(j => j.suggestedOperatorId).length} to their scheduled operator`}
+                </Button>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

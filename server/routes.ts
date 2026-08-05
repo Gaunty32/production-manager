@@ -5677,6 +5677,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Give unowned jobs to the operator already implied by their line items /
+  // machine schedule (only when unambiguous).
+  app.post("/api/allocation/adopt-suggestions", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !isAllocationManager(user.role)) {
+        return res.status(403).json({ message: "Only production managers can allocate jobs" });
+      }
+      const { adoptSuggestedOperators } = await import("./allocation");
+      res.json(await adoptSuggestedOperators(user.id));
+    } catch (error: any) {
+      console.error("Adopt suggested operators error:", error);
+      res.status(500).json({ message: error.message || "Failed to assign jobs" });
+    }
+  });
+
   // All active jobs with owners — visible to every staff member (read-only)
   app.get("/api/active-jobs-overview", isStaffAuthenticated, async (req: any, res) => {
     try {

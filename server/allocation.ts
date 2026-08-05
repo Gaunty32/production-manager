@@ -61,6 +61,11 @@ type JobCard = {
   awaitingArtwork: boolean;
   overdue: boolean;
   dueToday: boolean;
+  /** For unowned jobs: the operator already implied by the line items /
+   * machine schedule (explicit line-item operator, else the machine's
+   * default operator) when it is unambiguous. */
+  suggestedOperatorId: string | null;
+  suggestedOperatorName: string | null;
   lineItems: Array<{
     id: string;
     jobType: string;
@@ -82,6 +87,7 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
   const allMachines = await db.select().from(machines);
   const allCustomers = await db.select().from(customers);
   const staffName = new Map(allStaff.map(s => [s.id, s.name]));
+  const activeStaffIds = new Set(allStaff.filter(s => s.active !== false).map(s => s.id));
   const machineName = new Map(allMachines.map(m => [m.id, m.name]));
   const custName = new Map(allCustomers.map(c => [c.id, c.name]));
   const itemsByJob = new Map<string, typeof items>();
@@ -90,9 +96,28 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
     arr.push(li);
     itemsByJob.set(li.jobId, arr);
   }
+  const machineDefaultOperator = new Map(allMachines.map(m => [m.id, m.defaultOperatorId ?? null]));
   const todayStr = londonDateStr(new Date());
   return activeJobs.map(j => {
     const lis = (itemsByJob.get(j.id) ?? []) as any[];
+    // Effective operator already implied by the schedule: explicit line-item
+    // operator first, else the assigned machine's default operator. Only
+    // suggest when every resolvable (incomplete) line item points at ONE person.
+    let suggestedOperatorId: string | null = null;
+    if (!j.responsibleOperatorId) {
+      const implied = new Set<string>();
+      for (const li of lis) {
+        if (li.completed) continue;
+        const op = li.operatorId ?? (li.machineId != null ? machineDefaultOperator.get(li.machineId) : null);
+        if (op) implied.add(op);
+      }
+      if (implied.size === 1) {
+        const only = Array.from(implied)[0];
+        // Only suggest active staff — inactive operators aren't rendered on
+        // the board, so assigning to them would hide the job entirely.
+        if (activeStaffIds.has(only)) suggestedOperatorId = only;
+      }
+    }
     const lineItems = lis.map(li => ({
       id: li.id,
       jobType: li.jobType,
@@ -129,6 +154,8 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
       awaitingArtwork: lis.some(li => !li.logoApproved),
       overdue: dueStr != null && dueStr < todayStr,
       dueToday: dueStr === todayStr,
+      suggestedOperatorId,
+      suggestedOperatorName: suggestedOperatorId ? staffName.get(suggestedOperatorId) ?? null : null,
       lineItems,
     };
   });
@@ -320,6 +347,21 @@ export async function allocateJob(
 
   const [updated] = await db.update(jobs).set(updates).where(eq(jobs.id, jobId)).returning();
   return updated;
+}
+
+/** Give every unowned, unblocked job whose line items already imply a single
+ * operator to that operator. Goes through allocateJob so status/audit fields
+ * are derived consistently. Returns how many jobs were assigned. */
+export async function adoptSuggestedOperators(allocatedById: string) {
+  const activeJobs = await getActiveJobs();
+  const cards = await buildJobCards(activeJobs);
+  const adoptable = cards.filter(
+    c => !c.responsibleOperatorId && c.allocationStatus !== "blocked" && c.suggestedOperatorId,
+  );
+  for (const c of adoptable) {
+    await allocateJob(c.id, { responsibleOperatorId: c.suggestedOperatorId, allocatedById });
+  }
+  return { assigned: adoptable.length };
 }
 
 /** Summary used by the TV dashboard and manager alerts. */
