@@ -286,7 +286,7 @@ export interface IStorage {
   getOutstandingQueueQuantity(): Promise<number>;
 
   getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
-    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number }>;
+    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null }>;
     machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
     staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
   }>;
@@ -2375,7 +2375,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
-    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number }>;
+    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null }>;
     machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
     staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
   }> {
@@ -2414,16 +2414,19 @@ export class DatabaseStorage implements IStorage {
       GROUP BY 1
     `);
 
-    // Jobs completed per week — a job counts in the week its final line item was completed
+    // Jobs completed per week — a job counts in the week its final line item
+    // was completed. Average job value (ex VAT) uses stored invoice totals.
     const completedResult = await db.execute(sql`
       SELECT date_trunc('week', t.done_at AT TIME ZONE ${timezone})::date AS week_start,
-             COUNT(*) AS n
+             COUNT(*) AS n,
+             AVG(j.invoice_total) FILTER (WHERE j.invoice_total IS NOT NULL AND j.invoice_total > 0) AS avg_value
       FROM (
         SELECT jli.job_id, MAX(jli.completed_at) AS done_at
         FROM job_line_items jli
         GROUP BY jli.job_id
         HAVING BOOL_AND(jli.completed) AND MAX(jli.completed_at) IS NOT NULL
       ) t
+      JOIN jobs j ON j.id = t.job_id
       WHERE (t.done_at AT TIME ZONE ${timezone})::date BETWEEN ${startDate}::date AND ${endDate}::date
       GROUP BY 1
     `);
@@ -2479,11 +2482,11 @@ export class DatabaseStorage implements IStorage {
     const toDateStr = (v: any) => typeof v === "string" ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10);
 
     // Merge submitted + completed into a single per-week series covering the whole range
-    const weekMap = new Map<string, { submitted: number; completed: number; submittedQty: number; completedQty: number }>();
+    const weekMap = new Map<string, { submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null }>();
     const getWeek = (wk: string) => {
       let entry = weekMap.get(wk);
       if (!entry) {
-        entry = { submitted: 0, completed: 0, submittedQty: 0, completedQty: 0 };
+        entry = { submitted: 0, completed: 0, submittedQty: 0, completedQty: 0, avgJobValue: null };
         weekMap.set(wk, entry);
       }
       return entry;
@@ -2494,7 +2497,9 @@ export class DatabaseStorage implements IStorage {
       entry.submittedQty = Number(row.qty) || 0;
     }
     for (const row of completedResult.rows as any[]) {
-      getWeek(toDateStr(row.week_start)).completed = Number(row.n);
+      const entry = getWeek(toDateStr(row.week_start));
+      entry.completed = Number(row.n);
+      entry.avgJobValue = row.avg_value != null ? Math.round(Number(row.avg_value) * 100) / 100 : null;
     }
     for (const row of completedQtyResult.rows as any[]) {
       getWeek(toDateStr(row.week_start)).completedQty = Number(row.qty) || 0;

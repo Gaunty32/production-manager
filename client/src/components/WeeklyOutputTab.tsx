@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Download } from "lucide-react";
 import { format } from "date-fns";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
 import { DemoText } from "@/components/DemoText";
 
 interface WeeklyOutputData {
-  weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number }>;
+  weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null }>;
   machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
   staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
 }
@@ -149,8 +150,8 @@ export function WeeklyOutputTab() {
     const lines: string[] = [];
     lines.push(`Weekly Output Report,${startDate} to ${endDate}`);
     lines.push("");
-    lines.push("Week beginning,Jobs submitted,Items submitted,Jobs completed,Items completed");
-    for (const w of data.weeks) lines.push(`${w.weekStart},${w.submitted},${w.submittedQty},${w.completed},${w.completedQty}`);
+    lines.push("Week beginning,Jobs submitted,Items submitted,Jobs completed,Items completed,Average job value (ex VAT)");
+    for (const w of data.weeks) lines.push(`${w.weekStart},${w.submitted},${w.submittedQty},${w.completed},${w.completedQty},${w.avgJobValue ?? ""}`);
     lines.push("");
     lines.push("Items completed per machine");
     lines.push(["Week beginning", ...machinePivot.cols.map(c => `"${c.label}"`)].join(","));
@@ -198,6 +199,69 @@ export function WeeklyOutputTab() {
         <Skeleton className="h-64 w-full" />
       ) : (
         <>
+          {(data?.weeks.length ?? 0) > 0 && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Jobs per week</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data!.weeks.map(w => ({ ...w, week: fmtWeek(w.weekStart) }))}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="submitted" name="Jobs submitted" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="completed" name="Jobs completed" fill="#22c55e" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Items per week</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data!.weeks.map(w => ({ ...w, week: fmtWeek(w.weekStart) }))}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="submittedQty" name="Items submitted" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="completedQty" name="Items completed" fill="#22c55e" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="lg:col-span-2">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Average job value per week (£ ex VAT)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={data!.weeks.map(w => ({ ...w, week: fmtWeek(w.weekStart) }))}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `£${v}`} />
+                        <Tooltip formatter={(v: any) => [`£${Number(v).toFixed(2)}`, "Average job value"]} />
+                        <Line type="monotone" dataKey="avgJobValue" name="Average job value" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Jobs submitted and completed per week</CardTitle>
@@ -215,6 +279,7 @@ export function WeeklyOutputTab() {
                         <TableHead className="text-right">Items submitted</TableHead>
                         <TableHead className="text-right">Jobs completed</TableHead>
                         <TableHead className="text-right">Items completed</TableHead>
+                        <TableHead className="text-right">Avg job value</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -225,6 +290,7 @@ export function WeeklyOutputTab() {
                           <TableCell className="text-right">{w.submittedQty.toLocaleString()}</TableCell>
                           <TableCell className="text-right">{w.completed.toLocaleString()}</TableCell>
                           <TableCell className="text-right">{w.completedQty.toLocaleString()}</TableCell>
+                          <TableCell className="text-right">{w.avgJobValue != null ? `£${w.avgJobValue.toFixed(2)}` : <span className="text-muted-foreground">–</span>}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-muted/40">
@@ -240,6 +306,15 @@ export function WeeklyOutputTab() {
                         </TableCell>
                         <TableCell className="text-right font-semibold">
                           {data!.weeks.reduce((s, w) => s + w.completedQty, 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {(() => {
+                            const withVal = data!.weeks.filter(w => w.avgJobValue != null);
+                            if (withVal.length === 0) return "–";
+                            const weighted = withVal.reduce((s, w) => s + (w.avgJobValue as number) * w.completed, 0);
+                            const jobs = withVal.reduce((s, w) => s + w.completed, 0);
+                            return jobs > 0 ? `£${(weighted / jobs).toFixed(2)}` : "–";
+                          })()}
                         </TableCell>
                       </TableRow>
                     </TableBody>
