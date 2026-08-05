@@ -167,6 +167,10 @@ export function WeeklyOutputTab() {
         week: fmtWeek(w.weekStart),
         submitted, completed, submittedQty, completedQty,
         customersSubmitted: custSub, customersCompleted: custComp,
+        // Weekly (non-cumulative) values for the trend charts
+        wSubmitted: w.submitted, wCompleted: w.completed,
+        wSubmittedQty: w.submittedQty, wCompletedQty: w.completedQty,
+        wCustomersSubmitted: w.customersSubmitted, wCustomersCompleted: w.customersCompleted,
         avgLogoPrice: w.avgLogoPrice,
       };
     });
@@ -283,6 +287,66 @@ export function WeeklyOutputTab() {
                         <Legend />
                         <Line type="monotone" dataKey="customersSubmitted" name="Customers submitting" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} />
                         <Line type="monotone" dataKey="customersCompleted" name="Customers with completions" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Jobs week by week</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={wormData}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="wSubmitted" name="Jobs submitted" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} />
+                        <Line type="monotone" dataKey="wCompleted" name="Jobs completed" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Items week by week</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={wormData}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="wSubmittedQty" name="Items submitted" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} />
+                        <Line type="monotone" dataKey="wCompletedQty" name="Items completed" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Customers week by week</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={wormData}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="wCustomersSubmitted" name="Customers submitting" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} />
+                        <Line type="monotone" dataKey="wCustomersCompleted" name="Customers with completions" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
