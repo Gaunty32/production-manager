@@ -17,6 +17,34 @@ interface WeeklyOutputData {
   staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
 }
 
+const SERIES_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#a855f7", "#84cc16", "#ec4899", "#0ea5e9", "#f97316", "#14b8a6", "#8b5cf6"];
+
+function SeriesChart({ title, data, cols }: { title: string; data: Array<Record<string, string | number>>; cols: Array<{ key: string; label: string }> }) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+              <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {cols.map((c, i) => (
+                <Line key={c.key} type="monotone" dataKey={c.label} stroke={SERIES_COLORS[i % SERIES_COLORS.length]} strokeWidth={2} dot={{ r: 2 }} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function fmtWeek(weekStart: string) {
   try {
     return format(new Date(weekStart + "T00:00:00"), "d MMM yyyy");
@@ -175,6 +203,31 @@ export function WeeklyOutputTab() {
       };
     });
   }, [data?.weeks]);
+
+  // Per-machine / per-staff chart data: one point per week, one field per column.
+  // Cumulative variant is the "worm"; weekly variant shows trends.
+  const seriesChartData = (p: ReturnType<typeof pivot>, cumulative: boolean) => {
+    const running = new Map<string, number>();
+    return p.weekStarts.map(wk => {
+      const row: Record<string, string | number> = { week: fmtWeek(wk) };
+      const cells = p.cells.get(wk)!;
+      for (const c of p.cols) {
+        const v = cells.get(c.key) || 0;
+        if (cumulative) {
+          const cum = (running.get(c.key) || 0) + v;
+          running.set(c.key, cum);
+          row[c.label] = cum;
+        } else {
+          row[c.label] = v;
+        }
+      }
+      return row;
+    });
+  };
+  const machineWorm = useMemo(() => seriesChartData(machinePivot, true), [machinePivot]);
+  const machineWeeklyChart = useMemo(() => seriesChartData(machinePivot, false), [machinePivot]);
+  const staffWorm = useMemo(() => seriesChartData(staffPivot, true), [staffPivot]);
+  const staffWeeklyChart = useMemo(() => seriesChartData(staffPivot, false), [staffPivot]);
 
   const exportCsv = () => {
     if (!data) return;
@@ -435,6 +488,19 @@ export function WeeklyOutputTab() {
               )}
             </CardContent>
           </Card>
+
+          {machinePivot.weekStarts.length > 0 && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <SeriesChart title="Items completed per machine — worm (running total)" data={machineWorm} cols={machinePivot.cols} />
+              <SeriesChart title="Items completed per machine — week by week" data={machineWeeklyChart} cols={machinePivot.cols} />
+            </div>
+          )}
+          {staffPivot.weekStarts.length > 0 && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <SeriesChart title="Items completed per staff member — worm (running total)" data={staffWorm} cols={staffPivot.cols} />
+              <SeriesChart title="Items completed per staff member — week by week" data={staffWeeklyChart} cols={staffPivot.cols} />
+            </div>
+          )}
 
           <PivotTable title="Items completed per machine (weekly)" data={machinePivot} testId="table-weekly-machines" />
           <PivotTable title="Items completed per staff member (weekly)" data={staffPivot} testId="table-weekly-staff" />
