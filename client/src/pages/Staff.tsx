@@ -1,4 +1,13 @@
-import { Plus, Trash2, Pencil, UserX, UserCheck } from "lucide-react";
+import { Plus, Trash2, Pencil, UserX, UserCheck, Smartphone } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -23,6 +32,8 @@ export default function StaffPage() {
   const { toast } = useToast();
   const [staffToDelete, setStaffToDelete] = useState<string | null>(null);
   const [staffToEdit, setStaffToEdit] = useState<Staff | null>(null);
+  const [staffToInvite, setStaffToInvite] = useState<Staff | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
 
   const { data: staffData = [], isLoading } = useQuery<Staff[]>({
     queryKey: ["/api/staff"],
@@ -100,6 +111,28 @@ export default function StaffPage() {
         variant: "destructive",
       });
       setStaffToDelete(null);
+    },
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: async ({ id, email }: { id: string; email: string }) => {
+      const res = await apiRequest("POST", `/api/staff/${id}/app-invite`, { email });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/staff"] });
+      toast({
+        title: "Invite sent",
+        description: "They've been emailed a set-password link and instructions for adding the app to their phone.",
+      });
+      setStaffToInvite(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Could not send invite",
+        description: error.message || "Failed to send app invite",
+        variant: "destructive",
+      });
     },
   });
 
@@ -223,6 +256,17 @@ export default function StaffPage() {
                           </Button>
                           <Button
                             variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setStaffToInvite(staffMember);
+                              setInviteEmail(staffMember.email || "");
+                            }}
+                            data-testid={`button-invite-staff-${staffMember.id}`}
+                          >
+                            <Smartphone className="h-4 w-4 mr-1" /> App invite
+                          </Button>
+                          <Button
+                            variant="ghost"
                             size="icon"
                             onClick={() => handleDelete(staffMember.id)}
                             data-testid={`button-delete-staff-${staffMember.id}`}
@@ -239,6 +283,39 @@ export default function StaffPage() {
             </table>
           </div>
         </div>
+
+        <Dialog open={staffToInvite !== null} onOpenChange={(open) => !open && setStaffToInvite(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Send app invite{staffToInvite ? ` to ${staffToInvite.name}` : ""}</DialogTitle>
+              <DialogDescription>
+                They'll get an email explaining what the app is for, a link to set their password,
+                and instructions for adding it to their phone's home screen. Their login is created
+                automatically if they don't have one yet.
+              </DialogDescription>
+            </DialogHeader>
+            <div>
+              <label className="text-sm font-medium block mb-1">Their email address</label>
+              <Input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="name@example.com"
+                data-testid="input-invite-email"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setStaffToInvite(null)}>Cancel</Button>
+              <Button
+                onClick={() => staffToInvite && inviteMutation.mutate({ id: staffToInvite.id, email: inviteEmail.trim() })}
+                disabled={inviteMutation.isPending || !inviteEmail.includes("@")}
+                data-testid="button-send-invite"
+              >
+                {inviteMutation.isPending ? "Sending…" : "Send invite"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog open={staffToDelete !== null} onOpenChange={(open) => !open && setStaffToDelete(null)}>
           <AlertDialogContent>

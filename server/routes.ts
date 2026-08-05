@@ -5272,8 +5272,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: error.errors });
       } else {
+        res.status(500).json({ error: "Failed to update staff member" });
+      }
+    }
+  });
+
+  // Send a staff member an app invite: creates their login if needed and emails
+  // a set-password link plus instructions for adding the app to their phone.
+  app.post("/api/staff/:id/app-invite", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const actingUser = await storage.getUser(req.session.userId);
+      if (!actingUser || !["super_admin", "admin", "manager"].includes(actingUser.role)) {
+        return res.status(403).json({ error: "Only managers can send app invites" });
+      }
+      const { email: rawEmail } = z.object({ email: z.string().email("A valid email address is required") }).parse(req.body);
+      const email = rawEmail.trim().toLowerCase();
+      const allStaff = await storage.getStaff();
+      const staffMember = allStaff.find(s => s.id === req.params.id);
+      if (!staffMember) return res.status(404).json({ error: "Staff member not found" });
+
+      // Resolve their login WITHOUT persisting anything yet.
+      let user: any;
+      let isExistingUser = false;
+      let createdUserId: string | null = null;
+
+      if (staffMember.userId) {
+        // Already linked: the invite email MUST match the linked login's email —
+        // otherwise a reset link for that account would go to a different mailbox.
+        user = await storage.getUser(staffMember.userId);
+        if (!user) return res.status(409).json({ error: "This staff member's linked login no longer exists — contact support" });
+        if ((user.email || "").toLowerCase() !== email) {
+          return res.status(409).json({
+            error: `${staffMember.name} already has a login under ${user.email}. Send the invite to that address, or update their login email first.`,
+          });
+        }
+        isExistingUser = true;
+      } else {
+        const existingByEmail = await storage.getUserByEmail(email);
+        if (existingByEmail) {
+          // Only allow linking an existing login when it is a plain staff login
+          // not already attached to anyone else.
+          const linkedElsewhere = allStaff.find(s => s.userId === existingByEmail.id);
+          if (linkedElsewhere) {
+            return res.status(409).json({ error: `That email already belongs to ${linkedElsewhere.name}'s login` });
+          }
+          if (existingByEmail.role !== "staff") {
+            return res.status(409).json({ error: "That email belongs to a manager/admin login and can't be linked to a staff member this way" });
+          }
+          user = existingByEmail;
+          isExistingUser = true;
+        } else {
+          // Create a fresh staff login with an unusable random password.
+          const base = staffMember.name.toLowerCase().replace(/[^a-z0-9]/g, "") || "staff";
+          let username = base;
+          for (let i = 2; await storage.getUserByUsername(username); i++) username = `${base}${i}`;
+          const randomPassword = crypto.randomBytes(24).toString("hex");
+          user = await registerStaff({
+            username,
+            email,
+            password: randomPassword,
+            firstName: staffMember.name.split(" ")[0],
+            lastName: staffMember.name.split(" ").slice(1).join(" ") || undefined,
+            role: "staff",
+          } as any);
+          createdUserId = user.id;
+        }
+      }
+
+      // Set-password link (72 hours) and email — send BEFORE persisting the
+      // link so a failed send doesn't leave half-configured state.
+      const token = crypto.randomBytes(32).toString("hex");
+      await storage.createPasswordResetToken({
+        userId: user.id,
+        token,
+        expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+      });
+
+      const baseUrl = process.env.REPLIT_DEPLOYMENT === "1"
+        ? "https://production.selectbranding.co.uk"
+        : (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "http://localhost:5000");
+      const inviterStaff = allStaff.find(s => s.userId && String(s.userId) === String(actingUser.id));
+      try {
+        const { sendStaffAppInviteEmail } = await import("./emailService");
+        await sendStaffAppInviteEmail({
+          to: email,
+          staffName: staffMember.name,
+          inviterName: inviterStaff?.name || actingUser.firstName || "Your manager",
+          setPasswordUrl: `${baseUrl}/reset-password?token=${token}`,
+          appUrl: `${baseUrl}/staff/login`,
+          isExistingUser,
+        });
+      } catch (sendErr) {
+        // Compensate: remove the login we just created so a retry starts clean.
+        if (createdUserId) {
+          try { await storage.deleteUser(createdUserId); } catch {}
+        }
+        throw sendErr;
+      }
+
+      // Persist only after the email went out.
+      const staffUpdates: any = {};
+      if (staffMember.email !== email) staffUpdates.email = email;
+      if (staffMember.userId !== user.id) staffUpdates.userId = user.id;
+      if (Object.keys(staffUpdates).length > 0) {
+        await storage.updateStaff(staffMember.id, staffUpdates);
+      }
+
+      res.json({ success: true, isExistingUser });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors.map(e => e.message).join(", ") });
+      } else {
+        console.error("App invite failed:", error);
         res.status(500).json({ 
-          error: error instanceof Error ? error.message : "Failed to update staff member" 
+          error: error instanceof Error ? error.message : "Failed to send app invite" 
         });
       }
     }

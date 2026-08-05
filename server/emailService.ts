@@ -304,6 +304,52 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
   return data;
 }
 
+export async function sendStaffAppInviteEmail(params: {
+  to: string;
+  staffName: string;
+  inviterName: string;
+  setPasswordUrl: string;
+  appUrl: string;
+  isExistingUser: boolean;
+}) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const firstName = sanitizeHtml(params.staffName.split(" ")[0]);
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Welcome to the Select Branding staff app</h2>
+    <p style="margin:0 0 12px;">Hi ${firstName},</p>
+    <p style="margin:0 0 12px;">${sanitizeHtml(params.inviterName)} has set you up on our Production Manager — the app we use to run jobs, holidays and shifts. From your phone you can:</p>
+    <ul style="margin:0 0 16px;padding-left:20px;color:#18181b;">
+      <li style="margin-bottom:6px;"><strong>See the jobs</strong> in production and which ones are allocated to you</li>
+      <li style="margin-bottom:6px;"><strong>Mark your own jobs complete</strong> as you finish them</li>
+      <li style="margin-bottom:6px;"><strong>Book holidays</strong> — requests with 7+ days notice are approved automatically when cover is available</li>
+      <li style="margin-bottom:6px;"><strong>Check your holiday allowance</strong> and see what you have left</li>
+    </ul>
+    <p style="margin:0 0 4px;"><strong>Step 1 — Set your password</strong>${params.isExistingUser ? " (or reset it if you already have one)" : ""}:</p>
+    ${ctaButton(params.setPasswordUrl, 'Set My Password')}
+    <p style="margin:16px 0 4px;"><strong>Step 2 — Add the app to your phone's home screen:</strong></p>
+    <ol style="margin:0 0 16px;padding-left:20px;color:#18181b;">
+      <li style="margin-bottom:6px;">Open <a href="${params.appUrl}" style="color:#4f46e5;">${params.appUrl}</a> on your phone</li>
+      <li style="margin-bottom:6px;">On iPhone: tap the Share button, then <strong>Add to Home Screen</strong></li>
+      <li style="margin-bottom:6px;">On Android: tap the browser menu (three dots), then <strong>Add to Home screen</strong></li>
+      <li>It will then work just like a normal app</li>
+    </ol>
+    <p style="margin:0 0 12px;">Sign in with this email address (<strong>${sanitizeHtml(params.to)}</strong>) and the password you set.</p>
+    ${divider}
+    ${muted('The password link expires in 72 hours — if it runs out, use "Forgot password" on the sign-in page or ask a manager to resend this invite.')}
+  `;
+
+  const { data, error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: params.to,
+    subject: 'Your Select Branding staff app — set up in 2 minutes',
+    html: brandedEmail(body),
+  });
+  if (error) {
+    throw new Error(`Failed to send email: ${error.message}`);
+  }
+  return data;
+}
+
 export async function sendHolidayRequestNotificationEmail(params: {
   to: string;
   staffName: string;
