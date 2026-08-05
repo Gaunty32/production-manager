@@ -286,7 +286,7 @@ export interface IStorage {
   getOutstandingQueueQuantity(): Promise<number>;
 
   getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
-    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null; customersSubmitted: number; customersCompleted: number }>;
+    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgLogoPrice: number | null; invValue: number; invQty: number; customersSubmitted: number; customersCompleted: number }>;
     machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
     staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
   }>;
@@ -2375,7 +2375,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
-    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null; customersSubmitted: number; customersCompleted: number }>;
+    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgLogoPrice: number | null; invValue: number; invQty: number; customersSubmitted: number; customersCompleted: number }>;
     machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
     staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
   }> {
@@ -2416,12 +2416,15 @@ export class DatabaseStorage implements IStorage {
     `);
 
     // Jobs completed per week — a job counts in the week its final line item
-    // was completed. Average job value (ex VAT) uses stored invoice totals.
+    // was completed. Average price per logo application (ex VAT) = total
+    // invoiced value / total items, over jobs that have an invoice total.
     const completedResult = await db.execute(sql`
       SELECT date_trunc('week', t.done_at AT TIME ZONE ${timezone})::date AS week_start,
              COUNT(*) AS n,
              COUNT(DISTINCT j.customer_id) AS customers,
-             AVG(j.invoice_total) FILTER (WHERE j.invoice_total IS NOT NULL AND j.invoice_total > 0) AS avg_value
+             SUM(j.invoice_total) FILTER (WHERE j.invoice_total IS NOT NULL AND j.invoice_total > 0) AS inv_value,
+             SUM((SELECT SUM(jli3.quantity) FROM job_line_items jli3 WHERE jli3.job_id = j.id))
+               FILTER (WHERE j.invoice_total IS NOT NULL AND j.invoice_total > 0) AS inv_qty
       FROM (
         SELECT jli.job_id, MAX(jli.completed_at) AS done_at
         FROM job_line_items jli
@@ -2484,11 +2487,11 @@ export class DatabaseStorage implements IStorage {
     const toDateStr = (v: any) => typeof v === "string" ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10);
 
     // Merge submitted + completed into a single per-week series covering the whole range
-    const weekMap = new Map<string, { submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null; customersSubmitted: number; customersCompleted: number }>();
+    const weekMap = new Map<string, { submitted: number; completed: number; submittedQty: number; completedQty: number; avgLogoPrice: number | null; invValue: number; invQty: number; customersSubmitted: number; customersCompleted: number }>();
     const getWeek = (wk: string) => {
       let entry = weekMap.get(wk);
       if (!entry) {
-        entry = { submitted: 0, completed: 0, submittedQty: 0, completedQty: 0, avgJobValue: null, customersSubmitted: 0, customersCompleted: 0 };
+        entry = { submitted: 0, completed: 0, submittedQty: 0, completedQty: 0, avgLogoPrice: null, invValue: 0, invQty: 0, customersSubmitted: 0, customersCompleted: 0 };
         weekMap.set(wk, entry);
       }
       return entry;
@@ -2503,7 +2506,11 @@ export class DatabaseStorage implements IStorage {
       const entry = getWeek(toDateStr(row.week_start));
       entry.completed = Number(row.n);
       entry.customersCompleted = Number(row.customers) || 0;
-      entry.avgJobValue = row.avg_value != null ? Math.round(Number(row.avg_value) * 100) / 100 : null;
+      const invValue = row.inv_value != null ? Number(row.inv_value) : 0;
+      const invQty = row.inv_qty != null ? Number(row.inv_qty) : 0;
+      entry.invValue = Math.round(invValue * 100) / 100;
+      entry.invQty = invQty;
+      entry.avgLogoPrice = invQty > 0 ? Math.round((invValue / invQty) * 100) / 100 : null;
     }
     for (const row of completedQtyResult.rows as any[]) {
       getWeek(toDateStr(row.week_start)).completedQty = Number(row.qty) || 0;
