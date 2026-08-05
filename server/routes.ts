@@ -1763,6 +1763,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Weekly output report: jobs submitted/completed per week, plus weekly
+  // production per machine and per staff member, over a caller-set date range.
+  app.get("/api/reports/weekly-output", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const querySchema = z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      });
+      const params = querySchema.parse(req.query);
+      if (params.startDate > params.endDate) {
+        return res.status(400).json({ error: "Start date must be before end date" });
+      }
+      const data = await storage.getWeeklyOutputReport({
+        startDate: params.startDate,
+        endDate: params.endDate,
+        timezone: "Europe/London",
+      });
+      res.json(data);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters", details: error.errors });
+      }
+      console.error("Error fetching weekly output report:", error);
+      res.status(500).json({ error: "Failed to fetch weekly output report" });
+    }
+  });
+
   // Data Quality report: completed line items whose recorded production time
   // looks unreliable — missing/zero, or exactly equal to the system estimate
   // (a tell-tale sign the estimate was copied instead of the real time).

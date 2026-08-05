@@ -283,6 +283,12 @@ export interface IStorage {
     }>;
   }>;
 
+  getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
+    weeks: Array<{ weekStart: string; submitted: number; completed: number }>;
+    machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
+    staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
+  }>;
+
   getStaffProductivity(params: { staffId: string; startDate: string; endDate: string; timezone?: string }): Promise<{
     staff: { id: string; name: string } | null;
     summary: {
@@ -2352,6 +2358,120 @@ export class DatabaseStorage implements IStorage {
     }));
 
     return { weekly, rolling, deliveryJobs };
+  }
+
+  async getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
+    weeks: Array<{ weekStart: string; submitted: number; completed: number }>;
+    machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
+    staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
+  }> {
+    const { startDate, endDate, timezone = "Europe/London" } = params;
+
+    // Jobs submitted per week (week = Monday-start, UK time)
+    const submittedResult = await db.execute(sql`
+      SELECT date_trunc('week', j.submitted_at AT TIME ZONE ${timezone})::date AS week_start,
+             COUNT(*) AS n
+      FROM jobs j
+      WHERE j.submitted_at IS NOT NULL
+        AND (j.submitted_at AT TIME ZONE ${timezone})::date BETWEEN ${startDate}::date AND ${endDate}::date
+      GROUP BY 1
+    `);
+
+    // Jobs completed per week — a job counts in the week its final line item was completed
+    const completedResult = await db.execute(sql`
+      SELECT date_trunc('week', t.done_at AT TIME ZONE ${timezone})::date AS week_start,
+             COUNT(*) AS n
+      FROM (
+        SELECT jli.job_id, MAX(jli.completed_at) AS done_at
+        FROM job_line_items jli
+        GROUP BY jli.job_id
+        HAVING BOOL_AND(jli.completed) AND MAX(jli.completed_at) IS NOT NULL
+      ) t
+      WHERE (t.done_at AT TIME ZONE ${timezone})::date BETWEEN ${startDate}::date AND ${endDate}::date
+      GROUP BY 1
+    `);
+
+    // Weekly items completed per machine. Production entries are the source of
+    // truth; line items with NO entries at all fall back to the line item's
+    // own machine + completion date (mirrors staff-credit attribution rules).
+    const machineResult = await db.execute(sql`
+      SELECT week_start, machine_id, COALESCE(m.name, 'Machine ' || machine_id) AS machine_name, SUM(qty) AS qty
+      FROM (
+        SELECT date_trunc('week', pe.work_date AT TIME ZONE ${timezone})::date AS week_start,
+               pe.machine_id, SUM(pe.quantity_completed) AS qty
+        FROM production_entries pe
+        WHERE pe.machine_id IS NOT NULL
+          AND (pe.work_date AT TIME ZONE ${timezone})::date BETWEEN ${startDate}::date AND ${endDate}::date
+        GROUP BY 1, 2
+        UNION ALL
+        SELECT date_trunc('week', jli.completed_at AT TIME ZONE ${timezone})::date AS week_start,
+               jli.machine_id, SUM(jli.quantity) AS qty
+        FROM job_line_items jli
+        WHERE jli.completed AND jli.completed_at IS NOT NULL AND jli.machine_id IS NOT NULL
+          AND (jli.completed_at AT TIME ZONE ${timezone})::date BETWEEN ${startDate}::date AND ${endDate}::date
+          AND NOT EXISTS (SELECT 1 FROM production_entries pe2 WHERE pe2.line_item_id = jli.id)
+        GROUP BY 1, 2
+      ) u
+      LEFT JOIN machines m ON m.id = u.machine_id
+      GROUP BY 1, 2, 3
+    `);
+
+    // Weekly items completed per staff member — same source-of-truth + fallback
+    // rules: entries first; items with zero entries credit completed_by.
+    const staffResult = await db.execute(sql`
+      SELECT week_start, staff_id, s.name AS staff_name, SUM(qty) AS qty
+      FROM (
+        SELECT date_trunc('week', pe.work_date AT TIME ZONE ${timezone})::date AS week_start,
+               pe.staff_id, SUM(pe.quantity_completed) AS qty
+        FROM production_entries pe
+        WHERE (pe.work_date AT TIME ZONE ${timezone})::date BETWEEN ${startDate}::date AND ${endDate}::date
+        GROUP BY 1, 2
+        UNION ALL
+        SELECT date_trunc('week', jli.completed_at AT TIME ZONE ${timezone})::date AS week_start,
+               jli.completed_by_id AS staff_id, SUM(jli.quantity) AS qty
+        FROM job_line_items jli
+        WHERE jli.completed AND jli.completed_at IS NOT NULL AND jli.completed_by_id IS NOT NULL
+          AND (jli.completed_at AT TIME ZONE ${timezone})::date BETWEEN ${startDate}::date AND ${endDate}::date
+          AND NOT EXISTS (SELECT 1 FROM production_entries pe2 WHERE pe2.line_item_id = jli.id)
+        GROUP BY 1, 2
+      ) u
+      JOIN staff s ON s.id = u.staff_id
+      GROUP BY 1, 2, 3
+    `);
+
+    const toDateStr = (v: any) => typeof v === "string" ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10);
+
+    // Merge submitted + completed into a single per-week series covering the whole range
+    const weekMap = new Map<string, { submitted: number; completed: number }>();
+    for (const row of submittedResult.rows as any[]) {
+      const wk = toDateStr(row.week_start);
+      weekMap.set(wk, { submitted: Number(row.n), completed: 0 });
+    }
+    for (const row of completedResult.rows as any[]) {
+      const wk = toDateStr(row.week_start);
+      const entry = weekMap.get(wk) || { submitted: 0, completed: 0 };
+      entry.completed = Number(row.n);
+      weekMap.set(wk, entry);
+    }
+    const weeks = Array.from(weekMap.entries())
+      .map(([weekStart, v]) => ({ weekStart, ...v }))
+      .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+
+    const machineWeekly = (machineResult.rows as any[]).map(r => ({
+      weekStart: toDateStr(r.week_start),
+      machineId: Number(r.machine_id),
+      machineName: String(r.machine_name),
+      quantity: Number(r.qty),
+    })).sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+
+    const staffWeekly = (staffResult.rows as any[]).map(r => ({
+      weekStart: toDateStr(r.week_start),
+      staffId: String(r.staff_id),
+      staffName: String(r.staff_name),
+      quantity: Number(r.qty),
+    })).sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+
+    return { weeks, machineWeekly, staffWeekly };
   }
 
   async getStaffProductivity(params: { staffId: string; startDate: string; endDate: string; timezone?: string }): Promise<{

@@ -18,6 +18,7 @@ import { ProductionWeekSummary } from "@/components/ProductionWeekSummary";
 import { KeyMetricsTab } from "@/components/KeyMetricsTab";
 import { StaffProductivityTab } from "@/components/StaffProductivityTab";
 import { DataQualityTab } from "@/components/DataQualityTab";
+import { WeeklyOutputTab } from "@/components/WeeklyOutputTab";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -787,6 +788,10 @@ function WeeklyReportsContent() {
             <TrendingUp className="h-4 w-4 mr-2" />
             Daily Production
           </TabsTrigger>
+          <TabsTrigger value="weekly-output" data-testid="tab-weekly-output">
+            <Activity className="h-4 w-4 mr-2" />
+            Weekly Output
+          </TabsTrigger>
           <TabsTrigger value="production-week" data-testid="tab-production-week">
             <Factory className="h-4 w-4 mr-2" />
             Weekly Summary
@@ -819,6 +824,10 @@ function WeeklyReportsContent() {
 
         <TabsContent value="key-metrics" className="space-y-4">
           <KeyMetricsTab />
+        </TabsContent>
+
+        <TabsContent value="weekly-output" className="space-y-4">
+          <WeeklyOutputTab />
         </TabsContent>
 
         <TabsContent value="staff-productivity" className="space-y-4">
