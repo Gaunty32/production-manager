@@ -304,6 +304,47 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
   return data;
 }
 
+export async function sendHolidayRequestNotificationEmail(params: {
+  to: string;
+  staffName: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  autoApproved: boolean;
+  reason?: string;
+}) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const range = params.startDate === params.endDate ? params.startDate : `${params.startDate} to ${params.endDate}`;
+  const body = params.autoApproved
+    ? `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Holiday auto-approved</h2>
+    <p style="margin:0 0 12px;"><strong>${sanitizeHtml(params.staffName)}</strong> booked <strong>${params.days} day${params.days === 1 ? "" : "s"}</strong> off (${sanitizeHtml(range)}).</p>
+    <p style="margin:0 0 12px;">This was approved automatically: at least 7 days notice was given and no more than one other person is off at the same time.</p>
+    ${ctaButton(`${getBaseUrl()}/holidays`, 'View Holidays')}
+    ${divider}
+    ${muted('No action is needed — this is for your information.')}
+  `
+    : `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Holiday request needs approval</h2>
+    <p style="margin:0 0 12px;"><strong>${sanitizeHtml(params.staffName)}</strong> requested <strong>${params.days} day${params.days === 1 ? "" : "s"}</strong> off (${sanitizeHtml(range)}).</p>
+    ${params.reason ? `<p style="margin:0 0 12px;">It could not be approved automatically: ${sanitizeHtml(params.reason)}.</p>` : ""}
+    ${ctaButton(`${getBaseUrl()}/holidays`, 'Review Request')}
+  `;
+
+  const { data, error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: params.to,
+    subject: params.autoApproved
+      ? `Holiday auto-approved: ${params.staffName} (${range})`
+      : `Holiday request from ${params.staffName} needs approval`,
+    html: brandedEmail(body),
+  });
+  if (error) {
+    throw new Error(`Failed to send email: ${error.message}`);
+  }
+  return data;
+}
+
 export async function sendLoginCodeEmail(email: string, code: string) {
   const { client, fromEmail } = await getUncachableResendClient();
 

@@ -61,6 +61,17 @@ type JobCard = {
   awaitingArtwork: boolean;
   overdue: boolean;
   dueToday: boolean;
+  lineItems: Array<{
+    id: string;
+    jobType: string;
+    description: string | null;
+    position: string | null;
+    quantity: number;
+    completed: boolean;
+    awaitingStock: boolean;
+    logoApproved: boolean;
+    machineId: number | null;
+  }>;
 };
 
 async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs>>): Promise<JobCard[]> {
@@ -81,7 +92,18 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
   }
   const todayStr = londonDateStr(new Date());
   return activeJobs.map(j => {
-    const lis = itemsByJob.get(j.id) ?? [];
+    const lis = (itemsByJob.get(j.id) ?? []) as any[];
+    const lineItems = lis.map(li => ({
+      id: li.id,
+      jobType: li.jobType,
+      description: li.description,
+      position: li.position,
+      quantity: li.quantity,
+      completed: li.completed,
+      awaitingStock: li.awaitingStock,
+      logoApproved: li.logoApproved,
+      machineId: li.machineId,
+    }));
     const outstandingQty = lis.filter(li => !li.completed).reduce((s, li) => s + li.quantity, 0);
     const totalQty = lis.reduce((s, li) => s + li.quantity, 0);
     const dueStr = j.requiredDispatchDate ? londonDateStr(new Date(j.requiredDispatchDate)) : null;
@@ -107,8 +129,18 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
       awaitingArtwork: lis.some(li => !li.logoApproved),
       overdue: dueStr != null && dueStr < todayStr,
       dueToday: dueStr === todayStr,
+      lineItems,
     };
   });
+}
+
+/** All active jobs with their owners — read-only view for every staff member. */
+export async function getActiveJobsOverview() {
+  const activeJobs = await getActiveJobs();
+  const cards = await buildJobCards(activeJobs);
+  cards.sort((a, b) =>
+    (a.requiredDispatchDate ?? "9999").localeCompare(b.requiredDispatchDate ?? "9999") || b.outstandingQty - a.outstandingQty);
+  return cards;
 }
 
 /** Manager allocation board: every active operator with their owned jobs,

@@ -45,6 +45,10 @@ type AllowanceSummary = {
   used: number;
   pending: number;
   remaining: number;
+  carriedOver?: number;
+  carryOverUsed?: number;
+  carryOverAvailable?: number;
+  carryOverExpired?: boolean;
 };
 
 type HolidayWithDays = StaffHoliday & { days: number };
@@ -316,6 +320,13 @@ export function HolidaysManagement() {
                   </CardHeader>
                 </Card>
               </div>
+              {(me.summary.carriedOver ?? 0) > 0 && (
+                <p className="text-sm text-muted-foreground" data-testid="text-carryover">
+                  {me.summary.carryOverExpired
+                    ? `${me.summary.carryOverUsed ?? 0} of ${me.summary.carriedOver} day${me.summary.carriedOver === 1 ? "" : "s"} carried over from last year ${me.summary.carryOverUsed ? "were used" : "was available"} before the 31 March cut-off. Unused carry-over has now expired.`
+                    : `Includes ${me.summary.carriedOver} day${me.summary.carriedOver === 1 ? "" : "s"} carried over from last year — use by 31 March or they are lost.`}
+                </p>
+              )}
 
               <Card>
                 <CardHeader>

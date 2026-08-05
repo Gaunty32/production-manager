@@ -39,6 +39,10 @@
 
 - [Alloc-slots tri-state](alloc-slots-tristate.md) — getStaffMachineAllocationSlots returns null(=any machine)/[](=elsewhere)/slots; never collapse null & [] into one falsy check or operators get dropped.
 
+- [Holiday auto-approval & rollover](holiday-auto-approval.md) — 7-day notice + ≤1 other off auto-approves under an advisory lock; rollover dies 31 March and needs prior-year history.
+
+- [Own-job completion rule](own-job-completion.md) — plain staff can only complete jobs where responsibleOperatorId is theirs; gate every new completion endpoint via checkOwnJobCompletion.
+
 - [Holiday approval workflow](holiday-approval-workflow.md) — any route writing staffHolidays.status must be approver-gated (legacy CRUD too, or staff self-approve); /me returns canApprove even with no staff row; half-day & calendar-year clamp rules.
 
 - [wouter query-only navigation](wouter-query-navigation.md) — query-only URL changes don't remount route components; derive query-driven state via useSearch()+effect, not a one-time useState read.

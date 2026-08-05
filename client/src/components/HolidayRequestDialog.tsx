@@ -85,15 +85,22 @@ export function HolidayRequestDialog({ trigger }: HolidayRequestDialogProps) {
       const res = await apiRequest("POST", "/api/staff-holidays/request", data);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/me"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-holidays/allowances"] });
-      toast({
-        title: "Request submitted",
-        description: "Your holiday request has been sent for approval.",
-      });
+      toast(
+        result?.autoApproved
+          ? {
+              title: "Holiday approved",
+              description: "Your holiday was approved automatically — enough notice was given and cover is available.",
+            }
+          : {
+              title: "Request submitted",
+              description: "Your holiday request has been sent for approval.",
+            }
+      );
       setOpen(false);
       form.reset();
     },

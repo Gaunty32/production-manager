@@ -40,6 +40,9 @@ import {
   featureRequests,
 } from "@shared/schema";
 import { z } from "zod";
+import { db } from "./db";
+import { staffHolidays as staffHolidaysTable } from "@shared/schema";
+import { sql as drizzleSql, and, eq, lte, gte, ne } from "drizzle-orm";
 import { xeroService } from "./xero";
 import { dpdService } from "./dpd";
 import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantity, MIN_ORDER_QTY } from "@shared/pricing";
@@ -5562,6 +5565,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // All active jobs with owners — visible to every staff member (read-only)
+  app.get("/api/active-jobs-overview", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { getActiveJobsOverview } = await import("./allocation");
+      res.json(await getActiveJobsOverview());
+    } catch (error) {
+      console.error("Active jobs overview error:", error);
+      res.status(500).json({ message: "Failed to load jobs" });
+    }
+  });
+
   // Personal operator queue: own queue by default; managers can view anyone's
   app.get("/api/my-queue", isStaffAuthenticated, async (req: any, res) => {
     try {
@@ -5818,9 +5832,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Regular staff may only complete jobs allocated to them (managers/admins may
+  // complete anything). Returns null if allowed, or an error message.
+  async function checkOwnJobCompletion(req: any, jobId: string): Promise<string | null> {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return "Not authenticated";
+    if (["super_admin", "admin", "manager"].includes(user.role)) return null;
+    const staffRecord = await storage.getStaffByUserId(user.id);
+    if (!staffRecord) return "No staff profile is linked to your login";
+    const job = await storage.getJob(jobId);
+    if (!job) return "Job not found";
+    if (job.responsibleOperatorId !== staffRecord.id) {
+      return "This job is allocated to someone else — you can only complete your own jobs";
+    }
+    return null;
+  }
+
   app.patch("/api/job-line-items/:id", isStaffAuthenticated, async (req, res) => {
     try {
       const data = updateJobLineItemSchema.parse(req.body);
+
+      // Own-job rule: plain staff can only mark items complete on jobs they own.
+      if (data.completed === true) {
+        const target = await storage.getJobLineItem(req.params.id);
+        if (target) {
+          const denied = await checkOwnJobCompletion(req, target.jobId);
+          if (denied) return res.status(403).json({ error: denied });
+        }
+      }
 
       // Multi-member completion: contributors is not a column — pull it out and
       // derive completedById (largest quantity) + actualProductionTimeMinutes (sum).
@@ -6123,6 +6162,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!lineItem) {
         return res.status(404).json({ error: "Line item not found" });
       }
+
+      // Own-job rule: plain staff can only record work on jobs they own.
+      const denied = await checkOwnJobCompletion(req, lineItem.jobId);
+      if (denied) return res.status(403).json({ error: denied });
+
       const progress = await storage.getLineItemProgress(data.lineItemId);
       const remaining = lineItem.quantity - (progress?.totalQuantityCompleted ?? 0);
       if (data.quantityCompleted > remaining) {
@@ -8305,13 +8349,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     const allowance = staffMember.holidayAllowance ?? 23;
+
+    // Rollover: unused days from the previous calendar year can be used until
+    // 31 March of this year, after which any unused rollover is lost.
+    const prevYearStart = new Date(year - 1, 0, 1);
+    const prevYearEnd = new Date(year - 1, 11, 31, 23, 59, 59, 999);
+    const prevHolidays = await storage.getStaffHolidays(staffMember.id, prevYearStart, prevYearEnd);
+    let prevUsed = 0;
+    for (const h of prevHolidays) {
+      if (h.holidayType !== "holiday" || h.status !== "approved") continue;
+      const origStart = new Date(h.startDate);
+      const origEnd = new Date(h.endDate);
+      const start = origStart < prevYearStart ? prevYearStart : origStart;
+      const end = origEnd > prevYearEnd ? prevYearEnd : origEnd;
+      const halfStart = h.halfDayStart && origStart >= prevYearStart;
+      const halfEnd = h.halfDayEnd && origEnd <= prevYearEnd;
+      prevUsed += countHolidayDays(start, end, halfStart, halfEnd, bankHolidays);
+    }
+    // Only grant carry-over when there is actual previous-year history —
+    // otherwise (new staff, or the year before this system tracked holidays)
+    // a blank record would wrongly carry the full allowance forward.
+    const carriedOver = prevHolidays.length > 0
+      ? Math.max(0, Math.round((allowance - prevUsed) * 2) / 2)
+      : 0;
+
+    // Approved days taken in Jan-Mar of this year consume the rollover first.
+    const marchEnd = new Date(year, 2, 31, 23, 59, 59, 999);
+    let usedJanToMar = 0;
+    for (const h of holidays) {
+      if (h.holidayType !== "holiday" || h.status !== "approved") continue;
+      const origStart = new Date(h.startDate);
+      const origEnd = new Date(h.endDate);
+      if (origStart > marchEnd) continue;
+      const start = origStart < yearStart ? yearStart : origStart;
+      const end = origEnd > marchEnd ? marchEnd : origEnd;
+      const halfStart = h.halfDayStart && origStart >= yearStart;
+      const halfEnd = h.halfDayEnd && origEnd <= marchEnd;
+      usedJanToMar += countHolidayDays(start, end, halfStart, halfEnd, bankHolidays);
+    }
+    const carryOverUsed = Math.min(carriedOver, usedJanToMar);
+    // After 31 March, unused rollover is lost — only the part actually used counts.
+    const rolloverWindowOpen = new Date() <= marchEnd && new Date().getFullYear() <= year;
+    const carryOverAvailable = rolloverWindowOpen ? carriedOver : carryOverUsed;
+
     return {
       staffId: staffMember.id,
       staffName: staffMember.name,
       allowance,
       used: usedDays,
       pending: pendingDays,
-      remaining: Math.round((allowance - usedDays) * 2) / 2,
+      carriedOver,
+      carryOverUsed,
+      carryOverAvailable,
+      carryOverExpired: !rolloverWindowOpen,
+      remaining: Math.round((allowance + carryOverAvailable - usedDays) * 2) / 2,
     };
   }
 
@@ -8327,12 +8418,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
         staffId: staffRecord.id,
         status: "pending",
       });
-      const holiday = await storage.createStaffHoliday({ ...data, status: "pending" });
-      res.json(holiday);
+
+      // Auto-approval rules: at least 7 calendar days notice (Europe/London)
+      // AND no more than one other person already approved off on any day of
+      // the range. Anything outside these rules stays pending for review.
+      const londonDay = (d: Date) =>
+        new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(d); // yyyy-mm-dd
+      const dayNumber = (s: string) => Math.floor(Date.parse(s + "T00:00:00Z") / 86400000);
+
+      let autoApproved = false;
+      let manualReason = "";
+      let noticeOk = false;
+      if (data.holidayType === "holiday" || !data.holidayType) {
+        const noticeDays = dayNumber(londonDay(new Date(data.startDate))) - dayNumber(londonDay(new Date()));
+        if (noticeDays < 7) {
+          manualReason = "less than 7 days notice was given";
+        } else {
+          noticeOk = true;
+        }
+      } else {
+        manualReason = "only holiday-type requests are auto-approved";
+      }
+
+      // Check overlap and insert atomically so two simultaneous requests can't
+      // both auto-approve past the "one other person off" limit.
+      const holiday = await db.transaction(async (tx) => {
+        await tx.execute(drizzleSql`SELECT pg_advisory_xact_lock(hashtext('holiday-auto-approve'))`);
+
+        if (noticeOk) {
+          const start = new Date(data.startDate);
+          const end = new Date(data.endDate);
+          const overlapping = await tx
+            .select()
+            .from(staffHolidaysTable)
+            .where(and(
+              eq(staffHolidaysTable.status, "approved"),
+              ne(staffHolidaysTable.staffId, staffRecord.id),
+              lte(staffHolidaysTable.startDate, end),
+              gte(staffHolidaysTable.endDate, start),
+            ));
+          // Count DISTINCT other staff off per calendar day across the range
+          let maxConcurrent = 0;
+          for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
+            const key = londonDay(d);
+            const offToday = new Set(
+              overlapping
+                .filter(h => londonDay(new Date(h.startDate)) <= key && londonDay(new Date(h.endDate)) >= key)
+                .map(h => h.staffId)
+            );
+            maxConcurrent = Math.max(maxConcurrent, offToday.size);
+          }
+          if (maxConcurrent > 1) {
+            manualReason = `${maxConcurrent} other people are already off during this period`;
+          } else {
+            autoApproved = true;
+          }
+        }
+
+        const [row] = await tx
+          .insert(staffHolidaysTable)
+          .values({
+            ...data,
+            startDate: new Date(data.startDate),
+            endDate: new Date(data.endDate),
+            status: autoApproved ? "approved" : "pending",
+            ...(autoApproved ? {
+              reviewedAt: new Date(),
+              reviewNotes: "Auto-approved: 7+ days notice and no more than one other person off",
+            } : {}),
+          } as any)
+          .returning();
+        return row;
+      });
+
+      // Notify the holiday approvers (fire-and-forget so the request never fails on email)
+      (async () => {
+        try {
+          const { countHolidayDays } = await import("@shared/scheduling");
+          const bankHolidays = await storage.getBankHolidays();
+          const days = countHolidayDays(holiday.startDate, holiday.endDate, holiday.halfDayStart, holiday.halfDayEnd, bankHolidays);
+          const allStaff = await storage.getStaff();
+          const approvers = allStaff.filter(s => s.active && s.canApproveHolidays && s.id !== staffRecord.id);
+          const fmt = (dt: Date | string) => new Date(dt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          const { sendHolidayRequestNotificationEmail } = await import("./emailService");
+          // Recipients: approver staff plus super admins (Chris/Anna always in the loop)
+          const recipients = new Set<string>();
+          for (const approver of approvers) {
+            let email = approver.email;
+            if (!email && approver.userId) {
+              const linked = await storage.getUser(approver.userId);
+              email = linked?.email ?? null;
+            }
+            if (email) recipients.add(email.toLowerCase());
+          }
+          const allUsers = await storage.getAllUsers();
+          for (const u of allUsers) {
+            if ((u.role === "super_admin" || u.role === "manager") && u.email) {
+              recipients.add(u.email.toLowerCase());
+            }
+          }
+          // Never notify the requester about their own request
+          const ownUser = staffRecord.userId ? await storage.getUser(staffRecord.userId) : null;
+          if (ownUser?.email) recipients.delete(ownUser.email.toLowerCase());
+          for (const email of Array.from(recipients)) {
+            await sendHolidayRequestNotificationEmail({
+              to: email,
+              staffName: staffRecord.name,
+              startDate: fmt(holiday.startDate),
+              endDate: fmt(holiday.endDate),
+              days,
+              autoApproved,
+              reason: manualReason || undefined,
+            });
+          }
+        } catch (e) {
+          console.error("Holiday notification email failed:", e);
+        }
+      })();
+
+      res.json({ ...holiday, autoApproved });
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: error.errors });
       } else {
+        console.error("Holiday request failed:", error);
         res.status(500).json({ error: "Failed to submit holiday request" });
       }
     }
