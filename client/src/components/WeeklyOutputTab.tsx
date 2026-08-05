@@ -5,7 +5,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download } from "lucide-react";
+import { Download, Printer, FileSpreadsheet } from "lucide-react";
+import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
@@ -21,7 +22,7 @@ const SERIES_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#
 
 function SeriesChart({ title, data, cols }: { title: string; data: Array<Record<string, string | number>>; cols: Array<{ key: string; label: string }> }) {
   return (
-    <Card>
+    <Card className="print-block">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
@@ -86,7 +87,7 @@ function PivotTable({
 }) {
   const colTotals = new Map<string, number>();
   return (
-    <Card>
+    <Card className="print-block">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
@@ -147,19 +148,32 @@ function PivotTable({
   );
 }
 
-/** Monday of the week 15 weeks before this week's Monday — a rolling 16-week window.
- * Uses the current date in the UK (Europe/London) so the window matches server bucketing. */
-function rolling16WeekStart(): string {
+/** Monday of the current week in the UK (Europe/London). Weeks run Monday–Sunday;
+ * only weeks BEFORE this Monday are complete. */
+function currentUkMonday(): Date {
   const ukToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
   const monday = new Date(ukToday + "T00:00:00");
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7) - 15 * 7);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  return monday;
+}
+
+/** Monday 16 completed weeks back — a rolling 16-week window of finished weeks. */
+function rolling16WeekStart(): string {
+  const monday = currentUkMonday();
+  monday.setDate(monday.getDate() - 16 * 7);
+  return format(monday, "yyyy-MM-dd");
+}
+
+/** Last Sunday (end of the most recent completed week). */
+function lastCompletedSunday(): string {
+  const monday = currentUkMonday();
+  monday.setDate(monday.getDate() - 1);
   return format(monday, "yyyy-MM-dd");
 }
 
 export function WeeklyOutputTab() {
-  const today = format(new Date(), "yyyy-MM-dd");
   const [startDate, setStartDate] = useState(rolling16WeekStart());
-  const [endDate, setEndDate] = useState(today);
+  const [endDate, setEndDate] = useState(lastCompletedSunday());
 
   const validRange = /^\d{4}-\d{2}-\d{2}$/.test(startDate) && /^\d{4}-\d{2}-\d{2}$/.test(endDate) && startDate <= endDate;
 
@@ -172,19 +186,23 @@ export function WeeklyOutputTab() {
     enabled: validRange,
   });
 
+  // Only completed weeks (Mon–Sun): drop the current, in-progress week.
+  const completedWeekCutoff = format(currentUkMonday(), "yyyy-MM-dd");
+  const weeks = useMemo(() => (data?.weeks || []).filter(w => w.weekStart < completedWeekCutoff), [data?.weeks, completedWeekCutoff]);
+
   const machinePivot = useMemo(
-    () => pivot(data?.machineWeekly || [], r => String(r.machineId), r => r.machineName),
-    [data?.machineWeekly],
+    () => pivot((data?.machineWeekly || []).filter(r => r.weekStart < completedWeekCutoff), r => String(r.machineId), r => r.machineName),
+    [data?.machineWeekly, completedWeekCutoff],
   );
   const staffPivot = useMemo(
-    () => pivot(data?.staffWeekly || [], r => r.staffId, r => r.staffName),
-    [data?.staffWeekly],
+    () => pivot((data?.staffWeekly || []).filter(r => r.weekStart < completedWeekCutoff), r => r.staffId, r => r.staffName),
+    [data?.staffWeekly, completedWeekCutoff],
   );
 
   // Worm data: running (cumulative) totals week by week.
   const wormData = useMemo(() => {
     let submitted = 0, completed = 0, submittedQty = 0, completedQty = 0, custSub = 0, custComp = 0;
-    return (data?.weeks || []).map(w => {
+    return weeks.map(w => {
       submitted += w.submitted;
       completed += w.completed;
       submittedQty += w.submittedQty;
@@ -202,7 +220,7 @@ export function WeeklyOutputTab() {
         avgLogoPrice: w.avgLogoPrice,
       };
     });
-  }, [data?.weeks]);
+  }, [weeks]);
 
   // Per-machine / per-staff chart data: one point per week, one field per column.
   // Cumulative variant is the "worm"; weekly variant shows trends.
@@ -235,7 +253,7 @@ export function WeeklyOutputTab() {
     lines.push(`Weekly Output Report,${startDate} to ${endDate}`);
     lines.push("");
     lines.push("Week beginning,Jobs submitted,Items submitted,Jobs completed,Items completed,Customers submitting,Customers with completions,Average price per logo (ex VAT)");
-    for (const w of data.weeks) lines.push(`${w.weekStart},${w.submitted},${w.submittedQty},${w.completed},${w.completedQty},${w.customersSubmitted},${w.customersCompleted},${w.avgLogoPrice ?? ""}`);
+    for (const w of weeks) lines.push(`${w.weekStart},${w.submitted},${w.submittedQty},${w.completed},${w.completedQty},${w.customersSubmitted},${w.customersCompleted},${w.avgLogoPrice ?? ""}`);
     lines.push("");
     lines.push("Items completed per machine");
     lines.push(["Week beginning", ...machinePivot.cols.map(c => `"${c.label}"`)].join(","));
@@ -259,9 +277,59 @@ export function WeeklyOutputTab() {
     URL.revokeObjectURL(url);
   };
 
+  const exportExcel = () => {
+    if (!data) return;
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: weekly summary
+    const summaryRows = weeks.map(w => ({
+      "Week beginning": w.weekStart,
+      "Jobs submitted": w.submitted,
+      "Items submitted": w.submittedQty,
+      "Jobs completed": w.completed,
+      "Items completed": w.completedQty,
+      "Customers submitting": w.customersSubmitted,
+      "Customers with completions": w.customersCompleted,
+      "Invoiced value (ex VAT)": w.invValue,
+      "Invoiced items": w.invQty,
+      "Avg price per logo (ex VAT)": w.avgLogoPrice ?? "",
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Weekly summary");
+
+    // Sheets 2 & 3: machine and staff pivots (weeks as rows)
+    const pivotRows = (p: ReturnType<typeof pivot>) =>
+      p.weekStarts.map(wk => {
+        const row: Record<string, string | number> = { "Week beginning": wk };
+        const cells = p.cells.get(wk)!;
+        for (const c of p.cols) row[c.label] = cells.get(c.key) || 0;
+        return row;
+      });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pivotRows(machinePivot)), "Per machine");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pivotRows(staffPivot)), "Per staff member");
+
+    XLSX.writeFile(wb, `weekly-output-${startDate}-to-${endDate}.xlsx`);
+  };
+
+  const handlePrint = () => {
+    // Force A4 landscape just for this report (the app default is portrait)
+    const style = document.createElement("style");
+    style.textContent = "@page { size: A4 landscape; margin: 1cm; }";
+    document.head.appendChild(style);
+    const cleanup = () => {
+      style.remove();
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+  };
+
   return (
-    <div className="space-y-4">
-      <Card>
+    <div id="weekly-output-root" className="space-y-4">
+      <div className="hidden print:block">
+        <h1 className="text-lg font-bold">Weekly Output Report</h1>
+        <p className="text-sm text-muted-foreground">{fmtWeek(startDate)} to {fmtWeek(endDate)} — completed weeks (Monday to Sunday)</p>
+      </div>
+      <Card className="print-hide">
         <CardContent className="pt-6 flex flex-wrap items-end gap-3">
           <div>
             <label className="text-xs font-medium text-muted-foreground block mb-1">From</label>
@@ -271,9 +339,17 @@ export function WeeklyOutputTab() {
             <label className="text-xs font-medium text-muted-foreground block mb-1">To</label>
             <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-40" data-testid="input-weekly-output-end" />
           </div>
+          <Button variant="outline" onClick={exportExcel} disabled={!data} data-testid="button-weekly-output-excel">
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Download spreadsheet
+          </Button>
           <Button variant="outline" onClick={exportCsv} disabled={!data} data-testid="button-weekly-output-export">
             <Download className="h-4 w-4 mr-2" />
             Export CSV
+          </Button>
+          <Button variant="outline" onClick={handlePrint} disabled={!data} data-testid="button-weekly-output-print">
+            <Printer className="h-4 w-4 mr-2" />
+            Print
           </Button>
           {!validRange && <p className="text-xs text-destructive">Enter a valid date range (From must be on or before To).</p>}
         </CardContent>
@@ -283,8 +359,8 @@ export function WeeklyOutputTab() {
         <Skeleton className="h-64 w-full" />
       ) : (
         <>
-          {(data?.weeks.length ?? 0) > 0 && (
-            <div className="grid gap-4 lg:grid-cols-2">
+          {(weeks.length) > 0 && (
+            <div className="grid gap-4 lg:grid-cols-2 print-stack">
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Jobs worm (running total)</CardTitle>
@@ -417,6 +493,7 @@ export function WeeklyOutputTab() {
                         <XAxis dataKey="week" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `£${v}`} domain={[0, "auto"]} />
                         <Tooltip formatter={(v: any) => [`£${Number(v).toFixed(2)}`, "Average price per logo"]} />
+                        <Legend />
                         <Line type="monotone" dataKey="avgLogoPrice" name="Average price per logo" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} connectNulls />
                       </LineChart>
                     </ResponsiveContainer>
@@ -426,12 +503,12 @@ export function WeeklyOutputTab() {
             </div>
           )}
 
-          <Card>
+          <Card className="print-block">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Jobs submitted and completed per week</CardTitle>
             </CardHeader>
             <CardContent>
-              {(data?.weeks.length ?? 0) === 0 ? (
+              {(weeks.length) === 0 ? (
                 <p className="text-sm text-muted-foreground">No jobs in this date range.</p>
               ) : (
                 <div className="overflow-x-auto">
@@ -448,7 +525,7 @@ export function WeeklyOutputTab() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {data!.weeks.map(w => (
+                      {weeks.map(w => (
                         <TableRow key={w.weekStart}>
                           <TableCell className="whitespace-nowrap font-medium">{fmtWeek(w.weekStart)}</TableCell>
                           <TableCell className="text-right">{w.submitted.toLocaleString()}</TableCell>
@@ -462,22 +539,22 @@ export function WeeklyOutputTab() {
                       <TableRow className="bg-muted/40">
                         <TableCell className="font-semibold">Total</TableCell>
                         <TableCell className="text-right font-semibold">
-                          {data!.weeks.reduce((s, w) => s + w.submitted, 0).toLocaleString()}
+                          {weeks.reduce((s, w) => s + w.submitted, 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right font-semibold">
-                          {data!.weeks.reduce((s, w) => s + w.submittedQty, 0).toLocaleString()}
+                          {weeks.reduce((s, w) => s + w.submittedQty, 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right font-semibold">
-                          {data!.weeks.reduce((s, w) => s + w.completed, 0).toLocaleString()}
+                          {weeks.reduce((s, w) => s + w.completed, 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right font-semibold">
-                          {data!.weeks.reduce((s, w) => s + w.completedQty, 0).toLocaleString()}
+                          {weeks.reduce((s, w) => s + w.completedQty, 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right font-semibold">–</TableCell>
                         <TableCell className="text-right font-semibold">
                           {(() => {
-                            const totalValue = data!.weeks.reduce((s, w) => s + (w.invValue || 0), 0);
-                            const totalQty = data!.weeks.reduce((s, w) => s + (w.invQty || 0), 0);
+                            const totalValue = weeks.reduce((s, w) => s + (w.invValue || 0), 0);
+                            const totalQty = weeks.reduce((s, w) => s + (w.invQty || 0), 0);
                             return totalQty > 0 ? `£${(totalValue / totalQty).toFixed(2)}` : "–";
                           })()}
                         </TableCell>
@@ -490,13 +567,13 @@ export function WeeklyOutputTab() {
           </Card>
 
           {machinePivot.weekStarts.length > 0 && (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2 print-stack">
               <SeriesChart title="Items completed per machine — worm (running total)" data={machineWorm} cols={machinePivot.cols} />
               <SeriesChart title="Items completed per machine — week by week" data={machineWeeklyChart} cols={machinePivot.cols} />
             </div>
           )}
           {staffPivot.weekStarts.length > 0 && (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2 print-stack">
               <SeriesChart title="Items completed per staff member — worm (running total)" data={staffWorm} cols={staffPivot.cols} />
               <SeriesChart title="Items completed per staff member — week by week" data={staffWeeklyChart} cols={staffPivot.cols} />
             </div>

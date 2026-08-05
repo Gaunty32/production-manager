@@ -354,6 +354,48 @@
   }
 }
 
+/* Print styles for weekly output report (A4 landscape — page size set dynamically on print) */
+@media print {
+  #weekly-output-root,
+  #weekly-output-root * {
+    visibility: visible !important;
+  }
+
+  #weekly-output-root {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  #weekly-output-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Keep each chart/table card on one page */
+  #weekly-output-root .print-block,
+  #weekly-output-root .print-stack > * {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Grids flow as stacked blocks when printing */
+  #weekly-output-root .print-stack {
+    display: block !important;
+  }
+  #weekly-output-root .print-stack > * {
+    margin-bottom: 0.5cm;
+  }
+
+  /* Hide on-screen controls (date pickers, buttons) */
+  #weekly-output-root .print-hide {
+    display: none !important;
+  }
+}
+
 /* Print styles for production worksheet */
 @media print {
   /* Set page margins for A4 */
