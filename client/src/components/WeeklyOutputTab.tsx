@@ -12,7 +12,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { DemoText } from "@/components/DemoText";
 
 interface WeeklyOutputData {
-  weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null }>;
+  weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null; customersSubmitted: number; customersCompleted: number }>;
   machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
   staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
 }
@@ -150,8 +150,8 @@ export function WeeklyOutputTab() {
     const lines: string[] = [];
     lines.push(`Weekly Output Report,${startDate} to ${endDate}`);
     lines.push("");
-    lines.push("Week beginning,Jobs submitted,Items submitted,Jobs completed,Items completed,Average job value (ex VAT)");
-    for (const w of data.weeks) lines.push(`${w.weekStart},${w.submitted},${w.submittedQty},${w.completed},${w.completedQty},${w.avgJobValue ?? ""}`);
+    lines.push("Week beginning,Jobs submitted,Items submitted,Jobs completed,Items completed,Customers submitting,Customers with completions,Average job value (ex VAT)");
+    for (const w of data.weeks) lines.push(`${w.weekStart},${w.submitted},${w.submittedQty},${w.completed},${w.completedQty},${w.customersSubmitted},${w.customersCompleted},${w.avgJobValue ?? ""}`);
     lines.push("");
     lines.push("Items completed per machine");
     lines.push(["Week beginning", ...machinePivot.cols.map(c => `"${c.label}"`)].join(","));
@@ -241,7 +241,27 @@ export function WeeklyOutputTab() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="lg:col-span-2">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Customers per week</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data!.weeks.map(w => ({ ...w, week: fmtWeek(w.weekStart) }))}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="customersSubmitted" name="Customers submitting" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="customersCompleted" name="Customers with completions" fill="#22c55e" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Average job value per week (£ ex VAT)</CardTitle>
                 </CardHeader>
@@ -279,6 +299,7 @@ export function WeeklyOutputTab() {
                         <TableHead className="text-right">Items submitted</TableHead>
                         <TableHead className="text-right">Jobs completed</TableHead>
                         <TableHead className="text-right">Items completed</TableHead>
+                        <TableHead className="text-right">Customers</TableHead>
                         <TableHead className="text-right">Avg job value</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -290,6 +311,7 @@ export function WeeklyOutputTab() {
                           <TableCell className="text-right">{w.submittedQty.toLocaleString()}</TableCell>
                           <TableCell className="text-right">{w.completed.toLocaleString()}</TableCell>
                           <TableCell className="text-right">{w.completedQty.toLocaleString()}</TableCell>
+                          <TableCell className="text-right">{Math.max(w.customersSubmitted, w.customersCompleted).toLocaleString()}</TableCell>
                           <TableCell className="text-right">{w.avgJobValue != null ? `£${w.avgJobValue.toFixed(2)}` : <span className="text-muted-foreground">–</span>}</TableCell>
                         </TableRow>
                       ))}
@@ -307,6 +329,7 @@ export function WeeklyOutputTab() {
                         <TableCell className="text-right font-semibold">
                           {data!.weeks.reduce((s, w) => s + w.completedQty, 0).toLocaleString()}
                         </TableCell>
+                        <TableCell className="text-right font-semibold">–</TableCell>
                         <TableCell className="text-right font-semibold">
                           {(() => {
                             const withVal = data!.weeks.filter(w => w.avgJobValue != null);

@@ -286,7 +286,7 @@ export interface IStorage {
   getOutstandingQueueQuantity(): Promise<number>;
 
   getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
-    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null }>;
+    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null; customersSubmitted: number; customersCompleted: number }>;
     machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
     staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
   }>;
@@ -2375,7 +2375,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
-    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null }>;
+    weeks: Array<{ weekStart: string; submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null; customersSubmitted: number; customersCompleted: number }>;
     machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
     staffWeekly: Array<{ weekStart: string; staffId: string; staffName: string; quantity: number }>;
   }> {
@@ -2385,6 +2385,7 @@ export class DatabaseStorage implements IStorage {
     const submittedResult = await db.execute(sql`
       SELECT date_trunc('week', j.submitted_at AT TIME ZONE ${timezone})::date AS week_start,
              COUNT(*) AS n,
+             COUNT(DISTINCT j.customer_id) AS customers,
              COALESCE(SUM((SELECT SUM(jli.quantity) FROM job_line_items jli WHERE jli.job_id = j.id)), 0) AS qty
       FROM jobs j
       WHERE j.submitted_at IS NOT NULL
@@ -2419,6 +2420,7 @@ export class DatabaseStorage implements IStorage {
     const completedResult = await db.execute(sql`
       SELECT date_trunc('week', t.done_at AT TIME ZONE ${timezone})::date AS week_start,
              COUNT(*) AS n,
+             COUNT(DISTINCT j.customer_id) AS customers,
              AVG(j.invoice_total) FILTER (WHERE j.invoice_total IS NOT NULL AND j.invoice_total > 0) AS avg_value
       FROM (
         SELECT jli.job_id, MAX(jli.completed_at) AS done_at
@@ -2482,11 +2484,11 @@ export class DatabaseStorage implements IStorage {
     const toDateStr = (v: any) => typeof v === "string" ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10);
 
     // Merge submitted + completed into a single per-week series covering the whole range
-    const weekMap = new Map<string, { submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null }>();
+    const weekMap = new Map<string, { submitted: number; completed: number; submittedQty: number; completedQty: number; avgJobValue: number | null; customersSubmitted: number; customersCompleted: number }>();
     const getWeek = (wk: string) => {
       let entry = weekMap.get(wk);
       if (!entry) {
-        entry = { submitted: 0, completed: 0, submittedQty: 0, completedQty: 0, avgJobValue: null };
+        entry = { submitted: 0, completed: 0, submittedQty: 0, completedQty: 0, avgJobValue: null, customersSubmitted: 0, customersCompleted: 0 };
         weekMap.set(wk, entry);
       }
       return entry;
@@ -2495,10 +2497,12 @@ export class DatabaseStorage implements IStorage {
       const entry = getWeek(toDateStr(row.week_start));
       entry.submitted = Number(row.n);
       entry.submittedQty = Number(row.qty) || 0;
+      entry.customersSubmitted = Number(row.customers) || 0;
     }
     for (const row of completedResult.rows as any[]) {
       const entry = getWeek(toDateStr(row.week_start));
       entry.completed = Number(row.n);
+      entry.customersCompleted = Number(row.customers) || 0;
       entry.avgJobValue = row.avg_value != null ? Math.round(Number(row.avg_value) * 100) / 100 : null;
     }
     for (const row of completedQtyResult.rows as any[]) {
