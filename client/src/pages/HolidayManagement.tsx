@@ -31,6 +31,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { StaffHoliday, BankHoliday, Staff } from "@shared/schema";
@@ -107,6 +114,7 @@ export function HolidaysManagement() {
   const [bankHolidayToEdit, setBankHolidayToEdit] = useState<BankHoliday | null>(null);
   const [editingAllowanceId, setEditingAllowanceId] = useState<string | null>(null);
   const [editAllowanceValue, setEditAllowanceValue] = useState("");
+  const [requestsStaffFilter, setRequestsStaffFilter] = useState<string>("all");
 
   const { data: me } = useQuery<MyHolidayResponse>({
     queryKey: ["/api/staff-holidays/me"],
@@ -242,8 +250,42 @@ export function HolidaysManagement() {
     );
   }
 
-  const pendingRequests = requests.filter((r) => r.status === "pending");
-  const reviewedRequests = requests.filter((r) => r.status !== "pending");
+  const staffMatchesFilter = (staffId: string) =>
+    requestsStaffFilter === "all" || staffId === requestsStaffFilter;
+  const pendingRequests = requests.filter((r) => r.status === "pending" && staffMatchesFilter(r.staffId));
+  const reviewedRequests = requests.filter((r) => r.status !== "pending" && staffMatchesFilter(r.staffId));
+
+  // Crossovers: date ranges where two staff members' non-declined holidays
+  // overlap. When an employee filter is set, only their crossovers show.
+  const activeHolidays = requests.filter((r) => r.status !== "declined");
+  const crossovers: Array<{ key: string; a: RequestRow; b: RequestRow; from: string; to: string; fromTs: number }> = [];
+  for (let i = 0; i < activeHolidays.length; i++) {
+    for (let k = i + 1; k < activeHolidays.length; k++) {
+      const a = activeHolidays[i];
+      const b = activeHolidays[k];
+      if (a.staffId === b.staffId) continue;
+      if (requestsStaffFilter !== "all" && a.staffId !== requestsStaffFilter && b.staffId !== requestsStaffFilter) continue;
+      const aStart = new Date(a.startDate).getTime();
+      const aEnd = new Date(a.endDate).getTime();
+      const bStart = new Date(b.startDate).getTime();
+      const bEnd = new Date(b.endDate).getTime();
+      if (aStart <= bEnd && bStart <= aEnd) {
+        crossovers.push({
+          key: `${a.id}-${b.id}`,
+          a,
+          b,
+          from: format(new Date(Math.max(aStart, bStart)), "dd MMM yyyy"),
+          to: format(new Date(Math.min(aEnd, bEnd)), "dd MMM yyyy"),
+          fromTs: Math.max(aStart, bStart),
+        });
+      }
+    }
+  }
+  crossovers.sort((x, y) => x.fromTs - y.fromTs);
+  const filteredAllowance =
+    requestsStaffFilter !== "all"
+      ? allowancesData?.allowances.find((a) => a.staffId === requestsStaffFilter)
+      : undefined;
 
   return (
     <>
@@ -386,6 +428,67 @@ export function HolidaysManagement() {
         {canApprove && (
           <TabsContent value="requests" className="mt-6">
             <div className="space-y-6">
+              <div className="flex flex-wrap items-center gap-3">
+                <Select value={requestsStaffFilter} onValueChange={setRequestsStaffFilter}>
+                  <SelectTrigger className="w-[220px]" data-testid="select-requests-staff">
+                    <SelectValue placeholder="All employees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All employees</SelectItem>
+                    {staff
+                      .filter((s) => s.active !== false)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {filteredAllowance && (
+                  <div className="flex flex-wrap gap-2 text-sm" data-testid="summary-staff-allowance">
+                    <Badge variant="outline">Allowance: {filteredAllowance.allowance}</Badge>
+                    <Badge variant="outline">Booked: {filteredAllowance.used}</Badge>
+                    <Badge variant="outline">Pending: {filteredAllowance.pending}</Badge>
+                    <Badge variant={filteredAllowance.remaining <= 0 ? "destructive" : "default"}>
+                      Remaining: {filteredAllowance.remaining}
+                    </Badge>
+                    {(filteredAllowance.carryOverAvailable ?? 0) > 0 && (
+                      <Badge variant="outline">Carried over: {filteredAllowance.carryOverAvailable}</Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {crossovers.length > 0 && (
+                <Card className="border-amber-500/50">
+                  <CardHeader>
+                    <CardTitle>Crossovers ({crossovers.length})</CardTitle>
+                    <CardDescription>
+                      Dates where two team members are off at the same time (approved or pending).
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Who</TableHead>
+                          <TableHead>Overlapping dates</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {crossovers.map((c) => (
+                          <TableRow key={c.key} data-testid={`row-crossover-${c.key}`}>
+                            <TableCell className="font-medium">{c.a.staffName} & {c.b.staffName}</TableCell>
+                            <TableCell>{c.from === c.to ? c.from : `${c.from} → ${c.to}`}</TableCell>
+                            <TableCell className="flex gap-1">{statusBadge(c.a.status)}{statusBadge(c.b.status)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card>
                 <CardHeader>
                   <CardTitle>Pending Requests</CardTitle>
