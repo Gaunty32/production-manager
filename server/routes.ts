@@ -5962,7 +5962,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Regular staff may only complete jobs allocated to them (managers/admins may
   // complete anything). Returns null if allowed, or an error message.
-  async function checkOwnJobCompletion(req: any, jobId: string): Promise<string | null> {
+  async function checkOwnJobCompletion(
+    req: any,
+    jobId: string,
+    lineItem?: { operatorId?: string | null; machineId?: number | null },
+  ): Promise<string | null> {
     const user = await storage.getUser(req.session.userId);
     if (!user) return "Not authenticated";
     if (["super_admin", "admin", "manager"].includes(user.role)) return null;
@@ -5970,10 +5974,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!staffRecord) return "No staff profile is linked to your login";
     const job = await storage.getJob(jobId);
     if (!job) return "Job not found";
-    if (job.responsibleOperatorId !== staffRecord.id) {
-      return "This job is allocated to someone else — you can only complete your own jobs";
+    if (job.responsibleOperatorId === staffRecord.id) return null;
+    // Jobs can be split between team members: a line item is also "yours" when
+    // it's assigned to you directly, or to a machine you're the default
+    // operator of — as long as no one else owns the whole job.
+    if (!job.responsibleOperatorId && lineItem) {
+      let effectiveOperatorId = lineItem.operatorId ?? null;
+      if (!effectiveOperatorId && lineItem.machineId != null) {
+        const machine = await storage.getMachine(lineItem.machineId);
+        effectiveOperatorId = machine?.defaultOperatorId ?? null;
+      }
+      if (effectiveOperatorId === staffRecord.id) return null;
     }
-    return null;
+    return "This job is allocated to someone else — you can only complete your own jobs";
   }
 
   app.patch("/api/job-line-items/:id", isStaffAuthenticated, async (req, res) => {
@@ -5984,7 +5997,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.completed === true) {
         const target = await storage.getJobLineItem(req.params.id);
         if (target) {
-          const denied = await checkOwnJobCompletion(req, target.jobId);
+          const denied = await checkOwnJobCompletion(req, target.jobId, target);
           if (denied) return res.status(403).json({ error: denied });
         }
       }
@@ -6292,7 +6305,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Own-job rule: plain staff can only record work on jobs they own.
-      const denied = await checkOwnJobCompletion(req, lineItem.jobId);
+      const denied = await checkOwnJobCompletion(req, lineItem.jobId, lineItem);
       if (denied) return res.status(403).json({ error: denied });
 
       const progress = await storage.getLineItemProgress(data.lineItemId);

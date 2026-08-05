@@ -42,6 +42,8 @@ interface JobCard {
   dueToday: boolean;
   suggestedOperatorId: string | null;
   suggestedOperatorName: string | null;
+  impliedOperators: Array<{ staffId: string; name: string; outstandingQty: number }>;
+  shareQty?: number;
 }
 
 interface BoardData {
@@ -151,7 +153,11 @@ export default function AllocationBoard() {
         <span className="text-sm font-medium truncate">
           {job.jobNumber ? `#${job.jobNumber} ` : ""}<DemoText>{job.jobName}</DemoText>
         </span>
-        <span className="text-xs whitespace-nowrap text-muted-foreground">{job.outstandingQty.toLocaleString()} items</span>
+        <span className="text-xs whitespace-nowrap text-muted-foreground">
+          {job.shareQty != null && job.shareQty !== job.outstandingQty
+            ? `${job.shareQty.toLocaleString()} of ${job.outstandingQty.toLocaleString()} items`
+            : `${job.outstandingQty.toLocaleString()} items`}
+        </span>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted-foreground truncate"><DemoText>{job.customerName}</DemoText></span>
@@ -163,6 +169,9 @@ export default function AllocationBoard() {
         {job.awaitingArtwork && <Badge variant="outline" className="text-[10px] text-amber-600">Artwork</Badge>}
         {!job.responsibleOperatorId && job.suggestedOperatorName && (
           <Badge variant="outline" className="text-[10px]">Scheduled: <DemoText>{job.suggestedOperatorName}</DemoText></Badge>
+        )}
+        {!job.responsibleOperatorId && job.impliedOperators?.length > 1 && (
+          <Badge variant="outline" className="text-[10px]">Split {job.impliedOperators.length} ways</Badge>
         )}
       </div>
     </button>

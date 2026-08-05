@@ -48,6 +48,7 @@ interface QueueJob {
   awaitingArtwork: boolean;
   overdue: boolean;
   dueToday: boolean;
+  shareQty?: number;
   lineItems: QueueLineItem[];
 }
 
@@ -155,8 +156,10 @@ export default function MyQueue() {
             <p className="text-sm text-muted-foreground truncate"><DemoText>{job.customerName}</DemoText></p>
           </div>
           <span className={`font-bold whitespace-nowrap ${big ? "text-xl" : "text-sm"}`}>
-            {job.outstandingQty.toLocaleString()}
-            <span className="text-xs font-normal text-muted-foreground"> outstanding</span>
+            {(job.shareQty ?? job.outstandingQty).toLocaleString()}
+            <span className="text-xs font-normal text-muted-foreground">
+              {job.shareQty != null && job.shareQty !== job.outstandingQty ? " yours" : " outstanding"}
+            </span>
           </span>
         </div>
       </Link>

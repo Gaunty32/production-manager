@@ -66,6 +66,13 @@ type JobCard = {
    * default operator) when it is unambiguous. */
   suggestedOperatorId: string | null;
   suggestedOperatorName: string | null;
+  /** For unowned jobs: every active operator the line items / machine schedule
+   * imply, with the outstanding quantity that is theirs. One entry = the whole
+   * job is theirs; several = the job is split between team members. */
+  impliedOperators: Array<{ staffId: string; name: string; outstandingQty: number }>;
+  /** Set on the copy of a split job shown in one operator's column / queue:
+   * the outstanding quantity belonging to that operator. */
+  shareQty?: number;
   lineItems: Array<{
     id: string;
     jobType: string;
@@ -76,6 +83,7 @@ type JobCard = {
     awaitingStock: boolean;
     logoApproved: boolean;
     machineId: number | null;
+    effectiveOperatorId: string | null;
   }>;
 };
 
@@ -100,24 +108,34 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
   const todayStr = londonDateStr(new Date());
   return activeJobs.map(j => {
     const lis = (itemsByJob.get(j.id) ?? []) as any[];
-    // Effective operator already implied by the schedule: explicit line-item
-    // operator first, else the assigned machine's default operator. Only
-    // suggest when every resolvable (incomplete) line item points at ONE person.
-    let suggestedOperatorId: string | null = null;
+    // Effective operator per line item: explicit line-item operator first,
+    // else the assigned machine's default operator.
+    const effectiveOp = (li: any): string | null =>
+      li.operatorId ?? (li.machineId != null ? machineDefaultOperator.get(li.machineId) ?? null : null);
+
+    // Operators already implied by the schedule for unowned jobs. Jobs can be
+    // split between several team members — collect ALL of them (active staff
+    // only; inactive operators aren't rendered on the board, so assigning to
+    // them would hide the job entirely) with their share of the outstanding work.
+    const impliedShares = new Map<string, number>();
     if (!j.responsibleOperatorId) {
-      const implied = new Set<string>();
       for (const li of lis) {
         if (li.completed) continue;
-        const op = li.operatorId ?? (li.machineId != null ? machineDefaultOperator.get(li.machineId) : null);
-        if (op) implied.add(op);
-      }
-      if (implied.size === 1) {
-        const only = Array.from(implied)[0];
-        // Only suggest active staff — inactive operators aren't rendered on
-        // the board, so assigning to them would hide the job entirely.
-        if (activeStaffIds.has(only)) suggestedOperatorId = only;
+        const op = effectiveOp(li);
+        if (op && activeStaffIds.has(op)) impliedShares.set(op, (impliedShares.get(op) ?? 0) + li.quantity);
       }
     }
+    const impliedOperators = Array.from(impliedShares.entries())
+      .map(([staffId, outstandingQty]) => ({ staffId, name: staffName.get(staffId) ?? "Unknown", outstandingQty }))
+      .sort((a, b) => b.outstandingQty - a.outstandingQty);
+    // Only suggest a single job owner when the ENTIRE outstanding work points
+    // at ONE person — partial coverage must not hand them the whole job.
+    const outstandingQtyForShares = lis.filter(li => !li.completed).reduce((s, li) => s + li.quantity, 0);
+    const impliedSum = impliedOperators.reduce((s, op) => s + op.outstandingQty, 0);
+    const suggestedOperatorId =
+      impliedOperators.length === 1 && impliedSum === outstandingQtyForShares
+        ? impliedOperators[0].staffId
+        : null;
     const lineItems = lis.map(li => ({
       id: li.id,
       jobType: li.jobType,
@@ -128,6 +146,7 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
       awaitingStock: li.awaitingStock,
       logoApproved: li.logoApproved,
       machineId: li.machineId,
+      effectiveOperatorId: effectiveOp(li),
     }));
     const outstandingQty = lis.filter(li => !li.completed).reduce((s, li) => s + li.quantity, 0);
     const totalQty = lis.reduce((s, li) => s + li.quantity, 0);
@@ -156,6 +175,7 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
       dueToday: dueStr === todayStr,
       suggestedOperatorId,
       suggestedOperatorName: suggestedOperatorId ? staffName.get(suggestedOperatorId) ?? null : null,
+      impliedOperators,
       lineItems,
     };
   });
@@ -188,7 +208,19 @@ export async function getAllocationBoard() {
       arr.push(c);
       byOperator.set(c.responsibleOperatorId, arr);
     } else {
-      unallocated.push(c);
+      // The schedule may already give some or all of this job to one or more
+      // people — show their share in each of their columns.
+      for (const op of c.impliedOperators) {
+        const arr = byOperator.get(op.staffId) ?? [];
+        arr.push({ ...c, shareQty: op.outstandingQty });
+        byOperator.set(op.staffId, arr);
+      }
+      // Any outstanding work NOT covered by the schedule still needs a
+      // decision, so the job also stays in the awaiting list.
+      const impliedSum = c.impliedOperators.reduce((s, op) => s + op.outstandingQty, 0);
+      if (impliedSum < c.outstandingQty || c.impliedOperators.length === 0) {
+        unallocated.push(impliedSum > 0 ? { ...c, shareQty: c.outstandingQty - impliedSum } : c);
+      }
     }
   }
   const sortByDue = (a: JobCard, b: JobCard) =>
@@ -204,7 +236,7 @@ export async function getAllocationBoard() {
         name: s.name,
         jobs: jobsFor,
         jobCount: jobsFor.length,
-        itemsRemaining: jobsFor.reduce((sum, c) => sum + c.outstandingQty, 0),
+        itemsRemaining: jobsFor.reduce((sum, c) => sum + (c.shareQty ?? c.outstandingQty), 0),
         earliestDue: jobsFor[0]?.requiredDispatchDate ?? null,
         atRisk: jobsFor.filter(c => c.overdue || c.dueToday).length,
       };
@@ -218,10 +250,27 @@ export async function getAllocationBoard() {
  * should be worked, plus today's totals. */
 export async function getOperatorQueue(staffId: string) {
   const activeJobs = await getActiveJobs();
-  const owned = activeJobs.filter(j => j.responsibleOperatorId === staffId);
-  const cards = await buildJobCards(owned);
+  const allCards = await buildJobCards(activeJobs);
+  // Their queue: jobs they own, plus their share of unowned jobs the schedule
+  // splits between team members (only their line items, only their quantity).
+  const cards: JobCard[] = [];
+  for (const c of allCards) {
+    if (c.responsibleOperatorId === staffId) {
+      cards.push(c);
+    } else if (!c.responsibleOperatorId && c.allocationStatus !== "blocked") {
+      const share = c.impliedOperators.find(op => op.staffId === staffId);
+      if (share) {
+        cards.push({
+          ...c,
+          shareQty: share.outstandingQty,
+          lineItems: c.lineItems.filter(li => li.effectiveOperatorId === staffId),
+        });
+      }
+    }
+  }
   cards.sort((a, b) =>
-    (a.requiredDispatchDate ?? "9999").localeCompare(b.requiredDispatchDate ?? "9999") || b.outstandingQty - a.outstandingQty);
+    (a.requiredDispatchDate ?? "9999").localeCompare(b.requiredDispatchDate ?? "9999")
+    || (b.shareQty ?? b.outstandingQty) - (a.shareQty ?? a.outstandingQty));
 
   // Today's totals (London day) from production entries + completed line items
   const todayStr = londonDateStr(new Date());
@@ -242,7 +291,7 @@ export async function getOperatorQueue(staffId: string) {
     nextJobs: cards.slice(1),
     totals: {
       jobsAllocated: cards.length,
-      itemsRemaining: cards.reduce((s, c) => s + c.outstandingQty, 0),
+      itemsRemaining: cards.reduce((s, c) => s + (c.shareQty ?? c.outstandingQty), 0),
       itemsCompletedToday,
       minutesRecordedToday: minutesToday,
     },
@@ -368,7 +417,9 @@ export async function adoptSuggestedOperators(allocatedById: string) {
 export async function getAllocationSummary() {
   const activeJobs = await getActiveJobs();
   const cards = await buildJobCards(activeJobs);
-  const unallocated = cards.filter(c => c.allocationStatus !== "blocked" && !c.responsibleOperatorId);
+  const unallocated = cards.filter(c =>
+    c.allocationStatus !== "blocked" && !c.responsibleOperatorId
+    && c.impliedOperators.reduce((s, op) => s + op.outstandingQty, 0) < c.outstandingQty);
   const blocked = cards.filter(c => c.allocationStatus === "blocked");
   const atRisk = cards.filter(c => (c.overdue || c.dueToday) && c.outstandingQty > 0);
   return {
