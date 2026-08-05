@@ -379,12 +379,12 @@ export default function Users() {
   }
 
   return (
-    <div className="h-full overflow-auto p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-6 flex items-center justify-between gap-4">
+    <div>
+      <div>
+        <div className="mb-4 flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">User Management</h1>
-            <p className="text-muted-foreground">Manage user roles and permissions</p>
+            <h2 className="text-lg font-semibold">Logins &amp; Roles</h2>
+            <p className="text-sm text-muted-foreground">Who can log in and what they're allowed to do</p>
           </div>
           {currentUser?.role === UserRole.SUPER_ADMIN && (
             <div className="flex items-center gap-2 flex-wrap">

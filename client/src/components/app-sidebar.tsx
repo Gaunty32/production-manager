@@ -40,7 +40,7 @@ const menuItems = [
   { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
   { title: "Weekly Reports", url: "/reports/weekly", icon: BarChart3 },
   { title: "Customers", url: "/customers", icon: Users },
-  { title: "Staff", url: "/staff", icon: UserCog },
+  { title: "Team", url: "/team", icon: UserCog },
   { title: "Casual Shifts", url: "/summer-shifts", icon: Sun },
 ];
 
@@ -200,16 +200,6 @@ export function AppSidebar() {
                     </SidebarMenuItem>
                   );
                 })}
-              {isUserSuperAdmin && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/users"}>
-                    <Link href="/users" onClick={handleNavClick} data-testid="link-user-management">
-                      <ShieldCheck className="h-4 w-4" />
-                      <span>User Management</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
               {isUserSuperAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/dashboard-tv-setup"}>

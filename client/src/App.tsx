@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation, Router } from "wouter";
+import { Switch, Route, useLocation, Router, Redirect } from "wouter";
 import { useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -16,8 +16,7 @@ import { LogOut } from "lucide-react";
 import { StaffImpersonationBanner } from "@/components/StaffImpersonationBanner";
 import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
-import StaffPage from "@/pages/Staff";
-import UsersPage from "@/pages/Users";
+import TeamPage from "@/pages/Team";
 import EmailCustomers from "@/pages/EmailCustomers";
 import Schedule from "@/pages/Schedule";
 import Leaderboard from "@/pages/Leaderboard";
@@ -95,8 +94,9 @@ function StaffRouter() {
       <Route path="/dashboard"><Dashboard /></Route>
       <Route path="/orders"><Dashboard /></Route>
       <Route path="/customers"><Customers /></Route>
-      <Route path="/staff"><StaffPage /></Route>
-      <Route path="/users"><UsersPage /></Route>
+      <Route path="/team"><TeamPage /></Route>
+      <Route path="/staff"><Redirect to="/team?tab=staff" /></Route>
+      <Route path="/users"><Redirect to="/team?tab=logins" /></Route>
       <Route path="/email-customers"><EmailCustomers /></Route>
       <Route path="/schedule"><Schedule /></Route>
       <Route path="/holidays"><HolidayManagement /></Route>
