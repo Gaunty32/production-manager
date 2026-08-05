@@ -90,21 +90,18 @@ const addWorkingDays = (date: Date, days: number): Date => {
   return result;
 };
 
-// August 2026 restriction: 14-day minimum lead time, Priority Production
-// Service unavailable. Automatically lifts on 1 September 2026.
+// August 2026 restriction: Priority Production Service unavailable.
+// Automatically lifts on 1 September 2026.
 const AUGUST_RESTRICTION_END = "2026-08-31";
 const isAugustRestriction = (): boolean =>
   format(new Date(), "yyyy-MM-dd") <= AUGUST_RESTRICTION_END;
 
-// Minimum selectable dispatch date: 14 calendar days out during the August
-// restriction (rolled to a working day), otherwise the next working day.
-const getMinDispatchDate = (): Date => {
-  if (isAugustRestriction()) {
-    let d = addDays(new Date(), 14);
-    while (!isWorkingDay(d)) d = addDays(d, 1);
-    return d;
-  }
-  return addWorkingDays(new Date(), 1);
+// Minimum selectable dispatch date for a given lead time (calendar days),
+// rolled forward to a working day.
+const getMinDispatchDateFor = (leadTimeDays: number): Date => {
+  let d = addDays(new Date(), leadTimeDays);
+  while (!isWorkingDay(d)) d = addDays(d, 1);
+  return d;
 };
 
 const getWorkingDaysBetween = (startDate: Date, endDate: Date): number => {
@@ -185,17 +182,36 @@ export default function CustomerSubmitJob() {
       quantity: undefined,
       notes: "",
       deliveryAddress: "",
-      requiredDispatchDate: (() => {
-        let d = addDays(new Date(), isAugustRestriction() ? 14 : 7);
-        while (!isWorkingDay(d)) d = addDays(d, 1);
-        return format(d, "yyyy-MM-dd");
-      })(),
+      requiredDispatchDate: format(getMinDispatchDateFor(14), "yyyy-MM-dd"),
       logoType: "repeat_logo" as const,
     },
   });
 
   const watchedQuantity = form.watch("quantity");
   const watchedDispatch = form.watch("requiredDispatchDate");
+
+  // Minimum lead time is driven by the total outstanding quantity in the
+  // production queue (under 2,000 → 4 days; 2,000–5,000 → 7; over 5,000 → 14).
+  const { data: leadTimeInfo } = useQuery<{ queueQuantity: number; leadTimeDays: number }>({
+    queryKey: ["/api/scheduling/queue-lead-time"],
+  });
+  // Conservative 14-day floor until the server answers
+  const leadTimeDays = leadTimeInfo?.leadTimeDays ?? 14;
+  // Priority Production Service is only available when the queue is under
+  // 5,000 items (and not during August). Unavailable while loading.
+  const expressUnavailableReason: string | null = isAugustRestriction()
+    ? "Our Priority Production Service is unavailable during August."
+    : !leadTimeInfo || leadTimeInfo.queueQuantity >= 5000
+      ? "Our Priority Production Service is unavailable while the production queue is at full capacity."
+      : null;
+
+  // Once the real lead time arrives, move the default date (only if the
+  // customer hasn't already picked their own date).
+  useEffect(() => {
+    if (!leadTimeInfo) return;
+    if (form.formState.dirtyFields.requiredDispatchDate) return;
+    form.setValue("requiredDispatchDate", format(getMinDispatchDateFor(leadTimeInfo.leadTimeDays), "yyyy-MM-dd"));
+  }, [leadTimeInfo]);
 
   const { data: capacityInfo } = useQuery<{ earliestDate: string | null; quantity: number }>({
     queryKey: ["/api/scheduling/earliest-dispatch", Number(watchedQuantity) || 0],
@@ -236,33 +252,28 @@ export default function CustomerSubmitJob() {
       });
       return;
     }
-    // August restriction: 14-day minimum lead time, no Priority Production
-    if (isAugustRestriction()) {
-      const minDate = getMinDispatchDate();
-      minDate.setHours(0, 0, 0, 0);
-      if (selectedDate < minDate) {
-        toast({
-          title: "Lead time too short",
-          description: `During August we require 14 days' notice for all orders. The earliest available despatch date is ${format(minDate, "EEE d MMM yyyy")}.`,
-          variant: "destructive",
-        });
-        return;
-      }
-      onChange(dateStr);
-      return;
-    }
-    const workingDaysAway = getWorkingDaysBetween(today, selectedDate);
-    // Floor: at least the next working day
-    if (workingDaysAway < 1) {
+    // Queue-driven minimum lead time — no earlier dates allowed
+    const minDate = getMinDispatchDateFor(leadTimeDays);
+    minDate.setHours(0, 0, 0, 0);
+    if (selectedDate < minDate) {
       toast({
         title: "Lead time too short",
-        description: "Required despatch date must be at least the next working day.",
+        description: `Based on our current production queue, all orders require ${leadTimeDays} days' notice. The earliest available despatch date is ${format(minDate, "EEE d MMM yyyy")}.`,
         variant: "destructive",
       });
       return;
     }
+    const workingDaysAway = getWorkingDaysBetween(today, selectedDate);
     // Within 2 working days = Priority Production Service: confirm 100% surcharge
     if (workingDaysAway <= 2) {
+      if (expressUnavailableReason) {
+        toast({
+          title: "Priority Production Service unavailable",
+          description: `${expressUnavailableReason} Please choose a later despatch date.`,
+          variant: "destructive",
+        });
+        return;
+      }
       setPendingDispatchDate(dateStr);
       setPendingDispatchWorkingDays(workingDaysAway);
       setShowExpressDialog(true);
@@ -654,7 +665,7 @@ export default function CustomerSubmitJob() {
                           type="date"
                           value={field.value}
                           onChange={(e) => handleDispatchDateChange(e.target.value, field.onChange)}
-                          min={format(getMinDispatchDate(), "yyyy-MM-dd")}
+                          min={format(getMinDispatchDateFor(leadTimeDays), "yyyy-MM-dd")}
                           data-testid="input-dispatch-date"
                         />
                       </FormControl>
@@ -664,14 +675,12 @@ export default function CustomerSubmitJob() {
                         <span className="block">We despatch Monday to Friday on a standard DPD 24 Hour service.</span>
                         <span className="block">Please remember that production time begins once all garments have been received and all artwork has been approved.</span>
                         <span className="block">Most orders are completed within 3–4 working days; however, larger, specialist, or incomplete orders may require additional time.</span>
-                        {isAugustRestriction() && (
-                          <span className="block font-medium text-foreground pt-1">During August, all orders require a minimum of 14 days' notice.</span>
-                        )}
-                        <span className={isAugustRestriction() ? "block font-medium pt-1 text-muted-foreground/50 line-through" : "block font-medium text-foreground pt-1"}>Priority Production Service Available</span>
-                        <span className={isAugustRestriction() ? "block text-muted-foreground/50" : "block"}>Need it urgently? Orders of up to 100 units may be eligible for our Priority Production Service, with despatch within 2 working days of garments being received and artwork approval.</span>
-                        <span className={isAugustRestriction() ? "block text-muted-foreground/50" : "block"}>A 100% production surcharge applies, and the service is subject to capacity. Please contact us before submitting your order to confirm availability.</span>
-                        {isAugustRestriction() && (
-                          <span className="block text-muted-foreground/70 italic">Priority Production Service is unavailable during August.</span>
+                        <span className="block font-medium text-foreground pt-1">Based on our current production queue, all orders require a minimum of {leadTimeDays} days' notice.</span>
+                        <span className={expressUnavailableReason ? "block font-medium pt-1 text-muted-foreground/50 line-through" : "block font-medium text-foreground pt-1"}>Priority Production Service Available</span>
+                        <span className={expressUnavailableReason ? "block text-muted-foreground/50" : "block"}>Need it urgently? Orders of up to 100 units may be eligible for our Priority Production Service, with despatch within 2 working days of garments being received and artwork approval.</span>
+                        <span className={expressUnavailableReason ? "block text-muted-foreground/50" : "block"}>A 100% production surcharge applies, and the service is subject to capacity. Please contact us before submitting your order to confirm availability.</span>
+                        {expressUnavailableReason && (
+                          <span className="block text-muted-foreground/70 italic">{expressUnavailableReason}</span>
                         )}
                       </FormDescription>
                       {dispatchCapacityWarning && (

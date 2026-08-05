@@ -7883,6 +7883,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // a chosen due date is earlier than what current capacity can support.
   // Public-ish: any authenticated user (staff OR customer) can hit this — it
   // returns only a date, no scheduling internals.
+  // Minimum lead time for new customer orders, driven by the total
+  // outstanding quantity in the production queue:
+  //   under 2,000 → 4 days; 2,000–5,000 → 7 days; over 5,000 → 14 days.
+  app.get("/api/scheduling/queue-lead-time", async (req: any, res) => {
+    try {
+      const isStaff = !!(req.session as any)?.userId;
+      const isCustomer = !!(req.session as any)?.customerUserId;
+      if (!isStaff && !isCustomer) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      const queueQuantity = await storage.getOutstandingQueueQuantity();
+      const leadTimeDays = queueQuantity < 2000 ? 4 : queueQuantity <= 5000 ? 7 : 14;
+      res.json({ queueQuantity, leadTimeDays });
+    } catch (e) {
+      console.error("Error computing queue lead time:", e);
+      res.status(500).json({ error: "Failed to compute lead time" });
+    }
+  });
+
   app.get("/api/scheduling/earliest-dispatch", async (req: any, res) => {
     try {
       const isStaff = !!(req.session as any)?.userId;

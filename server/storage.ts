@@ -283,6 +283,8 @@ export interface IStorage {
     }>;
   }>;
 
+  getOutstandingQueueQuantity(): Promise<number>;
+
   getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
     weeks: Array<{ weekStart: string; submitted: number; completed: number }>;
     machineWeekly: Array<{ weekStart: string; machineId: number; machineName: string; quantity: number }>;
@@ -2358,6 +2360,18 @@ export class DatabaseStorage implements IStorage {
     }));
 
     return { weekly, rolling, deliveryJobs };
+  }
+
+  async getOutstandingQueueQuantity(): Promise<number> {
+    // Total outstanding quantity in the production queue: incomplete line
+    // items on jobs still in production.
+    const result = await db.execute(sql`
+      SELECT COALESCE(SUM(jli.quantity), 0) AS qty
+      FROM job_line_items jli
+      JOIN jobs j ON j.id = jli.job_id
+      WHERE NOT jli.completed AND j.status = 'production'
+    `);
+    return Number((result.rows[0] as any)?.qty || 0);
   }
 
   async getWeeklyOutputReport(params: { startDate: string; endDate: string; timezone?: string }): Promise<{
