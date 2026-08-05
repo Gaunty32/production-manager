@@ -180,10 +180,10 @@ export default function AllocationBoard() {
     </button>
   );
 
-  if (isLoading) return <div className="p-4"><Skeleton className="h-96 w-full" /></div>;
+  if (isLoading) return <div className="h-full overflow-y-auto p-4"><Skeleton className="h-96 w-full" /></div>;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="h-full overflow-y-auto p-4 space-y-4">
       <div>
         <h1 className="text-xl font-bold">Job Allocation</h1>
         <p className="text-sm text-muted-foreground">People own jobs. Machines provide capacity. Click any job to change its owner, machine or status.</p>
