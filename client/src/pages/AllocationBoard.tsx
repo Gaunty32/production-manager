@@ -82,6 +82,7 @@ export default function AllocationBoard() {
   const [overrideReason, setOverrideReason] = useState("");
   const [blockReason, setBlockReason] = useState<string>("none");
   const [awaitingSearch, setAwaitingSearch] = useState("");
+  const [awaitingOperator, setAwaitingOperator] = useState<string>("all");
 
   const { data: board, isLoading } = useQuery<BoardData>({ queryKey: ["/api/allocation/board"] });
   const { data: machines } = useQuery<Machine[]>({ queryKey: ["/api/machines"] });
@@ -212,26 +213,45 @@ export default function AllocationBoard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="relative max-w-sm">
-              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={awaitingSearch}
-                onChange={e => setAwaitingSearch(e.target.value)}
-                placeholder="Search by job number, name or customer…"
-                className="pl-8"
-                data-testid="input-awaiting-search"
-              />
+            <div className="flex flex-wrap gap-2">
+              <div className="relative max-w-sm flex-1 min-w-[220px]">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={awaitingSearch}
+                  onChange={e => setAwaitingSearch(e.target.value)}
+                  placeholder="Search by job number, name or customer…"
+                  className="pl-8"
+                  data-testid="input-awaiting-search"
+                />
+              </div>
+              <Select value={awaitingOperator} onValueChange={setAwaitingOperator}>
+                <SelectTrigger className="w-[210px]" data-testid="select-awaiting-operator">
+                  <SelectValue placeholder="All team members" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All team members</SelectItem>
+                  <SelectItem value="none">No one scheduled</SelectItem>
+                  {board!.operators.map(op => (
+                    <SelectItem key={op.staffId} value={op.staffId}><DemoText>{op.name}</DemoText></SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {(() => {
               const q = awaitingSearch.trim().toLowerCase();
-              const filtered = q
+              let filtered = q
                 ? board!.unallocated.filter(j =>
                     (j.jobNumber != null && String(j.jobNumber).includes(q.replace(/^#/, ""))) ||
                     j.jobName.toLowerCase().includes(q) ||
                     j.customerName.toLowerCase().includes(q))
                 : board!.unallocated;
+              if (awaitingOperator === "none") {
+                filtered = filtered.filter(j => !j.impliedOperators || j.impliedOperators.length === 0);
+              } else if (awaitingOperator !== "all") {
+                filtered = filtered.filter(j => j.impliedOperators?.some(op => op.staffId === awaitingOperator));
+              }
               if (filtered.length === 0) {
-                return <p className="text-sm text-muted-foreground">No awaiting jobs match "{awaitingSearch}".</p>;
+                return <p className="text-sm text-muted-foreground">No awaiting jobs match your filters.</p>;
               }
               return (
                 <div className="max-h-[26rem] overflow-y-auto pr-1">
