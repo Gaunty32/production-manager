@@ -12,7 +12,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, UserX, Ban, CalendarClock } from "lucide-react";
+import { AlertTriangle, UserX, Ban, CalendarClock, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -80,6 +81,7 @@ export default function AllocationBoard() {
   const [machineId, setMachineId] = useState<string>("none");
   const [overrideReason, setOverrideReason] = useState("");
   const [blockReason, setBlockReason] = useState<string>("none");
+  const [awaitingSearch, setAwaitingSearch] = useState("");
 
   const { data: board, isLoading } = useQuery<BoardData>({ queryKey: ["/api/allocation/board"] });
   const { data: machines } = useQuery<Machine[]>({ queryKey: ["/api/machines"] });
@@ -209,8 +211,36 @@ export default function AllocationBoard() {
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {board!.unallocated.map(j => <JobRow key={j.id} job={j} />)}
+          <CardContent className="space-y-3">
+            <div className="relative max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={awaitingSearch}
+                onChange={e => setAwaitingSearch(e.target.value)}
+                placeholder="Search by job number, name or customer…"
+                className="pl-8"
+                data-testid="input-awaiting-search"
+              />
+            </div>
+            {(() => {
+              const q = awaitingSearch.trim().toLowerCase();
+              const filtered = q
+                ? board!.unallocated.filter(j =>
+                    (j.jobNumber != null && String(j.jobNumber).includes(q.replace(/^#/, ""))) ||
+                    j.jobName.toLowerCase().includes(q) ||
+                    j.customerName.toLowerCase().includes(q))
+                : board!.unallocated;
+              if (filtered.length === 0) {
+                return <p className="text-sm text-muted-foreground">No awaiting jobs match "{awaitingSearch}".</p>;
+              }
+              return (
+                <div className="max-h-[26rem] overflow-y-auto pr-1">
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {filtered.map(j => <JobRow key={j.id} job={j} />)}
+                  </div>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       )}
