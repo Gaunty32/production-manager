@@ -489,7 +489,36 @@ function formatEstTime(mins: number): string {
   return `${h}h ${m}m`;
 }
 
-function PlanItemRow({ item, showMachine }: { item: PlanItem; showMachine: boolean }) {
+function PlanItemRow({ item, showMachine, compact }: { item: PlanItem; showMachine: boolean; compact?: boolean }) {
+  if (compact) {
+    // Single-line row so three jobs fit on a half-height person tile.
+    return (
+      <div className="flex items-center gap-2 min-w-0" data-testid="row-plan-item">
+        {item.done ? (
+          <CheckCircle2 className="w-5 h-5 shrink-0" style={{ color: STATUS_COLOR.green }} />
+        ) : (
+          <Circle className="w-5 h-5 shrink-0 text-slate-600" />
+        )}
+        <span
+          className={`text-lg font-semibold truncate ${item.done ? "text-slate-500 line-through" : "text-slate-200"}`}
+        >
+          {item.jobName || item.jobLabel}
+        </span>
+        {showMachine && item.machine && (
+          <span className="text-sm text-slate-400 whitespace-nowrap rounded-md bg-slate-800 ring-1 ring-slate-700 px-1.5 py-0.5 shrink-0">
+            {item.machine}
+          </span>
+        )}
+        <span
+          className={`ml-auto whitespace-nowrap text-right font-semibold text-lg ${
+            item.done ? "text-slate-500" : "text-amber-400"
+          }`}
+        >
+          {item.done ? "Done" : `${num(item.remaining)} pcs`}
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="flex items-start gap-3" data-testid="row-plan-item">
       {item.done ? (
@@ -539,8 +568,10 @@ function TodaysPlanPage({ data }: { data: TvData }) {
   // Full-width layout: up to 3 people fit on one row; more wrap into a second row.
   const cols = peopleShown.length <= 4 ? 2 : 3;
   const rows = Math.ceil(peopleShown.length / cols);
-  // With two rows each card gets half the height — show fewer items so nothing clips.
-  const itemsPerPerson = peopleShown.length <= 2 ? 5 : rows === 1 ? 3 : 2;
+  // With two rows each card gets half the height — compact single-line rows
+  // let three jobs fit per person without clipping.
+  const itemsPerPerson = peopleShown.length <= 2 ? 5 : 3;
+  const compactRows = rows > 1;
 
   const workload = data.operatorWorkload;
   const workloadShown = (workload?.operators ?? []).slice(0, 8);
@@ -618,10 +649,10 @@ function TodaysPlanPage({ data }: { data: TvData }) {
                       </div>
                       <div className="flex flex-col gap-1.5">
                         {p.items.slice(0, itemsPerPerson).map((item, i) => (
-                          <PlanItemRow key={i} item={item} showMachine />
+                          <PlanItemRow key={i} item={item} showMachine compact={compactRows} />
                         ))}
                         {p.totalCount > Math.min(p.items.length, itemsPerPerson) && (
-                          <div className="text-lg text-slate-500 pl-9">
+                          <div className={`text-slate-500 ${compactRows ? "text-base pl-7" : "text-lg pl-9"}`}>
                             +{p.totalCount - Math.min(p.items.length, itemsPerPerson)} more
                           </div>
                         )}
