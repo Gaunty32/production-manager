@@ -49,6 +49,7 @@ export const customers = pgTable("customers", {
   stripeCustomerId: text("stripe_customer_id"),
   createdAt: timestamp("created_at").defaultNow(),
   lastReEngagementEmailAt: timestamp("last_re_engagement_email_at"),
+  inactiveNotifiedAt: timestamp("inactive_notified_at"),
 });
 
 export const staff = pgTable("staff", {

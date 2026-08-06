@@ -1793,6 +1793,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Inactive customers report: active accounts ranked by time since their
+  // last order — 8+ weeks are going quiet, 3+ months are closure candidates.
+  app.get("/api/reports/inactive-customers", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const { getInactiveCustomers, getActiveCustomerCount } = await import("./inactiveCustomers");
+      const [customers, activeCount] = await Promise.all([
+        getInactiveCustomers(56),
+        getActiveCustomerCount(),
+      ]);
+      res.json({ activeCustomerCount: activeCount, customers });
+    } catch (error) {
+      console.error("Error fetching inactive customers report:", error);
+      res.status(500).json({ error: "Failed to fetch inactive customers report" });
+    }
+  });
+
   // Data Quality report: completed line items whose recorded production time
   // looks unreliable — missing/zero, or exactly equal to the system estimate
   // (a tell-tale sign the estimate was copied instead of the real time).

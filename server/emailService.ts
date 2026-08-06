@@ -1403,3 +1403,120 @@ export async function sendBroadcastEmail(params: {
     throw new Error(`Failed to send broadcast email to ${params.to}: ${JSON.stringify(error)}`);
   }
 }
+
+// ── Inactive customer notifications (internal, to James) ────────────────────
+
+export interface InactiveCustomerRow {
+  name: string;
+  email: string | null;
+  daysSinceLastOrder: number;
+  lastOrderDate: string | null;
+  checkInSentAt: string | null;
+}
+
+function inactiveCustomersTable(rows: InactiveCustomerRow[]): string {
+  const cell = `padding:8px 10px;border-bottom:1px solid #e4e4e7;font-size:13px;text-align:left;`;
+  const head = `${cell}font-weight:700;background:#fafafa;`;
+  const fmtDate = (d: string | null) => {
+    if (!d) return '—';
+    const dt = new Date(d);
+    return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' });
+  };
+  return `
+    <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e4e4e7;border-radius:6px;border-collapse:collapse;margin:12px 0 20px;">
+      <tr>
+        <th style="${head}">Customer</th>
+        <th style="${head}">Last order</th>
+        <th style="${head}">Weeks inactive</th>
+        <th style="${head}">Check-in email</th>
+      </tr>
+      ${rows.map(r => `
+      <tr>
+        <td style="${cell}"><strong>${sanitizeHtml(r.name)}</strong></td>
+        <td style="${cell}">${fmtDate(r.lastOrderDate)}</td>
+        <td style="${cell}">${Math.floor(r.daysSinceLastOrder / 7)} (${r.daysSinceLastOrder} days)</td>
+        <td style="${cell}">${r.checkInSentAt ? `Sent ${fmtDate(r.checkInSentAt)}` : 'Not yet sent'}</td>
+      </tr>`).join('')}
+    </table>
+  `;
+}
+
+export async function sendInactiveCustomerAlertEmail(params: {
+  to: string;
+  customers: InactiveCustomerRow[];
+}): Promise<void> {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const n = params.customers.length;
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">
+      ${n} customer${n === 1 ? '' : 's'} now inactive for 3+ months
+    </h2>
+    <p style="margin:0 0 12px;">
+      The customer${n === 1 ? '' : 's'} below ${n === 1 ? 'has' : 'have'} not placed an order for over 3 months.
+      Worth an honest conversation about whether the account should stay open — an open but inactive
+      account benefits nobody, and closing it frees up capacity for active customers.
+    </p>
+    ${inactiveCustomersTable(params.customers)}
+    <p style="margin:0;color:#71717a;font-size:13px;">
+      Sent automatically by Production Planner when a customer passes 3 months without an order.
+    </p>
+  `;
+  const { error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: params.to,
+    subject: `${n} customer${n === 1 ? '' : 's'} inactive for 3+ months — consider closing`,
+    html: brandedEmail(body, { noReply: true }),
+  });
+  if (error) {
+    throw new Error(`Failed to send inactive-customer alert: ${JSON.stringify(error)}`);
+  }
+}
+
+export async function sendMonthlyInactiveReportEmail(params: {
+  to: string;
+  monthLabel: string;
+  activeCustomerCount: number;
+  eightWeekPlus: InactiveCustomerRow[];
+  threeMonthPlus: InactiveCustomerRow[];
+}): Promise<void> {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">
+      Inactive customer report — ${sanitizeHtml(params.monthLabel)}
+    </h2>
+    <p style="margin:0 0 18px;">
+      Currently <strong>${params.activeCustomerCount}</strong> open customer accounts.
+      ${params.threeMonthPlus.length + params.eightWeekPlus.length === 0
+        ? 'No customers look inactive right now — nothing to action this month.'
+        : 'The lists below show who has gone quiet and who to consider offboarding.'}
+    </p>
+    ${params.threeMonthPlus.length > 0 ? `
+    <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#18181b;">
+      Consider making inactive — no orders for 3+ months (${params.threeMonthPlus.length})
+    </p>
+    <p style="margin:0 0 8px;color:#71717a;font-size:13px;">
+      Time for an honest conversation about closing these accounts to free up capacity.
+    </p>
+    ${inactiveCustomersTable(params.threeMonthPlus)}` : ''}
+    ${params.eightWeekPlus.length > 0 ? `
+    <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#18181b;">
+      Going quiet — no orders for 8+ weeks (${params.eightWeekPlus.length})
+    </p>
+    <p style="margin:0 0 8px;color:#71717a;font-size:13px;">
+      These customers get a friendly check-in email automatically.
+    </p>
+    ${inactiveCustomersTable(params.eightWeekPlus)}` : ''}
+    <p style="margin:0;color:#71717a;font-size:13px;">
+      Sent automatically by Production Planner on the 1st of each month.
+    </p>
+  `;
+  const { error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: params.to,
+    subject: `Inactive customer report — ${params.monthLabel}`,
+    html: brandedEmail(body, { noReply: true }),
+  });
+  if (error) {
+    throw new Error(`Failed to send monthly inactive report: ${JSON.stringify(error)}`);
+  }
+}

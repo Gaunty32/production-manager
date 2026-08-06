@@ -4,7 +4,8 @@ import { storage } from "./storage";
 import { sendReEngagementEmail } from "./emailService";
 import { getEmailBudget } from "./emailBudget";
 
-const DORMANT_DAYS = 90;
+// 8 weeks without placing an order triggers a friendly check-in email.
+const DORMANT_DAYS = 56;
 const RE_EMAIL_COOLDOWN_DAYS = 90;
 
 // How much of the daily budget to reserve for transactional emails
@@ -33,7 +34,11 @@ export async function getDormantCustomers(): Promise<DormantCustomer[]> {
     WITH last_job AS (
       SELECT
         customer_id,
-        MAX(COALESCE(submitted_at, approved_at, invoiced_at)) AS last_activity
+        MAX(GREATEST(
+          COALESCE(submitted_at, '-infinity'::timestamp),
+          COALESCE(approved_at, '-infinity'::timestamp),
+          COALESCE(invoiced_at, '-infinity'::timestamp)
+        )) FILTER (WHERE submitted_at IS NOT NULL OR approved_at IS NOT NULL OR invoiced_at IS NOT NULL) AS last_activity
       FROM jobs
       WHERE customer_id IS NOT NULL
       GROUP BY customer_id

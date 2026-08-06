@@ -19,6 +19,7 @@ import { KeyMetricsTab } from "@/components/KeyMetricsTab";
 import { StaffProductivityTab } from "@/components/StaffProductivityTab";
 import { DataQualityTab } from "@/components/DataQualityTab";
 import { WeeklyOutputTab } from "@/components/WeeklyOutputTab";
+import InactiveCustomersTab from "@/components/InactiveCustomersTab";
 import { format, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -820,6 +821,10 @@ function WeeklyReportsContent() {
             <ShieldAlert className="h-4 w-4 mr-2" />
             Data Quality
           </TabsTrigger>
+          <TabsTrigger value="inactive-customers" data-testid="tab-inactive-customers">
+            <Building2 className="h-4 w-4 mr-2" />
+            Inactive Customers
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="key-metrics" className="space-y-4">
@@ -836,6 +841,10 @@ function WeeklyReportsContent() {
 
         <TabsContent value="data-quality" className="space-y-4">
           <DataQualityTab />
+        </TabsContent>
+
+        <TabsContent value="inactive-customers" className="space-y-4">
+          <InactiveCustomersTab />
         </TabsContent>
 
         <TabsContent value="production-week" className="space-y-4">
