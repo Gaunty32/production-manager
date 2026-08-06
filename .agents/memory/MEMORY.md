@@ -51,6 +51,7 @@
 
 - [DPD Local API](dpd-local-api.md) — use api.dpdlocal.co.uk (old public-ws is dead); labels are HTML, print via sandboxed no-scripts iframe; fail hard on missing consignment number.
 
+- [Neon SQL array params](neon-sql-array-params.md) — JS arrays in drizzle sql`` fail ("malformed array literal"); expand via jsonb_array_elements_text(JSON.stringify(ids)).
 - [Default query fetcher](query-default-fetcher.md) — queryKey.join("/") turns object segments into "[object Object]"; params need an explicit queryFn.
 
 - [Auth session patterns](auth-session-patterns.md) — staff=userId (regenerates), customer=customerUserId (legacy login does NOT regenerate); any new login path MUST regenerate before attaching id. OTP lives in login_codes table.
