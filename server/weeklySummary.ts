@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { sendWeeklySummaryEmail, type WeeklySummaryMetric } from "./emailService";
+import { sendWeeklySummaryEmail, type WeeklySummaryMetric, type WeeklySummaryTeamRow } from "./emailService";
 import { claimSlot } from "./inactiveCustomers";
 
 const RECIPIENTS = [
@@ -85,12 +85,29 @@ export async function buildAndSendWeeklySummary(): Promise<void> {
     },
   ];
 
+  // Team performance: line items completed per staff member — last week and
+  // their weekly average across the whole window
+  const staffTotals = new Map<string, { name: string; lastWeek: number; total: number }>();
+  for (const row of data.staffWeekly) {
+    let entry = staffTotals.get(row.staffId);
+    if (!entry) {
+      entry = { name: row.staffName, lastWeek: 0, total: 0 };
+      staffTotals.set(row.staffId, entry);
+    }
+    entry.total += row.quantity;
+    if (row.weekStart === lastWeekKey) entry.lastWeek += row.quantity;
+  }
+  const team: WeeklySummaryTeamRow[] = Array.from(staffTotals.values())
+    .map(t => ({ name: t.name, lastWeek: t.lastWeek, average: t.total / weeksAveraged }))
+    .sort((a, b) => b.lastWeek - a.lastWeek);
+
   const weekLabel = `w/c ${lastMonday.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`;
   await sendWeeklySummaryEmail({
     to: RECIPIENTS,
     weekLabel,
     weeksAveraged,
     metrics,
+    team,
   });
   console.log(`[WeeklySummary] Sent for ${weekLabel} to ${RECIPIENTS.join(", ")}`);
 }

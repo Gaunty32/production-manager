@@ -1551,11 +1551,18 @@ function summaryDeltaChip(m: WeeklySummaryMetric): string {
   return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${bg};color:${fg};font-size:11px;font-weight:700;">${arrow} ${Math.abs(pct).toFixed(0)}%</span>`;
 }
 
+export interface WeeklySummaryTeamRow {
+  name: string;
+  lastWeek: number; // line items completed last week
+  average: number; // rolling average per week
+}
+
 export async function sendWeeklySummaryEmail(params: {
   to: string[];
   weekLabel: string; // e.g. "w/c 27 July 2026"
   weeksAveraged: number;
   metrics: WeeklySummaryMetric[];
+  team?: WeeklySummaryTeamRow[];
 }): Promise<void> {
   const { client, fromEmail } = await getUncachableResendClient();
 
@@ -1605,6 +1612,31 @@ export async function sendWeeklySummaryEmail(params: {
         </tr>
       </thead>
       <tbody>${rows}</tbody>
+    </table>` : ''}
+    ${params.team && params.team.length > 0 ? `
+    <p style="margin:0 0 8px;font-size:15px;font-weight:800;color:#18181b;">Team performance — line items completed</p>
+    <table style="width:100%;border-collapse:collapse;margin:0 0 20px;border:1px solid #e4e4e7;border-radius:10px;">
+      <thead>
+        <tr>
+          <th style="padding:9px 14px;background:#18181b;font-size:11px;color:#ffffff;text-align:left;text-transform:uppercase;letter-spacing:0.05em;border-top-left-radius:10px;">Team member</th>
+          <th style="padding:9px 14px;background:#18181b;font-size:11px;color:#ffffff;text-align:right;text-transform:uppercase;letter-spacing:0.05em;">Last week</th>
+          <th style="padding:9px 14px;background:#18181b;font-size:11px;color:#ffffff;text-align:right;text-transform:uppercase;letter-spacing:0.05em;">${params.weeksAveraged}-wk avg</th>
+          <th style="padding:9px 14px;background:#18181b;font-size:11px;color:#ffffff;text-align:right;text-transform:uppercase;letter-spacing:0.05em;border-top-right-radius:10px;">vs avg</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${params.team.map((t, i) => {
+          const bg = i % 2 === 0 ? '#fafafa' : '#ffffff';
+          const last = i === params.team!.length - 1;
+          return `
+        <tr>
+          <td style="padding:11px 14px;background:${bg};border-bottom:1px solid #f4f4f5;font-size:13px;color:#3f3f46;font-weight:600;${last ? 'border-bottom:none;border-bottom-left-radius:10px;' : ''}">${sanitizeHtml(t.name)}</td>
+          <td style="padding:11px 14px;background:${bg};border-bottom:1px solid #f4f4f5;font-size:15px;color:#18181b;text-align:right;font-weight:800;${last ? 'border-bottom:none;' : ''}">${Math.round(t.lastWeek).toLocaleString('en-GB')}</td>
+          <td style="padding:11px 14px;background:${bg};border-bottom:1px solid #f4f4f5;font-size:13px;color:#71717a;text-align:right;${last ? 'border-bottom:none;' : ''}">${Math.round(t.average).toLocaleString('en-GB')}</td>
+          <td style="padding:11px 14px;background:${bg};border-bottom:1px solid #f4f4f5;text-align:right;${last ? 'border-bottom:none;border-bottom-right-radius:10px;' : ''}">${summaryDeltaChip({ label: t.name, lastWeek: '', average: '', lastWeekValue: t.lastWeek, averageValue: t.average })}</td>
+        </tr>`;
+        }).join('')}
+      </tbody>
     </table>` : ''}
     <p style="margin:0;color:#71717a;font-size:12px;">
       Sent automatically by Production Planner every Monday morning. The full report is under Reports &rarr; Weekly Output.
