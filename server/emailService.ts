@@ -1522,3 +1522,56 @@ export async function sendMonthlyInactiveReportEmail(params: {
     throw new Error(`Failed to send monthly inactive report: ${JSON.stringify(error)}`);
   }
 }
+
+// ─── Weekly performance summary (internal) ───────────────────────────────────
+
+export interface WeeklySummaryMetric {
+  label: string;
+  lastWeek: string;
+  average: string; // rolling 16-week average
+}
+
+export async function sendWeeklySummaryEmail(params: {
+  to: string[];
+  weekLabel: string; // e.g. "w/c 27 July 2026"
+  weeksAveraged: number;
+  metrics: WeeklySummaryMetric[];
+}): Promise<void> {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const rows = params.metrics.map(m => `
+    <tr>
+      <td style="padding:7px 10px;border-bottom:1px solid #e4e4e7;font-size:13px;color:#3f3f46;">${sanitizeHtml(m.label)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #e4e4e7;font-size:13px;color:#18181b;text-align:right;font-weight:700;">${sanitizeHtml(m.lastWeek)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #e4e4e7;font-size:13px;color:#71717a;text-align:right;">${sanitizeHtml(m.average)}</td>
+    </tr>`).join('');
+  const body = `
+    <h2 style="margin:0 0 6px;font-size:20px;font-weight:700;color:#18181b;">
+      Weekly performance summary — ${sanitizeHtml(params.weekLabel)}
+    </h2>
+    <p style="margin:0 0 18px;color:#71717a;font-size:13px;">
+      Last completed week (Monday to Sunday) compared with the rolling ${params.weeksAveraged}-week average.
+    </p>
+    <table style="width:100%;border-collapse:collapse;margin:0 0 18px;">
+      <thead>
+        <tr>
+          <th style="padding:7px 10px;border-bottom:2px solid #d4d4d8;font-size:12px;color:#71717a;text-align:left;text-transform:uppercase;letter-spacing:0.04em;">Metric</th>
+          <th style="padding:7px 10px;border-bottom:2px solid #d4d4d8;font-size:12px;color:#71717a;text-align:right;text-transform:uppercase;letter-spacing:0.04em;">Last week</th>
+          <th style="padding:7px 10px;border-bottom:2px solid #d4d4d8;font-size:12px;color:#71717a;text-align:right;text-transform:uppercase;letter-spacing:0.04em;">${params.weeksAveraged}-week avg</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="margin:0;color:#71717a;font-size:13px;">
+      Sent automatically by Production Planner every Monday morning. The full report is under Reports &rarr; Weekly Output.
+    </p>
+  `;
+  const { error } = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    to: params.to,
+    subject: `Weekly performance summary — ${params.weekLabel}`,
+    html: brandedEmail(body, { noReply: true }),
+  });
+  if (error) {
+    throw new Error(`Failed to send weekly summary: ${JSON.stringify(error)}`);
+  }
+}

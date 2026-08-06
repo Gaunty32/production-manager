@@ -10,6 +10,7 @@ import { sql } from "drizzle-orm";
 import { scheduleDailyReEngagementCheck } from "./reEngagement";
 import { scheduleFortnightlyRecalibration } from "./calibration";
 import { scheduleInactiveCustomerChecks } from "./inactiveCustomers";
+import { scheduleWeeklySummary } from "./weeklySummary";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -107,6 +108,7 @@ app.use((req, res, next) => {
   scheduleDailyReEngagementCheck();
   scheduleFortnightlyRecalibration();
   scheduleInactiveCustomerChecks();
+  scheduleWeeklySummary();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

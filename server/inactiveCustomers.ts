@@ -133,7 +133,7 @@ export async function runInactiveAlertCheck(options: { dryRun?: boolean } = {}):
  * using the app_settings table, so restarts and multiple instances can't
  * run the same slot twice. Returns true when this caller won the slot.
  */
-async function claimSlot(key: string, slotValue: string): Promise<boolean> {
+export async function claimSlot(key: string, slotValue: string): Promise<boolean> {
   const result = await db.execute(sql`
     INSERT INTO app_settings (key, value, updated_at)
     VALUES (${key}, ${slotValue}, NOW())
