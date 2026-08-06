@@ -361,10 +361,10 @@
     visibility: visible !important;
   }
 
+  /* Flow normally inside the report page when printing (absolute positioning
+     made it overlay the page title) */
   #weekly-output-root {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
     width: 100% !important;
     overflow: visible !important;
   }
@@ -393,6 +393,44 @@
   /* Hide on-screen controls (date pickers, buttons) */
   #weekly-output-root .print-hide {
     display: none !important;
+  }
+
+  /* When the Weekly Output tab is being printed, hide the page-level header so
+     the tab's own report header is the only title on the page */
+  .print-report-root:has(#weekly-output-root) .report-page-header {
+    display: none !important;
+  }
+
+  /* Each chart fills its own A4 landscape page */
+  #weekly-output-root .print-chart {
+    break-before: page !important;
+    page-break-before: always !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  /* Let the first chart share page 1 with the report header */
+  #weekly-output-root .print-stack:first-of-type > .print-chart:first-child {
+    break-before: auto !important;
+    page-break-before: auto !important;
+  }
+  #weekly-output-root .print-chart .print-chart-box {
+    height: 15.5cm !important;
+  }
+  /* Recharts renders at on-screen pixel size; scale it up to fill the print box
+     (the SVG has a viewBox, so it scales proportionally) */
+  #weekly-output-root .print-chart .recharts-responsive-container,
+  #weekly-output-root .print-chart .recharts-wrapper {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  #weekly-output-root .print-chart svg.recharts-surface {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  /* Tables start on a fresh page after the chart pages */
+  #weekly-output-root .print-block {
+    break-before: page !important;
+    page-break-before: always !important;
   }
 }
 

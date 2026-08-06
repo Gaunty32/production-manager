@@ -22,12 +22,12 @@ const SERIES_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#
 
 function SeriesChart({ title, data, cols }: { title: string; data: Array<Record<string, string | number>>; cols: Array<{ key: string; label: string }> }) {
   return (
-    <Card className="print-block">
+    <Card className="print-chart">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-64">
+        <div className="h-64 print-chart-box">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
@@ -338,12 +338,12 @@ export function WeeklyOutputTab() {
         <>
           {(weeks.length) > 0 && (
             <div className="grid gap-4 lg:grid-cols-2 print-stack">
-              <Card>
+              <Card className="print-chart">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Jobs week by week</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64">
+                  <div className="h-64 print-chart-box">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={wormData}>
                         <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
@@ -358,12 +358,12 @@ export function WeeklyOutputTab() {
                   </div>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="print-chart">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Line items week by week</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64">
+                  <div className="h-64 print-chart-box">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={wormData}>
                         <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
@@ -378,12 +378,12 @@ export function WeeklyOutputTab() {
                   </div>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="print-chart">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Customers week by week</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64">
+                  <div className="h-64 print-chart-box">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={wormData}>
                         <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
@@ -398,12 +398,12 @@ export function WeeklyOutputTab() {
                   </div>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="print-chart">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Average price per logo (£ ex VAT, weekly)</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64">
+                  <div className="h-64 print-chart-box">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={wormData}>
                         <CartesianGrid strokeDasharray="3 3" className="opacity-30" />

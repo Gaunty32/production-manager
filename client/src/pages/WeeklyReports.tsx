@@ -599,7 +599,7 @@ function WeeklyReportsContent() {
           .card, [class*="card"] { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 report-page-header">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-page-title">Weekly Performance Report</h1>
           <p className="text-muted-foreground text-sm">
