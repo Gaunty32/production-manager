@@ -229,17 +229,17 @@ export function WeeklyOutputTab() {
     const lines: string[] = [];
     lines.push(`Weekly Output Report,${startDate} to ${endDate}`);
     lines.push("");
-    lines.push("Week beginning,Jobs submitted,Items submitted,Jobs completed,Items completed,Customers submitting,Customers with completions,Average price per logo (ex VAT)");
+    lines.push("Week beginning,Jobs submitted,Line items submitted,Jobs completed,Line items completed,Customers submitting,Customers with completions,Average price per logo (ex VAT)");
     for (const w of weeks) lines.push(`${w.weekStart},${w.submitted},${w.submittedQty},${w.completed},${w.completedQty},${w.customersSubmitted},${w.customersCompleted},${w.avgLogoPrice ?? ""}`);
     lines.push("");
-    lines.push("Items completed per machine");
+    lines.push("Line items completed per machine");
     lines.push(["Week beginning", ...machinePivot.cols.map(c => `"${c.label}"`)].join(","));
     for (const wk of machinePivot.weekStarts) {
       const row = machinePivot.cells.get(wk)!;
       lines.push([wk, ...machinePivot.cols.map(c => row.get(c.key) || 0)].join(","));
     }
     lines.push("");
-    lines.push("Items completed per staff member");
+    lines.push("Line items completed per staff member");
     lines.push(["Week beginning", ...staffPivot.cols.map(c => `"${c.label}"`)].join(","));
     for (const wk of staffPivot.weekStarts) {
       const row = staffPivot.cells.get(wk)!;
@@ -262,13 +262,13 @@ export function WeeklyOutputTab() {
     const summaryRows = weeks.map(w => ({
       "Week beginning": w.weekStart,
       "Jobs submitted": w.submitted,
-      "Items submitted": w.submittedQty,
+      "Line items submitted": w.submittedQty,
       "Jobs completed": w.completed,
-      "Items completed": w.completedQty,
+      "Line items completed": w.completedQty,
       "Customers submitting": w.customersSubmitted,
       "Customers with completions": w.customersCompleted,
       "Invoiced value (ex VAT)": w.invValue,
-      "Invoiced items": w.invQty,
+      "Invoiced line items": w.invQty,
       "Avg price per logo (ex VAT)": w.avgLogoPrice ?? "",
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Weekly summary");
@@ -360,7 +360,7 @@ export function WeeklyOutputTab() {
               </Card>
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Items week by week</CardTitle>
+                  <CardTitle className="text-base">Line items week by week</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="h-64">
@@ -371,8 +371,8 @@ export function WeeklyOutputTab() {
                         <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                         <Tooltip />
                         <Legend />
-                        <Line type="monotone" dataKey="wSubmittedQty" name="Items submitted" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} />
-                        <Line type="monotone" dataKey="wCompletedQty" name="Items completed" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
+                        <Line type="monotone" dataKey="wSubmittedQty" name="Line items submitted" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} />
+                        <Line type="monotone" dataKey="wCompletedQty" name="Line items completed" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -434,9 +434,9 @@ export function WeeklyOutputTab() {
                       <TableRow>
                         <TableHead>Week beginning</TableHead>
                         <TableHead className="text-right">Jobs submitted</TableHead>
-                        <TableHead className="text-right">Items submitted</TableHead>
+                        <TableHead className="text-right">Line items submitted</TableHead>
                         <TableHead className="text-right">Jobs completed</TableHead>
-                        <TableHead className="text-right">Items completed</TableHead>
+                        <TableHead className="text-right">Line items completed</TableHead>
                         <TableHead className="text-right">Customers</TableHead>
                         <TableHead className="text-right">Avg price per logo</TableHead>
                       </TableRow>
@@ -485,17 +485,17 @@ export function WeeklyOutputTab() {
 
           {machinePivot.weekStarts.length > 0 && (
             <div className="grid gap-4 lg:grid-cols-1 print-stack">
-              <SeriesChart title="Items completed per machine — week by week" data={machineWeeklyChart} cols={machinePivot.cols} />
+              <SeriesChart title="Line items completed per machine — week by week" data={machineWeeklyChart} cols={machinePivot.cols} />
             </div>
           )}
           {staffPivot.weekStarts.length > 0 && (
             <div className="grid gap-4 lg:grid-cols-1 print-stack">
-              <SeriesChart title="Items completed per staff member — week by week" data={staffWeeklyChart} cols={staffPivot.cols} />
+              <SeriesChart title="Line items completed per staff member — week by week" data={staffWeeklyChart} cols={staffPivot.cols} />
             </div>
           )}
 
-          <PivotTable title="Items completed per machine (weekly)" data={machinePivot} testId="table-weekly-machines" />
-          <PivotTable title="Items completed per staff member (weekly)" data={staffPivot} testId="table-weekly-staff" />
+          <PivotTable title="Line items completed per machine (weekly)" data={machinePivot} testId="table-weekly-machines" />
+          <PivotTable title="Line items completed per staff member (weekly)" data={staffPivot} testId="table-weekly-staff" />
         </>
       )}
     </div>
