@@ -86,9 +86,13 @@ export async function buildAndSendWeeklySummary(): Promise<void> {
   ];
 
   // Team performance: line items completed per staff member — last week and
-  // their weekly average across the whole window
+  // their weekly average across the whole window. Only current team members
+  // (active staff) are listed; leavers keep their history but drop off here.
+  const allStaff = await storage.getStaff();
+  const activeStaffIds = new Set(allStaff.filter(s => s.active).map(s => s.id));
   const staffTotals = new Map<string, { name: string; lastWeek: number; total: number }>();
   for (const row of data.staffWeekly) {
+    if (!activeStaffIds.has(row.staffId)) continue;
     let entry = staffTotals.get(row.staffId);
     if (!entry) {
       entry = { name: row.staffName, lastWeek: 0, total: 0 };
@@ -101,6 +105,21 @@ export async function buildAndSendWeeklySummary(): Promise<void> {
     .map(t => ({ name: t.name, lastWeek: t.lastWeek, average: t.total / weeksAveraged }))
     .sort((a, b) => b.lastWeek - a.lastWeek);
 
+  // Machine performance: same shape, per machine
+  const machineTotals = new Map<number, { name: string; lastWeek: number; total: number }>();
+  for (const row of data.machineWeekly) {
+    let entry = machineTotals.get(row.machineId);
+    if (!entry) {
+      entry = { name: row.machineName, lastWeek: 0, total: 0 };
+      machineTotals.set(row.machineId, entry);
+    }
+    entry.total += row.quantity;
+    if (row.weekStart === lastWeekKey) entry.lastWeek += row.quantity;
+  }
+  const machines: WeeklySummaryTeamRow[] = Array.from(machineTotals.values())
+    .map(t => ({ name: t.name, lastWeek: t.lastWeek, average: t.total / weeksAveraged }))
+    .sort((a, b) => b.lastWeek - a.lastWeek);
+
   const weekLabel = `w/c ${lastMonday.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`;
   await sendWeeklySummaryEmail({
     to: RECIPIENTS,
@@ -108,6 +127,7 @@ export async function buildAndSendWeeklySummary(): Promise<void> {
     weeksAveraged,
     metrics,
     team,
+    machines,
   });
   console.log(`[WeeklySummary] Sent for ${weekLabel} to ${RECIPIENTS.join(", ")}`);
 }
