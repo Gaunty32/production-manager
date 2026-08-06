@@ -1529,6 +1529,26 @@ export interface WeeklySummaryMetric {
   label: string;
   lastWeek: string;
   average: string; // rolling 16-week average
+  /** Raw values — when both present, a green/red change chip is shown */
+  lastWeekValue?: number | null;
+  averageValue?: number | null;
+  /** Show this metric as one of the big headline cards at the top */
+  headline?: boolean;
+}
+
+function summaryDeltaChip(m: WeeklySummaryMetric): string {
+  if (m.lastWeekValue == null || m.averageValue == null || m.averageValue === 0) {
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:#f4f4f5;color:#71717a;font-size:11px;font-weight:700;">&ndash;</span>`;
+  }
+  const pct = ((m.lastWeekValue - m.averageValue) / m.averageValue) * 100;
+  if (Math.abs(pct) < 1) {
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:#f4f4f5;color:#52525b;font-size:11px;font-weight:700;">level</span>`;
+  }
+  const up = pct > 0;
+  const bg = up ? '#dcfce7' : '#fee2e2';
+  const fg = up ? '#15803d' : '#b91c1c';
+  const arrow = up ? '&#9650;' : '&#9660;';
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${bg};color:${fg};font-size:11px;font-weight:700;">${arrow} ${Math.abs(pct).toFixed(0)}%</span>`;
 }
 
 export async function sendWeeklySummaryEmail(params: {
@@ -1538,30 +1558,55 @@ export async function sendWeeklySummaryEmail(params: {
   metrics: WeeklySummaryMetric[];
 }): Promise<void> {
   const { client, fromEmail } = await getUncachableResendClient();
-  const rows = params.metrics.map(m => `
+
+  const headline = params.metrics.filter(m => m.headline).slice(0, 3);
+  const rest = params.metrics.filter(m => !headline.includes(m));
+
+  const headlineCards = headline.length > 0 ? `
+    <table style="width:100%;border-collapse:separate;border-spacing:8px 0;margin:0 0 20px;table-layout:fixed;">
+      <tr>
+        ${headline.map(m => `
+        <td style="background:linear-gradient(135deg,#eef2ff,#f5f3ff);border:1px solid #e0e7ff;border-radius:12px;padding:16px 14px;text-align:center;vertical-align:top;">
+          <div style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">${sanitizeHtml(m.label)}</div>
+          <div style="font-size:30px;font-weight:800;color:#18181b;line-height:1;margin-bottom:8px;">${sanitizeHtml(m.lastWeek)}</div>
+          <div>${summaryDeltaChip(m)}</div>
+          <div style="font-size:11px;color:#71717a;margin-top:6px;">avg ${sanitizeHtml(m.average)}</div>
+        </td>`).join('')}
+      </tr>
+    </table>` : '';
+
+  const rows = rest.map((m, i) => `
     <tr>
-      <td style="padding:7px 10px;border-bottom:1px solid #e4e4e7;font-size:13px;color:#3f3f46;">${sanitizeHtml(m.label)}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e4e4e7;font-size:13px;color:#18181b;text-align:right;font-weight:700;">${sanitizeHtml(m.lastWeek)}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e4e4e7;font-size:13px;color:#71717a;text-align:right;">${sanitizeHtml(m.average)}</td>
+      <td style="padding:11px 14px;background:${i % 2 === 0 ? '#fafafa' : '#ffffff'};border-bottom:1px solid #f4f4f5;font-size:13px;color:#3f3f46;${i === 0 ? 'border-top-left-radius:10px;' : ''}${i === rest.length - 1 ? 'border-bottom-left-radius:10px;border-bottom:none;' : ''}">${sanitizeHtml(m.label)}</td>
+      <td style="padding:11px 14px;background:${i % 2 === 0 ? '#fafafa' : '#ffffff'};border-bottom:1px solid #f4f4f5;font-size:15px;color:#18181b;text-align:right;font-weight:800;${i === rest.length - 1 ? 'border-bottom:none;' : ''}">${sanitizeHtml(m.lastWeek)}</td>
+      <td style="padding:11px 14px;background:${i % 2 === 0 ? '#fafafa' : '#ffffff'};border-bottom:1px solid #f4f4f5;font-size:13px;color:#71717a;text-align:right;${i === rest.length - 1 ? 'border-bottom:none;' : ''}">${sanitizeHtml(m.average)}</td>
+      <td style="padding:11px 14px;background:${i % 2 === 0 ? '#fafafa' : '#ffffff'};border-bottom:1px solid #f4f4f5;text-align:right;${i === 0 ? 'border-top-right-radius:10px;' : ''}${i === rest.length - 1 ? 'border-bottom-right-radius:10px;border-bottom:none;' : ''}">${summaryDeltaChip(m)}</td>
     </tr>`).join('');
+
   const body = `
-    <h2 style="margin:0 0 6px;font-size:20px;font-weight:700;color:#18181b;">
-      Weekly performance summary — ${sanitizeHtml(params.weekLabel)}
-    </h2>
-    <p style="margin:0 0 18px;color:#71717a;font-size:13px;">
-      Last completed week (Monday to Sunday) compared with the rolling ${params.weeksAveraged}-week average.
-    </p>
-    <table style="width:100%;border-collapse:collapse;margin:0 0 18px;">
+    <div style="border-left:4px solid #6366f1;padding-left:12px;margin:0 0 18px;">
+      <h2 style="margin:0 0 4px;font-size:21px;font-weight:800;color:#18181b;">
+        Weekly performance summary
+      </h2>
+      <p style="margin:0;color:#6366f1;font-size:14px;font-weight:700;">${sanitizeHtml(params.weekLabel)}</p>
+      <p style="margin:4px 0 0;color:#71717a;font-size:12px;">
+        Last completed week (Monday to Sunday) against the rolling ${params.weeksAveraged}-week average
+      </p>
+    </div>
+    ${headlineCards}
+    ${rest.length > 0 ? `
+    <table style="width:100%;border-collapse:collapse;margin:0 0 20px;border:1px solid #e4e4e7;border-radius:10px;">
       <thead>
         <tr>
-          <th style="padding:7px 10px;border-bottom:2px solid #d4d4d8;font-size:12px;color:#71717a;text-align:left;text-transform:uppercase;letter-spacing:0.04em;">Metric</th>
-          <th style="padding:7px 10px;border-bottom:2px solid #d4d4d8;font-size:12px;color:#71717a;text-align:right;text-transform:uppercase;letter-spacing:0.04em;">Last week</th>
-          <th style="padding:7px 10px;border-bottom:2px solid #d4d4d8;font-size:12px;color:#71717a;text-align:right;text-transform:uppercase;letter-spacing:0.04em;">${params.weeksAveraged}-week avg</th>
+          <th style="padding:9px 14px;background:#18181b;font-size:11px;color:#ffffff;text-align:left;text-transform:uppercase;letter-spacing:0.05em;border-top-left-radius:10px;">Metric</th>
+          <th style="padding:9px 14px;background:#18181b;font-size:11px;color:#ffffff;text-align:right;text-transform:uppercase;letter-spacing:0.05em;">Last week</th>
+          <th style="padding:9px 14px;background:#18181b;font-size:11px;color:#ffffff;text-align:right;text-transform:uppercase;letter-spacing:0.05em;">${params.weeksAveraged}-wk avg</th>
+          <th style="padding:9px 14px;background:#18181b;font-size:11px;color:#ffffff;text-align:right;text-transform:uppercase;letter-spacing:0.05em;border-top-right-radius:10px;">vs avg</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
-    </table>
-    <p style="margin:0;color:#71717a;font-size:13px;">
+    </table>` : ''}
+    <p style="margin:0;color:#71717a;font-size:12px;">
       Sent automatically by Production Planner every Monday morning. The full report is under Reports &rarr; Weekly Output.
     </p>
   `;

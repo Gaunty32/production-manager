@@ -68,16 +68,20 @@ export async function buildAndSendWeeklySummary(): Promise<void> {
   const totalInvQty = weeks.reduce((s, w) => s + (w.invQty || 0), 0);
   const avgLogoPriceWindow = totalInvQty > 0 ? totalInvValue / totalInvQty : null;
 
+  const customersLastWeek = Math.max(lastWeek.customersSubmitted, lastWeek.customersCompleted);
+  const customersAvg = avg(w => Math.max(w.customersSubmitted, w.customersCompleted));
   const metrics: WeeklySummaryMetric[] = [
-    { label: "Jobs submitted", lastWeek: fmtInt(lastWeek.submitted), average: fmtInt(avg(w => w.submitted)) },
-    { label: "Jobs completed", lastWeek: fmtInt(lastWeek.completed), average: fmtInt(avg(w => w.completed)) },
-    { label: "Line items submitted", lastWeek: fmtInt(lastWeek.submittedQty), average: fmtInt(avg(w => w.submittedQty)) },
-    { label: "Line items completed", lastWeek: fmtInt(lastWeek.completedQty), average: fmtInt(avg(w => w.completedQty)) },
-    { label: "Customers ordering", lastWeek: fmtInt(Math.max(lastWeek.customersSubmitted, lastWeek.customersCompleted)), average: fmtInt(avg(w => Math.max(w.customersSubmitted, w.customersCompleted))) },
+    { label: "Line items completed", headline: true, lastWeek: fmtInt(lastWeek.completedQty), average: fmtInt(avg(w => w.completedQty)), lastWeekValue: lastWeek.completedQty, averageValue: avg(w => w.completedQty) },
+    { label: "Jobs completed", headline: true, lastWeek: fmtInt(lastWeek.completed), average: fmtInt(avg(w => w.completed)), lastWeekValue: lastWeek.completed, averageValue: avg(w => w.completed) },
+    { label: "Customers ordering", headline: true, lastWeek: fmtInt(customersLastWeek), average: fmtInt(customersAvg), lastWeekValue: customersLastWeek, averageValue: customersAvg },
+    { label: "Jobs submitted", lastWeek: fmtInt(lastWeek.submitted), average: fmtInt(avg(w => w.submitted)), lastWeekValue: lastWeek.submitted, averageValue: avg(w => w.submitted) },
+    { label: "Line items submitted", lastWeek: fmtInt(lastWeek.submittedQty), average: fmtInt(avg(w => w.submittedQty)), lastWeekValue: lastWeek.submittedQty, averageValue: avg(w => w.submittedQty) },
     {
       label: "Average price per logo (ex VAT)",
       lastWeek: lastWeek.avgLogoPrice != null ? `£${lastWeek.avgLogoPrice.toFixed(2)}` : "–",
       average: avgLogoPriceWindow != null ? `£${avgLogoPriceWindow.toFixed(2)}` : "–",
+      lastWeekValue: lastWeek.avgLogoPrice,
+      averageValue: avgLogoPriceWindow,
     },
   ];
 
