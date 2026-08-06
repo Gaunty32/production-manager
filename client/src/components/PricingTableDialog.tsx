@@ -30,7 +30,7 @@ const DTF_SIZE_LABELS = [
 ];
 
 // From 1st September all prices increase by £0.20 — show both until then
-const SEPTEMBER_INCREASE = 0.2;
+import { SEPTEMBER_PRICE_INCREASE as SEPTEMBER_INCREASE } from "@shared/pricing";
 
 function DualPrice({ price }: { price: number }) {
   return (

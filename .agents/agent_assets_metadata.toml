@@ -6,3 +6,10 @@ id = "XYLhXaWnPBfn3aqIBM2lk"
 uri = "file://exports/profile-pictures-implementation-guide.md"
 type = "text"
 title = "Profile Pictures Implementation Guide"
+
+[[outputs]]
+id = "5NSiY2YXD9sVXynTXKOAv"
+uri = "file://marketing/highlevel-cold-outreach-sequence.md"
+type = "text"
+title = "HighLevel cold outreach sequence (10 emails)"
+description = "Ready-to-paste 10-email series for contract customer outreach, with the 1st September price list, cadence and merge fields."

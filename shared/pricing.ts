@@ -449,6 +449,10 @@ export function getBaggingPrice(
   };
 }
 
+// ── September 2026 price increase ────────────────────────────────────────────
+// From 1st September 2026 all per-unit prices increase by £0.20.
+export const SEPTEMBER_PRICE_INCREASE = 0.2;
+
 // ── Minimum order quantity (from 1st September 2026) ────────────────────────
 // Orders of fewer than MIN_ORDER_QTY items per logo are charged at the
 // MIN_ORDER_QTY-item price. Applies to embroidery and print line items only

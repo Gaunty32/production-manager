@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/form";
 import { apiRequest } from "@/lib/queryClient";
 import { CheckCircle2, Layers, CalendarDays, BarChart3, MessageSquare, FileText, Zap, ArrowDown, Clock, CheckCheck, ChevronLeft, ChevronRight } from "lucide-react";
-import { PRICING_2026 } from "@shared/pricing";
+import { PRICING_2026, SEPTEMBER_PRICE_INCREASE } from "@shared/pricing";
 import customerDashboardImg from "@assets/screenshots/production_selectbranding_co_uk_demo.png";
 import customerPortalImg from "@assets/screenshots/production_selectbranding_co_uk_customer_login.png";
 import sbsLogo from "@assets/logo_transparent.png";
@@ -353,7 +353,7 @@ export default function DemoAccess() {
                             <td key={band} className="px-3 py-3 text-center">
                               {price === undefined || price === "POA"
                                 ? <span className="text-muted-foreground text-xs">POA</span>
-                                : <span className="font-medium">£{(price as number).toFixed(2)}</span>}
+                                : <span className="font-medium">£{((price as number) + SEPTEMBER_PRICE_INCREASE).toFixed(2)}</span>}
                             </td>
                           );
                         })}
@@ -371,7 +371,7 @@ export default function DemoAccess() {
                 <tfoot>
                   <tr className="border-t bg-muted/30">
                     <td colSpan={7} className="px-4 py-2 text-xs text-muted-foreground">
-                      All prices per unit, excluding VAT. Logo set-up £12 per logo. Prices shown are 2026 rates.
+                      All prices per unit, excluding VAT. Logo set-up £12 per logo. Prices effective from 1st September 2026. Minimum order 6 items per design — orders of 1–5 items are charged at the 6-item price.
                     </td>
                   </tr>
                 </tfoot>
