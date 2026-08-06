@@ -1464,6 +1464,7 @@ export async function sendInactiveCustomerAlertEmail(params: {
   const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: params.to,
+    cc: 'chris@selectbranding.co.uk',
     subject: `${n} customer${n === 1 ? '' : 's'} inactive for 3+ months — consider closing`,
     html: brandedEmail(body, { noReply: true }),
   });
@@ -1513,6 +1514,7 @@ export async function sendMonthlyInactiveReportEmail(params: {
   const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: params.to,
+    cc: 'chris@selectbranding.co.uk',
     subject: `Inactive customer report — ${params.monthLabel}`,
     html: brandedEmail(body, { noReply: true }),
   });
