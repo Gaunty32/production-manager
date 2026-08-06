@@ -199,53 +199,30 @@ export function WeeklyOutputTab() {
     [data?.staffWeekly, completedWeekCutoff],
   );
 
-  // Worm data: running (cumulative) totals week by week.
+  // Chart data: one point per week (weekly values, no running totals).
   const wormData = useMemo(() => {
-    let submitted = 0, completed = 0, submittedQty = 0, completedQty = 0, custSub = 0, custComp = 0;
-    return weeks.map(w => {
-      submitted += w.submitted;
-      completed += w.completed;
-      submittedQty += w.submittedQty;
-      completedQty += w.completedQty;
-      custSub += w.customersSubmitted;
-      custComp += w.customersCompleted;
-      return {
-        week: fmtWeek(w.weekStart),
-        submitted, completed, submittedQty, completedQty,
-        customersSubmitted: custSub, customersCompleted: custComp,
-        // Weekly (non-cumulative) values for the trend charts
-        wSubmitted: w.submitted, wCompleted: w.completed,
-        wSubmittedQty: w.submittedQty, wCompletedQty: w.completedQty,
-        wCustomersSubmitted: w.customersSubmitted, wCustomersCompleted: w.customersCompleted,
-        avgLogoPrice: w.avgLogoPrice,
-      };
-    });
+    return weeks.map(w => ({
+      week: fmtWeek(w.weekStart),
+      wSubmitted: w.submitted, wCompleted: w.completed,
+      wSubmittedQty: w.submittedQty, wCompletedQty: w.completedQty,
+      wCustomersSubmitted: w.customersSubmitted, wCustomersCompleted: w.customersCompleted,
+      avgLogoPrice: w.avgLogoPrice,
+    }));
   }, [weeks]);
 
   // Per-machine / per-staff chart data: one point per week, one field per column.
-  // Cumulative variant is the "worm"; weekly variant shows trends.
-  const seriesChartData = (p: ReturnType<typeof pivot>, cumulative: boolean) => {
-    const running = new Map<string, number>();
+  const seriesChartData = (p: ReturnType<typeof pivot>) => {
     return p.weekStarts.map(wk => {
       const row: Record<string, string | number> = { week: fmtWeek(wk) };
       const cells = p.cells.get(wk)!;
       for (const c of p.cols) {
-        const v = cells.get(c.key) || 0;
-        if (cumulative) {
-          const cum = (running.get(c.key) || 0) + v;
-          running.set(c.key, cum);
-          row[c.label] = cum;
-        } else {
-          row[c.label] = v;
-        }
+        row[c.label] = cells.get(c.key) || 0;
       }
       return row;
     });
   };
-  const machineWorm = useMemo(() => seriesChartData(machinePivot, true), [machinePivot]);
-  const machineWeeklyChart = useMemo(() => seriesChartData(machinePivot, false), [machinePivot]);
-  const staffWorm = useMemo(() => seriesChartData(staffPivot, true), [staffPivot]);
-  const staffWeeklyChart = useMemo(() => seriesChartData(staffPivot, false), [staffPivot]);
+  const machineWeeklyChart = useMemo(() => seriesChartData(machinePivot), [machinePivot]);
+  const staffWeeklyChart = useMemo(() => seriesChartData(staffPivot), [staffPivot]);
 
   const exportCsv = () => {
     if (!data) return;
@@ -361,66 +338,6 @@ export function WeeklyOutputTab() {
         <>
           {(weeks.length) > 0 && (
             <div className="grid gap-4 lg:grid-cols-2 print-stack">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Jobs worm (running total)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={wormData}>
-                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                        <Tooltip />
-                        <Legend />
-                        <Line type="monotone" dataKey="submitted" name="Jobs submitted" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} />
-                        <Line type="monotone" dataKey="completed" name="Jobs completed" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Items worm (running total)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={wormData}>
-                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                        <Tooltip />
-                        <Legend />
-                        <Line type="monotone" dataKey="submittedQty" name="Items submitted" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} />
-                        <Line type="monotone" dataKey="completedQty" name="Items completed" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Customers worm (running total)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={wormData}>
-                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                        <Tooltip />
-                        <Legend />
-                        <Line type="monotone" dataKey="customersSubmitted" name="Customers submitting" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} />
-                        <Line type="monotone" dataKey="customersCompleted" name="Customers with completions" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Jobs week by week</CardTitle>
@@ -567,14 +484,12 @@ export function WeeklyOutputTab() {
           </Card>
 
           {machinePivot.weekStarts.length > 0 && (
-            <div className="grid gap-4 lg:grid-cols-2 print-stack">
-              <SeriesChart title="Items completed per machine — worm (running total)" data={machineWorm} cols={machinePivot.cols} />
+            <div className="grid gap-4 lg:grid-cols-1 print-stack">
               <SeriesChart title="Items completed per machine — week by week" data={machineWeeklyChart} cols={machinePivot.cols} />
             </div>
           )}
           {staffPivot.weekStarts.length > 0 && (
-            <div className="grid gap-4 lg:grid-cols-2 print-stack">
-              <SeriesChart title="Items completed per staff member — worm (running total)" data={staffWorm} cols={staffPivot.cols} />
+            <div className="grid gap-4 lg:grid-cols-1 print-stack">
               <SeriesChart title="Items completed per staff member — week by week" data={staffWeeklyChart} cols={staffPivot.cols} />
             </div>
           )}
