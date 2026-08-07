@@ -102,7 +102,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
-  deleteUser(id: string): Promise<void>;
+  deleteUser(id: string, reassignToId: string): Promise<void>;
   createUser(user: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserRole(id: string, role: string): Promise<User>;
@@ -448,8 +448,24 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users);
   }
 
-  async deleteUser(id: string): Promise<void> {
-    await db.delete(users).where(eq(users.id, id));
+  async deleteUser(id: string, reassignToId: string): Promise<void> {
+    // Preserve history: nullable audit references are cleared; NOT NULL audit
+    // references (samples, error reports, documents) are reassigned to the
+    // super admin performing the deletion so the rows survive.
+    // userStars / passwordResetTokens / impersonationSessions / customerUsers
+    // cascade automatically.
+    await db.transaction(async (tx) => {
+      await tx.update(staff).set({ userId: null }).where(eq(staff.userId, id));
+      await tx.update(jobs).set({ approvedById: null }).where(eq(jobs.approvedById, id));
+      await tx.update(jobs).set({ rejectedById: null }).where(eq(jobs.rejectedById, id));
+      await tx.update(jobs).set({ paymentReceivedById: null }).where(eq(jobs.paymentReceivedById, id));
+      await tx.update(jobs).set({ allocatedById: null }).where(eq(jobs.allocatedById, id));
+      await tx.update(samples).set({ uploadedById: reassignToId }).where(eq(samples.uploadedById, id));
+      await tx.update(jobErrors).set({ reportedById: reassignToId }).where(eq(jobErrors.reportedById, id));
+      await tx.update(jobErrors).set({ resolvedById: null }).where(eq(jobErrors.resolvedById, id));
+      await tx.update(customerDocuments).set({ createdById: reassignToId }).where(eq(customerDocuments.createdById, id));
+      await tx.delete(users).where(eq(users.id, id));
+    });
   }
 
   async createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> {

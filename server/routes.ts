@@ -1267,6 +1267,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Permanently delete a user account (super admin only)
+  app.delete("/api/users/:id", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Prevent deleting yourself
+      if (req.params.id === req.session.userId) {
+        return res.status(400).json({ error: "You cannot delete your own account" });
+      }
+
+      // Prevent deleting the last super admin
+      if (user.role === "super_admin") {
+        const allUsers = await storage.getAllUsers();
+        const otherSuperAdmins = allUsers.filter(
+          u => u.role === "super_admin" && u.id !== user.id && u.active
+        );
+        if (otherSuperAdmins.length === 0) {
+          return res.status(400).json({ error: "Cannot delete the last super admin account" });
+        }
+      }
+
+      await storage.deleteUser(req.params.id, req.session.userId!);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
   // Demo user management (super_admin only)
   app.post("/api/admin/send-test-email", isStaffAuthenticated, async (req: any, res) => {
     try {
@@ -5381,7 +5413,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (sendErr) {
         // Compensate: remove the login we just created so a retry starts clean.
         if (createdUserId) {
-          try { await storage.deleteUser(createdUserId); } catch {}
+          try { await storage.deleteUser(createdUserId, createdUserId); } catch {}
         }
         throw sendErr;
       }

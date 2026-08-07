@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera, Eye, Copy, Check, FlaskConical, BellOff, Bell } from "lucide-react";
+import { UserPlus, Pencil, Mail, CheckCircle2, XCircle, KeyRound, Camera, Eye, Copy, Check, FlaskConical, BellOff, Bell, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -352,6 +353,30 @@ export default function Users() {
   const handleSendPasswordReset = (userId: string) => {
     sendPasswordResetMutation.mutate(userId);
   };
+
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("DELETE", `/api/users/${userId}`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setDeleteTarget(null);
+      toast({
+        title: "User deleted",
+        description: "The user account has been permanently deleted.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleToggleActive = (userId: string, currentActive: boolean) => {
     toggleActiveMutation.mutate({ userId, active: !currentActive });
@@ -692,6 +717,18 @@ export default function Users() {
                       <KeyRound className="h-4 w-4 mr-2" />
                       Set Password
                     </Button>
+                    {currentUser?.role === UserRole.SUPER_ADMIN && user.id !== currentUser?.id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => setDeleteTarget(user)}
+                        data-testid={`button-delete-user-${user.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </Button>
+                    )}
                     <div className="flex items-center gap-4 ml-auto flex-wrap">
                       <div className="flex items-center gap-2">
                         {user.emailNotificationsMessages ? (
@@ -743,6 +780,29 @@ export default function Users() {
         {currentUser?.role === UserRole.SUPER_ADMIN && <LoginBannerCard />}
 
         {currentUser?.role === UserRole.SUPER_ADMIN && <DataCleanupCard />}
+
+        {/* Delete User Confirmation */}
+        <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this user account?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteTarget ? `${deleteTarget.firstName || ""} ${deleteTarget.lastName || ""}`.trim() || deleteTarget.email : ""} ({deleteTarget?.email}) will be permanently deleted and will no longer be able to log in. Job history stays intact, but it will no longer be linked to this account. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="button-cancel-delete-user">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => deleteTarget && deleteUserMutation.mutate(deleteTarget.id)}
+                disabled={deleteUserMutation.isPending}
+                data-testid="button-confirm-delete-user"
+              >
+                {deleteUserMutation.isPending ? "Deleting..." : "Delete user"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Edit User Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
