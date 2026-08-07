@@ -1275,25 +1275,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Prevent deleting yourself
-      if (req.params.id === req.session.userId) {
+      // The real logged-in user, even when impersonating someone
+      const actingUserId = (req.session as any).realStaffUserId || req.session.userId;
+
+      // Prevent deleting yourself (or the account you're impersonating)
+      if (req.params.id === actingUserId || req.params.id === req.session.userId) {
         return res.status(400).json({ error: "You cannot delete your own account" });
       }
 
-      // Prevent deleting the last super admin
-      if (user.role === "super_admin") {
-        const allUsers = await storage.getAllUsers();
-        const otherSuperAdmins = allUsers.filter(
-          u => u.role === "super_admin" && u.id !== user.id && u.active
-        );
-        if (otherSuperAdmins.length === 0) {
-          return res.status(400).json({ error: "Cannot delete the last super admin account" });
-        }
-      }
-
-      await storage.deleteUser(req.params.id, req.session.userId!);
+      await storage.deleteUser(req.params.id, actingUserId!);
       res.json({ success: true });
     } catch (error: any) {
+      if (error?.message === "LAST_SUPER_ADMIN") {
+        return res.status(400).json({ error: "Cannot delete the last super admin account" });
+      }
       console.error("Error deleting user:", error);
       res.status(500).json({ error: "Failed to delete user" });
     }

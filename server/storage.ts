@@ -455,6 +455,17 @@ export class DatabaseStorage implements IStorage {
     // userStars / passwordResetTokens / impersonationSessions / customerUsers
     // cascade automatically.
     await db.transaction(async (tx) => {
+      // Concurrency-safe last-super-admin guard: lock super admin rows so two
+      // simultaneous deletions can't remove them all.
+      const superAdmins = await tx
+        .select({ id: users.id, active: users.active })
+        .from(users)
+        .where(eq(users.role, "super_admin"))
+        .for("update");
+      const target = superAdmins.find(u => u.id === id);
+      if (target && !superAdmins.some(u => u.id !== id && u.active)) {
+        throw new Error("LAST_SUPER_ADMIN");
+      }
       await tx.update(staff).set({ userId: null }).where(eq(staff.userId, id));
       await tx.update(jobs).set({ approvedById: null }).where(eq(jobs.approvedById, id));
       await tx.update(jobs).set({ rejectedById: null }).where(eq(jobs.rejectedById, id));
@@ -465,6 +476,12 @@ export class DatabaseStorage implements IStorage {
       await tx.update(jobErrors).set({ resolvedById: null }).where(eq(jobErrors.resolvedById, id));
       await tx.update(customerDocuments).set({ createdById: reassignToId }).where(eq(customerDocuments.createdById, id));
       await tx.delete(users).where(eq(users.id, id));
+      // Revoke any live login sessions belonging to the deleted user
+      // (session store has no FK to users).
+      await tx.execute(sql`
+        DELETE FROM sessions
+        WHERE sess->>'userId' = ${id} OR sess->>'realStaffUserId' = ${id}
+      `);
     });
   }
 
