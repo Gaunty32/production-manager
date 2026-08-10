@@ -13,3 +13,10 @@ uri = "file://marketing/highlevel-cold-outreach-sequence.md"
 type = "text"
 title = "HighLevel cold outreach sequence (10 emails)"
 description = "Ready-to-paste 10-email series for contract customer outreach, with the 1st September price list, cadence and merge fields."
+
+[[outputs]]
+id = "tEPJm6MRfmGRrgWdZcgrx"
+uri = "file://reports/high-maintenance-customers-2026-08-10.md"
+type = "text"
+title = "High-Maintenance Customer Report"
+description = "One-off effort score for all customers with 2+ jobs in the last 6 months, with the main driver and education angle per customer."
