@@ -1599,17 +1599,27 @@ export async function sendWeeklySummaryEmail(params: {
   const headline = params.metrics.filter(m => m.headline).slice(0, 3);
   const rest = params.metrics.filter(m => !headline.includes(m));
 
+  // Full-width stacked "pills" — one per headline metric — so nothing wraps
+  // awkwardly on narrow phone screens.
   const headlineCards = headline.length > 0 ? `
-    <table style="width:100%;border-collapse:separate;border-spacing:8px 0;margin:0 0 20px;table-layout:fixed;">
+    <table style="width:100%;border-collapse:separate;border-spacing:0 6px;margin:0 0 16px;">
+      ${headline.map(m => `
       <tr>
-        ${headline.map(m => `
-        <td style="background:linear-gradient(135deg,#eef2ff,#f5f3ff);border:1px solid #e0e7ff;border-radius:12px;padding:16px 14px;text-align:center;vertical-align:top;">
-          <div style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">${sanitizeHtml(m.label)}</div>
-          <div style="font-size:30px;font-weight:800;color:#18181b;line-height:1;margin-bottom:8px;">${sanitizeHtml(m.lastWeek)}</div>
-          <div>${summaryDeltaChip(m)}</div>
-          <div style="font-size:11px;color:#71717a;margin-top:6px;">avg ${sanitizeHtml(m.average)}</div>
-        </td>`).join('')}
-      </tr>
+        <td style="background:linear-gradient(135deg,#eef2ff,#f5f3ff);border:1px solid #e0e7ff;border-radius:999px;padding:12px 20px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr>
+              <td style="vertical-align:middle;">
+                <div style="font-size:12px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;">${sanitizeHtml(m.label)}</div>
+                <div style="font-size:11px;color:#71717a;margin-top:2px;">avg ${sanitizeHtml(m.average)}</div>
+              </td>
+              <td style="vertical-align:middle;text-align:right;white-space:nowrap;">
+                <span style="font-size:26px;font-weight:800;color:#18181b;line-height:1;">${sanitizeHtml(m.lastWeek)}</span>
+                <span style="display:inline-block;margin-left:8px;vertical-align:middle;">${summaryDeltaChip(m)}</span>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>`).join('')}
     </table>` : '';
 
   const rows = rest.map((m, i) => `
