@@ -20,3 +20,10 @@ uri = "file://reports/high-maintenance-customers-2026-08-10.md"
 type = "text"
 title = "High-Maintenance Customer Report"
 description = "One-off effort score for all customers with 2+ jobs in the last 6 months, with the main driver and education angle per customer."
+
+[[outputs]]
+id = "AhBeRRqEEgy4VZDZDUfih"
+uri = "file://reports/production-performance-last-16-weeks.xlsx"
+type = "table"
+title = "Production Performance — Last 16 Weeks"
+description = "Excel workbook with weekly orders, average order size, production, embroidery stitch count, and reconciled production by machine and employee."
