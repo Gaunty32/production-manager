@@ -2401,13 +2401,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOutstandingQueueQuantity(): Promise<number> {
-    // Total outstanding quantity in the production queue: incomplete line
-    // items on jobs still in production.
+    // Keep lead-time capacity in sync with the dashboard's Total Quantity:
+    // all line items for jobs that are actionable by production. Holding Area,
+    // invoiced/ready, and unpaid advance-payment jobs are not part of that
+    // operational queue.
     const result = await db.execute(sql`
       SELECT COALESCE(SUM(jli.quantity), 0) AS qty
       FROM job_line_items jli
       JOIN jobs j ON j.id = jli.job_id
-      WHERE NOT jli.completed AND j.status = 'production'
+      JOIN customers c ON c.id = j.customer_id
+      WHERE j.status <> 'pending_customer_approval'
+        AND j.invoice_status NOT IN ('invoiced', 'ready')
+        AND NOT (c.requires_advance_payment AND NOT j.payment_received)
     `);
     return Number((result.rows[0] as any)?.qty || 0);
   }
