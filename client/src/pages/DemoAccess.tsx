@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/form";
 import { apiRequest } from "@/lib/queryClient";
 import { CheckCircle2, Layers, CalendarDays, BarChart3, MessageSquare, FileText, Zap, ArrowDown, Clock, CheckCheck, ChevronLeft, ChevronRight } from "lucide-react";
-import { PRICING_2026, SEPTEMBER_PRICE_INCREASE } from "@shared/pricing";
+import { PRICING_2026, PRINT_PRICING_2026, SEPTEMBER_PRICE_INCREASE } from "@shared/pricing";
 import customerDashboardImg from "@assets/screenshots/production_selectbranding_co_uk_demo.png";
 import customerPortalImg from "@assets/screenshots/production_selectbranding_co_uk_customer_login.png";
 import sbsLogo from "@assets/logo_transparent.png";
@@ -322,7 +322,7 @@ export default function DemoAccess() {
           <div className="max-w-5xl mx-auto space-y-10">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold tracking-tight">Transparent pricing per garment</h2>
-              <p className="text-muted-foreground">Per-unit embroidery pricing based on quantity and stitch count. No hidden fees.</p>
+              <p className="text-muted-foreground">Per-unit embroidery and DTF print pricing based on quantity, stitch count, and print size. No hidden fees.</p>
             </div>
 
             {/* Embroidery pricing grid — 2026 table, columns up to 25k stitches */}
@@ -376,6 +376,62 @@ export default function DemoAccess() {
                   </tr>
                 </tfoot>
               </table>
+            </div>
+
+            {/* DTF print and apply pricing */}
+            <div className="space-y-4">
+              <div className="text-center space-y-1">
+                <h3 className="text-xl font-semibold tracking-tight">DTF Print &amp; Apply</h3>
+                <p className="text-sm text-muted-foreground">Per-unit pricing based on print size.</p>
+              </div>
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/60 border-b">
+                      <th className="text-left px-4 py-3 font-semibold">Qty</th>
+                      {[
+                        { key: "A6", label: "A6", sublabel: "¼ A4" },
+                        { key: "A5", label: "A5", sublabel: "½ A4" },
+                        { key: "A4", label: "A4", sublabel: "" },
+                        { key: "A3", label: "A3", sublabel: "" },
+                      ].map(size => (
+                        <th key={size.key} className="text-center px-3 py-3 font-semibold text-muted-foreground whitespace-nowrap">
+                          <span className="block">{size.label}</span>
+                          {size.sublabel && <span className="block text-xs font-normal">{size.sublabel}</span>}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PRINT_PRICING_2026.map((tier, i) => {
+                      const qtyLabel = tier.maxQty === null
+                        ? `${tier.minQty}+`
+                        : i === 0
+                          ? `Up to ${tier.maxQty}`
+                          : `${tier.minQty}–${tier.maxQty}`;
+                      return (
+                        <tr key={i} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
+                          <td className="px-4 py-3 font-semibold whitespace-nowrap">{qtyLabel}</td>
+                          {(["A6", "A5", "A4", "A3"] as const).map(size => (
+                            <td key={size} className="px-3 py-3 text-center">
+                              <span className="font-medium">
+                                £{(tier.prices[size] + SEPTEMBER_PRICE_INCREASE).toFixed(2)}
+                              </span>
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t bg-muted/30">
+                      <td colSpan={5} className="px-4 py-2 text-xs text-muted-foreground">
+                        All prices per item, excluding VAT. Prices effective from 1st September 2026. Minimum order 6 items per design — orders of 1–5 items are charged at the 6-item price.
+                      </td>
+                    </tr>
+                  </tfoot>
+                  </table>
+              </div>
             </div>
 
             <p className="text-center text-sm text-muted-foreground">
