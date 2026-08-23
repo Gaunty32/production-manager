@@ -38,6 +38,7 @@ import {
   insertSampleSchema,
   insertSampleFileSchema,
   featureRequests,
+  contractPartnerEnquiries,
 } from "@shared/schema";
 import { z } from "zod";
 import { db } from "./db";
@@ -714,6 +715,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Public: demo access request (no auth required)
+  app.post("/api/contract-partner-enquiries", async (req, res) => {
+    const volumeOptions = [
+      "Under 100",
+      "100–250",
+      "250–500",
+      "500–1,000",
+      "1,000–2,500",
+      "2,500–5,000",
+      "5,000+",
+    ] as const;
+    const challengeOptions = [
+      "Capacity",
+      "Recruitment",
+      "Lead times",
+      "Machinery investment",
+      "Staff sickness/holidays",
+      "Quality",
+      "Production management",
+      "Seasonal demand",
+      "Growth",
+      "Outsourcing all production",
+      "Outsourcing overflow production",
+      "Other",
+    ] as const;
+    const schema = z.object({
+      name: z.string().trim().min(1, "Name is required").max(150),
+      businessName: z.string().trim().min(1, "Business name is required").max(200),
+      email: z.string().trim().email("Invalid email address").max(320),
+      mobile: z.string().trim().max(50).default(""),
+      website: z.string().trim().max(300).default("").refine(
+        (value) => !value || z.string().url().safeParse(value).success,
+        "Please enter a valid website URL",
+      ),
+      monthlyVolume: z.enum(volumeOptions, { errorMap: () => ({ message: "Please select a monthly volume" }) }),
+      challenges: z.array(z.enum(challengeOptions)).max(challengeOptions.length).default([]),
+      notes: z.string().trim().max(4000).default(""),
+      source: z.string().trim().max(100).default(""),
+      campaign: z.string().trim().max(150).default(""),
+      utmSource: z.string().trim().max(150).default(""),
+      utmMedium: z.string().trim().max(150).default(""),
+      utmCampaign: z.string().trim().max(200).default(""),
+      utmTerm: z.string().trim().max(200).default(""),
+      utmContent: z.string().trim().max(200).default(""),
+      gclid: z.string().trim().max(500).default(""),
+      queryString: z.string().max(4000).default(""),
+      landingUrl: z.string().url().max(2000),
+      referrerUrl: z.string().max(2000).default(""),
+      firstVisitAt: z.string().datetime().optional(),
+      websiteCheck: z.string().max(200).default(""),
+    });
+
+    try {
+      const data = schema.parse(req.body);
+      // Honeypot — real users never see or complete this field.
+      if (data.websiteCheck) {
+        return res.json({ success: true });
+      }
+      const ip = req.ip || "unknown";
+      if (!checkRateLimit(`contract-partner-enquiry:${ip}`, 5, 60 * 60 * 1000)) {
+        return res.status(429).json({ error: "Too many enquiries — please try again later or email info@selectbranding.co.uk" });
+      }
+
+      const attributionKeys = ["source", "campaign", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid"];
+      const safeQuery = new URLSearchParams();
+      for (const key of attributionKeys) {
+        const value = new URLSearchParams(data.queryString).get(key);
+        if (value) safeQuery.set(key, value);
+      }
+      const landingUrl = new URL(data.landingUrl);
+      landingUrl.search = safeQuery.toString();
+      landingUrl.hash = "";
+      let referrerOrigin = "";
+      try {
+        referrerOrigin = data.referrerUrl ? new URL(data.referrerUrl).origin : "";
+      } catch {
+        // A malformed referrer is not useful for attribution and is discarded.
+      }
+      const sourceText = `${data.source} ${data.utmSource} ${data.utmMedium}`.toLowerCase();
+      const leadSource = data.gclid || /google|cpc|ppc|paid/.test(sourceText)
+        ? "Google Ads"
+        : /email|cold/.test(sourceText)
+          ? "Cold Email"
+          : /referral|partner/.test(sourceText)
+            ? "Referral"
+            : data.referrerUrl
+              ? "Organic"
+              : "Direct";
+
+      await db.insert(contractPartnerEnquiries).values({
+        name: data.name,
+        businessName: data.businessName,
+        email: data.email,
+        mobile: data.mobile || null,
+        website: data.website || null,
+        monthlyVolume: data.monthlyVolume,
+        challenges: data.challenges,
+        notes: data.notes || null,
+        leadSource,
+        source: data.source || null,
+        campaign: data.campaign || null,
+        utmSource: data.utmSource || null,
+        utmMedium: data.utmMedium || null,
+        utmCampaign: data.utmCampaign || null,
+        utmTerm: data.utmTerm || null,
+        utmContent: data.utmContent || null,
+        gclid: data.gclid || null,
+        queryString: safeQuery.toString() || null,
+        initialLandingUrl: landingUrl.toString(),
+        referrerUrl: referrerOrigin || null,
+        firstVisitAt: data.firstVisitAt ? new Date(data.firstVisitAt) : null,
+      });
+
+      const baseUrl = getBaseUrl();
+      const attribution = [
+        `Lead source: ${leadSource}`,
+        data.campaign && `Campaign: ${data.campaign}`,
+        data.utmCampaign && `UTM campaign: ${data.utmCampaign}`,
+        data.website && `Website: ${data.website}`,
+      ].filter(Boolean).join("\n");
+      await sendWebsiteEnquiryEmails({
+        name: data.name,
+        company: data.businessName,
+        email: data.email,
+        phone: data.mobile,
+        service: "Contract embroidery partnership enquiry",
+        message: [
+          `Monthly embroidery / outsourcing volume: ${data.monthlyVolume}`,
+          data.challenges.length ? `Production challenges: ${data.challenges.join(", ")}` : "",
+          data.notes && `Notes: ${data.notes}`,
+          attribution,
+        ].filter(Boolean).join("\n\n"),
+        demoUrl: `${baseUrl}/portal-preview`,
+      });
+
+      const hlApiKey = process.env.HIGHLEVEL_API_KEY;
+      const hlLocationId = process.env.HIGHLEVEL_LOCATION_ID;
+      if (hlApiKey && hlLocationId) {
+        const nameParts = data.name.split(/\s+/);
+        fetch("https://rest.gohighlevel.com/v1/contacts/", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${hlApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            firstName: nameParts[0],
+            lastName: nameParts.slice(1).join(" ") || undefined,
+            email: data.email,
+            ...(data.mobile ? { phone: data.mobile } : {}),
+            companyName: data.businessName,
+            website: data.website || undefined,
+            tags: ["contract-partner-enquiry", leadSource.toLowerCase().replace(/\s+/g, "-")],
+            source: "Select Contract Embroidery Landing Page",
+          }),
+        })
+          .then(async (response) => {
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              console.error("[HighLevel] Contract partner contact creation failed:", response.status, JSON.stringify(body));
+            }
+          })
+          .catch((error) => console.error("[HighLevel] Contract partner network error:", error));
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Contract partner enquiry error:", error);
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: error.errors[0]?.message || "Invalid input" });
+      }
+      res.status(500).json({ error: "Failed to send enquiry — please email info@selectbranding.co.uk" });
+    }
+  });
+
   app.post("/api/demo/request-access", async (req, res) => {
     const DEMO_EMAIL = "demo@selectbranding.co.uk";
     const DEMO_PASSWORD = "SBdemo2025!";

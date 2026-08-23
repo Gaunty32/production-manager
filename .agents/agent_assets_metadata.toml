@@ -27,3 +27,10 @@ uri = "file://reports/production-performance-last-16-weeks.xlsx"
 type = "table"
 title = "Production Performance — Last 16 Weeks"
 description = "Excel workbook with weekly orders, average order size, production, embroidery stitch count, and reconciled production by machine and employee."
+
+[[outputs]]
+id = "bZ-pyhAcgWjrhVnRczfxM"
+uri = "file://screenshots/contract-embroidery-preview-desktop.jpg"
+type = "image"
+title = "Contract Embroidery preview — desktop"
+description = "Capacity-campaign first viewport of the review-only landing-page preview."

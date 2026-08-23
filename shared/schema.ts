@@ -30,6 +30,39 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Public acquisition leads for the Contract Embroidery Division. Attribution is
+// captured at submission so campaigns can be tied back to qualified partners.
+export const contractPartnerEnquiries = pgTable("contract_partner_enquiries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  businessName: varchar("business_name").notNull(),
+  email: varchar("email").notNull(),
+  mobile: varchar("mobile"),
+  website: varchar("website"),
+  monthlyVolume: varchar("monthly_volume").notNull(),
+  challenges: jsonb("challenges").$type<string[]>().notNull().default([]),
+  notes: text("notes"),
+  leadSource: varchar("lead_source").notNull(),
+  source: varchar("source"),
+  campaign: varchar("campaign"),
+  utmSource: varchar("utm_source"),
+  utmMedium: varchar("utm_medium"),
+  utmCampaign: varchar("utm_campaign"),
+  utmTerm: varchar("utm_term"),
+  utmContent: varchar("utm_content"),
+  gclid: varchar("gclid"),
+  queryString: text("query_string"),
+  initialLandingUrl: text("initial_landing_url"),
+  referrerUrl: text("referrer_url"),
+  firstVisitAt: timestamp("first_visit_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("contract_partner_enquiries_created_at_idx").on(table.createdAt),
+  index("contract_partner_enquiries_lead_source_idx").on(table.leadSource),
+]);
+
+export type ContractPartnerEnquiry = typeof contractPartnerEnquiries.$inferSelect;
+
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),

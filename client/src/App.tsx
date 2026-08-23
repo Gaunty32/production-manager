@@ -46,6 +46,8 @@ import StaffSamples from "@/pages/StaffSamples";
 import CustomerSamples from "@/pages/CustomerSamples";
 import DemoPortal from "@/pages/DemoPortal";
 import DemoAccess from "@/pages/DemoAccess";
+import ContractEmbroideryPreview from "@/pages/ContractEmbroideryPreview";
+import Privacy from "@/pages/Privacy";
 import MachineManagement from "@/pages/MachineManagement";
 import CustomerPaymentMethods from "@/pages/CustomerPaymentMethods";
 import CustomerDeliveryAddress from "@/pages/CustomerDeliveryAddress";
@@ -173,6 +175,8 @@ function AppRouter() {
         <Route path="/portal-preview" component={PortalPreview} />
         <Route path="/staff-login" component={StaffLoginGate} />
         <Route path="/demo-access" component={DemoAccess} />
+        <Route path="/demo-access-preview" component={ContractEmbroideryPreview} />
+        <Route path="/privacy" component={Privacy} />
         <Route path="/demo" component={DemoPortal} />
         <Route path="/forgot-password" component={ForgotPassword} />
         <Route path="/reset-password" component={ResetPassword} />
