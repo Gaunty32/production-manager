@@ -1,0 +1,1209 @@
+# REPLIT MASTER BRIEF — CONTRACT EMBROIDERY CUSTOMER ACQUISITION LANDING PAGE
+
+## Objective
+
+Create/rebuild the landing page at:
+
+**https://production.selectbranding.co.uk/demo-access**
+
+This will become the primary customer acquisition landing page for the **Contract Embroidery Division of Select Branding Solutions**.
+
+Initially we will drive traffic to this page through targeted cold email outreach.
+
+We will then use the same landing page for Google Ads and potentially other paid advertising.
+
+This is NOT primarily a demo page for our production portal.
+
+The portal is an important part of our proposition, but the main thing we are selling is:
+
+# Production capacity.
+
+More specifically:
+
+**We enable businesses selling branded clothing, workwear, sportswear, schoolwear and merchandise to grow their sales without having to build the embroidery production infrastructure themselves.**
+
+The visitor should leave the page understanding:
+
+**You sell it. We embroider it.**
+
+---
+
+# 1. TARGET CUSTOMER
+
+This page is NOT aimed at an end user looking for some polos embroidered.
+
+It is specifically aimed at businesses already selling, or wanting to sell more:
+
+* Branded clothing
+* Workwear
+* Sportswear
+* Teamwear
+* Schoolwear
+* Promotional clothing
+* Merchandise
+
+Typical target customers include:
+
+* Workwear suppliers
+* Sportswear companies
+* Teamwear businesses
+* Schoolwear suppliers
+* Promotional merchandise companies
+* Printers
+* Sign companies
+* Clothing businesses
+* Online branded clothing retailers
+* Existing embroidery businesses needing overflow capacity
+
+Some already have embroidery machinery.
+
+Some outsource everything.
+
+Some operate a mixture of both.
+
+The common factor is:
+
+**They have customers to sell to and embroidery production can restrict their ability to grow.**
+
+---
+
+# 2. CUSTOMER PAIN POINTS
+
+Build the page around the problems these businesses actually experience.
+
+Typical problems include:
+
+* Not enough embroidery capacity
+* Machines already running at capacity
+* Difficulty recruiting experienced embroidery operators
+* Training new operators
+* Staff sickness
+* Staff holidays
+* Machinery breakdowns
+* Considering purchasing another embroidery machine
+* Lack of production space
+* Increasing fixed overheads
+* Unreliable existing suppliers
+* Long embroidery lead times
+* Seasonal peaks
+* Spending evenings/weekends embroidering
+* Business owner spending too much time in production
+* Turning orders away
+* Avoiding sales because production cannot cope
+* Wanting to grow without building a manufacturing operation
+
+The page should make the visitor recognise their own situation.
+
+---
+
+# 3. CORE POSITIONING
+
+We are NOT selling cheap embroidery.
+
+We are selling:
+
+* Capacity
+* Reliability
+* Infrastructure
+* Flexibility
+* Production expertise
+* Business resilience
+* Reduced fixed overhead
+* Freedom to concentrate on sales
+* Ability to scale
+
+The central proposition is:
+
+# Grow your branded clothing business.
+
+## We'll take care of the embroidery.
+
+Supporting proposition:
+
+**Add professional embroidery capacity to your business without buying more machines, recruiting embroidery operators or increasing your fixed overheads.**
+
+Alternative phrases that can be used throughout the page:
+
+**You sell it. We embroider it.**
+
+**You don't need to build this. We've already built it.**
+
+**Before you buy another embroidery machine, use ours.**
+
+**Stop building an embroidery business. Build a sales business.**
+
+**Grow sales without growing your production headache.**
+
+---
+
+# 4. TONE OF VOICE
+
+This is extremely important.
+
+The page should sound like Select Branding Solutions.
+
+It should be:
+
+* Straight talking
+* Confident
+* Experienced
+* Human
+* Commercial
+* Friendly
+* Occasionally challenging
+* Not overly polished
+* Not corporate
+* Not desperate for work
+
+We are comfortable saying:
+
+**We don't work with everyone.**
+
+Avoid generic marketing language such as:
+
+* Unlock your potential
+* Elevate your brand
+* Seamless solutions
+* Game-changing
+* Revolutionary
+* World-class solutions
+* Bespoke solutions tailored to your needs
+* End-to-end solutions
+* Industry-leading solutions
+
+It should sound like it has been written by people who actually run an embroidery production facility.
+
+---
+
+# 5. PAGE DESIGN
+
+Retain the existing Select Branding Solutions branding.
+
+Do not unnecessarily redesign the whole site.
+
+Use the existing:
+
+* Logo
+* Brand colours
+* Fonts
+* General visual identity
+
+But significantly improve:
+
+* Page hierarchy
+* Spacing
+* Typography
+* Calls to action
+* Mobile experience
+* Visual storytelling
+* Conversion journey
+
+The design should feel:
+
+**Modern + Industrial + Premium + Established**
+
+Avoid excessive animations.
+
+Avoid huge walls of text.
+
+Use:
+
+* Strong headlines
+* Short copy
+* Statistics
+* Real production imagery
+* Existing production video
+* Cards
+* Comparison sections
+* Clear CTAs
+
+Mobile-first design is essential.
+
+---
+
+# 6. NAVIGATION
+
+This is a dedicated acquisition landing page.
+
+Reduce unnecessary navigation.
+
+Keep:
+
+* Select Branding Solutions logo
+* Essential contact information
+* Privacy Policy
+* Link to main website if appropriate
+
+Do not use a large navigation menu that encourages visitors to leave the conversion journey.
+
+The intended journey is:
+
+**Problem → Solution → Evidence → How It Works → Technology → Fit → Proof → Enquiry**
+
+---
+
+# 7. HERO SECTION
+
+The first screen needs to explain the proposition immediately.
+
+Main headline:
+
+# Grow your branded clothing business.
+
+Subheading:
+
+## We'll take care of the embroidery.
+
+Supporting copy:
+
+**Add professional embroidery capacity to your business without buying more machines, recruiting embroidery operators or increasing your fixed overheads.**
+
+Then:
+
+Outsource your embroidery production to a dedicated UK team built specifically to support businesses selling branded clothing, workwear, sportswear, schoolwear and merchandise.
+
+Primary CTA:
+
+**SEE IF WE'RE A GOOD FIT**
+
+Secondary CTA:
+
+**SEE HOW IT WORKS**
+
+Do NOT use:
+
+* Contact Us
+* Submit
+* Request Demo
+
+as the primary CTA.
+
+---
+
+# 8. PRODUCTION PROOF BAR
+
+Immediately underneath the hero show four highly visible statistics.
+
+### 38
+
+EMBROIDERY HEADS
+
+### 24/6
+
+PRODUCTION
+
+### 3–4 DAYS
+
+STANDARD LEAD TIME
+
+### 80+
+
+CONTRACT PARTNERS
+
+These should be immediately visible and easy to scan.
+
+---
+
+# 9. EXISTING PRODUCTION VIDEO
+
+We already have the video.
+
+Use:
+
+**https://www.youtube.com/watch?v=6HE3NCGQMfg&t=2s**
+
+Do not create a placeholder video.
+
+Do not replace the video.
+
+Embed this existing video prominently near the top of the page.
+
+Heading:
+
+# You don't need to build this.
+
+## We've already built it.
+
+Supporting copy:
+
+Instead of investing in more embroidery machinery, production space and operators, plug your business into our existing production operation.
+
+Embed the video underneath.
+
+Use:
+
+* Responsive 16:9
+* Full content width desktop
+* Near/full width mobile
+* YouTube thumbnail before play
+* No autoplay with sound
+* Lazy loading where possible
+* Start at approximately 2 seconds if appropriate
+
+Immediately underneath:
+
+**This is the production infrastructure your business can use without having to build it yourself.**
+
+Compact proof line:
+
+**38 Heads | 24/6 Production | 3–4 Working Day Lead Time | UK Production**
+
+---
+
+# 10. PAIN POINT SECTION
+
+Heading:
+
+# What's stopping you growing?
+
+Supporting copy:
+
+For many successful branded clothing businesses, the problem eventually isn't finding customers.
+
+**It's producing everything they've sold.**
+
+Create visual cards.
+
+### NOT ENOUGH CAPACITY?
+
+Your machines are full and you're extending lead times or turning work away.
+
+**Use our capacity instead.**
+
+### CAN'T RECRUIT EMBROIDERY OPERATORS?
+
+Experienced embroidery staff can be difficult to find and time-consuming to train.
+
+**Use our production team instead.**
+
+### THINKING ABOUT ANOTHER MACHINE?
+
+Before committing significant capital to more embroidery machinery, use ours.
+
+**Increase capacity without increasing fixed overhead.**
+
+### SPENDING EVENINGS EMBROIDERING?
+
+If you started your business to sell branded clothing, you shouldn't have to spend every spare hour running machines.
+
+**Spend your time growing the business instead.**
+
+### WORRIED ABOUT STAFF OR MACHINE DOWNTIME?
+
+Production shouldn't depend entirely on one person or one machine.
+
+**Build resilience into your business.**
+
+### CURRENT SUPPLIER CAN'T KEEP UP?
+
+Unreliable production can quickly become your sales problem.
+
+**Our standard production lead time is 3–4 working days.**
+
+---
+
+# 11. THE BUSINESS MODEL SECTION
+
+Create a strong visual break.
+
+Heading:
+
+# Stop building an embroidery business.
+
+## Build a sales business.
+
+Copy:
+
+A lot of branded clothing businesses follow the same path.
+
+They start selling garments.
+
+Then they buy an embroidery machine.
+
+Sales increase.
+
+They buy another machine.
+
+Then they need an operator.
+
+Then more space.
+
+Then somebody goes on holiday.
+
+A machine breaks down.
+
+Orders start piling up.
+
+Before long, they're running a manufacturing business rather than concentrating on sales.
+
+**There is another way.**
+
+Large statement:
+
+# Sell more.
+
+## Produce less.
+
+Supporting copy:
+
+Let our Contract Embroidery team become your production department while you concentrate on finding customers and growing sales.
+
+---
+
+# 12. BUILD IT YOURSELF VS USE SELECT
+
+Heading:
+
+# You can build the infrastructure yourself.
+
+## Or use ours.
+
+Create an attractive two-column comparison.
+
+### BUILD IT YOURSELF
+
+* Buy embroidery machinery
+* Finance the machinery
+* Recruit operators
+* Train operators
+* Find additional space
+* Maintain machines
+* Cover sickness
+* Cover holidays
+* Manage production
+* Deal with breakdowns
+* Increase fixed overhead
+* Spend more time managing production
+
+### USE SELECT
+
+* Use our 38 embroidery heads
+* Use our production team
+* Use our factory
+* Use our Barudan machinery
+* Use our production systems
+* Access additional capacity when needed
+* Increase or decrease volume with demand
+* Avoid additional machinery investment
+* Concentrate on customers
+* Concentrate on sales
+
+Finish prominently:
+
+# You sell it.
+
+## We embroider it.
+
+CTA:
+
+**TALK TO US ABOUT YOUR PRODUCTION**
+
+---
+
+# 13. PRODUCTION CAPABILITY
+
+Heading:
+
+# Contract embroidery isn't a sideline for us.
+
+Copy:
+
+Our Contract Embroidery Division has been built specifically to provide outsourced embroidery production to businesses selling branded clothing.
+
+Highlight:
+
+* 38 embroidery heads
+* Industrial multi-head production
+* 24 hours per day, 6 days per week
+* Standard 3–4 working day lead time
+* Dedicated production team
+* UK production
+* Purpose-built production management system
+
+Use genuine imagery from our production facility wherever available.
+
+Do not use generic stock images if genuine Select production imagery is available.
+
+---
+
+# 14. BARUDAN
+
+Heading:
+
+# Serious production needs serious machinery.
+
+Copy:
+
+We use Barudan multi-head embroidery machinery throughout our production operation.
+
+We regard Barudan as the Rolls-Royce of industrial embroidery machinery — which is why we use it.
+
+For our Contract Partners that means professional industrial production built around consistency, reliability and quality.
+
+Where suitable, show close-up genuine photographs/video of the machines.
+
+---
+
+# 15. HOW IT WORKS
+
+Heading:
+
+# Outsourcing embroidery shouldn't create more work.
+
+Create four visual steps.
+
+### 1 — SEND US THE JOB
+
+Submit the production order through your Contract Partner portal.
+
+### 2 — WE SCHEDULE IT
+
+Our production system schedules the job into our production operation.
+
+### 3 — WE PRODUCE IT
+
+Our production team embroider the garments using our multi-head machinery.
+
+### 4 — WE RETURN IT
+
+Completed garments are dispatched back to you or, where agreed, onwards to your customer.
+
+Large supporting statement:
+
+# Simple in.
+
+## Finished garments out.
+
+---
+
+# 16. CONTRACT PARTNER PORTAL
+
+The existing portal/demo functionality is useful.
+
+KEEP IT.
+
+But it should no longer dominate the top of the landing page.
+
+Move/integrate it here.
+
+Heading:
+
+# Built for businesses that outsource production.
+
+Copy:
+
+Outsourcing should reduce your workload, not create another trail of emails, spreadsheets and missing instructions.
+
+That's why we've built our own Contract Partner production portal.
+
+Highlight genuine functionality including:
+
+* Submit production jobs
+* Upload artwork
+* Provide garment information
+* Provide embroidery instructions
+* Track production jobs
+* View previous jobs
+* Repeat previous orders
+* Store logo information
+* Keep production records together
+* Reduce emails and admin
+
+CTA:
+
+**VIEW THE PRODUCTION PORTAL**
+
+Secondary CTA:
+
+**BECOME A CONTRACT PARTNER**
+
+Preserve useful existing portal demo functionality.
+
+---
+
+# 17. WE DON'T WORK WITH EVERYONE
+
+Make this a major visual section.
+
+Use a dark/high-contrast background consistent with the brand.
+
+Heading:
+
+# We'll be upfront.
+
+## We don't work with everyone.
+
+Copy:
+
+We're not trying to become the embroidery supplier for every business in the UK.
+
+Our Contract Division works best when we build long-term relationships with businesses that value reliable production and want a genuine production partner.
+
+Create two columns.
+
+### WE'RE PROBABLY A GOOD FIT IF YOU:
+
+* Sell branded clothing, workwear, sportswear, schoolwear or merchandise
+* Have regular embroidery requirements
+* Want to grow
+* Need additional capacity
+* Give clear production instructions
+* Value reliability
+* Value consistency
+* Want a long-term production partner
+* Understand that successful outsourcing is a partnership
+
+### WE'RE PROBABLY NOT RIGHT FOR YOU IF:
+
+* You only have occasional tiny orders
+* Everything is always urgent
+* Instructions regularly change after submission
+* Price is the only factor when selecting a supplier
+* You need six polos embroidering tomorrow afternoon
+
+Finish:
+
+**If we're right for each other, we want to become the production partner you use for years — not the supplier you use for one job.**
+
+CTA:
+
+**SEE IF WE'RE A GOOD FIT**
+
+---
+
+# 18. SOCIAL PROOF
+
+Add genuine Contract Partner testimonials and reviews wherever available.
+
+DO NOT INVENT TESTIMONIALS.
+
+Prioritise testimonials mentioning:
+
+* Reliability
+* Lead times
+* Quality
+* Communication
+* Capacity
+* Ease of outsourcing
+* Growth
+* Long-term relationship
+
+If suitable testimonials are not currently available, build the section so they can easily be added through the existing admin/system later.
+
+Do not display fake testimonials on the live page.
+
+---
+
+# 19. WHO WE WORK WITH
+
+Heading:
+
+# Built for businesses selling branded clothing.
+
+Create cards.
+
+### WORKWEAR SUPPLIERS
+
+Increase embroidery capacity without increasing production overhead.
+
+### SPORTSWEAR & TEAMWEAR BUSINESSES
+
+Sell more kits and teamwear while we handle production.
+
+### SCHOOLWEAR BUSINESSES
+
+Access additional capacity during seasonal peaks.
+
+### PROMOTIONAL CLOTHING COMPANIES
+
+Offer embroidery without building your own production department.
+
+### PRINTERS & SIGN COMPANIES
+
+Add embroidery to your offering without investing in embroidery equipment.
+
+### ONLINE CLOTHING BUSINESSES
+
+Concentrate on ecommerce, marketing and sales while we concentrate on production.
+
+### EMBROIDERY BUSINESSES
+
+Use us for overflow production, peak periods or additional resilience.
+
+---
+
+# 20. PRIMARY LEAD FORM
+
+Replace generic demo/contact forms with a short qualification process.
+
+Heading:
+
+# Could we become your production partner?
+
+Supporting copy:
+
+Tell us a little about your business and we'll tell you whether we think we're a good fit.
+
+Fields:
+
+**Name***
+
+**Business Name***
+
+**Email***
+
+**Mobile Number**
+
+**Website**
+
+Question:
+
+**Approximately how many garments do you currently embroider or outsource each month?**
+
+Options:
+
+* Under 100
+* 100–250
+* 250–500
+* 500–1,000
+* 1,000–2,500
+* 2,500–5,000
+* 5,000+
+
+Question:
+
+**What's your biggest production challenge?**
+
+Allow multiple selections:
+
+* Capacity
+* Recruitment
+* Lead times
+* Machinery investment
+* Staff sickness/holidays
+* Quality
+* Production management
+* Seasonal demand
+* Growth
+* Outsourcing all production
+* Outsourcing overflow production
+* Other
+
+Optional field:
+
+**Anything else we should know?**
+
+Submit button:
+
+# SEE IF WE'RE A GOOD FIT
+
+After submission display:
+
+# Thanks — we'll take a look.
+
+We'll review what you've told us and get in touch to discuss whether Select could be the right production partner for your business.
+
+---
+
+# 21. FINAL CTA
+
+Create a powerful final section.
+
+Heading:
+
+# How much could you sell if production wasn't the problem?
+
+Copy:
+
+You don't necessarily need another machine.
+
+You don't necessarily need more production space.
+
+You don't necessarily need another embroidery operator.
+
+You need the confidence to go and win more customers knowing the production capacity is already there.
+
+Large statement:
+
+# You grow the business.
+
+## We'll take care of the embroidery.
+
+CTA:
+
+**SEE IF WE'RE A GOOD FIT**
+
+Supporting line:
+
+**We don't work with everyone. That's exactly why our Contract Partners trust us.**
+
+---
+
+# 22. EMAIL CAMPAIGN SUPPORT
+
+Initially this page will be used for cold email outreach.
+
+Build support for campaign-specific URL parameters.
+
+For example:
+
+`?source=email&campaign=capacity`
+
+`?source=email&campaign=growth`
+
+`?source=email&campaign=machinery`
+
+`?source=email&campaign=recruitment`
+
+`?source=email&campaign=lead-times`
+
+`?source=email&campaign=sportswear`
+
+`?source=email&campaign=workwear`
+
+`?source=email&campaign=overflow`
+
+Use these parameters to dynamically change the hero message where appropriate.
+
+---
+
+# 23. DYNAMIC HERO MESSAGING
+
+Create campaign-specific hero variants.
+
+### DEFAULT
+
+# Grow your branded clothing business.
+
+## We'll take care of the embroidery.
+
+### CAPACITY
+
+# Need more embroidery capacity?
+
+## Use ours.
+
+Supporting:
+
+Increase production without buying another machine.
+
+### GROWTH
+
+# Grow your branded clothing business.
+
+## Without growing your production headache.
+
+### MACHINERY
+
+# Before you buy another embroidery machine...
+
+## Use ours.
+
+### RECRUITMENT
+
+# Can't find embroidery operators?
+
+## Use our production team.
+
+### LEAD-TIMES
+
+# Is production slowing your business down?
+
+Supporting:
+
+Outsource to a dedicated embroidery production partner with a standard 3–4 working day lead time.
+
+### SPORTSWEAR
+
+# You sell the teamwear.
+
+## We'll embroider it.
+
+### WORKWEAR
+
+# Grow your workwear business.
+
+## We'll take care of the embroidery.
+
+### OVERFLOW
+
+# Your machines are full.
+
+## Ours don't have to be.
+
+Supporting:
+
+Use our Contract Embroidery Division for overflow production without giving up control of your customer.
+
+### OUTSOURCING
+
+# Outsource your embroidery production.
+
+## Concentrate on growing your business.
+
+All variants should lead into the SAME core landing page.
+
+Do not create duplicate pages unless technically necessary.
+
+---
+
+# 24. GOOGLE ADS SUPPORT
+
+Build the tracking infrastructure now so we don't need to rebuild the page when Google Ads launches.
+
+Support standard UTM parameters:
+
+* utm_source
+* utm_medium
+* utm_campaign
+* utm_term
+* utm_content
+
+Also capture:
+
+* GCLID
+* campaign parameter
+* source parameter
+* initial landing URL
+* referring URL where available
+* date/time of first visit
+
+Store this information against any enquiry generated.
+
+Maintain these values throughout the visitor's session.
+
+---
+
+# 25. CONVERSION TRACKING
+
+Build a clean analytics event layer.
+
+Track at minimum:
+
+* landing_page_view
+* video_play
+* video_25_percent
+* video_50_percent
+* video_75_percent
+* video_complete
+* primary_cta_click
+* secondary_cta_click
+* portal_demo_click
+* form_view
+* form_start
+* form_complete
+* phone_click
+* email_click
+
+Make this compatible with GA4 and future Google Ads conversion tracking.
+
+Do not count page loads as video plays.
+
+---
+
+# 26. LEAD SOURCE REPORTING
+
+Every lead should be identifiable as originating from:
+
+* Cold Email
+* Google Ads
+* Organic
+* Direct
+* Referral
+* Other
+
+Where campaign information exists, retain it.
+
+We eventually want to be able to analyse:
+
+**Campaign → Visitors → Leads → Qualified Leads → Contract Partners → Revenue**
+
+Build the database/tracking structure now so this information can later be linked to customer conversion and revenue.
+
+Do not overbuild a complex reporting system at this stage if it doesn't already exist.
+
+The important thing now is to CAPTURE THE DATA correctly.
+
+---
+
+# 27. GOOGLE ADS QUALITY / TECHNICAL REQUIREMENTS
+
+Optimise for:
+
+* Fast load speed
+* Mobile performance
+* Core Web Vitals
+* Minimal layout shift
+* Compressed imagery
+* Lazy-loaded below-fold media
+* Responsive video
+* Accessible forms
+* Semantic headings
+* Proper form validation
+* Clear privacy link
+* HTTPS
+* Clean page title
+* Meta description
+* Open Graph information
+
+Do not add unnecessary scripts that significantly slow the page.
+
+Preserve existing analytics/integrations unless there is a good technical reason to change them.
+
+---
+
+# 28. CTA BEHAVIOUR
+
+All major:
+
+**SEE IF WE'RE A GOOD FIT**
+
+buttons should either:
+
+1. Smooth-scroll to the qualification form
+
+or
+
+2. Open the same lightweight qualification form.
+
+Do not send visitors to another generic contact page.
+
+Keep the visitor on this conversion journey.
+
+---
+
+# 29. MOBILE
+
+Review every section specifically at mobile width.
+
+Important:
+
+* Headlines must not become enormous
+* Buttons should be easy to tap
+* Form fields should be full width
+* Comparison sections should stack intelligently
+* Statistics should remain easy to read
+* Video must resize correctly
+* Avoid horizontal scrolling
+* Keep important CTAs visible without excessive scrolling
+
+Consider a subtle sticky mobile CTA:
+
+**SEE IF WE'RE A GOOD FIT**
+
+Do not make it intrusive.
+
+---
+
+# 30. DO NOT MAKE UNSUPPORTED CLAIMS
+
+Do not promise or guarantee that outsourcing to us will produce a specific level of growth.
+
+Do NOT use:
+
+"Guaranteed double-digit growth."
+
+We CAN use:
+
+**Build the production infrastructure to support serious growth.**
+
+**Grow sales without building the production infrastructure yourself.**
+
+**Remove production capacity as a barrier to growth.**
+
+---
+
+# 31. PRESERVE EXISTING FUNCTIONALITY
+
+Before making changes:
+
+Review the current `/demo-access` implementation.
+
+Identify:
+
+* Existing portal demo
+* Forms
+* Analytics
+* Database connections
+* Lead handling
+* Authentication
+* Video functionality
+* Useful components
+* Existing responsive behaviour
+
+Do not blindly delete existing functionality.
+
+Reuse good components where appropriate.
+
+Refactor rather than duplicate functionality.
+
+---
+
+# 32. IMPORTANT — DO NOT PUBLISH IMMEDIATELY
+
+Implement the redesigned landing page in a preview/development version first.
+
+Do NOT overwrite the existing live page until the new version has been reviewed.
+
+Once built:
+
+Provide a preview URL.
+
+Then report back with:
+
+1. What you changed
+2. What existing functionality you retained
+3. What you removed
+4. What new tracking was added
+5. What URL campaign parameters are supported
+6. Where leads are stored
+7. How lead source/campaign data is stored
+8. Any claims/data you found in the existing application that conflict with this brief
+9. Anything that still requires configuration before Google Ads launches
+10. Screenshots or preview at desktop and mobile widths if available
+
+---
+
+# 33. FINAL TEST
+
+Before presenting the preview, test the page as though you know nothing about Select Branding Solutions.
+
+Within approximately 10 seconds of landing on the page, a visitor should understand:
+
+**WHAT IS THIS?**
+
+A dedicated outsourced embroidery production service for businesses selling branded clothing.
+
+**WHY SHOULD I CARE?**
+
+I can increase my production capacity without buying machines, recruiting operators or managing additional production.
+
+**WHY SELECT?**
+
+38 heads, dedicated UK production, Barudan machinery, 24/6 operation, 3–4 working day standard lead time, purpose-built systems and an established Contract Partner base.
+
+**IS IT FOR ME?**
+
+It is designed for businesses with regular embroidery requirements that value reliability and want to grow.
+
+**WHAT DO I DO NEXT?**
+
+Click:
+
+# SEE IF WE'RE A GOOD FIT
+
+The final page should leave the right prospect thinking:
+
+**"I don't need to buy another machine."**
+
+Then:
+
+**"I don't need to recruit another embroidery operator."**
+
+Then:
+
+**"I could send the production to these people and concentrate on selling."**
+
+And finally:
+
+**"These look like the sort of company I should talk to."**
