@@ -378,6 +378,13 @@ export default function DemoAccess() {
               </table>
             </div>
 
+            <div className="rounded-lg border bg-muted/30 p-5">
+              <h3 className="text-lg font-semibold tracking-tight">Personalisation</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Initials/Name up to 10,000 stitches have no minimum order quantity or set-up fee, but are charged at a flat rate of £3.
+              </p>
+            </div>
+
             {/* DTF print and apply pricing */}
             <div className="space-y-4">
               <div className="text-center space-y-1">
