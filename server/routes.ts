@@ -46,7 +46,7 @@ import { staffHolidays as staffHolidaysTable } from "@shared/schema";
 import { sql as drizzleSql, and, eq, lte, gte, ne } from "drizzle-orm";
 import { xeroService } from "./xero";
 import { dpdService } from "./dpd";
-import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantity, MIN_ORDER_QTY } from "@shared/pricing";
+import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantity, isMinOrderQtyActive, MIN_ORDER_QTY } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
 import { registerCasualShiftRoutes } from "./casualShiftRoutes";
@@ -4066,6 +4066,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const data = customerJobSubmissionSchema.parse(req.body);
       console.log('[JOB SUBMISSION] Request data parsed:', data);
+
+      if (
+        isMinOrderQtyActive() &&
+        typeof data.quantity === "number" &&
+        data.quantity > 0 &&
+        data.quantity < MIN_ORDER_QTY &&
+        !data.minimumOrderAcknowledged
+      ) {
+        return res.status(400).json({
+          error: "Please accept the minimum order quantity notice before submitting an order of fewer than 6 units.",
+        });
+      }
       
       // Get customer to use their address as default
       const customers = await storage.getCustomers();

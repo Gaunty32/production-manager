@@ -1074,6 +1074,7 @@ export const customerJobSubmissionSchema = z.object({
     { message: "Despatch date must be in the future" }
   ),
   logoType: z.enum(["repeat_logo", "new_logo", "new_logo_files_supplied"]).default("repeat_logo"),
+  minimumOrderAcknowledged: z.boolean().optional().default(false),
 });
 
 export type InsertCustomerUser = z.infer<typeof insertCustomerUserSchema>;

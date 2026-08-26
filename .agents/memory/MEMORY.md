@@ -12,6 +12,7 @@
 - [Direct conversation archiving](direct-conversation-archive.md) — direct channels share ONE status field; customer archive/delete hides them from staff, and staff inbox shows only status==open with no archived view ("disappearing channels").
 
 - [Job pricing parity](job-pricing-parity.md) — pricing_table_2025/2026 are BOOLEAN flags; staff amounts now come server-side from /api/jobs (amountDue/amountDuePoa) so they can't drift from the portal.
+- [Customer minimum-order acknowledgement](customer-minimum-order-acknowledgement.md) — warn on every 1–5 unit customer submission; staff handles the initials exemption later.
 
 - [Deadline Alerts vs Production Queue](deadline-alerts-stale-jobs.md) — stale incomplete jobs show in alerts but are filtered out of the queue; delete via super-admin trash → /api/admin/jobs/:id.
 

@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles, Layers, History, CheckCircle2 } from "lucide-react";
 import { customerJobSubmissionSchema } from "@shared/schema";
+import { isMinOrderQtyActive, MIN_ORDER_QTY } from "@shared/pricing";
 import { z } from "zod";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -123,6 +124,8 @@ export default function CustomerSubmitJob() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [showExpressDialog, setShowExpressDialog] = useState(false);
   const [pendingDispatchDate, setPendingDispatchDate] = useState<string>("");
+  const [showMinimumOrderDialog, setShowMinimumOrderDialog] = useState(false);
+  const [pendingMinimumOrderData, setPendingMinimumOrderData] = useState<FormData | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [repeatHint, setRepeatHint] = useState<string | null>(null);
   const jobNameWrapperRef = useRef<HTMLDivElement>(null);
@@ -430,7 +433,23 @@ export default function CustomerSubmitJob() {
   });
 
   const onSubmit = (data: FormData) => {
+    const quantity = typeof data.quantity === "number" ? data.quantity : Number(data.quantity);
+    if (isMinOrderQtyActive() && Number.isInteger(quantity) && quantity > 0 && quantity < MIN_ORDER_QTY) {
+      setPendingMinimumOrderData(data);
+      setShowMinimumOrderDialog(true);
+      return;
+    }
     submitJobMutation.mutate(data);
+  };
+
+  const handleMinimumOrderConfirm = () => {
+    if (!pendingMinimumOrderData) return;
+    submitJobMutation.mutate({
+      ...pendingMinimumOrderData,
+      minimumOrderAcknowledged: true,
+    });
+    setPendingMinimumOrderData(null);
+    setShowMinimumOrderDialog(false);
   };
 
   return (
@@ -930,6 +949,31 @@ export default function CustomerSubmitJob() {
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleExpressConfirm} data-testid="button-express-confirm">
               Confirm Priority Production
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={showMinimumOrderDialog}
+        onOpenChange={(open) => {
+          if (!open) setPendingMinimumOrderData(null);
+          setShowMinimumOrderDialog(open);
+        }}
+      >
+        <AlertDialogContent data-testid="dialog-minimum-order">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Minimum order quantity</AlertDialogTitle>
+            <AlertDialogDescription>
+              Our minimum order quantity is 6 units per design (other than initials) for quantities of less than 6 units per design you will be charged the 6 unit price.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={handleMinimumOrderConfirm}
+              data-testid="button-minimum-order-accept"
+            >
+              I understand and accept
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
