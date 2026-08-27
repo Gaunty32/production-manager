@@ -40,3 +40,7 @@ while the installed app remains blank.
 On the first boot failure, unregister workers, clear Cache Storage and reload
 once; on a second failure, render a visible refresh message instead of a blank
 root. Bump the service-worker cache name when changing entry-point structure.
+
+Legacy installed Planner shortcuts may launch at `/#/dashboard`. Normalize any
+boot-time `#/...` route into a pathname before selecting the public or portal
+entry; otherwise the entry splitter sees `/` and can boot the wrong app.

@@ -1,6 +1,13 @@
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
+// Older installed Planner shortcuts used hash routes such as #/dashboard.
+// Convert those once at boot so the browser router and the public/portal
+// entry-point split see the same path on first launch.
+if (window.location.hash.startsWith("#/")) {
+  window.history.replaceState(null, "", window.location.hash.slice(1));
+}
+
 const pathname = window.location.pathname;
 const isMarketingRoute =
   pathname === "/" ||
