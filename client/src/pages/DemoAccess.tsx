@@ -511,6 +511,15 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
               <h2 className="text-2xl font-bold tracking-tight">A glimpse of what you'll see</h2>
               <p className="text-muted-foreground">Your customer portal — track orders, approve artwork, and stay in the loop from any device.</p>
             </div>
+            <div className="flex flex-col items-center justify-between gap-5 rounded-lg border bg-primary/5 p-6 text-center sm:flex-row sm:text-left">
+              <div>
+                <p className="text-sm font-semibold">Already a Select customer?</p>
+                <p className="mt-1 text-sm text-muted-foreground">Sign in to see your live orders, invoices, artwork approvals and messages.</p>
+              </div>
+              <a href="/customer/login" className="shrink-0">
+                <Button size="sm" data-testid="button-customer-portal-login">Sign in to your portal</Button>
+              </a>
+            </div>
             <div className="grid lg:grid-cols-2 gap-8 items-start">
               <div className="space-y-2">
                 <BrowserFrame
