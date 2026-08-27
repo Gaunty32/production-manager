@@ -1,4 +1,4 @@
-const CACHE_NAME = 'select-v4';
+const CACHE_NAME = 'select-v5';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE = [

@@ -25,3 +25,18 @@ rollout window can't bounce a client.
 **Caveat:** a backend-only republish that leaves frontend assets byte-identical
 won't change the hash, so clients won't reload — acceptable, since there's no UI
 change to pick up.
+
+## Installed PWA boot recovery
+
+The standalone app can retain an old service worker across a deployment. If its
+HTML and content-hashed dynamic chunks no longer match, the initial dynamic
+import can fail before React mounts, leaving a completely white window.
+
+**Why:** Browser tabs naturally recover through fresh navigation more reliably
+than an already-installed PWA window, so production can work in the browser
+while the installed app remains blank.
+
+**How to apply:** Keep a rejection handler around the initial app-module import.
+On the first boot failure, unregister workers, clear Cache Storage and reload
+once; on a second failure, render a visible refresh message instead of a blank
+root. Bump the service-worker cache name when changing entry-point structure.
