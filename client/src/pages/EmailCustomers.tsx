@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -53,6 +54,11 @@ interface CampaignArticle {
   category: string;
   publishedAt: string;
 }
+interface CampaignCustomer {
+  id: string;
+  name: string;
+  users: Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>;
+}
 interface CampaignRun {
   id: string;
   slotKey: string;
@@ -67,8 +73,12 @@ interface CampaignRun {
 interface CampaignConfigResponse {
   config: {
     enabled: boolean;
+    audienceSource: "highlevel_tag" | "customers";
     tagId: string | null;
     tagName: string | null;
+    customerSelectionMode: "all" | "selected";
+    selectedCustomerIds: string[];
+    excludedCustomerUserIds: string[];
     articleSlug: string | null;
     subject: string | null;
     intro: string;
@@ -90,9 +100,13 @@ export default function EmailCustomers() {
   const [lastResult, setLastResult] = useState<SendResult | null>(null);
   const [campaignEnabled, setCampaignEnabled] = useState(false);
   const [campaignTagId, setCampaignTagId] = useState("");
+  const [campaignAudienceSource, setCampaignAudienceSource] = useState<"highlevel_tag" | "customers">("highlevel_tag");
+  const [customerSelectionMode, setCustomerSelectionMode] = useState<"all" | "selected">("all");
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+  const [excludedCustomerUserIds, setExcludedCustomerUserIds] = useState<string[]>([]);
+  const [customerSearch, setCustomerSearch] = useState("");
   const [campaignArticleSlug, setCampaignArticleSlug] = useState("");
   const [campaignSubject, setCampaignSubject] = useState("");
-  const [campaignIntro, setCampaignIntro] = useState("We thought you might find this useful.");
   const [campaignTestEmail, setCampaignTestEmail] = useState("");
   const [campaignPreviewHtml, setCampaignPreviewHtml] = useState("");
   const [campaignRecipientCount, setCampaignRecipientCount] = useState<number | null>(null);
@@ -118,14 +132,22 @@ export default function EmailCustomers() {
     enabled: isAllowed,
     staleTime: 0,
   });
+  const { data: customerAudienceData, isLoading: customerAudienceLoading } = useQuery<{ customers: CampaignCustomer[]; recipientCount: number }>({
+    queryKey: ["/api/admin/highlevel-campaign/customer-recipients"],
+    enabled: isAllowed,
+    staleTime: 0,
+  });
 
   useEffect(() => {
     if (!campaignData?.config) return;
     setCampaignEnabled(campaignData.config.enabled);
+    setCampaignAudienceSource(campaignData.config.audienceSource || "highlevel_tag");
     setCampaignTagId(campaignData.config.tagId || "");
+    setCustomerSelectionMode(campaignData.config.customerSelectionMode || "all");
+    setSelectedCustomerIds(campaignData.config.selectedCustomerIds || []);
+    setExcludedCustomerUserIds(campaignData.config.excludedCustomerUserIds || []);
     setCampaignArticleSlug(campaignData.config.articleSlug || "");
     setCampaignSubject(campaignData.config.subject || "");
-    setCampaignIntro(campaignData.config.intro || "We thought you might find this useful.");
   }, [campaignData]);
 
   useEffect(() => {
@@ -136,9 +158,12 @@ export default function EmailCustomers() {
   const previewCampaignMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/admin/highlevel-campaign/preview", {
-        tagId: campaignTagId,
+        audienceSource: campaignAudienceSource,
+        tagId: campaignAudienceSource === "customers" ? "existing-customers" : campaignTagId,
+        customerSelectionMode,
+        selectedCustomerIds,
+        excludedCustomerUserIds,
         articleSlug: campaignArticleSlug,
-        intro: campaignIntro,
       });
       return res.json() as Promise<{ html: string; recipientCount: number }>;
     },
@@ -154,11 +179,15 @@ export default function EmailCustomers() {
       const tag = tagsData?.tags.find((item) => item.id === campaignTagId);
       const res = await apiRequest("PUT", "/api/admin/highlevel-campaign/config", {
         enabled: campaignEnabled,
-        tagId: campaignTagId,
-        tagName: tag?.name || "",
+        audienceSource: campaignAudienceSource,
+        tagId: campaignAudienceSource === "customers" ? "existing-customers" : campaignTagId,
+        tagName: campaignAudienceSource === "customers" ? "Existing customers" : tag?.name || "",
+        customerSelectionMode,
+        selectedCustomerIds,
+        excludedCustomerUserIds,
         articleSlug: campaignArticleSlug,
         subject: campaignSubject,
-        intro: campaignIntro,
+        intro: "",
       });
       return res.json();
     },
@@ -173,10 +202,10 @@ export default function EmailCustomers() {
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/admin/highlevel-campaign/test", {
         to: campaignTestEmail,
-        tagId: campaignTagId,
+        audienceSource: campaignAudienceSource,
+        tagId: campaignAudienceSource === "customers" ? "existing-customers" : campaignTagId,
         articleSlug: campaignArticleSlug,
         subject: campaignSubject,
-        intro: campaignIntro,
       });
       return res.json();
     },
@@ -228,7 +257,14 @@ export default function EmailCustomers() {
   const canSend = subject.trim().length > 0 && message.trim().length > 0;
   const recipientCount = recipientsData?.count ?? 0;
   const canConfigureCampaign = Boolean(
-    campaignTagId && campaignArticleSlug && campaignSubject.trim() && campaignIntro.trim(),
+    (campaignAudienceSource === "customers" || campaignTagId) &&
+    (campaignAudienceSource !== "customers" || customerSelectionMode === "all" || selectedCustomerIds.length > 0) &&
+    campaignArticleSlug &&
+    campaignSubject.trim(),
+  );
+  const filteredCampaignCustomers = (customerAudienceData?.customers || []).filter((customer) =>
+    customer.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    customer.users.some((person) => `${person.firstName || ""} ${person.lastName || ""} ${person.email}`.toLowerCase().includes(customerSearch.toLowerCase())),
   );
 
   if (authLoading) {
@@ -295,23 +331,110 @@ export default function EmailCustomers() {
           ) : (
             <>
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>HighLevel tag</Label>
-                    <Button variant="ghost" size="sm" onClick={() => refetchTags()} disabled={tagsLoading} data-testid="button-refresh-highlevel-tags">
-                      <RefreshCw className={`h-3.5 w-3.5 mr-1 ${tagsLoading ? "animate-spin" : ""}`} /> Refresh
-                    </Button>
-                  </div>
-                  <Select value={campaignTagId} onValueChange={(value) => { setCampaignTagId(value); setCampaignRecipientCount(null); setCampaignPreviewHtml(""); }}>
-                    <SelectTrigger data-testid="select-highlevel-tag"><SelectValue placeholder={tagsLoading ? "Loading tags…" : "Select a tag"} /></SelectTrigger>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Recipients</Label>
+                  <Select value={campaignAudienceSource} onValueChange={(value: "highlevel_tag" | "customers") => { setCampaignAudienceSource(value); setCampaignRecipientCount(null); setCampaignPreviewHtml(""); }}>
+                    <SelectTrigger data-testid="select-campaign-audience-source"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {(tagsData?.tags || []).map((tag) => <SelectItem key={tag.id} value={tag.id}>{tag.name}</SelectItem>)}
+                      <SelectItem value="highlevel_tag">Contacts with a HighLevel tag</SelectItem>
+                      <SelectItem value="customers">Existing customer portal users</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {campaignRecipientCount == null ? "Preview to check the current audience size." : `${campaignRecipientCount} unique contact${campaignRecipientCount === 1 ? "" : "s"} currently have this tag.`}
-                  </p>
                 </div>
+                {campaignAudienceSource === "highlevel_tag" ? (
+                  <div className="space-y-2 md:col-span-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>HighLevel tag</Label>
+                      <Button variant="ghost" size="sm" onClick={() => refetchTags()} disabled={tagsLoading} data-testid="button-refresh-highlevel-tags">
+                        <RefreshCw className={`h-3.5 w-3.5 mr-1 ${tagsLoading ? "animate-spin" : ""}`} /> Refresh
+                      </Button>
+                    </div>
+                    <Select value={campaignTagId} onValueChange={(value) => { setCampaignTagId(value); setCampaignRecipientCount(null); setCampaignPreviewHtml(""); }}>
+                      <SelectTrigger data-testid="select-highlevel-tag"><SelectValue placeholder={tagsLoading ? "Loading tags…" : "Select a tag"} /></SelectTrigger>
+                      <SelectContent>
+                        {(tagsData?.tags || []).map((tag) => <SelectItem key={tag.id} value={tag.id}>{tag.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {campaignRecipientCount == null ? "Preview to check the current audience size." : `${campaignRecipientCount} unique contact${campaignRecipientCount === 1 ? "" : "s"} currently have this tag.`}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 md:col-span-2 rounded-md border p-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Customer selection</Label>
+                        <Select value={customerSelectionMode} onValueChange={(value: "all" | "selected") => { setCustomerSelectionMode(value); setCampaignRecipientCount(null); setCampaignPreviewHtml(""); }}>
+                          <SelectTrigger data-testid="select-customer-selection-mode"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All active customers</SelectItem>
+                            <SelectItem value="selected">Only selected customers</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="campaign-customer-search">Find a company or person</Label>
+                        <Input id="campaign-customer-search" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Search customers…" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Tick the people who should receive the email. Untick an individual to exclude them, even when their company is selected.
+                    </p>
+                    <div className="max-h-72 overflow-y-auto rounded-md border divide-y">
+                      {customerAudienceLoading ? (
+                        <div className="p-4 text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading customers…</div>
+                      ) : filteredCampaignCustomers.length === 0 ? (
+                        <div className="p-4 text-sm text-muted-foreground">No matching customers.</div>
+                      ) : filteredCampaignCustomers.map((customer) => {
+                        const companyIncluded = customerSelectionMode === "all" || selectedCustomerIds.includes(customer.id);
+                        return (
+                          <div key={customer.id} className="p-3 space-y-2">
+                            <label className="flex items-center gap-2 font-medium text-sm">
+                              <Checkbox
+                                checked={companyIncluded}
+                                disabled={customerSelectionMode === "all"}
+                                onCheckedChange={(checked) => {
+                                  setSelectedCustomerIds((current) => checked
+                                    ? Array.from(new Set(current.concat(customer.id)))
+                                    : current.filter((id) => id !== customer.id));
+                                  setCampaignRecipientCount(null);
+                                  setCampaignPreviewHtml("");
+                                }}
+                              />
+                              {customer.name}
+                            </label>
+                            {companyIncluded && (
+                              <div className="grid gap-2 pl-6 sm:grid-cols-2">
+                                {customer.users.map((person) => {
+                                  const included = !excludedCustomerUserIds.includes(person.id);
+                                  const name = `${person.firstName || ""} ${person.lastName || ""}`.trim();
+                                  return (
+                                    <label key={person.id} className="flex items-start gap-2 text-sm">
+                                      <Checkbox
+                                        checked={included}
+                                        onCheckedChange={(checked) => {
+                                          setExcludedCustomerUserIds((current) => checked
+                                            ? current.filter((id) => id !== person.id)
+                                            : Array.from(new Set(current.concat(person.id))));
+                                          setCampaignRecipientCount(null);
+                                          setCampaignPreviewHtml("");
+                                        }}
+                                      />
+                                      <span><span className="block">{name || person.email}</span>{name && <span className="block text-xs text-muted-foreground">{person.email}</span>}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {campaignRecipientCount == null ? "Preview to confirm the final recipient count." : `${campaignRecipientCount} unique customer portal recipient${campaignRecipientCount === 1 ? "" : "s"} selected.`}
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Knowledge Centre article</Label>
                   <Select value={campaignArticleSlug} onValueChange={(value) => { setCampaignArticleSlug(value); const article = articlesData?.articles.find((item) => item.slug === value); if (article) setCampaignSubject(article.title); setCampaignPreviewHtml(""); }}>
@@ -324,10 +447,6 @@ export default function EmailCustomers() {
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="campaign-subject">Email subject</Label>
                   <Input id="campaign-subject" value={campaignSubject} onChange={(event) => setCampaignSubject(event.target.value)} maxLength={200} data-testid="input-campaign-subject" />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="campaign-intro">Introduction</Label>
-                  <Textarea id="campaign-intro" value={campaignIntro} onChange={(event) => { setCampaignIntro(event.target.value); setCampaignPreviewHtml(""); }} rows={3} maxLength={4000} data-testid="input-campaign-intro" />
                 </div>
               </div>
 

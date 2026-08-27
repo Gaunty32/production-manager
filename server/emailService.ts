@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import { generateOrderAcknowledgementPdf, type OrderAcknowledgementData } from './orderAcknowledgementPdf';
 import { recordEmailSent } from './emailBudget';
+import { articleCampaignUnsubscribeUrl } from './articleCampaignUnsubscribe';
 
 let connectionSettings: any;
 
@@ -1387,24 +1388,22 @@ export function buildBroadcastEmailHtml(message: string, recipientFirstName?: st
 }
 
 export function buildArticleCampaignEmailHtml(params: {
-  recipientFirstName?: string | null;
-  intro: string;
   articleTitle: string;
   articleExcerpt: string;
   articleUrl: string;
   imageUrl?: string | null;
+  unsubscribeUrl: string;
 }): string {
-  const greeting = params.recipientFirstName
-    ? `Hi ${sanitizeHtml(params.recipientFirstName)},`
-    : "Hi there,";
   const body = `
-    <p style="margin:0 0 18px;">${greeting}</p>
-    <p style="margin:0 0 22px;white-space:pre-wrap;">${sanitizeHtml(params.intro)}</p>
     ${params.imageUrl ? `<img src="${sanitizeHtml(params.imageUrl)}" alt="" width="520" style="display:block;width:100%;max-width:520px;height:auto;border-radius:8px;margin:0 auto 22px;" />` : ""}
     <h2 style="margin:0 0 12px;font-size:22px;line-height:1.3;color:#18181b;">${sanitizeHtml(params.articleTitle)}</h2>
     <p style="margin:0 0 18px;color:#52525b;">${sanitizeHtml(params.articleExcerpt)}</p>
     ${ctaButton(params.articleUrl, "Read the article")}
     <p style="margin:24px 0 0;">Best wishes,<br /><strong>The Select Branding Solutions Team</strong></p>
+    <p style="margin:24px 0 0;text-align:center;font-size:12px;color:#71717a;">
+      Don't want these weekly Knowledge Centre emails?
+      <a href="${sanitizeHtml(params.unsubscribeUrl)}" style="color:#4f46e5;text-decoration:underline;">Unsubscribe</a>
+    </p>
   `;
   return brandedEmail(body);
 }
@@ -1412,19 +1411,22 @@ export function buildArticleCampaignEmailHtml(params: {
 export async function sendArticleCampaignEmail(params: {
   to: string;
   subject: string;
-  recipientFirstName?: string | null;
-  intro: string;
   articleTitle: string;
   articleExcerpt: string;
   articleUrl: string;
   imageUrl?: string | null;
 }): Promise<void> {
   const { client, fromEmail } = await getUncachableResendClient();
+  const unsubscribeUrl = articleCampaignUnsubscribeUrl(params.to);
   const { error } = await sendEmail(client, {
     from: fromEmail || "info@selectbranding.co.uk",
     to: params.to,
     subject: cleanHeader(params.subject),
-    html: buildArticleCampaignEmailHtml(params),
+    headers: {
+      "List-Unsubscribe": `<${unsubscribeUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    html: buildArticleCampaignEmailHtml({ ...params, unsubscribeUrl }),
   });
   if (error) {
     throw new Error(`Failed to send article campaign email to ${params.to}: ${JSON.stringify(error)}`);

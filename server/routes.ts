@@ -65,11 +65,17 @@ import {
   getCampaignArticles,
   getCampaignConfig,
   getCampaignHistory,
+  getCustomerAudienceOptions,
   getHighLevelTags,
   getNextCampaignLabel,
   saveCampaignConfig,
   sendCampaignTest,
 } from "./highLevelCampaign";
+import {
+  isArticleCampaignUnsubscribed,
+  isValidArticleCampaignUnsubscribeToken,
+  unsubscribeFromArticleCampaign,
+} from "./articleCampaignUnsubscribe";
 
 
 // ─── Base URL helper ──────────────────────────────────────────────────────────
@@ -1644,14 +1650,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const renderArticleUnsubscribePage = (content: string) => `<!doctype html>
+    <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Weekly email preferences | Select Branding Solutions</title>
+    <style>body{font-family:Arial,sans-serif;background:#f5f5f5;color:#18181b;margin:0;padding:32px 16px}.card{max-width:520px;margin:8vh auto;background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:32px;box-shadow:0 8px 30px rgba(0,0,0,.06)}h1{font-size:24px;margin:0 0 12px}p{line-height:1.6;color:#52525b}button{background:#4f46e5;color:#fff;border:0;border-radius:6px;padding:12px 20px;font-weight:600;cursor:pointer}a{color:#4f46e5}</style>
+    </head><body><main class="card">${content}</main></body></html>`;
+
+  app.get("/unsubscribe/weekly-articles", async (req, res) => {
+    try {
+      const email = typeof req.query.email === "string" ? req.query.email : "";
+      const token = typeof req.query.token === "string" ? req.query.token : "";
+      if (!isValidArticleCampaignUnsubscribeToken(email, token)) {
+        return res.status(400).type("html").send(renderArticleUnsubscribePage(
+          "<h1>Invalid unsubscribe link</h1><p>This link is incomplete or has expired.</p>",
+        ));
+      }
+      if (await isArticleCampaignUnsubscribed(email)) {
+        return res.type("html").send(renderArticleUnsubscribePage(
+          "<h1>Already unsubscribed</h1><p>You will not receive any more weekly Knowledge Centre emails.</p><p><a href=\"https://www.selectbranding.co.uk\">Return to Select Branding Solutions</a></p>",
+        ));
+      }
+      const action = `/unsubscribe/weekly-articles?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`;
+      res.type("html").send(renderArticleUnsubscribePage(
+        `<h1>Unsubscribe from weekly emails?</h1><p>You will no longer receive the weekly Select Branding Solutions Knowledge Centre email.</p><form method="post" action="${action}"><button type="submit">Confirm unsubscribe</button></form>`,
+      ));
+    } catch (error) {
+      res.status(500).type("html").send(renderArticleUnsubscribePage(
+        "<h1>Something went wrong</h1><p>We could not update your email preference. Please try again.</p>",
+      ));
+    }
+  });
+
+  app.post("/unsubscribe/weekly-articles", async (req, res) => {
+    try {
+      const email = typeof req.query.email === "string" ? req.query.email : "";
+      const token = typeof req.query.token === "string" ? req.query.token : "";
+      if (!isValidArticleCampaignUnsubscribeToken(email, token)) {
+        return res.status(400).type("html").send(renderArticleUnsubscribePage(
+          "<h1>Invalid unsubscribe link</h1><p>This link is incomplete or has expired.</p>",
+        ));
+      }
+      await unsubscribeFromArticleCampaign(email);
+      res.type("html").send(renderArticleUnsubscribePage(
+        "<h1>You are unsubscribed</h1><p>You will not receive any more weekly Knowledge Centre emails.</p><p><a href=\"https://www.selectbranding.co.uk\">Return to Select Branding Solutions</a></p>",
+      ));
+    } catch (error) {
+      res.status(500).type("html").send(renderArticleUnsubscribePage(
+        "<h1>Something went wrong</h1><p>We could not update your email preference. Please try again.</p>",
+      ));
+    }
+  });
+
   // ─── Broadcast email to all customers (super_admin only) ──────────────────
   const campaignConfigSchema = z.object({
     enabled: z.boolean(),
+    audienceSource: z.enum(["highlevel_tag", "customers"]),
     tagId: z.string().trim().min(1).max(200),
     tagName: z.string().trim().min(1).max(200),
+    customerSelectionMode: z.enum(["all", "selected"]),
+    selectedCustomerIds: z.array(z.string().max(100)).max(5000),
+    excludedCustomerUserIds: z.array(z.string().max(100)).max(20000),
     articleSlug: z.string().trim().min(1).max(300),
     subject: z.string().trim().min(1).max(200),
-    intro: z.string().trim().min(1).max(4000),
+    intro: z.string().trim().max(4000).default(""),
   });
 
   app.get("/api/admin/highlevel-campaign/tags", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
@@ -1677,6 +1738,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  app.get("/api/admin/highlevel-campaign/customer-recipients", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      const customers = await getCustomerAudienceOptions();
+      res.json({
+        customers,
+        recipientCount: customers.reduce((total, customer) => total + customer.users.length, 0),
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to load existing customers" });
+    }
+  });
+
   app.get("/api/admin/highlevel-campaign/config", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
     try {
       const [config, history] = await Promise.all([getCampaignConfig(), getCampaignHistory()]);
@@ -1692,7 +1765,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/admin/highlevel-campaign/preview", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
-    const schema = campaignConfigSchema.pick({ tagId: true, articleSlug: true, intro: true });
+    const schema = campaignConfigSchema.pick({
+      audienceSource: true,
+      tagId: true,
+      customerSelectionMode: true,
+      selectedCustomerIds: true,
+      excludedCustomerUserIds: true,
+      articleSlug: true,
+    });
     try {
       const data = schema.parse(req.body);
       res.json(await buildCampaignPreview(data));
@@ -1706,10 +1786,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/admin/highlevel-campaign/config", isStaffAuthenticated, requireSuperAdmin, async (req: any, res) => {
     try {
       const data = campaignConfigSchema.parse(req.body);
-      const tags = await getHighLevelTags();
-      const selectedTag = tags.find((tag) => tag.id === data.tagId);
-      if (!selectedTag || selectedTag.name !== data.tagName) {
-        return res.status(400).json({ error: "Please select a current HighLevel tag." });
+      if (data.audienceSource === "highlevel_tag") {
+        const tags = await getHighLevelTags();
+        const selectedTag = tags.find((tag) => tag.id === data.tagId);
+        if (!selectedTag || selectedTag.name !== data.tagName) {
+          return res.status(400).json({ error: "Please select a current HighLevel tag." });
+        }
+      }
+      if (data.audienceSource === "customers" && data.customerSelectionMode === "selected" && data.selectedCustomerIds.length === 0) {
+        return res.status(400).json({ error: "Select at least one existing customer." });
       }
       const articles = await getCampaignArticles();
       if (!articles.some((article) => article.slug === data.articleSlug)) {
@@ -1725,7 +1810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/admin/highlevel-campaign/test", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
-    const schema = campaignConfigSchema.pick({ tagId: true, articleSlug: true, subject: true, intro: true }).extend({
+    const schema = campaignConfigSchema.pick({ audienceSource: true, tagId: true, articleSlug: true, subject: true }).extend({
       to: z.string().trim().email().max(320),
     });
     try {

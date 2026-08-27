@@ -1290,8 +1290,12 @@ export type AppSetting = typeof appSettings.$inferSelect;
 export const weeklyArticleCampaigns = pgTable("weekly_article_campaigns", {
   id: varchar("id").primaryKey(),
   enabled: boolean("enabled").notNull().default(false),
+  audienceSource: varchar("audience_source").notNull().default("highlevel_tag"),
   tagId: varchar("tag_id"),
   tagName: varchar("tag_name"),
+  customerSelectionMode: varchar("customer_selection_mode").notNull().default("all"),
+  selectedCustomerIds: jsonb("selected_customer_ids").$type<string[]>().notNull().default([]),
+  excludedCustomerUserIds: jsonb("excluded_customer_user_ids").$type<string[]>().notNull().default([]),
   articleSlug: varchar("article_slug"),
   subject: varchar("subject"),
   intro: text("intro").notNull().default("We thought you might find this useful."),
@@ -1305,8 +1309,12 @@ export const weeklyArticleCampaignRuns = pgTable("weekly_article_campaign_runs",
   campaignId: varchar("campaign_id").notNull().references(() => weeklyArticleCampaigns.id, { onDelete: "cascade" }),
   slotKey: varchar("slot_key").notNull().unique(),
   status: varchar("status").notNull().default("sending"),
+  audienceSource: varchar("audience_source").notNull().default("highlevel_tag"),
   tagId: varchar("tag_id").notNull(),
   tagName: varchar("tag_name").notNull(),
+  customerSelectionMode: varchar("customer_selection_mode").notNull().default("all"),
+  selectedCustomerIds: jsonb("selected_customer_ids").$type<string[]>().notNull().default([]),
+  excludedCustomerUserIds: jsonb("excluded_customer_user_ids").$type<string[]>().notNull().default([]),
   articleSlug: varchar("article_slug").notNull(),
   articleTitle: varchar("article_title").notNull(),
   subject: varchar("subject").notNull(),
@@ -1339,6 +1347,13 @@ export const weeklyArticleCampaignRecipients = pgTable("weekly_article_campaign_
 ]);
 
 export type WeeklyArticleCampaignRecipient = typeof weeklyArticleCampaignRecipients.$inferSelect;
+
+export const weeklyArticleCampaignUnsubscribes = pgTable("weekly_article_campaign_unsubscribes", {
+  email: varchar("email").primaryKey(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type WeeklyArticleCampaignUnsubscribe = typeof weeklyArticleCampaignUnsubscribes.$inferSelect;
 
 // Machines table — stores each embroidery machine with capacity and status
 export const machines = pgTable("machines", {

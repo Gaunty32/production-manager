@@ -1,9 +1,20 @@
 import { and, desc, eq, lt } from "drizzle-orm";
 import { db } from "./db";
-import { weeklyArticleCampaignRecipients, weeklyArticleCampaignRuns, weeklyArticleCampaigns } from "@shared/schema";
+import {
+  customers,
+  customerUsers,
+  weeklyArticleCampaignRecipients,
+  weeklyArticleCampaignRuns,
+  weeklyArticleCampaigns,
+} from "@shared/schema";
 import { KNOWLEDGE_CENTRE_ARTICLES, type KnowledgeCentreArticle } from "@shared/knowledgeCentre";
 import { getExternalKnowledgeCentreArticles } from "./knowledgeCentreFeed";
 import { buildArticleCampaignEmailHtml, sendArticleCampaignEmail } from "./emailService";
+import {
+  articleCampaignUnsubscribeUrl,
+  filterArticleCampaignRecipients,
+  isArticleCampaignUnsubscribed,
+} from "./articleCampaignUnsubscribe";
 
 const CAMPAIGN_ID = "weekly-article";
 const HIGHLEVEL_BASE = "https://rest.gohighlevel.com/v1";
@@ -16,6 +27,13 @@ export type HighLevelContact = {
   firstName: string | null;
   lastName: string | null;
   tags: unknown[];
+};
+
+export type CampaignAudienceSelection = {
+  audienceSource: "highlevel_tag" | "customers";
+  customerSelectionMode: "all" | "selected";
+  selectedCustomerIds: string[];
+  excludedCustomerUserIds: string[];
 };
 
 function credentials() {
@@ -112,6 +130,51 @@ export async function getHighLevelContactsByTag(tag: HighLevelTag): Promise<High
     }));
 }
 
+export async function getCustomerAudienceOptions() {
+  const [allCustomers, allUsers] = await Promise.all([
+    db.select({ id: customers.id, name: customers.name }).from(customers)
+      .where(eq(customers.active, true))
+      .orderBy(customers.name),
+    db.select({
+      id: customerUsers.id,
+      customerId: customerUsers.customerId,
+      email: customerUsers.email,
+      firstName: customerUsers.firstName,
+      lastName: customerUsers.lastName,
+    }).from(customerUsers).where(eq(customerUsers.active, true)),
+  ]);
+  return allCustomers.map((customer) => ({
+    ...customer,
+    users: allUsers
+      .filter((user) => user.customerId === customer.id && user.email)
+      .map(({ customerId: _customerId, ...user }) => user),
+  })).filter((customer) => customer.users.length > 0);
+}
+
+async function getExistingCustomerRecipients(selection: CampaignAudienceSelection): Promise<HighLevelContact[]> {
+  const options = await getCustomerAudienceOptions();
+  const selectedCustomers = new Set(selection.selectedCustomerIds);
+  const excludedUsers = new Set(selection.excludedCustomerUserIds);
+  const seen = new Set<string>();
+  return options
+    .filter((customer) => selection.customerSelectionMode === "all" || selectedCustomers.has(customer.id))
+    .flatMap((customer) => customer.users)
+    .filter((user) => !excludedUsers.has(user.id))
+    .filter((user) => {
+      const email = user.email.trim().toLowerCase();
+      if (!email || seen.has(email)) return false;
+      seen.add(email);
+      return true;
+    })
+    .map((user) => ({
+      id: user.id,
+      email: user.email.trim(),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      tags: [],
+    }));
+}
+
 export async function getCampaignArticles(): Promise<KnowledgeCentreArticle[]> {
   const external = await getExternalKnowledgeCentreArticles();
   return [...external, ...KNOWLEDGE_CENTRE_ARTICLES].sort(
@@ -124,11 +187,15 @@ export async function getCampaignConfig() {
   return row || {
     id: CAMPAIGN_ID,
     enabled: false,
+    audienceSource: "highlevel_tag",
     tagId: null,
     tagName: null,
+    customerSelectionMode: "all",
+    selectedCustomerIds: [],
+    excludedCustomerUserIds: [],
     articleSlug: null,
     subject: null,
-    intro: "We thought you might find this useful.",
+    intro: "",
     updatedById: null,
     createdAt: null,
     updatedAt: null,
@@ -137,8 +204,12 @@ export async function getCampaignConfig() {
 
 export async function saveCampaignConfig(input: {
   enabled: boolean;
+  audienceSource: string;
   tagId: string;
   tagName: string;
+  customerSelectionMode: string;
+  selectedCustomerIds: string[];
+  excludedCustomerUserIds: string[];
   articleSlug: string;
   subject: string;
   intro: string;
@@ -184,13 +255,24 @@ export function getNextCampaignLabel(date = new Date()) {
   }) + " at 17:00";
 }
 
-async function resolveSelection(tagId: string, articleSlug: string) {
-  const [tags, articles] = await Promise.all([getHighLevelTags(), getCampaignArticles()]);
-  const tag = tags.find((item) => item.id === tagId);
+async function resolveSelection(tagId: string, articleSlug: string, audienceSource = "highlevel_tag") {
+  const articles = await getCampaignArticles();
   const article = articles.find((item) => item.slug === articleSlug);
-  if (!tag) throw new Error("The selected HighLevel tag no longer exists.");
   if (!article) throw new Error("The selected article no longer exists.");
+  if (audienceSource === "customers") {
+    return { tag: { id: "existing-customers", name: "Existing customers" }, article };
+  }
+  const tags = await getHighLevelTags();
+  const tag = tags.find((item) => item.id === tagId);
+  if (!tag) throw new Error("The selected HighLevel tag no longer exists.");
   return { tag, article };
+}
+
+async function getAudienceRecipients(selection: CampaignAudienceSelection, tag: HighLevelTag) {
+  const recipients = selection.audienceSource === "customers"
+    ? getExistingCustomerRecipients(selection)
+    : getHighLevelContactsByTag(tag);
+  return filterArticleCampaignRecipients(await recipients);
 }
 
 async function getRunBySlot(slotKey: string) {
@@ -203,8 +285,12 @@ async function insertRun(slotKey: string, config: Awaited<ReturnType<typeof getC
   const [run] = await db.insert(weeklyArticleCampaignRuns).values({
     campaignId: CAMPAIGN_ID,
     slotKey,
+    audienceSource: config.audienceSource,
     tagId: tag.id,
     tagName: tag.name,
+    customerSelectionMode: config.customerSelectionMode,
+    selectedCustomerIds: config.selectedCustomerIds,
+    excludedCustomerUserIds: config.excludedCustomerUserIds,
     articleSlug: article.slug,
     articleTitle: article.title,
     subject: config.subject!,
@@ -234,34 +320,31 @@ async function populateRecipients(runId: string, contacts: HighLevelContact[]) {
 }
 
 function articleUrl(article: KnowledgeCentreArticle) {
-  const base = process.env.BASE_URL?.replace(/\/$/, "") || "https://www.selectbranding.co.uk";
-  return `${base}/knowledge-centre/${article.slug}`;
+  return `https://www.selectbranding.co.uk/knowledge-centre/${article.slug}`;
 }
 
-export async function buildCampaignPreview(input: { tagId: string; articleSlug: string; intro: string }) {
-  const { tag, article } = await resolveSelection(input.tagId, input.articleSlug);
-  const contacts = await getHighLevelContactsByTag(tag);
+export async function buildCampaignPreview(input: CampaignAudienceSelection & { tagId: string; articleSlug: string }) {
+  const { tag, article } = await resolveSelection(input.tagId, input.articleSlug, input.audienceSource);
+  const contacts = await getAudienceRecipients(input, tag);
   return {
     recipientCount: contacts.length,
     tag,
     article,
     html: buildArticleCampaignEmailHtml({
-      recipientFirstName: "Sam",
-      intro: input.intro,
       articleTitle: article.title,
       articleExcerpt: article.excerpt,
       articleUrl: articleUrl(article),
       imageUrl: article.imageUrl,
+      unsubscribeUrl: articleCampaignUnsubscribeUrl("preview@selectbranding.co.uk"),
     }),
   };
 }
 
-export async function sendCampaignTest(input: { to: string; subject: string; tagId: string; articleSlug: string; intro: string }) {
-  const { article } = await resolveSelection(input.tagId, input.articleSlug);
+export async function sendCampaignTest(input: { to: string; subject: string; tagId: string; articleSlug: string; audienceSource: string }) {
+  const { article } = await resolveSelection(input.tagId, input.articleSlug, input.audienceSource);
   await sendArticleCampaignEmail({
     to: input.to,
     subject: input.subject,
-    intro: input.intro,
     articleTitle: article.title,
     articleExcerpt: article.excerpt,
     articleUrl: articleUrl(article),
@@ -271,19 +354,26 @@ export async function sendCampaignTest(input: { to: string; subject: string; tag
 
 async function runScheduledCampaign(slotKey: string) {
   const config = await getCampaignConfig();
-  if (!config.enabled || !config.tagId || !config.articleSlug || !config.subject || !config.tagName) return;
+  if (!config.enabled || !config.articleSlug || !config.subject) return;
+  if (config.audienceSource === "highlevel_tag" && (!config.tagId || !config.tagName)) return;
   const existing = await getRunBySlot(slotKey);
   if (existing && existing.status !== "sending") return;
   let run = existing;
   try {
     const { tag, article } = existing
-      ? await resolveSelection(existing.tagId, existing.articleSlug)
-      : await resolveSelection(config.tagId, config.articleSlug);
+      ? await resolveSelection(existing.tagId, existing.articleSlug, existing.audienceSource)
+      : await resolveSelection(config.tagId || "", config.articleSlug, config.audienceSource);
     run = run || await insertRun(slotKey, config, tag, article);
     if (!run) throw new Error("Could not claim the campaign run.");
     let recipients = await getRecipientsForRun(run.id);
     if (recipients.length === 0) {
-      const contacts = await getHighLevelContactsByTag(tag);
+      const selection = {
+        audienceSource: run.audienceSource as CampaignAudienceSelection["audienceSource"],
+        customerSelectionMode: run.customerSelectionMode as CampaignAudienceSelection["customerSelectionMode"],
+        selectedCustomerIds: run.selectedCustomerIds,
+        excludedCustomerUserIds: run.excludedCustomerUserIds,
+      };
+      const contacts = await getAudienceRecipients(selection, tag);
       await populateRecipients(run.id, contacts);
       recipients = await getRecipientsForRun(run.id);
     }
@@ -304,11 +394,17 @@ async function runScheduledCampaign(slotKey: string) {
       )).returning();
       if (!claimedRecipient) continue;
       try {
+        if (await isArticleCampaignUnsubscribed(claimedRecipient.email)) {
+          await db.update(weeklyArticleCampaignRecipients).set({
+            status: "unsubscribed",
+            claimedAt: null,
+            error: null,
+          }).where(eq(weeklyArticleCampaignRecipients.id, claimedRecipient.id));
+          continue;
+        }
         await sendArticleCampaignEmail({
           to: claimedRecipient.email,
           subject: run.subject,
-          recipientFirstName: claimedRecipient.firstName,
-          intro: run.intro,
           articleTitle: article.title,
           articleExcerpt: article.excerpt,
           articleUrl: articleUrl(article),
