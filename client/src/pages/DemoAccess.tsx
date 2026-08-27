@@ -136,7 +136,7 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
                 <a href="#how-it-works" className="text-muted-foreground transition-colors hover:text-foreground">How It Works</a>
                 <a href="#services" className="text-muted-foreground transition-colors hover:text-foreground">Services</a>
                 <a href="#customer-portal" className="text-muted-foreground transition-colors hover:text-foreground">Customer Portal</a>
-                <a href="/knowledge-centre" className="text-muted-foreground transition-colors hover:text-foreground">Knowledge Base</a>
+                <a href="/knowledge-centre" className="text-muted-foreground transition-colors hover:text-foreground">Knowledge Centre</a>
               </nav>
             )}
             <div className={publicNav ? "flex items-center gap-2" : "absolute right-0"}>
@@ -156,7 +156,7 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
               <a href="#how-it-works" className="whitespace-nowrap text-muted-foreground">How It Works</a>
               <a href="#services" className="whitespace-nowrap text-muted-foreground">Services</a>
               <a href="#customer-portal" className="whitespace-nowrap text-muted-foreground">Customer Portal</a>
-              <a href="/knowledge-centre" className="whitespace-nowrap text-muted-foreground">Knowledge Base</a>
+              <a href="/knowledge-centre" className="whitespace-nowrap text-muted-foreground">Knowledge Centre</a>
             </nav>
           )}
         </div>
