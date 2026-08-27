@@ -28,8 +28,22 @@ function credentials() {
 
 async function highLevelFetch(pathOrUrl: string): Promise<any> {
   const { apiKey } = credentials();
-  const url = pathOrUrl.startsWith("http") ? pathOrUrl : `${HIGHLEVEL_BASE}${pathOrUrl}`;
-  if (!url.startsWith(`${HIGHLEVEL_BASE}/`)) throw new Error("HighLevel returned an invalid pagination URL.");
+  const rawUrl = pathOrUrl.startsWith("http") ? pathOrUrl : `${HIGHLEVEL_BASE}${pathOrUrl}`;
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch {
+    throw new Error("HighLevel returned an invalid pagination URL.");
+  }
+  const baseUrl = new URL(HIGHLEVEL_BASE);
+  if (parsedUrl.hostname !== baseUrl.hostname || !parsedUrl.pathname.startsWith("/v1/")) {
+    throw new Error("HighLevel returned an invalid pagination URL.");
+  }
+  // The legacy endpoint currently returns an http nextPageUrl even when the
+  // initial request is HTTPS. Keep the request encrypted while preserving the
+  // provider's pagination query.
+  parsedUrl.protocol = "https:";
+  const url = parsedUrl.toString();
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
     signal: AbortSignal.timeout(15_000),
