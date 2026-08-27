@@ -30,12 +30,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { insertLogoSetupSchema, type Customer } from "@shared/schema";
+import { insertLogoSetupSchema, type Customer, type Job } from "@shared/schema";
 import { z } from "zod";
 
 const formSchema = insertLogoSetupSchema.extend({
   customerId: z.string().min(1, "Please select a customer"),
-  jobName: z.string().min(1, "Job name is required"),
+  jobName: z.string().min(1, "Set-up name is required"),
 });
 
 type LogoSetupFormData = z.infer<typeof formSchema>;
@@ -43,11 +43,12 @@ type LogoSetupFormData = z.infer<typeof formSchema>;
 interface LogoSetupDialogProps {
   trigger?: React.ReactNode;
   customers: Customer[];
+  jobs?: Job[];
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
-export function LogoSetupDialog({ trigger, customers, open: controlledOpen, onOpenChange }: LogoSetupDialogProps) {
+export function LogoSetupDialog({ trigger, customers, jobs = [], open: controlledOpen, onOpenChange }: LogoSetupDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const { toast } = useToast();
   
@@ -59,10 +60,15 @@ export function LogoSetupDialog({ trigger, customers, open: controlledOpen, onOp
     resolver: zodResolver(formSchema),
     defaultValues: {
       customerId: "",
+      jobId: null,
       jobName: "",
       notes: "",
     },
   });
+  const selectedCustomerId = form.watch("customerId");
+  const availableJobs = jobs
+    .filter((job) => job.customerId === selectedCustomerId)
+    .sort((a, b) => (b.jobNumber ?? 0) - (a.jobNumber ?? 0));
 
   const createMutation = useMutation({
     mutationFn: async (data: LogoSetupFormData) => {
@@ -109,7 +115,13 @@ export function LogoSetupDialog({ trigger, customers, open: controlledOpen, onOp
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Customer</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      form.setValue("jobId", null);
+                    }}
+                    value={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger data-testid="select-customer">
                         <SelectValue placeholder="Select customer" />
@@ -130,14 +142,44 @@ export function LogoSetupDialog({ trigger, customers, open: controlledOpen, onOp
 
             <FormField
               control={form.control}
+              name="jobId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Related Job (Optional)</FormLabel>
+                  <Select
+                    onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                    value={field.value || "none"}
+                    disabled={!selectedCustomerId}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-related-job">
+                        <SelectValue placeholder="Select related job" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">No linked job</SelectItem>
+                      {availableJobs.map((job) => (
+                        <SelectItem key={job.id} value={job.id}>
+                          {job.jobNumber ? `#${job.jobNumber} — ` : ""}{job.jobName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="jobName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Job Name / Description</FormLabel>
+                  <FormLabel>Set-Up Name / Description</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="e.g., Company Logo Embroidery"
+                      placeholder="e.g., Left Chest Logo"
                       data-testid="input-job-name"
                     />
                   </FormControl>

@@ -261,6 +261,7 @@ export const userStars = pgTable("user_stars", {
 export const logoSetups = pgTable("logo_setups", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
   jobName: text("job_name").notNull(),
   approved: boolean("approved").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),

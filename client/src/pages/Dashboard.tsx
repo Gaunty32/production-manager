@@ -598,15 +598,32 @@ export default function Dashboard() {
   const dueIn3DaysQuantity = jobsDueIn3Days.reduce((sum, job) => sum + outstandingQuantity(job), 0);
   
   const pendingLogoSetups = logoSetups.filter(ls => !ls.approved);
+
+  const getRelatedJobForSetup = (setup: LogoSetup) => {
+    if (setup.jobId) {
+      return jobs.find(job => job.id === setup.jobId);
+    }
+
+    const setupCreatedAt = new Date(setup.createdAt).getTime();
+    const legacyMatches = jobs.filter((job) => {
+      if (job.customerId !== setup.customerId || !job.approvedAt) return false;
+      const approvalToSetupMs = setupCreatedAt - new Date(job.approvedAt).getTime();
+      return approvalToSetupMs >= 0 && approvalToSetupMs <= 10 * 60 * 1000;
+    });
+
+    return legacyMatches.length === 1 ? legacyMatches[0] : undefined;
+  };
   
   // Apply unified search filtering to embroidery set-ups
   const filteredLogoSetups = pendingLogoSetups.filter((setup) => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     const customer = customers.find(c => c.id === setup.customerId);
+    const relatedJob = getRelatedJobForSetup(setup);
     return (
       (customer?.name?.toLowerCase().includes(searchLower)) ||
       (setup.jobName?.toLowerCase().includes(searchLower)) ||
+      (relatedJob?.jobName?.toLowerCase().includes(searchLower)) ||
       (setup.notes?.toLowerCase().includes(searchLower))
     );
   });
@@ -830,6 +847,7 @@ export default function Dashboard() {
               open={showLogoSetupDialog}
               onOpenChange={setShowLogoSetupDialog}
               customers={activeCustomers}
+              jobs={jobs}
             />
           </div>
         </div>
@@ -993,6 +1011,7 @@ export default function Dashboard() {
                 </Button>
               }
               customers={activeCustomers}
+              jobs={jobs}
             />
             <CustomerDocumentsManager
               trigger={
@@ -1915,12 +1934,14 @@ export default function Dashboard() {
                   </Button>
                 }
                 customers={activeCustomers}
+                jobs={jobs}
               />
             </div>
             {filteredLogoSetups.length > 0 ? (
               <div className="space-y-2">
                 {filteredLogoSetups.map((setup) => {
                     const customer = customers.find(c => c.id === setup.customerId);
+                    const relatedJob = getRelatedJobForSetup(setup);
                     return (
                       <div
                         key={setup.id}
@@ -1933,6 +1954,12 @@ export default function Dashboard() {
                             <span className="text-muted-foreground">-</span>
                             <span className="text-sm">{setup.jobName}</span>
                           </div>
+                          {relatedJob && (
+                            <p className="text-sm text-foreground mt-1">
+                              Job: <DemoText className="font-medium">{relatedJob.jobName}</DemoText>
+                              {relatedJob.jobNumber && <span className="text-muted-foreground"> (#{relatedJob.jobNumber})</span>}
+                            </p>
+                          )}
                           {setup.notes && (
                             <p className="text-xs text-muted-foreground mt-1">{setup.notes}</p>
                           )}
@@ -1993,6 +2020,7 @@ export default function Dashboard() {
                   ) : (
                     completedLogoSetups.map((setup) => {
                       const customer = customers.find(c => c.id === setup.customerId);
+                      const relatedJob = getRelatedJobForSetup(setup);
                       return (
                         <div
                           key={setup.id}
@@ -2005,6 +2033,12 @@ export default function Dashboard() {
                               <span className="text-muted-foreground">-</span>
                               <span className="text-sm">{setup.jobName}</span>
                             </div>
+                            {relatedJob && (
+                              <p className="text-sm text-foreground mt-1">
+                                Job: <DemoText className="font-medium">{relatedJob.jobName}</DemoText>
+                                {relatedJob.jobNumber && <span className="text-muted-foreground"> (#{relatedJob.jobNumber})</span>}
+                              </p>
+                            )}
                             {setup.notes && (
                               <p className="text-xs text-muted-foreground mt-1">{setup.notes}</p>
                             )}

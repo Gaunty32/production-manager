@@ -201,7 +201,7 @@ export default function StaffHoldingArea() {
       const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/approve`, {});
       const result = await res.json();
       for (const name of setupNames.filter(n => n.trim())) {
-        await apiRequest("POST", "/api/logo-setups", { customerId, jobName: name.trim() });
+        await apiRequest("POST", "/api/logo-setups", { customerId, jobId, jobName: name.trim() });
       }
       return result;
     },
