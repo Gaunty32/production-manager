@@ -59,6 +59,7 @@ import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, 
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 import { KNOWLEDGE_CENTRE_ARTICLES } from "@shared/knowledgeCentre";
+import { EXTERNAL_KNOWLEDGE_FEED_URL, getExternalKnowledgeCentreArticles } from "./knowledgeCentreFeed";
 
 
 // ─── Base URL helper ──────────────────────────────────────────────────────────
@@ -654,13 +655,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Public: first-party Knowledge Centre RSS feed
-  app.get("/rss/knowledge-centre.xml", (req, res) => {
+  app.get("/api/knowledge-centre/external", async (_req, res) => {
+    const articles = await getExternalKnowledgeCentreArticles();
+    res
+      .type("application/json")
+      .set("Cache-Control", "public, max-age=600")
+      .json({ sourceUrl: EXTERNAL_KNOWLEDGE_FEED_URL, articles });
+  });
+
+  app.get("/rss/knowledge-centre.xml", async (req, res) => {
     const baseUrl = getRequestBaseUrl(req);
-    const items = KNOWLEDGE_CENTRE_ARTICLES.map((article) => `
+    const externalArticles = await getExternalKnowledgeCentreArticles();
+    const articles = [...externalArticles, ...KNOWLEDGE_CENTRE_ARTICLES].sort(
+      (left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime(),
+    );
+    const items = articles.map((article) => `
       <item>
         <title>${escapeXml(article.title)}</title>
-        <link>${baseUrl}/knowledge-centre/${article.slug}</link>
-        <guid isPermaLink="true">${baseUrl}/knowledge-centre/${article.slug}</guid>
+        <link>${escapeXml(article.url || `${baseUrl}/knowledge-centre/${article.slug}`)}</link>
+        <guid isPermaLink="${article.url ? "false" : "true"}">${escapeXml(article.url || `${baseUrl}/knowledge-centre/${article.slug}`)}</guid>
         <pubDate>${new Date(article.publishedAt).toUTCString()}</pubDate>
         <category>${escapeXml(article.category)}</category>
         <description>${escapeXml(article.excerpt)}</description>
@@ -673,7 +686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     <link>${baseUrl}/knowledge-centre</link>
     <description>Practical guidance on embroidery, print, branded workwear and production planning.</description>
     <language>en-gb</language>
-    <lastBuildDate>${new Date(KNOWLEDGE_CENTRE_ARTICLES[0].publishedAt).toUTCString()}</lastBuildDate>
+    <lastBuildDate>${new Date(articles[0]?.publishedAt || Date.now()).toUTCString()}</lastBuildDate>
     ${items}
   </channel>
 </rss>`;

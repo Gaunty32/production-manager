@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { ArrowLeft, ArrowRight, BookOpen, Clock3, Rss } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   getKnowledgeCentreArticle,
+  type KnowledgeCentreArticle,
   KNOWLEDGE_CENTRE_ARTICLES,
 } from "@shared/knowledgeCentre";
 import sbsLogo from "@assets/logo_transparent.png";
@@ -35,6 +36,21 @@ function SiteHeader() {
 export default function KnowledgeCentre() {
   const [, params] = useRoute("/knowledge-centre/:slug");
   const article = params?.slug ? getKnowledgeCentreArticle(params.slug) : undefined;
+  const [externalArticles, setExternalArticles] = useState<KnowledgeCentreArticle[]>([]);
+  const articles = [...externalArticles, ...KNOWLEDGE_CENTRE_ARTICLES];
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/knowledge-centre/external")
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("RSS import unavailable")))
+      .then((data: { articles?: KnowledgeCentreArticle[] }) => {
+        if (active) setExternalArticles(data.articles || []);
+      })
+      .catch(() => {
+        if (active) setExternalArticles([]);
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     document.title = article
@@ -90,17 +106,26 @@ export default function KnowledgeCentre() {
               </a>
             </div>
             <div className="mx-auto mt-14 grid max-w-5xl gap-6 md:grid-cols-2">
-              {KNOWLEDGE_CENTRE_ARTICLES.map((item) => (
+              {articles.map((item) => (
                 <Card key={item.slug} className="transition-shadow hover:shadow-md">
                   <CardContent className="flex h-full flex-col p-6">
-                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">{item.category}</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">
+                      {item.category}
+                      {item.source === "external" && <span className="ml-2 text-muted-foreground">· Latest</span>}
+                    </p>
                     <h2 className="mt-3 text-2xl font-semibold">{item.title}</h2>
                     <p className="mt-3 flex-1 leading-relaxed text-muted-foreground">{item.excerpt}</p>
                     <div className="mt-6 flex items-center justify-between gap-4">
                       <span className="flex items-center gap-1 text-sm text-muted-foreground"><Clock3 className="h-4 w-4" /> {item.readTime}</span>
-                      <Link href={`/knowledge-centre/${item.slug}`} data-testid={`link-article-${item.slug}`}>
+                      {item.url ? (
+                        <a href={item.url} target="_blank" rel="noreferrer" data-testid={`link-external-article-${item.slug}`}>
+                          <Button variant="outline" size="sm">Read article <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                        </a>
+                      ) : (
+                        <Link href={`/knowledge-centre/${item.slug}`} data-testid={`link-article-${item.slug}`}>
                         <Button variant="outline" size="sm">Read article <ArrowRight className="ml-2 h-4 w-4" /></Button>
-                      </Link>
+                        </Link>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
