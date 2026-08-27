@@ -28,8 +28,11 @@ import {
   Phone,
   Mail,
   Sparkles,
+  BookOpen,
+  Rss,
 } from "lucide-react";
 import sbsLogo from "@assets/logo_transparent.png";
+import { KNOWLEDGE_CENTRE_ARTICLES } from "@shared/knowledgeCentre";
 
 const SERVICES = [
   {
@@ -142,6 +145,8 @@ export default function Home() {
           <img src={sbsLogo} alt="Select Branding Solutions" className="h-9 object-contain" data-testid="img-logo" />
           <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
             <button onClick={() => scrollTo("services")} className="text-muted-foreground hover:text-foreground" data-testid="link-services">Services</button>
+              <Link href="/demo-access" className="text-muted-foreground hover:text-foreground" data-testid="link-contract-embroidery">Contract Embroidery</Link>
+              <Link href="/knowledge-centre" className="text-muted-foreground hover:text-foreground" data-testid="link-knowledge-centre">Knowledge Centre</Link>
             <button onClick={() => scrollTo("portal")} className="text-muted-foreground hover:text-foreground" data-testid="link-portal">Customer Portal</button>
             <button onClick={() => scrollTo("how")} className="text-muted-foreground hover:text-foreground" data-testid="link-how">How It Works</button>
             <button onClick={() => scrollTo("contact")} className="text-muted-foreground hover:text-foreground" data-testid="link-contact">Get a Quote</button>
@@ -192,6 +197,24 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Contract embroidery */}
+      <section className="border-b bg-primary text-primary-foreground">
+        <div className="container mx-auto grid gap-8 px-4 py-16 md:grid-cols-[1fr_auto] md:items-center md:py-20">
+          <div className="max-w-3xl space-y-4">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary-foreground/75">For clothing suppliers and trade customers</p>
+            <h2 className="text-3xl font-bold tracking-tight md:text-5xl">Need more embroidery capacity?</h2>
+            <p className="max-w-2xl text-lg text-primary-foreground/80">
+              Use our UK production team for overflow, seasonal demand or your next stage of growth — without buying another machine or recruiting another operator.
+            </p>
+          </div>
+          <Link href="/demo-access" data-testid="link-contract-embroidery-feature">
+            <Button size="lg" variant="secondary">
+              Explore Contract Embroidery <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      </section>
+
       {/* Services */}
       <section id="services" className="container mx-auto px-4 py-20">
         <div className="mb-12 text-center">
@@ -212,6 +235,46 @@ export default function Home() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      </section>
+
+      {/* Knowledge Centre */}
+      <section id="knowledge-centre" className="border-y bg-muted/40">
+        <div className="container mx-auto px-4 py-20">
+          <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-2xl">
+              <div className="mb-3 flex items-center gap-2 text-primary">
+                <BookOpen className="h-5 w-5" />
+                <p className="text-sm font-semibold uppercase tracking-[0.16em]">Knowledge Centre</p>
+              </div>
+              <h2 className="text-3xl font-bold md:text-4xl">Useful guidance for branded clothing businesses</h2>
+              <p className="mt-3 text-muted-foreground">
+                Practical advice on embroidery, print, artwork, production planning and choosing the right route for your garments.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+              <Link href="/knowledge-centre">
+                <Button variant="outline">Visit Knowledge Centre <ArrowRight className="ml-2 h-4 w-4" /></Button>
+              </Link>
+              <a href="/rss/knowledge-centre.xml" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground" data-testid="link-home-rss">
+                <Rss className="h-4 w-4" /> Subscribe via RSS
+              </a>
+            </div>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
+            {KNOWLEDGE_CENTRE_ARTICLES.slice(0, 3).map((article) => (
+              <Card key={article.slug} className="h-full transition-shadow hover:shadow-md">
+                <CardContent className="flex h-full flex-col p-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">{article.category}</p>
+                  <h3 className="mt-3 text-xl font-semibold">{article.title}</h3>
+                  <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">{article.excerpt}</p>
+                  <Link href={`/knowledge-centre/${article.slug}`} className="mt-5 inline-flex items-center text-sm font-semibold text-primary hover:underline">
+                    Read article <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -436,6 +499,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-6">
             <a href="mailto:info@selectbranding.co.uk" className="hover:text-foreground">info@selectbranding.co.uk</a>
+            <Link href="/knowledge-centre" className="hover:text-foreground">Knowledge Centre</Link>
             <Link href="/customer/login" className="hover:text-foreground" data-testid="link-footer-customer">Customer Sign In</Link>
             <Link href="/staff-login" className="hover:text-foreground" data-testid="link-footer-staff">Staff</Link>
           </div>

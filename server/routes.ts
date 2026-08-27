@@ -58,6 +58,7 @@ import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
 import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendWebsiteEnquiryEmails, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail, buildBroadcastEmailHtml, sendBroadcastEmail } from "./emailService";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
+import { KNOWLEDGE_CENTRE_ARTICLES } from "@shared/knowledgeCentre";
 
 
 // ─── Base URL helper ──────────────────────────────────────────────────────────
@@ -65,6 +66,21 @@ function getBaseUrl() {
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
   if (process.env.REPLIT_DOMAINS) return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
   return 'http://localhost:5000';
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function getRequestBaseUrl(req: express.Request) {
+  const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || req.protocol;
+  return `${protocol}://${req.get("host")}`;
 }
 
 // ─── @Mention detection & notification ───────────────────────────────────────
@@ -635,6 +651,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
     }
+  });
+
+  // Public: first-party Knowledge Centre RSS feed
+  app.get("/rss/knowledge-centre.xml", (req, res) => {
+    const baseUrl = getRequestBaseUrl(req);
+    const items = KNOWLEDGE_CENTRE_ARTICLES.map((article) => `
+      <item>
+        <title>${escapeXml(article.title)}</title>
+        <link>${baseUrl}/knowledge-centre/${article.slug}</link>
+        <guid isPermaLink="true">${baseUrl}/knowledge-centre/${article.slug}</guid>
+        <pubDate>${new Date(article.publishedAt).toUTCString()}</pubDate>
+        <category>${escapeXml(article.category)}</category>
+        <description>${escapeXml(article.excerpt)}</description>
+      </item>`).join("");
+
+    const rss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Select Branding Solutions Knowledge Centre</title>
+    <link>${baseUrl}/knowledge-centre</link>
+    <description>Practical guidance on embroidery, print, branded workwear and production planning.</description>
+    <language>en-gb</language>
+    <lastBuildDate>${new Date(KNOWLEDGE_CENTRE_ARTICLES[0].publishedAt).toUTCString()}</lastBuildDate>
+    ${items}
+  </channel>
+</rss>`;
+
+    res
+      .type("application/rss+xml")
+      .set("Cache-Control", "public, max-age=900")
+      .send(rss);
   });
 
   // Public: website enquiry form (no auth required)

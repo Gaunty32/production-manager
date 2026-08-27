@@ -47,6 +47,7 @@ import CustomerSamples from "@/pages/CustomerSamples";
 import DemoPortal from "@/pages/DemoPortal";
 import DemoAccess from "@/pages/DemoAccess";
 import ContractEmbroideryPreview from "@/pages/ContractEmbroideryPreview";
+import KnowledgeCentre from "@/pages/KnowledgeCentre";
 import Privacy from "@/pages/Privacy";
 import MachineManagement from "@/pages/MachineManagement";
 import CustomerPaymentMethods from "@/pages/CustomerPaymentMethods";
@@ -176,6 +177,8 @@ function AppRouter() {
         <Route path="/staff-login" component={StaffLoginGate} />
         <Route path="/demo-access" component={DemoAccess} />
         <Route path="/demo-access-preview" component={ContractEmbroideryPreview} />
+        <Route path="/knowledge-centre/:slug" component={KnowledgeCentre} />
+        <Route path="/knowledge-centre" component={KnowledgeCentre} />
         <Route path="/privacy" component={Privacy} />
         <Route path="/demo" component={DemoPortal} />
         <Route path="/forgot-password" component={ForgotPassword} />

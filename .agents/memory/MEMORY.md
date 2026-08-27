@@ -59,3 +59,4 @@
 - [Server hot-reload gap](server-hot-reload-gap.md) — backend edits may not auto-reload in dev; restart the workflow before curl-testing new server behavior or you test stale code.
 - [External tokened embeds](external-tokened-embeds.md) — cross-app TV embeds: tokened URL goes in an env var served via the token-gated data endpoint, never hardcoded in client code.
 - [Firestick keep-awake](firestick-keep-awake.md) — hidden 1px videos are ignored by Silk; screensaver defence needs a visible (background-coloured) video + wake-lock retry loop.
+- [Public website domain structure](public-site-domain-structure.md) — www is the marketing-site home; production remains the app and hosts the focused /demo-access landing page.
