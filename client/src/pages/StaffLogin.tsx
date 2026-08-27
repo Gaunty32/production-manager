@@ -87,7 +87,7 @@ export default function StaffLogin() {
         // ignore
       }
       toast({ title: "Welcome back", description: "You have been logged in successfully" });
-       window.location.href = "/dashboard";
+       window.location.href = "/";
     },
     onError: (error: any) => {
       toast({
@@ -118,7 +118,7 @@ export default function StaffLogin() {
         title: "Welcome back",
         description: "You have been logged in successfully",
       });
-       window.location.href = "/dashboard";
+       window.location.href = "/";
     },
     onError: (error: any) => {
       toast({

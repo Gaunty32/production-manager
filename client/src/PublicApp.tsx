@@ -1,10 +1,11 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Route, Router, Switch } from "wouter";
+import { Route, Router, Switch, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Toaster } from "@/components/ui/toaster";
+import { useAuth } from "@/hooks/useAuth";
 import DemoAccess from "@/pages/DemoAccess";
 
 const KnowledgeCentre = lazy(() => import("@/pages/KnowledgeCentre"));
@@ -15,6 +16,13 @@ function LoadingPage() {
 }
 
 function PublicHome() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) setLocation("/dashboard");
+  }, [isAuthenticated, isLoading, setLocation]);
+
   return <DemoAccess publicNav />;
 }
 
