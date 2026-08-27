@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Mail, Send, Users, Loader2, ChevronDown, FlaskConical, Eye } from "lucide-react";
+import { Mail, Send, Users, Loader2, ChevronDown, FlaskConical, Eye, CalendarClock, BookOpen, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { isSuperAdmin } from "@shared/schema";
 
@@ -43,6 +45,39 @@ interface SendResult {
   failures?: string[];
 }
 
+interface CampaignTag { id: string; name: string }
+interface CampaignArticle {
+  slug: string;
+  title: string;
+  excerpt: string;
+  category: string;
+  publishedAt: string;
+}
+interface CampaignRun {
+  id: string;
+  slotKey: string;
+  status: string;
+  tagName: string;
+  articleTitle: string;
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  startedAt: string;
+}
+interface CampaignConfigResponse {
+  config: {
+    enabled: boolean;
+    tagId: string | null;
+    tagName: string | null;
+    articleSlug: string | null;
+    subject: string | null;
+    intro: string;
+  };
+  history: CampaignRun[];
+  nextSend: string;
+  schedule: string;
+}
+
 export default function EmailCustomers() {
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
@@ -53,10 +88,100 @@ export default function EmailCustomers() {
   const [previewHtml, setPreviewHtml] = useState("");
   const [recipientsOpen, setRecipientsOpen] = useState(false);
   const [lastResult, setLastResult] = useState<SendResult | null>(null);
+  const [campaignEnabled, setCampaignEnabled] = useState(false);
+  const [campaignTagId, setCampaignTagId] = useState("");
+  const [campaignArticleSlug, setCampaignArticleSlug] = useState("");
+  const [campaignSubject, setCampaignSubject] = useState("");
+  const [campaignIntro, setCampaignIntro] = useState("We thought you might find this useful.");
+  const [campaignTestEmail, setCampaignTestEmail] = useState("");
+  const [campaignPreviewHtml, setCampaignPreviewHtml] = useState("");
+  const [campaignRecipientCount, setCampaignRecipientCount] = useState<number | null>(null);
 
   const { data: recipientsData, isLoading: recipientsLoading } = useQuery<RecipientsResponse>({
     queryKey: ["/api/admin/broadcast-recipients"],
     enabled: isAllowed,
+  });
+
+  const { data: campaignData, isLoading: campaignLoading } = useQuery<CampaignConfigResponse>({
+    queryKey: ["/api/admin/highlevel-campaign/config"],
+    enabled: isAllowed,
+    staleTime: 0,
+  });
+  const { data: tagsData, isLoading: tagsLoading, refetch: refetchTags } = useQuery<{ tags: CampaignTag[] }>({
+    queryKey: ["/api/admin/highlevel-campaign/tags"],
+    enabled: isAllowed,
+    staleTime: 0,
+    retry: false,
+  });
+  const { data: articlesData, isLoading: articlesLoading } = useQuery<{ articles: CampaignArticle[] }>({
+    queryKey: ["/api/admin/highlevel-campaign/articles"],
+    enabled: isAllowed,
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    if (!campaignData?.config) return;
+    setCampaignEnabled(campaignData.config.enabled);
+    setCampaignTagId(campaignData.config.tagId || "");
+    setCampaignArticleSlug(campaignData.config.articleSlug || "");
+    setCampaignSubject(campaignData.config.subject || "");
+    setCampaignIntro(campaignData.config.intro || "We thought you might find this useful.");
+  }, [campaignData]);
+
+  useEffect(() => {
+    const article = articlesData?.articles.find((item) => item.slug === campaignArticleSlug);
+    if (article && !campaignSubject.trim()) setCampaignSubject(article.title);
+  }, [campaignArticleSlug, articlesData, campaignSubject]);
+
+  const previewCampaignMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/highlevel-campaign/preview", {
+        tagId: campaignTagId,
+        articleSlug: campaignArticleSlug,
+        intro: campaignIntro,
+      });
+      return res.json() as Promise<{ html: string; recipientCount: number }>;
+    },
+    onSuccess: (result) => {
+      setCampaignPreviewHtml(result.html);
+      setCampaignRecipientCount(result.recipientCount);
+    },
+    onError: (err: any) => toast({ title: "Preview unavailable", description: err?.message || "Could not load the HighLevel audience.", variant: "destructive" }),
+  });
+
+  const saveCampaignMutation = useMutation({
+    mutationFn: async () => {
+      const tag = tagsData?.tags.find((item) => item.id === campaignTagId);
+      const res = await apiRequest("PUT", "/api/admin/highlevel-campaign/config", {
+        enabled: campaignEnabled,
+        tagId: campaignTagId,
+        tagName: tag?.name || "",
+        articleSlug: campaignArticleSlug,
+        subject: campaignSubject,
+        intro: campaignIntro,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/highlevel-campaign/config"] });
+      toast({ title: campaignEnabled ? "Weekly campaign enabled" : "Campaign saved and paused", description: campaignEnabled ? "The next email will send on Sunday at 17:00 London time." : "No weekly emails will send while the campaign is paused." });
+    },
+    onError: (err: any) => toast({ title: "Could not save campaign", description: err?.message || "Please check the selections.", variant: "destructive" }),
+  });
+
+  const testCampaignMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/highlevel-campaign/test", {
+        to: campaignTestEmail,
+        tagId: campaignTagId,
+        articleSlug: campaignArticleSlug,
+        subject: campaignSubject,
+        intro: campaignIntro,
+      });
+      return res.json();
+    },
+    onSuccess: () => toast({ title: "Test email sent", description: `A test copy was sent to ${campaignTestEmail}.` }),
+    onError: (err: any) => toast({ title: "Test email failed", description: err?.message || "Please try again.", variant: "destructive" }),
   });
 
   // Live preview (debounced)
@@ -102,6 +227,9 @@ export default function EmailCustomers() {
 
   const canSend = subject.trim().length > 0 && message.trim().length > 0;
   const recipientCount = recipientsData?.count ?? 0;
+  const canConfigureCampaign = Boolean(
+    campaignTagId && campaignArticleSlug && campaignSubject.trim() && campaignIntro.trim(),
+  );
 
   if (authLoading) {
     return (
@@ -136,11 +264,132 @@ export default function EmailCustomers() {
       <div className="flex items-center gap-3 flex-wrap">
         <Mail className="h-6 w-6 text-muted-foreground" />
         <div>
-          <h1 className="text-2xl font-semibold" data-testid="text-page-title">Email All Customers</h1>
+          <h1 className="text-2xl font-semibold" data-testid="text-page-title">Customer Emails</h1>
           <p className="text-sm text-muted-foreground">
-            Compose a message, preview exactly what customers will receive, then send.
+            Schedule a weekly Knowledge Centre campaign or send a one-off message.
           </p>
         </div>
+      </div>
+
+      <Card data-testid="card-weekly-article-campaign">
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CalendarClock className="h-5 w-5" />
+                Weekly HighLevel article campaign
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Choose a HighLevel tag and Knowledge Centre article. One email sends every Sunday at 17:00 Europe/London.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="campaign-enabled">{campaignEnabled ? "Enabled" : "Paused"}</Label>
+              <Switch id="campaign-enabled" checked={campaignEnabled} onCheckedChange={setCampaignEnabled} data-testid="switch-campaign-enabled" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {campaignLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading campaign…</div>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>HighLevel tag</Label>
+                    <Button variant="ghost" size="sm" onClick={() => refetchTags()} disabled={tagsLoading} data-testid="button-refresh-highlevel-tags">
+                      <RefreshCw className={`h-3.5 w-3.5 mr-1 ${tagsLoading ? "animate-spin" : ""}`} /> Refresh
+                    </Button>
+                  </div>
+                  <Select value={campaignTagId} onValueChange={(value) => { setCampaignTagId(value); setCampaignRecipientCount(null); setCampaignPreviewHtml(""); }}>
+                    <SelectTrigger data-testid="select-highlevel-tag"><SelectValue placeholder={tagsLoading ? "Loading tags…" : "Select a tag"} /></SelectTrigger>
+                    <SelectContent>
+                      {(tagsData?.tags || []).map((tag) => <SelectItem key={tag.id} value={tag.id}>{tag.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {campaignRecipientCount == null ? "Preview to check the current audience size." : `${campaignRecipientCount} unique contact${campaignRecipientCount === 1 ? "" : "s"} currently have this tag.`}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Knowledge Centre article</Label>
+                  <Select value={campaignArticleSlug} onValueChange={(value) => { setCampaignArticleSlug(value); const article = articlesData?.articles.find((item) => item.slug === value); if (article) setCampaignSubject(article.title); setCampaignPreviewHtml(""); }}>
+                    <SelectTrigger data-testid="select-campaign-article"><SelectValue placeholder={articlesLoading ? "Loading articles…" : "Select an article"} /></SelectTrigger>
+                    <SelectContent>
+                      {(articlesData?.articles || []).map((article) => <SelectItem key={article.slug} value={article.slug}>{article.title}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="campaign-subject">Email subject</Label>
+                  <Input id="campaign-subject" value={campaignSubject} onChange={(event) => setCampaignSubject(event.target.value)} maxLength={200} data-testid="input-campaign-subject" />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="campaign-intro">Introduction</Label>
+                  <Textarea id="campaign-intro" value={campaignIntro} onChange={(event) => { setCampaignIntro(event.target.value); setCampaignPreviewHtml(""); }} rows={3} maxLength={4000} data-testid="input-campaign-intro" />
+                </div>
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" disabled={!canConfigureCampaign || previewCampaignMutation.isPending} onClick={() => previewCampaignMutation.mutate()} data-testid="button-preview-campaign">
+                  {previewCampaignMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />} Preview & count audience
+                </Button>
+                <Button disabled={!canConfigureCampaign || saveCampaignMutation.isPending} onClick={() => saveCampaignMutation.mutate()} data-testid="button-save-campaign">
+                  {saveCampaignMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save campaign
+                </Button>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><FlaskConical className="h-4 w-4" /> Send a safe test</CardTitle><CardDescription>This sends only to the email address entered below.</CardDescription></CardHeader>
+                  <CardContent className="flex gap-2 flex-wrap">
+                    <Input type="email" placeholder="you@selectbranding.co.uk" value={campaignTestEmail} onChange={(event) => setCampaignTestEmail(event.target.value)} className="flex-1 min-w-52" data-testid="input-campaign-test-email" />
+                    <Button variant="outline" disabled={!canConfigureCampaign || !campaignTestEmail.trim() || testCampaignMutation.isPending} onClick={() => testCampaignMutation.mutate()} data-testid="button-send-campaign-test">
+                      {testCampaignMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Send test
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle className="text-base">Schedule status</CardTitle></CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2">{campaignData?.config.enabled ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-muted-foreground" />} <strong>{campaignData?.config.enabled ? "Enabled" : "Paused"}</strong></div>
+                    <p className="text-muted-foreground">Next scheduled time: {campaignData?.nextSend || "Sunday at 17:00"}</p>
+                    <p className="text-xs text-muted-foreground">Saving while paused keeps your selections but sends nothing.</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {campaignPreviewHtml && (
+                <div className="space-y-2">
+                  <Label>Campaign preview</Label>
+                  <iframe title="Campaign preview" srcDoc={campaignPreviewHtml} sandbox="" className="w-full h-[620px] rounded-md border bg-white" data-testid="iframe-campaign-preview" />
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <h3 className="font-medium flex items-center gap-2"><BookOpen className="h-4 w-4" /> Campaign history</h3>
+                {(campaignData?.history || []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No scheduled campaigns have sent yet.</p>
+                ) : (
+                  <div className="rounded-md border divide-y">
+                    {campaignData!.history.map((run) => (
+                      <div key={run.id} className="p-3 flex items-center justify-between gap-3 flex-wrap text-sm">
+                        <div><p className="font-medium">{run.articleTitle}</p><p className="text-xs text-muted-foreground">{run.slotKey} · {run.tagName}</p></div>
+                        <div className="text-right"><Badge variant={run.status === "sent" ? "secondary" : run.status === "sending" ? "outline" : "destructive"}>{run.status}</Badge><p className="text-xs text-muted-foreground mt-1">{run.sentCount} sent{run.failedCount ? ` · ${run.failedCount} failed` : ""}</p></div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <div>
+        <h2 className="text-xl font-semibold">One-off customer broadcast</h2>
+        <p className="text-sm text-muted-foreground">The existing manual email tool remains available below.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">

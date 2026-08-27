@@ -1287,6 +1287,40 @@ export const appSettings = pgTable("app_settings", {
 
 export type AppSetting = typeof appSettings.$inferSelect;
 
+export const weeklyArticleCampaigns = pgTable("weekly_article_campaigns", {
+  id: varchar("id").primaryKey(),
+  enabled: boolean("enabled").notNull().default(false),
+  tagId: varchar("tag_id"),
+  tagName: varchar("tag_name"),
+  articleSlug: varchar("article_slug"),
+  subject: varchar("subject"),
+  intro: text("intro").notNull().default("We thought you might find this useful."),
+  updatedById: varchar("updated_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const weeklyArticleCampaignRuns = pgTable("weekly_article_campaign_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => weeklyArticleCampaigns.id, { onDelete: "cascade" }),
+  slotKey: varchar("slot_key").notNull().unique(),
+  status: varchar("status").notNull().default("sending"),
+  tagName: varchar("tag_name").notNull(),
+  articleTitle: varchar("article_title").notNull(),
+  subject: varchar("subject").notNull(),
+  recipientCount: integer("recipient_count").notNull().default(0),
+  sentCount: integer("sent_count").notNull().default(0),
+  failedCount: integer("failed_count").notNull().default(0),
+  failures: jsonb("failures").$type<string[]>().notNull().default([]),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+}, (table) => [
+  index("weekly_article_campaign_runs_started_at_idx").on(table.startedAt),
+]);
+
+export type WeeklyArticleCampaign = typeof weeklyArticleCampaigns.$inferSelect;
+export type WeeklyArticleCampaignRun = typeof weeklyArticleCampaignRuns.$inferSelect;
+
 // Machines table — stores each embroidery machine with capacity and status
 export const machines = pgTable("machines", {
   id: serial("id").primaryKey(),

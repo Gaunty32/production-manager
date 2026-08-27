@@ -60,6 +60,16 @@ import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePay
 import { shouldSendStaffNotification } from "./notificationThrottle";
 import { KNOWLEDGE_CENTRE_ARTICLES } from "@shared/knowledgeCentre";
 import { EXTERNAL_KNOWLEDGE_FEED_URL, getExternalKnowledgeCentreArticles } from "./knowledgeCentreFeed";
+import {
+  buildCampaignPreview,
+  getCampaignArticles,
+  getCampaignConfig,
+  getCampaignHistory,
+  getHighLevelTags,
+  getNextCampaignLabel,
+  saveCampaignConfig,
+  sendCampaignTest,
+} from "./highLevelCampaign";
 
 
 // ─── Base URL helper ──────────────────────────────────────────────────────────
@@ -1637,6 +1647,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ─── Broadcast email to all customers (super_admin only) ──────────────────
+  const campaignConfigSchema = z.object({
+    enabled: z.boolean(),
+    tagId: z.string().trim().min(1).max(200),
+    tagName: z.string().trim().min(1).max(200),
+    articleSlug: z.string().trim().min(1).max(300),
+    subject: z.string().trim().min(1).max(200),
+    intro: z.string().trim().min(1).max(4000),
+  });
+
+  app.get("/api/admin/highlevel-campaign/tags", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      res.json({ tags: await getHighLevelTags() });
+    } catch (error: any) {
+      console.error("[ArticleCampaign] Failed to load tags:", error);
+      res.status(502).json({ error: error.message || "Failed to load HighLevel tags" });
+    }
+  });
+
+  app.get("/api/admin/highlevel-campaign/articles", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
+    const articles = await getCampaignArticles();
+    res.json({
+      articles: articles.map((article) => ({
+        slug: article.slug,
+        title: article.title,
+        excerpt: article.excerpt,
+        category: article.category,
+        publishedAt: article.publishedAt,
+        imageUrl: article.imageUrl || null,
+      })),
+    });
+  });
+
+  app.get("/api/admin/highlevel-campaign/config", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      const [config, history] = await Promise.all([getCampaignConfig(), getCampaignHistory()]);
+      res.json({
+        config,
+        history,
+        nextSend: getNextCampaignLabel(),
+        schedule: "Every Sunday at 17:00 Europe/London",
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to load campaign configuration" });
+    }
+  });
+
+  app.post("/api/admin/highlevel-campaign/preview", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    const schema = campaignConfigSchema.pick({ tagId: true, articleSlug: true, intro: true });
+    try {
+      const data = schema.parse(req.body);
+      res.json(await buildCampaignPreview(data));
+    } catch (error: any) {
+      if (error.name === "ZodError") return res.status(400).json({ error: error.errors[0]?.message || "Invalid selection" });
+      console.error("[ArticleCampaign] Preview failed:", error);
+      res.status(502).json({ error: error.message || "Failed to build campaign preview" });
+    }
+  });
+
+  app.put("/api/admin/highlevel-campaign/config", isStaffAuthenticated, requireSuperAdmin, async (req: any, res) => {
+    try {
+      const data = campaignConfigSchema.parse(req.body);
+      const tags = await getHighLevelTags();
+      const selectedTag = tags.find((tag) => tag.id === data.tagId);
+      if (!selectedTag || selectedTag.name !== data.tagName) {
+        return res.status(400).json({ error: "Please select a current HighLevel tag." });
+      }
+      const articles = await getCampaignArticles();
+      if (!articles.some((article) => article.slug === data.articleSlug)) {
+        return res.status(400).json({ error: "Please select a current Knowledge Centre article." });
+      }
+      const config = await saveCampaignConfig({ ...data, updatedById: req.session.userId });
+      res.json({ config, nextSend: getNextCampaignLabel() });
+    } catch (error: any) {
+      if (error.name === "ZodError") return res.status(400).json({ error: error.errors[0]?.message || "Invalid campaign settings" });
+      console.error("[ArticleCampaign] Save failed:", error);
+      res.status(500).json({ error: error.message || "Failed to save campaign" });
+    }
+  });
+
+  app.post("/api/admin/highlevel-campaign/test", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
+    const schema = campaignConfigSchema.pick({ tagId: true, articleSlug: true, subject: true, intro: true }).extend({
+      to: z.string().trim().email().max(320),
+    });
+    try {
+      const data = schema.parse(req.body);
+      await sendCampaignTest(data);
+      res.json({ success: true });
+    } catch (error: any) {
+      if (error.name === "ZodError") return res.status(400).json({ error: error.errors[0]?.message || "Invalid test email" });
+      console.error("[ArticleCampaign] Test send failed:", error);
+      res.status(502).json({ error: error.message || "Failed to send test email" });
+    }
+  });
+
   app.get("/api/admin/broadcast-recipients", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
     try {
       const [allCustomerUsers, allCustomers] = await Promise.all([
