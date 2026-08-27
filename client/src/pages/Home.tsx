@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -29,10 +29,9 @@ import {
   Mail,
   Sparkles,
   BookOpen,
-  Rss,
 } from "lucide-react";
 import sbsLogo from "@assets/logo_transparent.png";
-import { KNOWLEDGE_CENTRE_ARTICLES } from "@shared/knowledgeCentre";
+import type { KnowledgeCentreArticle } from "@shared/knowledgeCentre";
 
 const SERVICES = [
   {
@@ -98,6 +97,20 @@ const STEPS = [
 
 export default function Home() {
   const { toast } = useToast();
+  const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeCentreArticle[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/knowledge-centre/external")
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Knowledge Centre unavailable")))
+      .then((data: { articles?: KnowledgeCentreArticle[] }) => {
+        if (active) setKnowledgeArticles(data.articles || []);
+      })
+      .catch(() => {
+        if (active) setKnowledgeArticles([]);
+      });
+    return () => { active = false; };
+  }, []);
   const [form, setForm] = useState({
     name: "",
     company: "",
@@ -256,13 +269,10 @@ export default function Home() {
               <Link href="/knowledge-centre">
                 <Button variant="outline">Visit Knowledge Centre <ArrowRight className="ml-2 h-4 w-4" /></Button>
               </Link>
-              <a href="/rss/knowledge-centre.xml" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground" data-testid="link-home-rss">
-                <Rss className="h-4 w-4" /> Subscribe via RSS
-              </a>
             </div>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
-            {KNOWLEDGE_CENTRE_ARTICLES.slice(0, 3).map((article) => (
+            {knowledgeArticles.slice(0, 3).map((article) => (
               <Card key={article.slug} className="h-full transition-shadow hover:shadow-md">
                 <CardContent className="flex h-full flex-col p-6">
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">{article.category}</p>

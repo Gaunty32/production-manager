@@ -676,9 +676,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/rss/knowledge-centre.xml", async (req, res) => {
     const baseUrl = getRequestBaseUrl(req);
     const externalArticles = await getExternalKnowledgeCentreArticles();
-    const articles = [...externalArticles, ...KNOWLEDGE_CENTRE_ARTICLES].sort(
-      (left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime(),
-    );
+    const articles = externalArticles;
     const items = articles.map((article) => `
       <item>
         <title>${escapeXml(article.title)}</title>

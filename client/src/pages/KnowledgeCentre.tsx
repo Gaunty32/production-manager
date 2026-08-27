@@ -1,13 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { ArrowLeft, ArrowRight, BookOpen, Clock3, Rss } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Clock3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  getKnowledgeCentreArticle,
-  type KnowledgeCentreArticle,
-  KNOWLEDGE_CENTRE_ARTICLES,
-} from "@shared/knowledgeCentre";
+import type { KnowledgeCentreArticle } from "@shared/knowledgeCentre";
 import sbsLogo from "@assets/logo_transparent.png";
 
 function SiteHeader() {
@@ -38,9 +34,9 @@ export default function KnowledgeCentre() {
   const [externalArticles, setExternalArticles] = useState<KnowledgeCentreArticle[]>([]);
   const [externalLoaded, setExternalLoaded] = useState(false);
   const article = params?.slug
-    ? getKnowledgeCentreArticle(params.slug) || externalArticles.find((item) => item.slug === params.slug)
+    ? externalArticles.find((item) => item.slug === params.slug)
     : undefined;
-  const articles = [...externalArticles, ...KNOWLEDGE_CENTRE_ARTICLES];
+  const articles = externalArticles;
 
   useEffect(() => {
     let active = true;
@@ -118,13 +114,6 @@ export default function KnowledgeCentre() {
               <p className="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground">
                 Practical guidance for businesses buying, selling and producing branded workwear, sportswear, uniforms and merchandise.
               </p>
-              <a
-                href="/rss/knowledge-centre.xml"
-                className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
-                data-testid="link-knowledge-rss"
-              >
-                <Rss className="h-4 w-4" /> Subscribe via RSS
-              </a>
             </div>
             <div className="mx-auto mt-14 grid max-w-5xl gap-6 md:grid-cols-2">
               {articles.map((item) => (
