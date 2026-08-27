@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation, Router, Redirect } from "wouter";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -14,57 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LogOut } from "lucide-react";
 import { StaffImpersonationBanner } from "@/components/StaffImpersonationBanner";
-import Dashboard from "@/pages/Dashboard";
-import Customers from "@/pages/Customers";
-import TeamPage from "@/pages/Team";
-import EmailCustomers from "@/pages/EmailCustomers";
-import Schedule from "@/pages/Schedule";
-import Leaderboard from "@/pages/Leaderboard";
-import InvoicingQueue from "@/pages/InvoicingQueue";
-import StaffHoldingArea from "@/pages/StaffHoldingArea";
-import WeeklyReports from "@/pages/WeeklyReports";
-import StaffJobDetail from "@/pages/StaffJobDetail";
-import HolidayManagement from "@/pages/HolidayManagement";
-import Landing from "@/pages/Landing";
-import CustomerLogin from "@/pages/CustomerLogin";
-import StaffLogin from "@/pages/StaffLogin";
-import ForgotPassword from "@/pages/ForgotPassword";
-import ResetPassword from "@/pages/ResetPassword";
-import CustomerDashboard from "@/pages/CustomerDashboard";
-import CustomerSubmitJob from "@/pages/CustomerSubmitJob";
-import CustomerPendingJobs from "@/pages/CustomerPendingJobs";
-import CustomerJobDetail from "@/pages/CustomerJobDetail";
-import CustomerDocuments from "@/pages/CustomerDocuments";
-import CustomerPasswordReset from "@/pages/CustomerPasswordReset";
-import CustomerInbox from "@/pages/CustomerInbox";
-import CustomerTeam from "@/pages/CustomerTeam";
-import CustomerInviteAccept from "@/pages/CustomerInviteAccept";
-import CustomerInvoices from "@/pages/CustomerInvoices";
-import StaffMessages from "@/pages/StaffMessages";
-import StaffSamples from "@/pages/StaffSamples";
-import CustomerSamples from "@/pages/CustomerSamples";
-import DemoPortal from "@/pages/DemoPortal";
 import DemoAccess from "@/pages/DemoAccess";
-import ContractEmbroideryPreview from "@/pages/ContractEmbroideryPreview";
-import KnowledgeCentre from "@/pages/KnowledgeCentre";
-import Privacy from "@/pages/Privacy";
-import MachineManagement from "@/pages/MachineManagement";
-import CustomerPaymentMethods from "@/pages/CustomerPaymentMethods";
-import CustomerDeliveryAddress from "@/pages/CustomerDeliveryAddress";
-import ThreadColourChart from "@/pages/ThreadColourChart";
-import PortalPreview from "@/pages/PortalPreview";
-import FeatureRequests from "@/pages/FeatureRequests";
-import Tasks from "@/pages/Tasks";
-import SummerShifts from "@/pages/SummerShifts";
-import Purchasing from "@/pages/Purchasing";
-import AllocationBoard from "@/pages/AllocationBoard";
-import MyQueue from "@/pages/MyQueue";
-import CasualLogin from "@/pages/CasualLogin";
-import CasualSetPin from "@/pages/CasualSetPin";
-import CasualDashboard from "@/pages/CasualDashboard";
-import DashboardTv from "@/pages/DashboardTv";
-import DashboardTvSetup from "@/pages/DashboardTvSetup";
-import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -72,6 +22,56 @@ import { DemoModeContext } from "@/lib/demoMode";
 import { FlaskConical } from "lucide-react";
 import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 import { AppDownloadModal } from "@/components/AppDownloadModal";
+
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Customers = lazy(() => import("@/pages/Customers"));
+const TeamPage = lazy(() => import("@/pages/Team"));
+const EmailCustomers = lazy(() => import("@/pages/EmailCustomers"));
+const Schedule = lazy(() => import("@/pages/Schedule"));
+const Leaderboard = lazy(() => import("@/pages/Leaderboard"));
+const InvoicingQueue = lazy(() => import("@/pages/InvoicingQueue"));
+const StaffHoldingArea = lazy(() => import("@/pages/StaffHoldingArea"));
+const WeeklyReports = lazy(() => import("@/pages/WeeklyReports"));
+const StaffJobDetail = lazy(() => import("@/pages/StaffJobDetail"));
+const HolidayManagement = lazy(() => import("@/pages/HolidayManagement"));
+const CustomerLogin = lazy(() => import("@/pages/CustomerLogin"));
+const StaffLogin = lazy(() => import("@/pages/StaffLogin"));
+const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
+const CustomerDashboard = lazy(() => import("@/pages/CustomerDashboard"));
+const CustomerSubmitJob = lazy(() => import("@/pages/CustomerSubmitJob"));
+const CustomerPendingJobs = lazy(() => import("@/pages/CustomerPendingJobs"));
+const CustomerJobDetail = lazy(() => import("@/pages/CustomerJobDetail"));
+const CustomerDocuments = lazy(() => import("@/pages/CustomerDocuments"));
+const CustomerPasswordReset = lazy(() => import("@/pages/CustomerPasswordReset"));
+const CustomerInbox = lazy(() => import("@/pages/CustomerInbox"));
+const CustomerTeam = lazy(() => import("@/pages/CustomerTeam"));
+const CustomerInviteAccept = lazy(() => import("@/pages/CustomerInviteAccept"));
+const CustomerInvoices = lazy(() => import("@/pages/CustomerInvoices"));
+const StaffMessages = lazy(() => import("@/pages/StaffMessages"));
+const StaffSamples = lazy(() => import("@/pages/StaffSamples"));
+const CustomerSamples = lazy(() => import("@/pages/CustomerSamples"));
+const DemoPortal = lazy(() => import("@/pages/DemoPortal"));
+const ContractEmbroideryPreview = lazy(() => import("@/pages/ContractEmbroideryPreview"));
+const KnowledgeCentre = lazy(() => import("@/pages/KnowledgeCentre"));
+const Privacy = lazy(() => import("@/pages/Privacy"));
+const MachineManagement = lazy(() => import("@/pages/MachineManagement"));
+const CustomerPaymentMethods = lazy(() => import("@/pages/CustomerPaymentMethods"));
+const CustomerDeliveryAddress = lazy(() => import("@/pages/CustomerDeliveryAddress"));
+const ThreadColourChart = lazy(() => import("@/pages/ThreadColourChart"));
+const PortalPreview = lazy(() => import("@/pages/PortalPreview"));
+const FeatureRequests = lazy(() => import("@/pages/FeatureRequests"));
+const Tasks = lazy(() => import("@/pages/Tasks"));
+const SummerShifts = lazy(() => import("@/pages/SummerShifts"));
+const Purchasing = lazy(() => import("@/pages/Purchasing"));
+const AllocationBoard = lazy(() => import("@/pages/AllocationBoard"));
+const MyQueue = lazy(() => import("@/pages/MyQueue"));
+const CasualLogin = lazy(() => import("@/pages/CasualLogin"));
+const CasualSetPin = lazy(() => import("@/pages/CasualSetPin"));
+const CasualDashboard = lazy(() => import("@/pages/CasualDashboard"));
+const DashboardTv = lazy(() => import("@/pages/DashboardTv"));
+const DashboardTvSetup = lazy(() => import("@/pages/DashboardTvSetup"));
+const NotFound = lazy(() => import("@/pages/not-found"));
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isLoading } = useAuth();
@@ -174,7 +174,9 @@ function AppRouter() {
         <Route path="/dashboard-tv" component={DashboardTv} />
         <Route path="/portal-preview" component={PortalPreview} />
         <Route path="/staff-login" component={StaffLoginGate} />
-        <Route path="/demo-access" component={DemoAccess} />
+        <Route path="/demo-access">
+          <DemoAccess />
+        </Route>
         <Route path="/demo-access-preview" component={ContractEmbroideryPreview} />
         <Route path="/knowledge-centre/:slug" component={KnowledgeCentre} />
         <Route path="/knowledge-centre" component={KnowledgeCentre} />
@@ -193,6 +195,10 @@ function AppRouter() {
         <Route path="/customer/:rest*">
           <CustomerPortalApp />
         </Route>
+
+        <Route path="/">
+          <PublicHome />
+        </Route>
         
         {/* Authenticated Staff Routes - handles all non-specific paths */}
         <Route>
@@ -203,20 +209,41 @@ function AppRouter() {
   );
 }
 
+function PublicHome() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) setLocation("/dashboard");
+  }, [isAuthenticated, isLoading, setLocation]);
+
+  return <DemoAccess publicNav />;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider>
           <ErrorBoundary>
-            <Router>
-              <AppRouter />
-            </Router>
+            <Suspense fallback={<PageLoading />}>
+              <Router>
+                <AppRouter />
+              </Router>
+            </Suspense>
           </ErrorBoundary>
           <Toaster />
         </ThemeProvider>
       </TooltipProvider>
     </QueryClientProvider>
+  );
+}
+
+function PageLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <p className="text-sm text-muted-foreground">Loading...</p>
+    </div>
   );
 }
 

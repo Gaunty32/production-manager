@@ -14,21 +14,21 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { apiRequest } from "@/lib/queryClient";
-import { CheckCircle2, Layers, CalendarDays, BarChart3, MessageSquare, FileText, Zap, ArrowDown, Clock, CheckCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { CheckCircle2, Layers, CalendarDays, BarChart3, MessageSquare, FileText, Zap, ArrowDown, Clock, CheckCheck, ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { PRICING_2026, PRINT_PRICING_2026, SEPTEMBER_PRICE_INCREASE } from "@shared/pricing";
 import customerDashboardImg from "@assets/screenshots/production_selectbranding_co_uk_demo.png";
 import customerPortalImg from "@assets/screenshots/production_selectbranding_co_uk_customer_login.png";
 import sbsLogo from "@assets/logo_transparent.png";
-import prodImg1 from "@assets/SWM07349_1778335006727.jpg";
-import prodImg2 from "@assets/SWM00610_1778335033870.jpg";
-import prodImg3 from "@assets/SWM00709_1778335040781.jpg";
-import prodImg4 from "@assets/SWM00529_1778335054895.jpg";
-import prodImg5 from "@assets/SWM00543_1778335073241.jpg";
-import prodImg6 from "@assets/IMG_20250828_110500_1778335115271.jpg";
-import prodImg7 from "@assets/SWM04080_1778335119599.jpg";
-import prodImg8 from "@assets/SWM04094_1778335134804.jpg";
-import prodImg9 from "@assets/SWM04102_1778335146071.jpg";
-import prodImg10 from "@assets/SWM04109_1778335174184.jpg";
+import prodImg1 from "@assets/SWM07349_1778335006727.webp";
+import prodImg2 from "@assets/SWM00610_1778335033870.webp";
+import prodImg3 from "@assets/SWM00709_1778335040781.webp";
+import prodImg4 from "@assets/SWM00529_1778335054895.webp";
+import prodImg5 from "@assets/SWM00543_1778335073241.webp";
+import prodImg6 from "@assets/IMG_20250828_110500_1778335115271.webp";
+import prodImg7 from "@assets/SWM04080_1778335119599.webp";
+import prodImg8 from "@assets/SWM04094_1778335134804.webp";
+import prodImg9 from "@assets/SWM04102_1778335146071.webp";
+import prodImg10 from "@assets/SWM04109_1778335174184.webp";
 
 const productionPhotos = [
   { src: prodImg9,  caption: "Precision in every stitch" },
@@ -80,6 +80,7 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
   const [submitted, setSubmitted] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [videoStarted, setVideoStarted] = useState(false);
 
   useEffect(() => {
     if (paused) return;
@@ -186,14 +187,37 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
 
             {/* Video */}
             <div className="rounded-lg overflow-hidden shadow-2xl border border-border/50 aspect-video">
-              <iframe
-                src="https://www.youtube.com/embed/6HE3NCGQMfg"
-                title="Select Branding Solutions — Production System Walkthrough"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="w-full h-full"
-                loading="lazy"
-              />
+              {videoStarted ? (
+                <iframe
+                  src="https://www.youtube.com/embed/6HE3NCGQMfg?autoplay=1"
+                  title="Select Branding Solutions — Production System Walkthrough"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setVideoStarted(true)}
+                  className="group relative h-full w-full bg-black"
+                  aria-label="Play the Select Branding Solutions production system walkthrough"
+                  data-testid="button-play-walkthrough"
+                >
+                  <img
+                    src={prodImg9}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-full w-full object-cover opacity-75 transition-opacity group-hover:opacity-85"
+                    decoding="async"
+                  />
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/20 text-white">
+                    <span className="flex h-16 w-16 items-center justify-center rounded-full bg-primary shadow-xl transition-transform group-hover:scale-105">
+                      <Play className="ml-1 h-7 w-7 fill-current" />
+                    </span>
+                    <span className="text-sm font-semibold drop-shadow">Watch the production walkthrough</span>
+                  </span>
+                </button>
+              )}
             </div>
 
             {/* CTA */}
@@ -247,16 +271,13 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
 
             {/* Carousel */}
             <div className="relative rounded-lg overflow-hidden bg-black select-none" style={{ aspectRatio: "16/9" }}>
-              {productionPhotos.map((photo, i) => (
-                <img
-                  key={i}
-                  src={photo.src}
-                  alt={photo.caption}
-                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
-                  style={{ opacity: i === activePhoto ? 1 : 0 }}
-                  loading={i === 0 ? "eager" : "lazy"}
-                />
-              ))}
+              <img
+                src={productionPhotos[activePhoto].src}
+                alt={productionPhotos[activePhoto].caption}
+                className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+                loading="lazy"
+                decoding="async"
+              />
 
               {/* Gradient wash for caption legibility */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
