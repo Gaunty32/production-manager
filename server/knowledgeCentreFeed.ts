@@ -17,7 +17,7 @@ function textValue(value: unknown): string {
   if (Array.isArray(value)) return textValue(value[0]);
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
-    return textValue(record["#text"] ?? record["@_href"] ?? "");
+    return textValue(record["#text"] ?? record["@_url"] ?? record["@_href"] ?? "");
   }
   return "";
 }
@@ -29,6 +29,13 @@ function stripMarkup(value: string) {
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function extractArticleParagraphs(value: string) {
+  const blocks = Array.from(value.matchAll(/<(?:h[2-4]|p)[^>]*>([\s\S]*?)<\/(?:h[2-4]|p)>/gi))
+    .map((match) => stripMarkup(match[1]))
+    .filter(Boolean);
+  return blocks.length ? blocks : [stripMarkup(value)].filter(Boolean);
 }
 
 function slugify(value: string) {
@@ -57,12 +64,15 @@ function toArticle(item: Record<string, unknown>): KnowledgeCentreArticle | unde
       textValue(item["content:encoded"]) ||
       textValue(item.content),
   );
+  const fullContent = textValue(item["content:encoded"]) || textValue(item.content);
+  const paragraphs = fullContent ? extractArticleParagraphs(fullContent) : [description].filter(Boolean);
   const pubDate = textValue(item.pubDate) || textValue(item.published);
   const parsedDate = Date.parse(pubDate);
   const publishedAt = Number.isNaN(parsedDate)
     ? new Date(0).toISOString()
     : new Date(parsedDate).toISOString();
-  const wordCount = description ? description.split(/\s+/).length : 0;
+  const articleText = stripMarkup(fullContent) || description;
+  const wordCount = articleText ? articleText.split(/\s+/).length : 0;
 
   return {
     slug: slugify(title),
@@ -71,8 +81,9 @@ function toArticle(item: Record<string, unknown>): KnowledgeCentreArticle | unde
     category: textValue(item.category) || "Knowledge Centre",
     publishedAt,
     readTime: wordCount ? `${Math.max(1, Math.ceil(wordCount / 200))} min read` : "Read article",
-    paragraphs: description ? [description] : [],
+    paragraphs,
     url,
+    imageUrl: textValue(item["media:content"]) || textValue(item.enclosure),
     source: "external",
   };
 }
@@ -81,7 +92,9 @@ export async function getExternalKnowledgeCentreArticles(): Promise<KnowledgeCen
   if (cache && cache.expiresAt > Date.now()) return cache.articles;
 
   try {
-    const response = await fetch(EXTERNAL_KNOWLEDGE_FEED_URL, {
+    const refreshUrl = new URL(EXTERNAL_KNOWLEDGE_FEED_URL);
+    refreshUrl.searchParams.set("_", String(Math.floor(Date.now() / 60_000)));
+    const response = await fetch(refreshUrl, {
       headers: { Accept: "application/rss+xml, application/xml, text/xml" },
       signal: AbortSignal.timeout(8_000),
     });
@@ -97,7 +110,7 @@ export async function getExternalKnowledgeCentreArticles(): Promise<KnowledgeCen
       .map(toArticle)
       .filter((article): article is KnowledgeCentreArticle => Boolean(article));
 
-    cache = { expiresAt: Date.now() + 10 * 60 * 1000, articles };
+    cache = { expiresAt: Date.now() + 60 * 1000, articles };
     return articles;
   } catch (error) {
     console.error("[KnowledgeCentre] External RSS import failed:", error);

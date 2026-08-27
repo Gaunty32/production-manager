@@ -659,7 +659,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const articles = await getExternalKnowledgeCentreArticles();
     res
       .type("application/json")
-      .set("Cache-Control", "public, max-age=600")
+      .set("Cache-Control", "public, max-age=60")
       .json({ sourceUrl: EXTERNAL_KNOWLEDGE_FEED_URL, articles });
   });
 
@@ -672,8 +672,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const items = articles.map((article) => `
       <item>
         <title>${escapeXml(article.title)}</title>
-        <link>${escapeXml(article.url || `${baseUrl}/knowledge-centre/${article.slug}`)}</link>
-        <guid isPermaLink="${article.url ? "false" : "true"}">${escapeXml(article.url || `${baseUrl}/knowledge-centre/${article.slug}`)}</guid>
+        <link>${escapeXml(`${baseUrl}/knowledge-centre/${article.slug}`)}</link>
+        <guid isPermaLink="true">${escapeXml(`${baseUrl}/knowledge-centre/${article.slug}`)}</guid>
         <pubDate>${new Date(article.publishedAt).toUTCString()}</pubDate>
         <category>${escapeXml(article.category)}</category>
         <description>${escapeXml(article.excerpt)}</description>

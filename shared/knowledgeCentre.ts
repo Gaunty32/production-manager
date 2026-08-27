@@ -7,6 +7,7 @@ export type KnowledgeCentreArticle = {
   readTime: string;
   paragraphs: string[];
   url?: string;
+  imageUrl?: string;
   source?: "first-party" | "external";
 };
 

@@ -35,8 +35,11 @@ function SiteHeader() {
 
 export default function KnowledgeCentre() {
   const [, params] = useRoute("/knowledge-centre/:slug");
-  const article = params?.slug ? getKnowledgeCentreArticle(params.slug) : undefined;
   const [externalArticles, setExternalArticles] = useState<KnowledgeCentreArticle[]>([]);
+  const [externalLoaded, setExternalLoaded] = useState(false);
+  const article = params?.slug
+    ? getKnowledgeCentreArticle(params.slug) || externalArticles.find((item) => item.slug === params.slug)
+    : undefined;
   const articles = [...externalArticles, ...KNOWLEDGE_CENTRE_ARTICLES];
 
   useEffect(() => {
@@ -44,10 +47,16 @@ export default function KnowledgeCentre() {
     fetch("/api/knowledge-centre/external")
       .then((response) => response.ok ? response.json() : Promise.reject(new Error("RSS import unavailable")))
       .then((data: { articles?: KnowledgeCentreArticle[] }) => {
-        if (active) setExternalArticles(data.articles || []);
+        if (active) {
+          setExternalArticles(data.articles || []);
+          setExternalLoaded(true);
+        }
       })
       .catch(() => {
-        if (active) setExternalArticles([]);
+        if (active) {
+          setExternalArticles([]);
+          setExternalLoaded(true);
+        }
       });
     return () => { active = false; };
   }, []);
@@ -62,7 +71,11 @@ export default function KnowledgeCentre() {
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <main className="container mx-auto px-4 py-12 md:py-20">
-        {article ? (
+        {params?.slug && !article && !externalLoaded ? (
+          <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">
+            Loading article...
+          </div>
+        ) : article ? (
           <article className="mx-auto max-w-3xl">
             <Link href="/knowledge-centre" className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft className="h-4 w-4" /> Back to Knowledge Centre
@@ -76,6 +89,14 @@ export default function KnowledgeCentre() {
                 <span className="flex items-center gap-1"><Clock3 className="h-4 w-4" /> {article.readTime}</span>
               </div>
             </div>
+            {article.imageUrl && (
+              <img
+                src={article.imageUrl}
+                alt=""
+                className="mb-10 aspect-[16/9] w-full rounded-xl object-cover"
+                decoding="async"
+              />
+            )}
             <p className="mb-10 border-l-4 border-primary pl-5 text-xl leading-relaxed text-muted-foreground">{article.excerpt}</p>
             <div className="space-y-6 text-lg leading-relaxed">
               {article.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
@@ -109,6 +130,15 @@ export default function KnowledgeCentre() {
               {articles.map((item) => (
                 <Card key={item.slug} className="transition-shadow hover:shadow-md">
                   <CardContent className="flex h-full flex-col p-6">
+                    {item.imageUrl && (
+                      <img
+                        src={item.imageUrl}
+                        alt=""
+                        className="mb-5 aspect-[16/9] w-full rounded-lg object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    )}
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">
                       {item.category}
                       {item.source === "external" && <span className="ml-2 text-muted-foreground">· Latest</span>}
@@ -117,15 +147,9 @@ export default function KnowledgeCentre() {
                     <p className="mt-3 flex-1 leading-relaxed text-muted-foreground">{item.excerpt}</p>
                     <div className="mt-6 flex items-center justify-between gap-4">
                       <span className="flex items-center gap-1 text-sm text-muted-foreground"><Clock3 className="h-4 w-4" /> {item.readTime}</span>
-                      {item.url ? (
-                        <a href={item.url} target="_blank" rel="noreferrer" data-testid={`link-external-article-${item.slug}`}>
-                          <Button variant="outline" size="sm">Read article <ArrowRight className="ml-2 h-4 w-4" /></Button>
-                        </a>
-                      ) : (
-                        <Link href={`/knowledge-centre/${item.slug}`} data-testid={`link-article-${item.slug}`}>
+                      <Link href={`/knowledge-centre/${item.slug}`} data-testid={`link-article-${item.slug}`}>
                         <Button variant="outline" size="sm">Read article <ArrowRight className="ml-2 h-4 w-4" /></Button>
-                        </Link>
-                      )}
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
