@@ -274,9 +274,9 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
               <img
                 src={productionPhotos[activePhoto].src}
                 alt={productionPhotos[activePhoto].caption}
-                className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
                 loading="lazy"
                 decoding="async"
+                className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
               />
 
               {/* Gradient wash for caption legibility */}

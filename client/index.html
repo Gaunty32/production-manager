@@ -8,18 +8,51 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Planner" />
     <meta name="theme-color" content="#4f46e5" />
+    <script>
+      if (
+        location.pathname === "/" ||
+        location.pathname === "/demo-access"
+      ) document.documentElement.classList.add("public-entry");
+    </script>
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-apple.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
     <title>Production Planner</title>
     <meta name="description" content="Track your orders, view invoices and manage your account with Select Branding Solutions — Production Planner.">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="initial-public-shell" aria-hidden="true">
+        <header>
+          <img src="/logo.png" alt="" width="109" height="56" />
+          <nav>Pricing &nbsp;&nbsp; How It Works &nbsp;&nbsp; Services &nbsp;&nbsp; Customer Portal &nbsp;&nbsp; Knowledge Centre</nav>
+          <span>Book a Discovery Call</span>
+        </header>
+        <main>
+          <p>CONTRACT EMBROIDERY PARTNER</p>
+          <h1>Stop Running Machines.<br /><strong>Start Growing Your Business.</strong></h1>
+          <div>Your new production department is already built.<br />38 embroidery heads running 16 hours a day, 6 days a week — ready to support your growth.</div>
+          <section><b>Watch the production walkthrough</b></section>
+        </main>
+      </div>
+    </div>
+    <style>
+      #initial-public-shell{display:none}
+      .public-entry #initial-public-shell{display:block;min-height:100vh;background:#fff;color:#18181b;font-family:Arial,sans-serif}
+      #initial-public-shell header{height:81px;border-bottom:1px solid #e4e4e7;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 5%;box-sizing:border-box}
+      #initial-public-shell header img{object-fit:contain}
+      #initial-public-shell header nav{font-size:14px;color:#52525b}
+      #initial-public-shell header span{background:#4f46e5;color:#fff;border-radius:6px;padding:10px 14px;font-size:14px;font-weight:600}
+      #initial-public-shell main{text-align:center;max-width:1024px;margin:0 auto;padding:64px 16px 48px;box-sizing:border-box}
+      #initial-public-shell main>p{margin:0 0 16px;color:#4f46e5;font-size:14px;font-weight:700;letter-spacing:.14em}
+      #initial-public-shell h1{margin:0;font-size:48px;line-height:1.15;letter-spacing:-.025em}
+      #initial-public-shell h1 strong{color:#4f46e5}
+      #initial-public-shell main>div{margin:20px auto 32px;color:#71717a;font-size:18px;line-height:1.65}
+      #initial-public-shell section{aspect-ratio:16/9;max-width:960px;margin:0 auto;border-radius:8px;background:#18181b;color:#fff;display:flex;align-items:center;justify-content:center}
+      @media(max-width:850px){#initial-public-shell header nav{display:none}#initial-public-shell h1{font-size:38px}}
+      @media(max-width:520px){#initial-public-shell header{height:72px;padding:0 16px}#initial-public-shell header span{font-size:12px;padding:9px}#initial-public-shell main{padding-top:48px}#initial-public-shell h1{font-size:34px}}
+    </style>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
