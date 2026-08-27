@@ -76,7 +76,7 @@ function BrowserFrame({ src, label, className = "" }: { src: string; label: stri
   );
 }
 
-export default function DemoAccess() {
+export default function DemoAccess({ publicNav = false }: { publicNav?: boolean }) {
   const [submitted, setSubmitted] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -124,14 +124,41 @@ export default function DemoAccess() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-3 relative flex items-center justify-center">
-          <img src={sbsLogo} alt="Select Branding Solutions" className="h-16 w-auto" />
-          <div className="absolute right-6">
-            <Button onClick={scrollToForm} size="sm" data-testid="button-header-cta">
-              Book a Discovery Call
-            </Button>
+      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
+        <div className={`mx-auto px-5 py-3 ${publicNav ? "max-w-7xl" : "max-w-6xl"}`}>
+          <div className={publicNav ? "flex items-center justify-between gap-5" : "relative flex items-center justify-center"}>
+            <a href="/" aria-label="Select Branding Solutions home">
+              <img src={sbsLogo} alt="Select Branding Solutions" className={`${publicNav ? "h-14" : "h-16"} w-auto`} />
+            </a>
+            {publicNav && (
+              <nav className="hidden items-center gap-5 text-sm font-medium lg:flex" aria-label="Main navigation">
+                <a href="#pricing" className="text-muted-foreground transition-colors hover:text-foreground">Pricing</a>
+                <a href="#how-it-works" className="text-muted-foreground transition-colors hover:text-foreground">How It Works</a>
+                <a href="#services" className="text-muted-foreground transition-colors hover:text-foreground">Services</a>
+                <a href="#customer-portal" className="text-muted-foreground transition-colors hover:text-foreground">Customer Portal</a>
+                <a href="/knowledge-centre" className="text-muted-foreground transition-colors hover:text-foreground">Knowledge Base</a>
+              </nav>
+            )}
+            <div className={publicNav ? "flex items-center gap-2" : "absolute right-0"}>
+              {publicNav && (
+                <a href="/customer/login" className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block">
+                  Sign in
+                </a>
+              )}
+              <Button onClick={scrollToForm} size="sm" data-testid="button-header-cta">
+                Book a Discovery Call
+              </Button>
+            </div>
           </div>
+          {publicNav && (
+            <nav className="mt-3 flex gap-5 overflow-x-auto pb-1 text-xs font-semibold lg:hidden" aria-label="Mobile navigation">
+              <a href="#pricing" className="whitespace-nowrap text-muted-foreground">Pricing</a>
+              <a href="#how-it-works" className="whitespace-nowrap text-muted-foreground">How It Works</a>
+              <a href="#services" className="whitespace-nowrap text-muted-foreground">Services</a>
+              <a href="#customer-portal" className="whitespace-nowrap text-muted-foreground">Customer Portal</a>
+              <a href="/knowledge-centre" className="whitespace-nowrap text-muted-foreground">Knowledge Base</a>
+            </nav>
+          )}
         </div>
       </header>
 
@@ -188,7 +215,7 @@ export default function DemoAccess() {
         </section>
 
         {/* ── WHAT YOU GET ─────────────────────────────────────────────────────── */}
-        <section className="border-t bg-muted/30 px-4 py-14">
+        <section id="services" className="scroll-mt-24 border-t bg-muted/30 px-4 py-14">
           <div className="max-w-5xl mx-auto">
             <div className="text-center space-y-2 mb-10">
               <h2 className="text-2xl font-bold tracking-tight">Everything managed for you</h2>
@@ -282,6 +309,32 @@ export default function DemoAccess() {
           </div>
         </section>
 
+        {/* ── HOW IT WORKS ──────────────────────────────────────────────────────── */}
+        <section id="how-it-works" className="scroll-mt-24 border-t px-4 py-16">
+          <div className="mx-auto max-w-5xl">
+            <div className="mb-10 text-center">
+              <p className="text-sm font-semibold uppercase tracking-widest text-primary">How it works</p>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight">A simple route from order to dispatch</h2>
+              <p className="mx-auto mt-2 max-w-2xl text-muted-foreground">
+                You keep the customer relationship. We manage the production department behind it.
+              </p>
+            </div>
+            <div className="grid gap-6 md:grid-cols-3">
+              {[
+                ["01", "Send us the job", "Share your garments, artwork and production instructions through the portal or with the team."],
+                ["02", "We schedule and produce", "Your order is planned across our embroidery capacity, then checked at every stage."],
+                ["03", "We dispatch it back", "Finished garments leave with clear updates and tracked delivery so you know what is happening."],
+              ].map(([number, title, description]) => (
+                <div key={number} className="border-t-2 border-primary pt-5">
+                  <span className="text-sm font-bold text-primary">{number}</span>
+                  <h3 className="mt-4 text-lg font-semibold">{title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* ── ON TIME, EVERY TIME ──────────────────────────────────────────────── */}
         <section className="border-t px-4 py-20 bg-foreground text-background">
           <div className="max-w-4xl mx-auto text-center space-y-6">
@@ -318,7 +371,7 @@ export default function DemoAccess() {
         </section>
 
         {/* ── PRICING TABLE ─────────────────────────────────────────────────────── */}
-        <section className="border-t px-4 py-16">
+        <section id="pricing" className="scroll-mt-24 border-t px-4 py-16">
           <div className="max-w-5xl mx-auto space-y-10">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold tracking-tight">Transparent pricing per garment</h2>
@@ -452,7 +505,7 @@ export default function DemoAccess() {
         </section>
 
         {/* ── SCREENSHOTS ──────────────────────────────────────────────────────── */}
-        <section className="border-t px-4 py-14">
+        <section id="customer-portal" className="scroll-mt-24 border-t px-4 py-14">
           <div className="max-w-6xl mx-auto space-y-10">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold tracking-tight">A glimpse of what you'll see</h2>

@@ -28,7 +28,6 @@ import HolidayManagement from "@/pages/HolidayManagement";
 import Landing from "@/pages/Landing";
 import CustomerLogin from "@/pages/CustomerLogin";
 import StaffLogin from "@/pages/StaffLogin";
-import Home from "@/pages/Home";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import CustomerDashboard from "@/pages/CustomerDashboard";
@@ -267,7 +266,7 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
     // Anonymous visitors on the root URL see the public marketing site;
     // deep links to staff pages still show the staff login.
     if (location === "/") {
-      return <Home />;
+      return <DemoAccess publicNav />;
     }
     return <StaffLogin />;
   }
