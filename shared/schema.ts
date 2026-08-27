@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, serial, timestamp, boolean, index, jsonb, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, serial, timestamp, boolean, index, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1305,9 +1305,12 @@ export const weeklyArticleCampaignRuns = pgTable("weekly_article_campaign_runs",
   campaignId: varchar("campaign_id").notNull().references(() => weeklyArticleCampaigns.id, { onDelete: "cascade" }),
   slotKey: varchar("slot_key").notNull().unique(),
   status: varchar("status").notNull().default("sending"),
+  tagId: varchar("tag_id").notNull(),
   tagName: varchar("tag_name").notNull(),
+  articleSlug: varchar("article_slug").notNull(),
   articleTitle: varchar("article_title").notNull(),
   subject: varchar("subject").notNull(),
+  intro: text("intro").notNull(),
   recipientCount: integer("recipient_count").notNull().default(0),
   sentCount: integer("sent_count").notNull().default(0),
   failedCount: integer("failed_count").notNull().default(0),
@@ -1320,6 +1323,22 @@ export const weeklyArticleCampaignRuns = pgTable("weekly_article_campaign_runs",
 
 export type WeeklyArticleCampaign = typeof weeklyArticleCampaigns.$inferSelect;
 export type WeeklyArticleCampaignRun = typeof weeklyArticleCampaignRuns.$inferSelect;
+
+export const weeklyArticleCampaignRecipients = pgTable("weekly_article_campaign_recipients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  runId: varchar("run_id").notNull().references(() => weeklyArticleCampaignRuns.id, { onDelete: "cascade" }),
+  email: varchar("email").notNull(),
+  firstName: varchar("first_name"),
+  status: varchar("status").notNull().default("pending"),
+  error: text("error"),
+  claimedAt: timestamp("claimed_at"),
+  sentAt: timestamp("sent_at"),
+}, (table) => [
+  uniqueIndex("weekly_article_campaign_recipient_run_email_idx").on(table.runId, table.email),
+  index("weekly_article_campaign_recipients_run_status_idx").on(table.runId, table.status),
+]);
+
+export type WeeklyArticleCampaignRecipient = typeof weeklyArticleCampaignRecipients.$inferSelect;
 
 // Machines table — stores each embroidery machine with capacity and status
 export const machines = pgTable("machines", {

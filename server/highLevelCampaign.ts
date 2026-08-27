@@ -1,6 +1,6 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
 import { db } from "./db";
-import { weeklyArticleCampaignRuns, weeklyArticleCampaigns } from "@shared/schema";
+import { weeklyArticleCampaignRecipients, weeklyArticleCampaignRuns, weeklyArticleCampaigns } from "@shared/schema";
 import { KNOWLEDGE_CENTRE_ARTICLES, type KnowledgeCentreArticle } from "@shared/knowledgeCentre";
 import { getExternalKnowledgeCentreArticles } from "./knowledgeCentreFeed";
 import { buildArticleCampaignEmailHtml, sendArticleCampaignEmail } from "./emailService";
@@ -20,11 +20,10 @@ export type HighLevelContact = {
 
 function credentials() {
   const apiKey = process.env.HIGHLEVEL_API_KEY;
-  const locationId = process.env.HIGHLEVEL_LOCATION_ID;
-  if (!apiKey || !locationId) {
-    throw new Error("HighLevel is not configured. HIGHLEVEL_API_KEY and HIGHLEVEL_LOCATION_ID are required.");
+  if (!apiKey) {
+    throw new Error("HighLevel is not configured. HIGHLEVEL_API_KEY is required.");
   }
-  return { apiKey, locationId };
+  return { apiKey };
 }
 
 async function highLevelFetch(pathOrUrl: string): Promise<any> {
@@ -64,7 +63,12 @@ export async function getHighLevelContactsByTag(tag: HighLevelTag): Promise<High
   credentials();
   const contacts: any[] = [];
   let nextUrl: string | null = `${HIGHLEVEL_BASE}/contacts/?limit=100`;
-  for (let page = 0; nextUrl && page < 50; page++) {
+  const visitedUrls = new Set<string>();
+  for (let page = 0; nextUrl; page++) {
+    if (page > 1000 || visitedUrls.has(nextUrl)) {
+      throw new Error("HighLevel returned a repeating pagination link; audience loading stopped to avoid an incomplete send.");
+    }
+    visitedUrls.add(nextUrl);
     const body = await highLevelFetch(nextUrl);
     contacts.push(...(Array.isArray(body?.contacts) ? body.contacts : []));
     nextUrl = typeof body?.meta?.nextPageUrl === "string" && body.meta.nextPageUrl ? body.meta.nextPageUrl : null;
@@ -72,6 +76,13 @@ export async function getHighLevelContactsByTag(tag: HighLevelTag): Promise<High
   const seen = new Set<string>();
   return contacts
     .filter((contact) => contactHasTag(contact, tag) && typeof contact.email === "string" && contact.email.includes("@"))
+    .filter((contact) => {
+      const emailSettings = contact.dndSettings?.Email || contact.dndSettings?.email;
+      const emailStatus = String(emailSettings?.status || "").toLowerCase();
+      return contact.dnd !== true &&
+        contact.emailDnd !== true &&
+        !["active", "unsubscribed", "bounced", "complaint", "spam"].includes(emailStatus);
+    })
     .filter((contact) => {
       const key = contact.email.trim().toLowerCase();
       if (seen.has(key)) return false;
@@ -168,6 +179,46 @@ async function resolveSelection(tagId: string, articleSlug: string) {
   return { tag, article };
 }
 
+async function getRunBySlot(slotKey: string) {
+  const [run] = await db.select().from(weeklyArticleCampaignRuns)
+    .where(eq(weeklyArticleCampaignRuns.slotKey, slotKey));
+  return run;
+}
+
+async function insertRun(slotKey: string, config: Awaited<ReturnType<typeof getCampaignConfig>>, tag: HighLevelTag, article: KnowledgeCentreArticle) {
+  const [run] = await db.insert(weeklyArticleCampaignRuns).values({
+    campaignId: CAMPAIGN_ID,
+    slotKey,
+    tagId: tag.id,
+    tagName: tag.name,
+    articleSlug: article.slug,
+    articleTitle: article.title,
+    subject: config.subject!,
+    intro: config.intro,
+  }).onConflictDoNothing({ target: weeklyArticleCampaignRuns.slotKey }).returning();
+  return run || getRunBySlot(slotKey);
+}
+
+async function getRecipientsForRun(runId: string) {
+  return db.select().from(weeklyArticleCampaignRecipients)
+    .where(eq(weeklyArticleCampaignRecipients.runId, runId));
+}
+
+async function populateRecipients(runId: string, contacts: HighLevelContact[]) {
+  const values = contacts.map((contact) => ({
+    runId,
+    email: contact.email.trim().toLowerCase(),
+    firstName: contact.firstName,
+  }));
+  for (let offset = 0; offset < values.length; offset += 500) {
+    const chunk = values.slice(offset, offset + 500);
+    if (chunk.length) {
+      await db.insert(weeklyArticleCampaignRecipients).values(chunk)
+        .onConflictDoNothing({ target: [weeklyArticleCampaignRecipients.runId, weeklyArticleCampaignRecipients.email] });
+    }
+  }
+}
+
 function articleUrl(article: KnowledgeCentreArticle) {
   const base = process.env.BASE_URL?.replace(/\/$/, "") || "https://www.selectbranding.co.uk";
   return `${base}/knowledge-centre/${article.slug}`;
@@ -207,54 +258,82 @@ export async function sendCampaignTest(input: { to: string; subject: string; tag
 async function runScheduledCampaign(slotKey: string) {
   const config = await getCampaignConfig();
   if (!config.enabled || !config.tagId || !config.articleSlug || !config.subject || !config.tagName) return;
-  const { tag, article } = await resolveSelection(config.tagId, config.articleSlug);
-  const [claimed] = await db.insert(weeklyArticleCampaignRuns).values({
-    campaignId: CAMPAIGN_ID,
-    slotKey,
-    tagName: tag.name,
-    articleTitle: article.title,
-    subject: config.subject,
-  }).onConflictDoNothing({ target: weeklyArticleCampaignRuns.slotKey }).returning();
-  if (!claimed) return;
-
-  let sent = 0;
-  const failures: string[] = [];
+  const existing = await getRunBySlot(slotKey);
+  if (existing && existing.status !== "sending") return;
+  let run = existing;
   try {
-    const contacts = await getHighLevelContactsByTag(tag);
-    for (const contact of contacts) {
+    const { tag, article } = existing
+      ? await resolveSelection(existing.tagId, existing.articleSlug)
+      : await resolveSelection(config.tagId, config.articleSlug);
+    run = run || await insertRun(slotKey, config, tag, article);
+    if (!run) throw new Error("Could not claim the campaign run.");
+    let recipients = await getRecipientsForRun(run.id);
+    if (recipients.length === 0) {
+      const contacts = await getHighLevelContactsByTag(tag);
+      await populateRecipients(run.id, contacts);
+      recipients = await getRecipientsForRun(run.id);
+    }
+    const staleClaimCutoff = new Date(Date.now() - 30 * 60 * 1000);
+    await db.update(weeklyArticleCampaignRecipients).set({ status: "pending", claimedAt: null })
+      .where(and(
+        eq(weeklyArticleCampaignRecipients.runId, run.id),
+        eq(weeklyArticleCampaignRecipients.status, "sending"),
+        lt(weeklyArticleCampaignRecipients.claimedAt, staleClaimCutoff),
+      ));
+    for (const recipient of recipients.filter((item) => item.status === "pending")) {
+      const [claimedRecipient] = await db.update(weeklyArticleCampaignRecipients).set({
+        status: "sending",
+        claimedAt: new Date(),
+      }).where(and(
+        eq(weeklyArticleCampaignRecipients.id, recipient.id),
+        eq(weeklyArticleCampaignRecipients.status, "pending"),
+      )).returning();
+      if (!claimedRecipient) continue;
       try {
         await sendArticleCampaignEmail({
-          to: contact.email,
-          subject: config.subject,
-          recipientFirstName: contact.firstName,
-          intro: config.intro,
+          to: claimedRecipient.email,
+          subject: run.subject,
+          recipientFirstName: claimedRecipient.firstName,
+          intro: run.intro,
           articleTitle: article.title,
           articleExcerpt: article.excerpt,
           articleUrl: articleUrl(article),
           imageUrl: article.imageUrl,
         });
-        sent++;
+        await db.update(weeklyArticleCampaignRecipients).set({ status: "sent", sentAt: new Date(), claimedAt: null, error: null })
+          .where(eq(weeklyArticleCampaignRecipients.id, claimedRecipient.id));
       } catch (error: any) {
-        failures.push(`${contact.email}: ${error?.message || "send failed"}`.slice(0, 500));
+        await db.update(weeklyArticleCampaignRecipients).set({
+          status: "failed",
+          claimedAt: null,
+          error: String(error?.message || "send failed").slice(0, 500),
+        }).where(eq(weeklyArticleCampaignRecipients.id, claimedRecipient.id));
       }
       await new Promise((resolve) => setTimeout(resolve, 600));
     }
+    const finalRecipients = await getRecipientsForRun(run.id);
+    const sent = finalRecipients.filter((item) => item.status === "sent").length;
+    const failures = finalRecipients.filter((item) => item.status === "failed");
     await db.update(weeklyArticleCampaignRuns).set({
       status: failures.length ? (sent ? "partial" : "failed") : "sent",
-      recipientCount: contacts.length,
+      recipientCount: finalRecipients.length,
       sentCount: sent,
       failedCount: failures.length,
-      failures: failures.slice(0, 50),
+      failures: failures.map((item) => `${item.email}: ${item.error || "send failed"}`).slice(0, 50),
       finishedAt: new Date(),
-    }).where(eq(weeklyArticleCampaignRuns.id, claimed.id));
+    }).where(eq(weeklyArticleCampaignRuns.id, run.id));
   } catch (error: any) {
-    await db.update(weeklyArticleCampaignRuns).set({
-      status: "failed",
-      sentCount: sent,
-      failedCount: failures.length,
-      failures: [...failures, String(error?.message || error)].slice(0, 50),
-      finishedAt: new Date(),
-    }).where(eq(weeklyArticleCampaignRuns.id, claimed.id));
+    if (run) {
+      const finalRecipients = await getRecipientsForRun(run.id);
+      await db.update(weeklyArticleCampaignRuns).set({
+        status: "failed",
+        recipientCount: finalRecipients.length,
+        sentCount: finalRecipients.filter((item) => item.status === "sent").length,
+        failedCount: finalRecipients.filter((item) => item.status === "failed").length,
+        failures: [...finalRecipients.filter((item) => item.status === "failed").map((item) => `${item.email}: ${item.error || "send failed"}`), String(error?.message || error)].slice(0, 50),
+        finishedAt: new Date(),
+      }).where(eq(weeklyArticleCampaignRuns.id, run.id));
+    }
     throw error;
   }
 }

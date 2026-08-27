@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart, Phone, Mail, MessageCircle, Headphones, Lightbulb, MapPin } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart, Phone, Mail, MessageCircle, Headphones, Lightbulb, MapPin, BookOpen, ArrowRight } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import sbsLogo from "@assets/logo_transparent.png";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -63,6 +63,7 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import type { KnowledgeCentreArticle } from "@shared/knowledgeCentre";
 
 const CONTACT = {
   phone: "0113 2552694",
@@ -312,6 +313,13 @@ export default function CustomerDashboard() {
     refetchInterval: 15000,
   });
   const unreadMessageCount = unreadData?.count ?? 0;
+
+  const { data: knowledgeData, isLoading: isLoadingKnowledge } = useQuery<{ articles?: KnowledgeCentreArticle[] }>({
+    queryKey: ["/api/knowledge-centre/external"],
+    enabled: !!customerUser,
+    staleTime: 5 * 60 * 1000,
+  });
+  const knowledgeArticles = (knowledgeData?.articles || []).slice(0, 3);
 
   const customerPostcode = extractUkPostcode(customerUser?.customerAddress);
 
@@ -659,6 +667,10 @@ export default function CustomerDashboard() {
                       <MapPin className="h-4 w-4" />
                       Delivery Address
                     </Button>
+                     <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/knowledge-centre")} data-testid="menu-knowledge-centre">
+                       <BookOpen className="h-4 w-4" />
+                       Knowledge Centre
+                     </Button>
                     <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setFeatureDialogOpen(true)} data-testid="menu-suggest-feature">
                       <Lightbulb className="h-4 w-4" />
                       Suggest a Feature
@@ -938,6 +950,51 @@ export default function CustomerDashboard() {
           </div>
 
           <div>
+             <Card className="mb-6 overflow-hidden" data-testid="card-knowledge-centre">
+               <CardHeader className="flex flex-row items-center justify-between gap-4">
+                 <div>
+                   <CardTitle className="flex items-center gap-2 text-xl">
+                     <BookOpen className="h-5 w-5 text-primary" />
+                     Knowledge Centre
+                   </CardTitle>
+                   <p className="mt-1 text-sm text-muted-foreground">
+                     Practical advice from Select Branding Solutions, including the latest articles from our RSS feed.
+                   </p>
+                 </div>
+                 <Button variant="outline" size="sm" onClick={() => setLocation("/knowledge-centre")} data-testid="button-view-knowledge-centre">
+                   View all <ArrowRight className="ml-2 h-4 w-4" />
+                 </Button>
+               </CardHeader>
+               <CardContent>
+                 {isLoadingKnowledge ? (
+                   <p className="text-sm text-muted-foreground">Loading articles...</p>
+                 ) : knowledgeArticles.length === 0 ? (
+                   <p className="text-sm text-muted-foreground">New advice will appear here soon.</p>
+                 ) : (
+                   <div className="grid gap-4 md:grid-cols-3">
+                     {knowledgeArticles.map((article) => (
+                       <button
+                         key={article.slug}
+                         type="button"
+                         className="group rounded-lg border bg-card text-left transition-shadow hover:shadow-md"
+                         onClick={() => setLocation(`/knowledge-centre/${article.slug}`)}
+                         data-testid={`link-customer-article-${article.slug}`}
+                       >
+                         {article.imageUrl && (
+                           <img src={article.imageUrl} alt="" className="aspect-[16/9] w-full rounded-t-lg object-cover" loading="lazy" decoding="async" />
+                         )}
+                         <div className="p-4">
+                           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{article.category}</p>
+                           <h3 className="mt-2 line-clamp-2 font-semibold group-hover:text-primary">{article.title}</h3>
+                           <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{article.excerpt}</p>
+                           <span className="mt-3 inline-flex items-center text-sm font-medium text-primary">Read article <ArrowRight className="ml-1 h-3.5 w-3.5" /></span>
+                         </div>
+                       </button>
+                     ))}
+                   </div>
+                 )}
+               </CardContent>
+             </Card>
             <h2 className="text-xl font-semibold text-foreground mb-2">Production Queue</h2>
             <p className="text-sm text-muted-foreground">
               View the status and progress of your orders in production
