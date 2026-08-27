@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Route, Router, Switch, useLocation } from "wouter";
+import { Route, Router, Switch } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -17,11 +17,14 @@ function LoadingPage() {
 
 function PublicHome() {
   const { isAuthenticated, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) setLocation("/dashboard");
-  }, [isAuthenticated, isLoading, setLocation]);
+    if (!isLoading && isAuthenticated) {
+      // Switch from the lightweight public entry to the full planner entry.
+      // Client-side navigation would leave /dashboard inside PublicApp.
+      window.location.replace("/dashboard");
+    }
+  }, [isAuthenticated, isLoading]);
 
   return <DemoAccess publicNav />;
 }

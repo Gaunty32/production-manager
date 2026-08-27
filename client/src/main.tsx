@@ -20,7 +20,12 @@ const appModule = isMarketingRoute ? import("./PublicApp") : import("./App");
 
 appModule.then(({ default: App }) => {
   sessionStorage.removeItem("production-planner-boot-retry");
-  createRoot(document.getElementById("root")!).render(<App />);
+  const root = createRoot(document.getElementById("root")!);
+  root.render(<App />);
+  requestAnimationFrame(() => {
+    document.documentElement.dataset.plannerMounted = "true";
+    sessionStorage.removeItem("production-planner-shell-retry");
+  });
 }).catch(async (error) => {
   console.error("Production Planner failed to start", error);
 

@@ -44,3 +44,9 @@ root. Bump the service-worker cache name when changing entry-point structure.
 Legacy installed Planner shortcuts may launch at `/#/dashboard`. Normalize any
 boot-time `#/...` route into a pathname before selecting the public or portal
 entry; otherwise the entry splitter sees `/` and can boot the wrong app.
+
+An installed/restored Chrome window may leave its initial module request pending
+without rejecting it, so the JavaScript-level import catch never runs. Keep an
+HTML-level mount watchdog: if React has not marked the document mounted after
+the startup window, reload once using a session guard. Non-public routes must
+also include a static loading shell so this interval is never a white page.
