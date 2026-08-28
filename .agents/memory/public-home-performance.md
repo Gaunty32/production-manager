@@ -14,3 +14,8 @@ document navigation (`location.replace`/`location.href`), not Wouter
 client-side navigation. The public router does not contain planner routes, so a
 history-only transition to `/dashboard` renders a blank page instead of loading
 the full app entry.
+
+The static marketing shell on `/` must wait for the lightweight staff-session
+preflight. Show it immediately on explicit public routes, but keep the neutral
+planner shell on `/` when staff auth succeeds; otherwise logged-in staff see the
+marketing hero flash before the full `/dashboard` navigation.

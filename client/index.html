@@ -9,10 +9,26 @@
     <meta name="apple-mobile-web-app-title" content="Planner" />
     <meta name="theme-color" content="#4f46e5" />
     <script>
-      if (
-        location.pathname === "/" ||
-        location.pathname === "/demo-access"
-      ) document.documentElement.classList.add("public-entry");
+      const isPublicPath =
+        location.pathname === "/demo-access" ||
+        location.pathname === "/privacy" ||
+        location.pathname === "/knowledge-centre" ||
+        location.pathname.startsWith("/knowledge-centre/");
+
+      if (isPublicPath) {
+        document.documentElement.classList.add("public-entry");
+      } else if (location.pathname === "/") {
+        // Keep the fast static homepage for anonymous visitors, but do not
+        // flash it for staff sessions that will be handed off to /dashboard.
+        fetch("/api/staff-auth/user", {
+          credentials: "include",
+          cache: "no-store",
+        }).then((response) => {
+          if (!response.ok) document.documentElement.classList.add("public-entry");
+        }).catch(() => {
+          document.documentElement.classList.add("public-entry");
+        });
+      }
     </script>
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-apple.png" />
