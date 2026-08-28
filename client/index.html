@@ -8,6 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Planner" />
     <meta name="theme-color" content="#4f46e5" />
+    <script>window.__staffAuthSnapshot = null;</script>
     <script>
       const isPublicPath =
         location.pathname === "/demo-access" ||
@@ -18,16 +19,20 @@
       if (isPublicPath) {
         document.documentElement.classList.add("public-entry");
       } else if (location.pathname === "/") {
-        // Keep the fast static homepage for anonymous visitors, but do not
-        // flash it for staff sessions that will be handed off to /dashboard.
-        fetch("/api/staff-auth/user", {
-          credentials: "include",
-          cache: "no-store",
-        }).then((response) => {
-          if (!response.ok) document.documentElement.classList.add("public-entry");
-        }).catch(() => {
+        if (window.__staffAuthSnapshot === false) {
           document.documentElement.classList.add("public-entry");
-        });
+        } else if (window.__staffAuthSnapshot !== true) {
+          // Development fallback if the server did not inject session state.
+          window.__staffAuthPreflight = fetch("/api/staff-auth/user", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          window.__staffAuthPreflight.then((response) => {
+            if (!response.ok) document.documentElement.classList.add("public-entry");
+          }).catch(() => {
+            document.documentElement.classList.add("public-entry");
+          });
+        }
       }
     </script>
     <link rel="manifest" href="/manifest.json" />

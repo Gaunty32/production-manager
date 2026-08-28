@@ -1,30 +1,43 @@
 import { lazy, Suspense, useEffect } from "react";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { Route, Router, Switch } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { ThemeProvider } from "@/components/ThemeProvider";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Toaster } from "@/components/ui/toaster";
-import { useAuth } from "@/hooks/useAuth";
 import DemoAccess from "@/pages/DemoAccess";
 
 const KnowledgeCentre = lazy(() => import("@/pages/KnowledgeCentre"));
 const Privacy = lazy(() => import("@/pages/Privacy"));
+
+declare global {
+  interface Window {
+    __staffAuthPreflight?: Promise<Response>;
+    __staffAuthSnapshot?: boolean | null;
+  }
+}
 
 function LoadingPage() {
   return <div className="min-h-screen bg-background" />;
 }
 
 function PublicHome() {
-  const { isAuthenticated, isLoading } = useAuth();
-
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      // Switch from the lightweight public entry to the full planner entry.
-      // Client-side navigation would leave /dashboard inside PublicApp.
+    if (window.__staffAuthSnapshot === false) return;
+    if (window.__staffAuthSnapshot === true) {
       window.location.replace("/dashboard");
+      return;
     }
-  }, [isAuthenticated, isLoading]);
+    let active = true;
+    const request = window.__staffAuthPreflight || fetch("/api/staff-auth/user", {
+      credentials: "include",
+      cache: "no-store",
+    });
+    request.then((response) => {
+      if (active && response.ok) {
+        // Switch from the lightweight public entry to the full planner entry.
+        window.location.replace("/dashboard");
+      }
+    }).catch(() => {
+      // Anonymous visitors should continue to see the public homepage.
+    });
+    return () => { active = false; };
+  }, []);
 
   return <DemoAccess publicNav />;
 }
@@ -43,17 +56,10 @@ function PublicRoutes() {
 
 export default function PublicApp() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <ErrorBoundary>
-          <Suspense fallback={<LoadingPage />}>
-            <Router>
-              <PublicRoutes />
-            </Router>
-          </Suspense>
-          <Toaster />
-        </ErrorBoundary>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <Suspense fallback={<LoadingPage />}>
+      <Router>
+        <PublicRoutes />
+      </Router>
+    </Suspense>
   );
 }

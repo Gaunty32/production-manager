@@ -15,7 +15,17 @@ client-side navigation. The public router does not contain planner routes, so a
 history-only transition to `/dashboard` renders a blank page instead of loading
 the full app entry.
 
-The static marketing shell on `/` must wait for the lightweight staff-session
-preflight. Show it immediately on explicit public routes, but keep the neutral
-planner shell on `/` when staff auth succeeds; otherwise logged-in staff see the
-marketing hero flash before the full `/dashboard` navigation.
+The static marketing shell on `/` must use staff-session state injected into the
+initial HTML response. Do not hide it behind a client-side auth request: that
+delays first content on cold loads. Keep the neutral planner shell when the
+injected session belongs to staff; otherwise show the marketing hero during HTML
+parsing. Retain a client-side auth check only as a fallback when no snapshot was
+injected.
+
+**Why:** Waiting for `/api/staff-auth/user` kept meaningful HTML hidden and made
+first content depend on an extra round trip. Server-injected session state
+preserves the no-flash staff handoff without penalising anonymous visitors.
+
+**How to apply:** Any server path that transforms or serves the SPA index must
+replace the auth snapshot placeholder from the current request session. Do not
+let static middleware serve `index.html` before that transformation.

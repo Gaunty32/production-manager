@@ -99,14 +99,30 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
   const [activePhoto, setActivePhoto] = useState(0);
   const [paused, setPaused] = useState(false);
   const [videoStarted, setVideoStarted] = useState(false);
+  const [carouselVisible, setCarouselVisible] = useState(false);
+  const carouselRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (paused) return;
+    const section = carouselRef.current;
+    if (!section || !("IntersectionObserver" in window)) {
+      setCarouselVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => setCarouselVisible(entry.isIntersecting),
+      { rootMargin: "300px 0px" },
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (paused || !carouselVisible) return;
     const timer = setInterval(() => {
       setActivePhoto(i => (i + 1) % productionPhotos.length);
     }, 4000);
     return () => clearInterval(timer);
-  }, [paused]);
+  }, [paused, carouselVisible]);
 
   const prevPhoto = () => {
     setPaused(true);
@@ -261,7 +277,7 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
         </section>
 
         {/* ── PRODUCTION PHOTO CAROUSEL ────────────────────────────────────────── */}
-        <section className="border-t px-4 py-16">
+        <section ref={carouselRef} className="border-t px-4 py-16">
           <div className="max-w-5xl mx-auto space-y-6">
             <div className="text-center space-y-1">
               <h2 className="text-2xl font-bold tracking-tight">Inside the production floor</h2>

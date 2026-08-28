@@ -1,51 +1,54 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { apiRequest } from "@/lib/queryClient";
 import { CheckCircle2 } from "lucide-react";
 
-const schema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  email: z.string().email("Please enter a valid email address"),
-  phone: z.string().min(7, "Phone number is required"),
-  company: z.string().min(1, "Company name is required"),
-});
+type FormValues = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  company: string;
+};
 
-type FormValues = z.infer<typeof schema>;
+const EMPTY_FORM: FormValues = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  company: "",
+};
 
 export default function DemoLeadForm() {
   const [submitted, setSubmitted] = useState(false);
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { firstName: "", lastName: "", email: "", phone: "", company: "" },
-  });
+  const [form, setForm] = useState<FormValues>(EMPTY_FORM);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
 
-  const requestMutation = useMutation({
-    mutationFn: async (data: FormValues) => {
-      const res = await apiRequest("POST", "/api/demo/request-access", data);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "Unable to send request");
-      }
-      return res.json();
-    },
-    onSuccess: () => setSubmitted(true),
-  });
+  const updateField = (field: keyof FormValues, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
 
-  const onSubmit = (data: FormValues) => requestMutation.mutate(data);
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setPending(true);
+    try {
+      const response = await fetch("/api/demo/request-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(form),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || body.error || "Unable to send request");
+      setSubmitted(true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <div className="max-w-lg mx-auto">
@@ -73,108 +76,99 @@ export default function DemoLeadForm() {
             </div>
             <Button
               variant="outline"
-              onClick={() => { setSubmitted(false); form.reset(); }}
+              onClick={() => { setSubmitted(false); setForm(EMPTY_FORM); setError(""); }}
               data-testid="button-try-again"
             >
               Send again
             </Button>
           </div>
         ) : (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Jane" data-testid="input-first-name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-2 text-sm font-medium">
+                First name
+                <Input
+                  required
+                  autoComplete="given-name"
+                  placeholder="Jane"
+                  value={form.firstName}
+                  onChange={(event) => updateField("firstName", event.target.value)}
+                  data-testid="input-first-name"
                 />
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Smith" data-testid="input-last-name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+              </label>
+              <label className="space-y-2 text-sm font-medium">
+                Last name
+                <Input
+                  required
+                  autoComplete="family-name"
+                  placeholder="Smith"
+                  value={form.lastName}
+                  onChange={(event) => updateField("lastName", event.target.value)}
+                  data-testid="input-last-name"
                 />
-              </div>
+              </label>
+            </div>
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Work email</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="jane@yourcompany.com" data-testid="input-email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            <label className="space-y-2 text-sm font-medium">
+              Work email
+              <Input
+                required
+                type="email"
+                autoComplete="email"
+                placeholder="jane@yourcompany.com"
+                value={form.email}
+                onChange={(event) => updateField("email", event.target.value)}
+                data-testid="input-email"
               />
+            </label>
 
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Phone number</FormLabel>
-                      <FormControl>
-                        <Input type="tel" placeholder="07700 900000" data-testid="input-phone" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-2 text-sm font-medium">
+                Phone number
+                <Input
+                  required
+                  type="tel"
+                  minLength={7}
+                  autoComplete="tel"
+                  placeholder="07700 900000"
+                  value={form.phone}
+                  onChange={(event) => updateField("phone", event.target.value)}
+                  data-testid="input-phone"
                 />
-                <FormField
-                  control={form.control}
-                  name="company"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Company name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Acme Ltd" data-testid="input-company" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+              </label>
+              <label className="space-y-2 text-sm font-medium">
+                Company name
+                <Input
+                  required
+                  autoComplete="organization"
+                  placeholder="Acme Ltd"
+                  value={form.company}
+                  onChange={(event) => updateField("company", event.target.value)}
+                  data-testid="input-company"
                 />
-              </div>
+              </label>
+            </div>
 
-              {requestMutation.isError && (
-                <p className="text-sm text-destructive">
-                  {(requestMutation.error as Error)?.message || "Something went wrong. Please try again."}
-                </p>
-              )}
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={requestMutation.isPending}
-                data-testid="button-request-demo"
-              >
-                {requestMutation.isPending ? "Sending..." : "Book a Discovery Call"}
-              </Button>
-
-              <p className="text-xs text-muted-foreground text-center leading-relaxed">
-                By submitting, you agree that Select Branding Solutions may follow up with you.
-                No spam, ever.
+            {error && (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
               </p>
-            </form>
-          </Form>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={pending}
+              data-testid="button-request-demo"
+            >
+              {pending ? "Sending..." : "Book a Discovery Call"}
+            </Button>
+
+            <p className="text-xs text-muted-foreground text-center leading-relaxed">
+              By submitting, you agree that Select Branding Solutions may follow up with you.
+              No spam, ever.
+            </p>
+          </form>
         )}
       </div>
     </div>
