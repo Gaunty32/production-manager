@@ -41,6 +41,13 @@ interface JobCard {
   awaitingArtwork: boolean;
   overdue: boolean;
   dueToday: boolean;
+  planningStatus: "scheduled" | "at_risk" | "unscheduled";
+  plannedCompletionDate: string | null;
+  plannedStartTime: number | null;
+  plannedEndTime: number | null;
+  plannedOperatorName: string | null;
+  plannedMachineName: string | null;
+  planningReason: string | null;
   suggestedOperatorId: string | null;
   suggestedOperatorName: string | null;
   impliedOperators: Array<{ staffId: string; name: string; outstandingQty: number }>;
@@ -87,10 +94,14 @@ export default function AllocationBoard() {
   const { data: board, isLoading } = useQuery<BoardData>({ queryKey: ["/api/allocation/board"] });
   const { data: machines } = useQuery<Machine[]>({ queryKey: ["/api/machines"] });
 
-  const { data: recommendation } = useQuery<{ machineId: number | null; machineName: string | null; reason: string }>({
-    queryKey: ["/api/allocation/recommend", selected?.id],
+  const { data: recommendation } = useQuery<{
+    machineId: number | null; machineName: string | null; reason: string;
+    earliestDate?: string | null; startTime?: number | null; endTime?: number | null; canMeetDeadline?: boolean;
+  }>({
+    queryKey: ["/api/allocation/recommend", selected?.id, operatorId],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/allocation/recommend/${selected!.id}`);
+      const selectedOperator = operatorId === "unallocated" ? "" : `?operatorId=${encodeURIComponent(operatorId)}`;
+      const res = await apiRequest("GET", `/api/allocation/recommend/${selected!.id}${selectedOperator}`);
       return res.json();
     },
     enabled: !!selected,
@@ -133,6 +144,10 @@ export default function AllocationBoard() {
 
   const submitAllocation = () => {
     if (!selected) return;
+    if (operatorId === "unallocated" && machineId !== "none") {
+      toast({ title: "Choose a responsible operator first", variant: "destructive" });
+      return;
+    }
     const chosenMachine = machineId === "none" ? null : Number(machineId);
     const isOverride = recommendation?.machineId != null && chosenMachine != null && chosenMachine !== recommendation.machineId;
     allocateMutation.mutate({
@@ -168,6 +183,13 @@ export default function AllocationBoard() {
           <CalendarClock className="h-3 w-3 mr-1" />{fmtDue(job.requiredDispatchDate)}
         </Badge>
         {job.machineName && <Badge variant="outline" className="text-[10px]">{job.machineName}</Badge>}
+        <Badge variant={job.planningStatus === "at_risk" ? "destructive" : "outline"} className="text-[10px]">
+          {job.planningStatus === "scheduled" && job.plannedCompletionDate
+            ? `Completes ${fmtDue(job.plannedCompletionDate)}`
+            : job.planningStatus === "at_risk" && job.plannedCompletionDate
+              ? `Late: ${fmtDue(job.plannedCompletionDate)}`
+              : "Not scheduled"}
+        </Badge>
         {job.awaitingStock && <Badge variant="outline" className="text-[10px] text-amber-600">Stock</Badge>}
         {job.awaitingArtwork && <Badge variant="outline" className="text-[10px] text-amber-600">Artwork</Badge>}
         {!job.responsibleOperatorId && job.suggestedOperatorName && (
@@ -333,13 +355,17 @@ export default function AllocationBoard() {
             </div>
             <div>
               <label className="text-sm font-medium block mb-1">Machine</label>
-              {recommendation?.machineId != null && (
+              {operatorId === "unallocated" ? (
+                <p className="text-xs text-amber-600 mb-1">Choose the responsible operator before selecting a machine.</p>
+              ) : recommendation?.machineId != null ? (
                 <p className="text-xs text-muted-foreground mb-1">
                   Recommended: <span className="font-medium">{recommendation.machineName}</span> — {recommendation.reason}
                 </p>
-              )}
+              ) : recommendation ? (
+                <p className="text-xs text-destructive mb-1">{recommendation.reason}</p>
+              ) : null}
               <Select value={machineId} onValueChange={setMachineId}>
-                <SelectTrigger data-testid="select-confirmed-machine"><SelectValue /></SelectTrigger>
+                <SelectTrigger disabled={operatorId === "unallocated"} data-testid="select-confirmed-machine"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Not set</SelectItem>
                   {machines?.filter(m => m.isActive).map(m => (

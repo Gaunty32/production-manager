@@ -6,6 +6,8 @@ description: How job ownership by operators works — status derivation, recomme
 Principle: people own jobs, machines provide capacity. `jobs` carries responsibleOperatorId, allocationStatus (unallocated|allocated|blocked), blockedReason, recommendedMachineId, machineOverrideReason, allocatedById/At. Existing `jobs.machineId` doubles as the CONFIRMED machine — do not add a second confirmed-machine column.
 
 Rules:
+- A job's responsible operator is authoritative for every new schedule. Machine defaults are legacy display/history fallbacks only; automatic scheduling must fail visibly rather than silently choosing somebody else.
+- Production assignment is ordered: responsible operator first, then an availability-aware machine choice. Direct job/line-item mutation routes must not bypass this invariant.
 - allocationStatus is DERIVED in `allocateJob` (blocked > allocated > unallocated); never set it directly from other write paths or it drifts.
 - The machine recommendation is snapshotted at first allocation using the operator being set in that same request (pass the intended operator into `recommendMachineForJob`), otherwise the recommended-vs-overridden audit is computed against the stale operator.
 - Historic jobs keep null operator — display "Historic allocation unavailable"; never backfill guesses.
@@ -13,4 +15,6 @@ Rules:
 - Active-job filter (board/queue/TV) mirrors the Production Queue: not completed, not pending_customer_approval, not invoiced/ready, advance-payment gate. Keep all consumers on `getActiveJobs()` in server/allocation.ts so they can't diverge.
 - TV: operatorWorkload strip renders above Today's Plan; "Jobs with no owner" + "Blocked jobs" alerts derive from the same fields.
 
-**Why:** code review found the stale-recommendation and staff-wide read-route issues on first build; both were fixed — don't reintroduce.
+**Why:** code review found silent operator fallback, bypass write paths, and Print re-planning gaps. These create plans that name the wrong person or quietly lose work.
+
+**How to apply:** New scheduling paths must keep the responsible person fixed and report unavailable work explicitly rather than substituting another operator.

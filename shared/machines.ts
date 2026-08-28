@@ -3,21 +3,23 @@
 export const PRINT_MACHINE_ID = 6;
 
 export const MACHINE_NAMES: Record<number, string> = {
-  1: "Barudan 8",
+  1: "Barudan 8 1",
   2: "Barudan 6 1",
   3: "SWF 6 1",
   4: "SWF 6 2",
   5: "Barudan 6 2",
   6: "Print",
+  7: "Barudan 8 2",
 };
 
 export const MACHINE_HEADS: Record<number, number> = {
-  1: 8,  // Barudan 8 - Best machine with 8 heads
+  1: 8,  // Barudan 8 1
   2: 6,  // Barudan 6 1 - 6 heads
   3: 6,  // SWF 6 1 - 6 heads
   4: 6,  // SWF 6 2 - 6 heads
   5: 6,  // Barudan 6 2 - 6 heads
   6: 1,  // Print - single station
+  7: 8,  // Barudan 8 2
 };
 
 // True when a line item's job type is Print (case-insensitive, trimmed).
@@ -82,11 +84,13 @@ export function formatTimeDisplay(minutes: number): string {
 }
 
 // Allocation rule (per line item):
-//   quantity  > 40  -> Barudan 8 (id 1)
+//   quantity  > 40  -> either active Barudan 8 (ids 1, 7)
 //   quantity <= 40  -> Barudan 6 1 (id 2) or Barudan 6 2 (id 5)
 // SWF machines (ids 3, 4) are never auto-suggested. Staff can still pick them
 // manually if they re-activate them.
-export const BARUDAN_8_ID = 1;
+export const BARUDAN_8_IDS = [1, 7];
+/** @deprecated Prefer BARUDAN_8_IDS when searching for capacity. */
+export const BARUDAN_8_ID = BARUDAN_8_IDS[0];
 export const BARUDAN_6_IDS = [2, 5];
 export const LARGE_JOB_THRESHOLD = 40;
 
@@ -98,7 +102,7 @@ export function suggestMachine(quantity: number, jobType: string, stitchCount?: 
     return null;
   }
   if (quantity > LARGE_JOB_THRESHOLD) {
-    return BARUDAN_8_ID;
+    return BARUDAN_8_IDS[0];
   }
   // For ≤40, prefer the 6-head machine with the shortest estimated runtime
   // when a stitch count is provided; otherwise default to Barudan 6 1.
@@ -117,6 +121,6 @@ export function suggestMachine(quantity: number, jobType: string, stitchCount?: 
 
 export function getCandidateMachineIds(quantity: number): number[] {
   if (quantity <= 0) return [];
-  if (quantity > LARGE_JOB_THRESHOLD) return [BARUDAN_8_ID];
+  if (quantity > LARGE_JOB_THRESHOLD) return [...BARUDAN_8_IDS];
   return [...BARUDAN_6_IDS];
 }

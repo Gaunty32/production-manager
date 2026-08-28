@@ -77,25 +77,25 @@ app.use((req, res, next) => {
   }
 
   await storage.seedMachines();
+  await storage.ensureProductionMachineRoster();
   await storage.ensurePrintMachine();
 
-  // Backfill: make every Print line item compliant — assigned to the dedicated
-  // Print machine and its default operator (Mollie). Idempotent: only items that
-  // are not already compliant are touched; uncompleted ones are then scheduled so
-  // they appear on the Machine Schedule.
+  // Backfill the dedicated Print machine without changing job ownership.
   try {
     const printMachine = await storage.getMachine(PRINT_MACHINE_ID);
-    const operatorId = printMachine?.defaultOperatorId ?? null;
+    const jobsById = new Map((await storage.getJobs()).map(job => [job.id, job]));
     const printItems = (await storage.getAllJobLineItems()).filter(
       (li) =>
         isPrintJobType(li.jobType) &&
-        (li.machineId !== PRINT_MACHINE_ID || (!!operatorId && li.operatorId !== operatorId)),
+        (li.machineId !== PRINT_MACHINE_ID ||
+          li.operatorId !== (jobsById.get(li.jobId)?.responsibleOperatorId ?? null)),
     );
     if (printItems.length > 0) {
       for (const li of printItems) {
+        const operatorId = jobsById.get(li.jobId)?.responsibleOperatorId ?? null;
         await storage.updateJobLineItem(li.id, {
           machineId: PRINT_MACHINE_ID,
-          ...(operatorId ? { operatorId } : {}),
+          operatorId,
         });
         if (!li.completed) await autoScheduleLineItem(li.id);
       }

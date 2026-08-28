@@ -209,7 +209,9 @@ export async function autoScheduleLineItem(lineItemId: string): Promise<{ succes
     const changeover = machine?.changeoverTimeMinutes ?? 3;
     
     // Calculate duration from quantity and stitch count
-    const quantity = lineItem.quantity || 0;
+    const completedQuantity = (await storage.getProductionEntriesByLineItem(lineItem.id))
+      .reduce((sum, entry) => sum + entry.quantityCompleted, 0);
+    const quantity = Math.max(0, (lineItem.quantity || 0) - completedQuantity);
     const stitchCount = lineItem.stitchCount || 0;
     
     if (quantity === 0) {
@@ -320,24 +322,17 @@ export async function autoScheduleLineItem(lineItemId: string): Promise<{ succes
       return found;
     };
 
-    // Prefer the machine's default operator (using their shift pattern). Fall back to
-    // any other staff member only if the default operator has no available slot.
+    // Person-first precedence is authoritative. Never silently move assigned work
+    // to somebody else merely because they have an earlier slot.
     let bestSlot: { date: Date; startTime: number; endTime: number; staffId: string } | null = null;
-    const defaultOperator = machine?.defaultOperatorId
-      ? staff.find(s => s.id === machine.defaultOperatorId)
-      : undefined;
-    if (defaultOperator) {
-      bestSlot = searchEarliestSlot([defaultOperator]);
-    }
-    if (!bestSlot) {
-      const fallbackStaff = defaultOperator
-        ? staff.filter(s => s.id !== defaultOperator.id)
-        : staff;
-      bestSlot = searchEarliestSlot(fallbackStaff);
-    }
+    const assignedOperatorId = job.responsibleOperatorId;
+    if (!assignedOperatorId) return { success: false, error: "Choose a responsible operator before scheduling" };
+    const assignedOperator = staff.find(s => s.id === assignedOperatorId);
+    if (!assignedOperator) return { success: false, error: "Assigned operator is inactive or unavailable" };
+    bestSlot = searchEarliestSlot([assignedOperator]);
 
     if (!bestSlot) {
-      return { success: false, error: "No available time slots found within 30 days" };
+      return { success: false, error: `${assignedOperator.name} has no valid slot on this machine within the planning window` };
     }
     
     // Create the schedule
@@ -357,6 +352,68 @@ export async function autoScheduleLineItem(lineItemId: string): Promise<{ succes
   } catch (error) {
     console.error("Auto-scheduling error:", error);
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+async function validateSchedulePlacement(
+  data: {
+    id?: string;
+    jobId: string;
+    lineItemId?: string | null;
+    machineId: number;
+    staffId: string;
+    scheduledDate: Date | string;
+    startTime: number;
+    endTime: number;
+  },
+): Promise<void> {
+  const { findAvailableSlots } = await import("@shared/scheduling");
+  const [job, machine, staffMember] = await Promise.all([
+    storage.getJob(data.jobId),
+    storage.getMachine(data.machineId),
+    storage.getStaff().then(rows => rows.find(s => s.id === data.staffId)),
+  ]);
+  if (!job) throw new Error("Job not found");
+  if (!job.responsibleOperatorId) throw new Error("Choose a responsible operator before scheduling");
+  if (job.responsibleOperatorId !== data.staffId) {
+    throw new Error("Schedule operator must match the job's responsible operator");
+  }
+  if (!staffMember || staffMember.active === false) throw new Error("Assigned operator is inactive");
+  if (!machine || !machine.isActive) throw new Error("Selected machine is offline");
+  if (job.machineId != null && job.machineId !== data.machineId) {
+    throw new Error("Schedule machine must match the job's confirmed machine");
+  }
+  if (data.lineItemId) {
+    const item = await storage.getJobLineItem(data.lineItemId);
+    if (!item || item.jobId !== data.jobId) throw new Error("Line item does not belong to this job");
+    if (item.operatorId && item.operatorId !== data.staffId) throw new Error("Line-item operator conflicts with the responsible operator");
+  }
+  const date = new Date(data.scheduledDate);
+  date.setHours(0, 0, 0, 0);
+  if (job.requiredDispatchDate && date > new Date(job.requiredDispatchDate)) {
+    throw new Error("This placement is after the required dispatch date");
+  }
+  const [blocks, shifts, schedules, allocations, holidays, bankDays] = await Promise.all([
+    storage.getMachineScheduleBlocks(),
+    storage.getStaffShifts(),
+    storage.getJobSchedules(),
+    storage.getStaffMachineAllocations(),
+    storage.getStaffHolidays(),
+    storage.getBankHolidays(),
+  ]);
+  const slots = findAvailableSlots(
+    date,
+    data.machineId,
+    data.staffId,
+    blocks,
+    shifts,
+    schedules.filter(s => s.id !== data.id),
+    allocations,
+    holidays,
+    bankDays,
+  );
+  if (!slots.some(slot => data.startTime >= slot.startTime && data.endTime <= slot.endTime)) {
+    throw new Error("That time is unavailable due to a shift, holiday, allocation, block, or existing booking");
   }
 }
 
@@ -6120,7 +6177,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       if (!(await requireAllocationManager(req, res))) return;
       const { recommendMachineForJob } = await import("./allocation");
-      res.json(await recommendMachineForJob(req.params.jobId));
+      res.json(await recommendMachineForJob(
+        req.params.jobId,
+        typeof req.query.operatorId === "string" && req.query.operatorId ? req.query.operatorId : undefined,
+      ));
     } catch (error) {
       console.error("Machine recommendation error:", error);
       res.status(500).json({ message: "Failed to recommend a machine" });
@@ -6143,7 +6203,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = allocateJobSchema.parse(req.body);
       const { allocateJob } = await import("./allocation");
       const updated = await allocateJob(req.params.id, { ...data, allocatedById: user.id });
-      res.json(updated);
+      const replanned = [];
+      for (const lineItemId of updated.planning.replanLineItemIds) {
+        replanned.push({ lineItemId, ...(await autoScheduleLineItem(lineItemId)) });
+      }
+      res.json({ ...updated, planning: { ...updated.planning, replanned } });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid allocation", errors: error.errors });
@@ -6206,6 +6270,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const data = updateJobSchema.parse(req.body);
+      if (data.machineId !== undefined) {
+        return res.status(400).json({
+          error: "Assign the responsible operator and machine together from Job Allocation",
+        });
+      }
       
       // Extract consolidatedJobIds and existingShipmentId before filtering
       const consolidatedJobIds = data.consolidatedJobIds || [];
@@ -6377,22 +6446,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { jobId } = req.params;
       const data = insertJobLineItemSchema.parse({ ...req.body, jobId });
+      const parentJob = await storage.getJob(jobId);
+      if (!parentJob) return res.status(404).json({ error: "Job not found" });
 
       // Print jobs always run on the dedicated "Print" machine (operator Mollie)
       const isPrintItem = isPrintJobType(data.jobType);
       if (isPrintItem) {
         data.machineId = PRINT_MACHINE_ID;
       }
-
-      // Default the operator from the machine's default operator when none was
-      // chosen. For Print items the operator is always forced to the Print
-      // machine's default operator (Mollie), overriding any incoming value.
-      if (data.machineId && (isPrintItem || !data.operatorId)) {
-        const machine = await storage.getMachine(data.machineId);
-        if (machine?.defaultOperatorId) {
-          data.operatorId = machine.defaultOperatorId;
-        }
+      if (data.machineId && !parentJob.responsibleOperatorId) {
+        return res.status(400).json({ error: "Choose a responsible operator in Job Allocation before assigning a machine" });
       }
+      if (data.machineId && parentJob.machineId != null && data.machineId !== parentJob.machineId) {
+        return res.status(400).json({ error: "Line-item machine must match the job's confirmed machine" });
+      }
+
+      // Ownership is job-level. A line item may inherit it, but may not invent
+      // a different operator from a machine default.
+      data.operatorId = parentJob.responsibleOperatorId ?? null;
 
       const lineItem = await storage.createJobLineItem(data);
       
@@ -6545,24 +6616,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get existing line item to check if machine is newly assigned
       const existingBeforeUpdate = await storage.getJobLineItem(req.params.id);
+      if (!existingBeforeUpdate) return res.status(404).json({ error: "Line item not found" });
       const previousMachineId = existingBeforeUpdate?.machineId;
+      const parentJob = await storage.getJob(existingBeforeUpdate.jobId);
+      if (!parentJob) return res.status(404).json({ error: "Job not found" });
 
       // Print jobs always run on the dedicated "Print" machine (operator Mollie).
       // Use the incoming job type when present, otherwise the saved one.
-      const isPrintItem = isPrintJobType(data.jobType ?? existingBeforeUpdate?.jobType);
+      const isPrintItem = isPrintJobType(existingBeforeUpdate.jobType);
       if (isPrintItem) {
         data.machineId = PRINT_MACHINE_ID;
       }
 
-      // Default the operator from the machine's default operator when a machine
-      // is assigned/changed but no operator was provided (parity with create).
-      // For Print items the operator is always forced to Mollie, overriding any
-      // incoming value.
-      if (data.machineId && (isPrintItem || !data.operatorId)) {
-        const machine = await storage.getMachine(data.machineId);
-        if (machine?.defaultOperatorId) {
-          data.operatorId = machine.defaultOperatorId;
+      if (data.completed !== true && (data.machineId !== undefined || data.operatorId !== undefined)) {
+        if (!parentJob.responsibleOperatorId) {
+          return res.status(400).json({ error: "Choose a responsible operator in Job Allocation first" });
         }
+        if (data.operatorId != null && data.operatorId !== parentJob.responsibleOperatorId) {
+          return res.status(400).json({ error: "Line-item operator must match the job's responsible operator" });
+        }
+        data.operatorId = parentJob.responsibleOperatorId;
       }
 
       const updates = Object.fromEntries(
@@ -7133,13 +7206,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/job-schedules", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertJobScheduleSchema.parse(req.body);
-      // Never allow new work to be booked against a leaver (active=false)
-      if (data.staffId) {
-        const staffMember = (await storage.getStaff()).find(s => s.id === data.staffId);
-        if (staffMember && staffMember.active === false) {
-          return res.status(400).json({ error: "This staff member has left and cannot be scheduled" });
-        }
-      }
+      await validateSchedulePlacement({
+        ...data,
+        scheduledDate: data.scheduledDate,
+      });
       const schedule = await storage.createJobSchedule(data);
       res.json(schedule);
     } catch (error) {
@@ -7157,13 +7227,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
-      // Never allow work to be reassigned to a leaver (active=false)
-      if (typeof updates.staffId === "string" && updates.staffId) {
-        const staffMember = (await storage.getStaff()).find(s => s.id === updates.staffId);
-        if (staffMember && staffMember.active === false) {
-          return res.status(400).json({ error: "This staff member has left and cannot be scheduled" });
-        }
-      }
+      const existing = (await storage.getJobSchedules()).find(s => s.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: "Job schedule not found" });
+      await validateSchedulePlacement({
+        id: existing.id,
+        jobId: (updates.jobId as string | undefined) ?? existing.jobId,
+        lineItemId: existing.lineItemId,
+        machineId: (updates.machineId as number | undefined) ?? existing.machineId,
+        staffId: (updates.staffId as string | undefined) ?? existing.staffId,
+        scheduledDate: (updates.scheduledDate as Date | undefined) ?? existing.scheduledDate,
+        startTime: (updates.startTime as number | undefined) ?? existing.startTime,
+        endTime: (updates.endTime as number | undefined) ?? existing.endTime,
+      });
       const schedule = await storage.updateJobSchedule(req.params.id, updates);
       res.json(schedule);
     } catch (error) {
@@ -7440,7 +7515,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const allLogosApproved = jobLineItems.length > 0 && jobLineItems.every(li => li.logoApproved);
         if (!allLogosApproved) continue;
         
-        const duration = calculateJobDuration(lineItem.quantity, lineItem.stitchCount, lineItem.machineId!);
+        const completedQuantity = (await storage.getProductionEntriesByLineItem(lineItem.id))
+          .reduce((sum, entry) => sum + entry.quantityCompleted, 0);
+        const remainingQuantity = Math.max(0, lineItem.quantity - completedQuantity);
+        if (remainingQuantity === 0) continue;
+        const duration = calculateJobDuration(remainingQuantity, lineItem.stitchCount, lineItem.machineId!);
         if (duration === 0) {
           failedItems.push({ 
             lineItemId: lineItem.id, 
@@ -7477,62 +7556,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let bestSlot: any = null;
         let bestStaffId: string | null = null;
         
-        // Determine which staff to consider for this machine
-        // If allocations exist, only use staff who have allocations for this machine
-        // Otherwise, use all staff (legacy behavior for systems without allocations)
-        const hasAllocationsInSystem = staffMachineAllocations.length > 0;
-        
-        let candidateStaff = staff;
-        if (hasAllocationsInSystem) {
-          // Get staff IDs who have allocations for this specific machine
-          const staffWithMachineAllocations = new Set(
-            staffMachineAllocations
-              .filter(a => a.machineId === lineItem.machineId)
-              .map(a => a.staffId)
-          );
-          candidateStaff = staff.filter(s => staffWithMachineAllocations.has(s.id));
-          
-          if (candidateStaff.length === 0) {
-            failedItems.push({ 
-              lineItemId: lineItem.id, 
-              jobName: job.jobName,
-              reason: `No staff allocated to machine ${lineItem.machineId}` 
-            });
-            continue;
-          }
-        }
-
         const machineForItem = allMachines.find(m => m.id === lineItem.machineId);
-        const defaultOperator = machineForItem?.defaultOperatorId
-          ? staff.find(s => s.id === machineForItem.defaultOperatorId)
+        const assignedOperatorId = job.responsibleOperatorId;
+        const assignedOperator = assignedOperatorId
+          ? staff.find(s => s.id === assignedOperatorId)
           : undefined;
+        if (!assignedOperator) {
+          failedItems.push({
+            lineItemId: lineItem.id,
+            jobName: job.jobName,
+            reason: "Choose an active responsible operator before scheduling",
+          });
+          continue;
+        }
+        const candidateStaff = [assignedOperator];
 
-        // Walk forward day by day and take the earliest day where an eligible
-        // operator has a free slot. The operator is whoever is allocated to this
-        // machine that day (the machine+staff combination set up in Staff
-        // Allocations), so a job's operator always matches who is actually on the
-        // machine. When nobody is allocated that day we fall back to the machine's
-        // default operator, then to any candidate staff (legacy behaviour for
-        // set-ups without allocations).
+        // Walk forward with the assigned person only. Availability determines
+        // whether the placement is feasible; it never changes ownership.
         const cursor = new Date(startDate);
         while (cursor <= endDate && !bestSlot) {
-          const allocatedIds = allocatedStaffOnDate(lineItem.machineId!, cursor);
-          let dayStaff: typeof staff;
-          if (allocatedIds.length > 0) {
-            const allocated = candidateStaff.filter(s => allocatedIds.includes(s.id));
-            // Prefer the default operator first, but only if they are allocated today.
-            dayStaff = defaultOperator && allocatedIds.includes(defaultOperator.id)
-              ? [defaultOperator, ...allocated.filter(s => s.id !== defaultOperator.id)]
-              : allocated;
-          } else if (defaultOperator) {
-            dayStaff = [defaultOperator];
-          } else {
-            dayStaff = candidateStaff;
-          }
-
           let daySlot: any = null;
           let daySlotStaffId: string | null = null;
-          for (const staffMember of dayStaff) {
+          for (const staffMember of candidateStaff) {
             const dateSlots = findAvailableSlots(
               cursor,
               lineItem.machineId!,

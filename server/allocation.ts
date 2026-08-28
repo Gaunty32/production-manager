@@ -4,9 +4,10 @@
 // recommended machine, and (via jobs.machineId) a confirmed machine.
 
 import { db } from "./db";
-import { jobs, jobLineItems, staff, machines, customers, productionEntries, users } from "@shared/schema";
-import { and, eq, ne, isNull, inArray, gte, lt, sql } from "drizzle-orm";
+import { jobs, jobLineItems, jobSchedule, staff, machines, customers, productionEntries, staffShifts, machineScheduleBlocks, staffMachineAllocations, staffHolidays, bankHolidays } from "@shared/schema";
+import { and, eq, ne, isNull, inArray, gte, lt } from "drizzle-orm";
 import { PRINT_MACHINE_ID, isPrintJobType } from "@shared/machines";
+import { findAvailableSlots, minutesToTime } from "@shared/scheduling";
 
 /** London calendar date (yyyy-MM-dd) for "today". */
 function londonDateStr(d: Date): string {
@@ -61,6 +62,13 @@ type JobCard = {
   awaitingArtwork: boolean;
   overdue: boolean;
   dueToday: boolean;
+  planningStatus: "scheduled" | "at_risk" | "unscheduled";
+  plannedCompletionDate: string | null;
+  plannedStartTime: number | null;
+  plannedEndTime: number | null;
+  plannedOperatorName: string | null;
+  plannedMachineName: string | null;
+  planningReason: string | null;
   /** For unowned jobs: the operator already implied by the line items /
    * machine schedule (explicit line-item operator, else the machine's
    * default operator) when it is unambiguous. */
@@ -94,11 +102,26 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
   const allStaff = await db.select().from(staff);
   const allMachines = await db.select().from(machines);
   const allCustomers = await db.select().from(customers);
+  const schedules = await db.select().from(jobSchedule).where(inArray(jobSchedule.jobId, jobIds));
+  const entries = await db.select().from(productionEntries).where(inArray(
+    productionEntries.lineItemId,
+    items.map(i => i.id),
+  ));
   const staffName = new Map(allStaff.map(s => [s.id, s.name]));
   const activeStaffIds = new Set(allStaff.filter(s => s.active !== false).map(s => s.id));
   const machineName = new Map(allMachines.map(m => [m.id, m.name]));
   const custName = new Map(allCustomers.map(c => [c.id, c.name]));
   const itemsByJob = new Map<string, typeof items>();
+  const schedulesByJob = new Map<string, typeof schedules>();
+  const completedByLineItem = new Map<string, number>();
+  for (const entry of entries) {
+    completedByLineItem.set(entry.lineItemId, (completedByLineItem.get(entry.lineItemId) ?? 0) + entry.quantityCompleted);
+  }
+  for (const schedule of schedules.filter(s => s.status !== "cancelled")) {
+    const arr = schedulesByJob.get(schedule.jobId) ?? [];
+    arr.push(schedule);
+    schedulesByJob.set(schedule.jobId, arr);
+  }
   for (const li of items) {
     const arr = itemsByJob.get(li.jobId) ?? [];
     arr.push(li);
@@ -141,16 +164,31 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
       jobType: li.jobType,
       description: li.description,
       position: li.position,
-      quantity: li.quantity,
+      quantity: Math.max(0, li.quantity - (completedByLineItem.get(li.id) ?? 0)),
       completed: li.completed,
       awaitingStock: li.awaitingStock,
       logoApproved: li.logoApproved,
       machineId: li.machineId,
       effectiveOperatorId: effectiveOp(li),
     }));
-    const outstandingQty = lis.filter(li => !li.completed).reduce((s, li) => s + li.quantity, 0);
+    const outstandingQty = lis
+      .filter(li => !li.completed)
+      .reduce((s, li) => s + Math.max(0, li.quantity - (completedByLineItem.get(li.id) ?? 0)), 0);
     const totalQty = lis.reduce((s, li) => s + li.quantity, 0);
     const dueStr = j.requiredDispatchDate ? londonDateStr(new Date(j.requiredDispatchDate)) : null;
+    const planned = [...(schedulesByJob.get(j.id) ?? [])]
+      .filter(s => s.status !== "completed")
+      .sort((a, b) =>
+        new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime() ||
+        a.endTime - b.endTime);
+    const firstPlan = planned[0] ?? null;
+    const finalPlan = planned[planned.length - 1] ?? null;
+    const completionDate = finalPlan ? londonDateStr(new Date(finalPlan.scheduledDate)) : null;
+    const planningStatus: JobCard["planningStatus"] = !finalPlan
+      ? "unscheduled"
+      : dueStr && completionDate && completionDate > dueStr
+        ? "at_risk"
+        : "scheduled";
     return {
       id: j.id,
       jobNumber: j.jobNumber,
@@ -173,6 +211,21 @@ async function buildJobCards(activeJobs: Awaited<ReturnType<typeof getActiveJobs
       awaitingArtwork: lis.some(li => !li.logoApproved),
       overdue: dueStr != null && dueStr < todayStr,
       dueToday: dueStr === todayStr,
+      planningStatus,
+      plannedCompletionDate: completionDate,
+      plannedStartTime: firstPlan?.startTime ?? null,
+      plannedEndTime: finalPlan?.endTime ?? null,
+      plannedOperatorName: finalPlan ? staffName.get(finalPlan.staffId) ?? null : null,
+      plannedMachineName: finalPlan ? machineName.get(finalPlan.machineId) ?? null : null,
+      planningReason: !j.responsibleOperatorId
+        ? "Choose a responsible operator first"
+        : !j.machineId
+          ? "Choose a machine after the operator"
+          : !finalPlan
+            ? "Ready to schedule"
+            : planningStatus === "at_risk"
+              ? "Planned completion is after dispatch date"
+              : null,
       suggestedOperatorId,
       suggestedOperatorName: suggestedOperatorId ? staffName.get(suggestedOperatorId) ?? null : null,
       impliedOperators,
@@ -306,53 +359,93 @@ export async function getOperatorQueue(staffId: string) {
 export async function recommendMachineForJob(
   jobId: string,
   operatorIdOverride?: string | null,
-): Promise<{ machineId: number | null; machineName: string | null; reason: string }> {
+): Promise<{
+  machineId: number | null;
+  machineName: string | null;
+  reason: string;
+  earliestDate?: string | null;
+  startTime?: number | null;
+  endTime?: number | null;
+  canMeetDeadline?: boolean;
+  alternatives?: Array<{ machineId: number; machineName: string; earliestDate: string; startTime: number; endTime: number; canMeetDeadline: boolean }>;
+}> {
   const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
   if (!job) return { machineId: null, machineName: null, reason: "Job not found" };
   const responsibleOperatorId = operatorIdOverride !== undefined ? operatorIdOverride : job.responsibleOperatorId;
   const items = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId));
   const allMachines = (await db.select().from(machines)).filter(m => m.isActive);
+  if (!responsibleOperatorId) {
+    return { machineId: null, machineName: null, reason: "Choose a responsible operator before selecting a machine", alternatives: [] };
+  }
+  const [operator] = await db.select().from(staff).where(and(eq(staff.id, responsibleOperatorId), eq(staff.active, true)));
+  if (!operator) return { machineId: null, machineName: null, reason: "Responsible operator is not active", alternatives: [] };
 
-  const isPrint = items.some(li => isPrintJobType(li.jobType));
-  if (isPrint) {
+  const isPrintOnly = items.length > 0 && items.every(li => isPrintJobType(li.jobType));
+  if (isPrintOnly) {
     const printMachine = allMachines.find(m => m.id === PRINT_MACHINE_ID);
     if (printMachine) return { machineId: printMachine.id, machineName: printMachine.name, reason: "Print work is routed to the print machine" };
   }
   const embMachines = allMachines.filter(m => m.id !== PRINT_MACHINE_ID);
   if (embMachines.length === 0) return { machineId: null, machineName: null, reason: "No active machines available" };
 
-  // Outstanding quantity per machine across active jobs (line-item machine first, job machine as fallback)
-  const activeJobs = await getActiveJobs();
-  const activeIds = new Set(activeJobs.map(j => j.id));
-  const jobMachine = new Map(activeJobs.map(j => [j.id, j.machineId]));
-  const allItems = activeIds.size > 0
-    ? await db.select().from(jobLineItems).where(inArray(jobLineItems.jobId, Array.from(activeIds)))
-    : [];
-  const load = new Map<number, number>();
-  for (const li of allItems) {
-    if (li.completed) continue;
-    const mId = li.machineId ?? jobMachine.get(li.jobId) ?? null;
-    if (mId == null) continue;
-    load.set(mId, (load.get(mId) ?? 0) + li.quantity);
-  }
-
-  // Prefer a machine whose default operator is the job's responsible operator
-  const candidates = [...embMachines].sort((a, b) => (load.get(a.id) ?? 0) - (load.get(b.id) ?? 0));
-  if (responsibleOperatorId) {
-    const operatorMachine = candidates.find(m => m.defaultOperatorId === responsibleOperatorId);
-    if (operatorMachine) {
-      return {
-        machineId: operatorMachine.id,
-        machineName: operatorMachine.name,
-        reason: `Usual machine for the responsible operator (current queue: ${(load.get(operatorMachine.id) ?? 0).toLocaleString()} items)`,
-      };
+  const [blocks, shifts, schedules, allocations, holidays, bankDays, progressEntries] = await Promise.all([
+    db.select().from(machineScheduleBlocks),
+    db.select().from(staffShifts),
+    db.select().from(jobSchedule),
+    db.select().from(staffMachineAllocations),
+    db.select().from(staffHolidays),
+    db.select().from(bankHolidays),
+    db.select().from(productionEntries).where(inArray(productionEntries.lineItemId, items.map(i => i.id))),
+  ]);
+  const completedQty = new Map<string, number>();
+  for (const entry of progressEntries) completedQty.set(entry.lineItemId, (completedQty.get(entry.lineItemId) ?? 0) + entry.quantityCompleted);
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const horizon = new Date(start); horizon.setDate(horizon.getDate() + 60);
+  const due = job.requiredDispatchDate ? new Date(job.requiredDispatchDate) : null;
+  const alternatives: NonNullable<Awaited<ReturnType<typeof recommendMachineForJob>>["alternatives"]> = [];
+  for (const machine of embMachines) {
+    let duration = 0;
+    for (const item of items.filter(i => !i.completed && !isPrintJobType(i.jobType))) {
+      const remaining = Math.max(0, item.quantity - (completedQty.get(item.id) ?? 0));
+      if (!remaining || !item.stitchCount) continue;
+      const runs = Math.ceil(remaining / machine.heads);
+      duration += Math.ceil((runs * (item.stitchCount / machine.stitchesPerMinute + machine.changeoverTimeMinutes) * (machine.schedulingMultiplier ?? 1)) / 10) * 10;
+    }
+    if (!duration) continue;
+    const cursor = new Date(start);
+    while (cursor <= horizon) {
+      const slots = findAvailableSlots(cursor, machine.id, operator.id, blocks, shifts, schedules, allocations, holidays, bankDays);
+      const slot = slots.find(s => s.endTime - s.startTime >= duration);
+      if (slot) {
+        const date = londonDateStr(cursor);
+        alternatives.push({
+          machineId: machine.id,
+          machineName: machine.name,
+          earliestDate: date,
+          startTime: slot.startTime,
+          endTime: slot.startTime + duration,
+          canMeetDeadline: !due || cursor <= due,
+        });
+        break;
+      }
+      cursor.setDate(cursor.getDate() + 1);
     }
   }
-  const best = candidates[0];
+  alternatives.sort((a, b) =>
+    Number(b.canMeetDeadline) - Number(a.canMeetDeadline) ||
+    a.earliestDate.localeCompare(b.earliestDate) ||
+    a.startTime - b.startTime);
+  const best = alternatives[0];
+  if (!best) return { machineId: null, machineName: null, reason: `${operator.name} has no feasible machine slot in the next 60 days`, alternatives: [] };
   return {
-    machineId: best.id,
-    machineName: best.name,
-    reason: `Lightest current queue (${(load.get(best.id) ?? 0).toLocaleString()} items outstanding)`,
+    machineId: best.machineId,
+    machineName: best.machineName,
+    reason: `${operator.name} can complete this ${best.canMeetDeadline ? "on time" : "at the earliest available time"} on ${best.earliestDate} (${minutesToTime(best.startTime)}–${minutesToTime(best.endTime)})`,
+    earliestDate: best.earliestDate,
+    startTime: best.startTime,
+    endTime: best.endTime,
+    canMeetDeadline: best.canMeetDeadline,
+    alternatives,
   };
 }
 
@@ -377,6 +470,16 @@ export async function allocateJob(
   };
 
   const finalOperator = input.responsibleOperatorId !== undefined ? input.responsibleOperatorId : job.responsibleOperatorId;
+  const finalMachine = input.machineId !== undefined ? input.machineId : job.machineId;
+  if (finalMachine != null && !finalOperator) throw new Error("Choose a responsible operator before selecting a machine");
+  if (finalOperator) {
+    const [operator] = await db.select().from(staff).where(and(eq(staff.id, finalOperator), eq(staff.active, true)));
+    if (!operator) throw new Error("Responsible operator must be an active staff member");
+  }
+  if (finalMachine != null) {
+    const [machine] = await db.select().from(machines).where(and(eq(machines.id, finalMachine), eq(machines.isActive, true)));
+    if (!machine) throw new Error("Machine must be active");
+  }
 
   if (input.responsibleOperatorId !== undefined) updates.responsibleOperatorId = input.responsibleOperatorId;
   if (input.machineId !== undefined) {
@@ -394,8 +497,39 @@ export async function allocateJob(
   const finalBlocked = input.blockedReason !== undefined ? input.blockedReason : job.blockedReason;
   updates.allocationStatus = finalBlocked ? "blocked" : finalOperator ? "allocated" : "unallocated";
 
-  const [updated] = await db.update(jobs).set(updates).where(eq(jobs.id, jobId)).returning();
-  return updated;
+  const allocationChanged =
+    (input.responsibleOperatorId !== undefined && input.responsibleOperatorId !== job.responsibleOperatorId) ||
+    (input.machineId !== undefined && input.machineId !== job.machineId);
+  const result = await db.transaction(async (tx) => {
+    const [updated] = await tx.update(jobs).set(updates).where(eq(jobs.id, jobId)).returning();
+    let replanLineItemIds: string[] = [];
+    if (allocationChanged) {
+      const outstanding = await tx.select().from(jobLineItems)
+        .where(and(eq(jobLineItems.jobId, jobId), eq(jobLineItems.completed, false)));
+      replanLineItemIds = outstanding
+        .filter(item => item.machineId != null || finalMachine != null)
+        .map(item => item.id);
+      for (const item of outstanding) {
+        const itemMachineId = isPrintJobType(item.jobType)
+          ? PRINT_MACHINE_ID
+          : input.machineId !== undefined
+            ? finalMachine ?? null
+            : item.machineId;
+        await tx.update(jobLineItems).set({
+          operatorId: finalOperator ?? null,
+          machineId: itemMachineId,
+        }).where(eq(jobLineItems.id, item.id));
+      }
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      await tx.delete(jobSchedule).where(and(
+        eq(jobSchedule.jobId, jobId),
+        eq(jobSchedule.status, "scheduled"),
+        gte(jobSchedule.scheduledDate, today),
+      ));
+    }
+    return { ...updated, planning: { replanLineItemIds } };
+  });
+  return result;
 }
 
 /** Give every unowned, unblocked job whose line items already imply a single

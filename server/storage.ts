@@ -398,6 +398,7 @@ export interface IStorage {
   getMachine(id: number): Promise<Machine | undefined>;
   updateMachine(id: number, data: Partial<Machine>): Promise<Machine>;
   seedMachines(): Promise<void>;
+  ensureProductionMachineRoster(): Promise<void>;
   ensurePrintMachine(): Promise<void>;
 
   // App settings (key/value)
@@ -4006,12 +4007,13 @@ export class DatabaseStorage implements IStorage {
     if (existing.length > 0) return;
 
     const defaults = [
-      { id: 1, name: "Barudan 8", heads: 8, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
+      { id: 1, name: "Barudan 8 1", heads: 8, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
       { id: 2, name: "Barudan 6 1", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
-      { id: 3, name: "SWF 6 1", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
+      { id: 3, name: "SWF 6 1", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: false },
       { id: 4, name: "SWF 6 2", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
       { id: 5, name: "Barudan 6 2", heads: 6, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
       { id: 6, name: "Print", heads: 1, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
+      { id: 7, name: "Barudan 8 2", heads: 8, stitchesPerMinute: 750, changeoverTimeMinutes: 3, isActive: true },
     ];
 
     for (const m of defaults) {
@@ -4021,8 +4023,28 @@ export class DatabaseStorage implements IStorage {
         ON CONFLICT (id) DO NOTHING
       `);
     }
-    // Reset the serial sequence so next auto-insert starts after 6
-    await db.execute(sql`SELECT setval('machines_id_seq', 6, true)`);
+    await db.execute(sql`SELECT setval('machines_id_seq', 7, true)`);
+  }
+
+  // Preserve the retired SWF row for truthful history and add the new physical
+  // Barudan under its own ID. This is deliberately idempotent for existing DBs.
+  async ensureProductionMachineRoster(): Promise<void> {
+    const existingSeven = await this.getMachine(7);
+    if (existingSeven && existingSeven.name !== "Barudan 8 2") {
+      throw new Error(`Machine ID 7 is already ${existingSeven.name}; refusing to overwrite its history`);
+    }
+    await db.transaction(async (tx) => {
+      await tx.update(machines).set({ name: "Barudan 8 1", heads: 8, isActive: true }).where(eq(machines.id, 1));
+      await tx.update(machines).set({ name: "SWF 6 1", heads: 6, isActive: false }).where(eq(machines.id, 3));
+      await tx.execute(sql`
+        INSERT INTO machines (id, name, heads, stitches_per_minute, changeover_time_minutes, is_active)
+        VALUES (7, 'Barudan 8 2', 8, 750, 3, true)
+        ON CONFLICT (id) DO UPDATE SET
+          heads = EXCLUDED.heads,
+          is_active = true
+      `);
+      await tx.execute(sql`SELECT setval('machines_id_seq', GREATEST((SELECT MAX(id) FROM machines), 7), true)`);
+    });
   }
 
   // Idempotently make sure the dedicated "Print" machine (id 6) exists and is
