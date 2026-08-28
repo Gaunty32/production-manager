@@ -79,6 +79,8 @@ import {
 
 
 // ─── Base URL helper ──────────────────────────────────────────────────────────
+const MARKETING_BASE_URL = "https://www.selectbranding.co.uk";
+
 function getBaseUrl() {
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
   if (process.env.REPLIT_DOMAINS) return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
@@ -735,7 +737,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(429).json({ error: "Too many enquiries — please try again later or email info@selectbranding.co.uk" });
       }
 
-      const baseUrl = getBaseUrl();
       await sendWebsiteEnquiryEmails({
         name: data.name,
         company: data.company,
@@ -743,7 +744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phone: data.phone,
         service: data.service,
         message: data.message,
-        demoUrl: `${baseUrl}/portal-preview`,
+        demoUrl: `${MARKETING_BASE_URL}/portal-preview`,
       });
 
       // Sync contact to HighLevel (fire-and-forget — never block the response)
@@ -901,7 +902,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstVisitAt: data.firstVisitAt ? new Date(data.firstVisitAt) : null,
       });
 
-      const baseUrl = getBaseUrl();
       const attribution = [
         `Lead source: ${leadSource}`,
         data.campaign && `Campaign: ${data.campaign}`,
@@ -920,7 +920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           data.notes && `Notes: ${data.notes}`,
           attribution,
         ].filter(Boolean).join("\n\n"),
-        demoUrl: `${baseUrl}/portal-preview`,
+        demoUrl: `${MARKETING_BASE_URL}/portal-preview`,
       });
 
       const hlApiKey = process.env.HIGHLEVEL_API_KEY;
@@ -991,13 +991,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserRole(existing.id, "demo");
         await storage.updateUserActive(existing.id, true);
       }
-      const baseUrl = getBaseUrl();
       await sendDemoAccessEmail({
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
         company: data.company,
-        portalUrl: `${baseUrl}/portal-preview`,
+        portalUrl: `${MARKETING_BASE_URL}/portal-preview`,
       });
 
       // Sync contact to HighLevel (fire-and-forget — never block the response)
