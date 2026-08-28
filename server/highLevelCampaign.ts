@@ -1,4 +1,4 @@
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, gte, gt, lt } from "drizzle-orm";
 import { db } from "./db";
 import {
   customers,
@@ -19,6 +19,8 @@ import {
 const CAMPAIGN_ID = "weekly-article";
 const HIGHLEVEL_BASE = "https://rest.gohighlevel.com/v1";
 const LONDON_TIME_ZONE = "Europe/London";
+const ARTICLE_COOLDOWN_WEEKS = 16;
+const ARTICLE_COOLDOWN_MS = ARTICLE_COOLDOWN_WEEKS * 7 * 24 * 60 * 60 * 1000;
 
 export type HighLevelTag = { id: string; name: string };
 export type HighLevelContact = {
@@ -182,6 +184,34 @@ export async function getCampaignArticles(): Promise<KnowledgeCentreArticle[]> {
   );
 }
 
+export async function getCampaignArticleAvailability() {
+  const articles = await getCampaignArticles();
+  const cutoff = new Date(Date.now() - ARTICLE_COOLDOWN_MS);
+  const recentRuns = await db.select({
+    articleSlug: weeklyArticleCampaignRuns.articleSlug,
+    startedAt: weeklyArticleCampaignRuns.startedAt,
+    finishedAt: weeklyArticleCampaignRuns.finishedAt,
+  }).from(weeklyArticleCampaignRuns).where(and(
+    eq(weeklyArticleCampaignRuns.campaignId, CAMPAIGN_ID),
+    gt(weeklyArticleCampaignRuns.sentCount, 0),
+    gte(weeklyArticleCampaignRuns.startedAt, cutoff),
+  ));
+  const lastSentBySlug = new Map<string, Date>();
+  for (const run of recentRuns) {
+    const sentAt = run.finishedAt || run.startedAt;
+    const current = lastSentBySlug.get(run.articleSlug);
+    if (!current || sentAt > current) lastSentBySlug.set(run.articleSlug, sentAt);
+  }
+  return articles.map((article) => {
+    const lastSentAt = lastSentBySlug.get(article.slug) || null;
+    return {
+      ...article,
+      lastSentAt: lastSentAt?.toISOString() || null,
+      eligible: !lastSentAt,
+    };
+  });
+}
+
 export async function getCampaignConfig() {
   const [row] = await db.select().from(weeklyArticleCampaigns).where(eq(weeklyArticleCampaigns.id, CAMPAIGN_ID));
   return row || {
@@ -255,10 +285,18 @@ export function getNextCampaignLabel(date = new Date()) {
   }) + " at 17:00";
 }
 
-async function resolveSelection(tagId: string, articleSlug: string, audienceSource = "highlevel_tag") {
-  const articles = await getCampaignArticles();
+async function resolveSelection(
+  tagId: string,
+  articleSlug: string,
+  audienceSource = "highlevel_tag",
+  options: { allowRecentlySent?: boolean } = {},
+) {
+  const articles = await getCampaignArticleAvailability();
   const article = articles.find((item) => item.slug === articleSlug);
   if (!article) throw new Error("The selected article no longer exists.");
+  if (!article.eligible && !options.allowRecentlySent) {
+    throw new Error("This article was sent within the last 16 weeks. Please choose another article.");
+  }
   if (audienceSource === "customers") {
     return { tag: { id: "existing-customers", name: "Existing customers" }, article };
   }
@@ -293,7 +331,7 @@ async function insertRun(slotKey: string, config: Awaited<ReturnType<typeof getC
     excludedCustomerUserIds: config.excludedCustomerUserIds,
     articleSlug: article.slug,
     articleTitle: article.title,
-    subject: config.subject!,
+    subject: article.title,
     intro: config.intro,
   }).onConflictDoNothing({ target: weeklyArticleCampaignRuns.slotKey }).returning();
   return run || getRunBySlot(slotKey);
@@ -344,7 +382,7 @@ export async function sendCampaignTest(input: { to: string; subject: string; tag
   const { article } = await resolveSelection(input.tagId, input.articleSlug, input.audienceSource);
   await sendArticleCampaignEmail({
     to: input.to,
-    subject: input.subject,
+    subject: article.title,
     articleTitle: article.title,
     articleExcerpt: article.excerpt,
     articleUrl: articleUrl(article),
@@ -361,7 +399,7 @@ async function runScheduledCampaign(slotKey: string) {
   let run = existing;
   try {
     const { tag, article } = existing
-      ? await resolveSelection(existing.tagId, existing.articleSlug, existing.audienceSource)
+      ? await resolveSelection(existing.tagId, existing.articleSlug, existing.audienceSource, { allowRecentlySent: true })
       : await resolveSelection(config.tagId || "", config.articleSlug, config.audienceSource);
     run = run || await insertRun(slotKey, config, tag, article);
     if (!run) throw new Error("Could not claim the campaign run.");

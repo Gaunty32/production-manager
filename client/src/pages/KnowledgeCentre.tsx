@@ -98,9 +98,33 @@ export default function KnowledgeCentre() {
               {article.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
             </div>
             <div className="mt-12 border-t pt-8">
-              <Link href="/demo-access">
-                <Button>Talk to the contract embroidery team <ArrowRight className="ml-2 h-4 w-4" /></Button>
-              </Link>
+              <div className="space-y-2">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">
+                  See it in action
+                </p>
+                <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+                  Take a tour of our production setup
+                </h2>
+                <p className="text-muted-foreground">
+                  See how our contract embroidery team supports growing workwear and merchandise businesses.
+                </p>
+              </div>
+              <div className="mt-6 aspect-video overflow-hidden rounded-xl border bg-black shadow-lg">
+                <iframe
+                  src="https://www.youtube.com/embed/6HE3NCGQMfg"
+                  title="Select Branding Solutions production tour"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="h-full w-full"
+                />
+              </div>
+              <div className="mt-6">
+                <Link href="/demo-access#book-call">
+                  <Button>
+                    Book a Discovery Call <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
             </div>
           </article>
         ) : (

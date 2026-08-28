@@ -62,7 +62,7 @@ import { KNOWLEDGE_CENTRE_ARTICLES } from "@shared/knowledgeCentre";
 import { EXTERNAL_KNOWLEDGE_FEED_URL, getExternalKnowledgeCentreArticles } from "./knowledgeCentreFeed";
 import {
   buildCampaignPreview,
-  getCampaignArticles,
+  getCampaignArticleAvailability,
   getCampaignConfig,
   getCampaignHistory,
   getCustomerAudienceOptions,
@@ -1781,7 +1781,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/admin/highlevel-campaign/articles", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
-    const articles = await getCampaignArticles();
+    const articles = await getCampaignArticleAvailability();
     res.json({
       articles: articles.map((article) => ({
         slug: article.slug,
@@ -1790,6 +1790,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: article.category,
         publishedAt: article.publishedAt,
         imageUrl: article.imageUrl || null,
+        lastSentAt: article.lastSentAt,
+        eligible: article.eligible,
       })),
     });
   });
@@ -1852,11 +1854,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.audienceSource === "customers" && data.customerSelectionMode === "selected" && data.selectedCustomerIds.length === 0) {
         return res.status(400).json({ error: "Select at least one existing customer." });
       }
-      const articles = await getCampaignArticles();
-      if (!articles.some((article) => article.slug === data.articleSlug)) {
+      const articles = await getCampaignArticleAvailability();
+      const selectedArticle = articles.find((article) => article.slug === data.articleSlug);
+      if (!selectedArticle) {
         return res.status(400).json({ error: "Please select a current Knowledge Centre article." });
       }
-      const config = await saveCampaignConfig({ ...data, updatedById: req.session.userId });
+      if (!selectedArticle.eligible) {
+        return res.status(400).json({ error: "This article was sent within the last 16 weeks. Please choose another article." });
+      }
+      const config = await saveCampaignConfig({
+        ...data,
+        subject: selectedArticle.title,
+        updatedById: req.session.userId,
+      });
       res.json({ config, nextSend: getNextCampaignLabel() });
     } catch (error: any) {
       if (error.name === "ZodError") return res.status(400).json({ error: error.errors[0]?.message || "Invalid campaign settings" });

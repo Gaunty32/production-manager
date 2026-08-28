@@ -53,6 +53,8 @@ interface CampaignArticle {
   excerpt: string;
   category: string;
   publishedAt: string;
+  lastSentAt: string | null;
+  eligible: boolean;
 }
 interface CampaignCustomer {
   id: string;
@@ -86,6 +88,14 @@ interface CampaignConfigResponse {
   history: CampaignRun[];
   nextSend: string;
   schedule: string;
+}
+
+function formatArticleSentDate(value: string) {
+  return new Date(value).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default function EmailCustomers() {
@@ -152,7 +162,7 @@ export default function EmailCustomers() {
 
   useEffect(() => {
     const article = articlesData?.articles.find((item) => item.slug === campaignArticleSlug);
-    if (article && !campaignSubject.trim()) setCampaignSubject(article.title);
+    if (article && campaignSubject !== article.title) setCampaignSubject(article.title);
   }, [campaignArticleSlug, articlesData, campaignSubject]);
 
   const previewCampaignMutation = useMutation({
@@ -256,10 +266,12 @@ export default function EmailCustomers() {
 
   const canSend = subject.trim().length > 0 && message.trim().length > 0;
   const recipientCount = recipientsData?.count ?? 0;
+  const selectedCampaignArticle = articlesData?.articles.find((article) => article.slug === campaignArticleSlug);
   const canConfigureCampaign = Boolean(
     (campaignAudienceSource === "customers" || campaignTagId) &&
     (campaignAudienceSource !== "customers" || customerSelectionMode === "all" || selectedCustomerIds.length > 0) &&
     campaignArticleSlug &&
+    selectedCampaignArticle?.eligible &&
     campaignSubject.trim(),
   );
   const filteredCampaignCustomers = (customerAudienceData?.customers || []).filter((customer) =>
@@ -440,13 +452,40 @@ export default function EmailCustomers() {
                   <Select value={campaignArticleSlug} onValueChange={(value) => { setCampaignArticleSlug(value); const article = articlesData?.articles.find((item) => item.slug === value); if (article) setCampaignSubject(article.title); setCampaignPreviewHtml(""); }}>
                     <SelectTrigger data-testid="select-campaign-article"><SelectValue placeholder={articlesLoading ? "Loading articles…" : "Select an article"} /></SelectTrigger>
                     <SelectContent>
-                      {(articlesData?.articles || []).map((article) => <SelectItem key={article.slug} value={article.slug}>{article.title}</SelectItem>)}
+                        {(articlesData?.articles || []).map((article) => (
+                          <SelectItem key={article.slug} value={article.slug} disabled={!article.eligible}>
+                            <span>{article.title}</span>
+                            {!article.eligible && article.lastSentAt && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                (sent {formatArticleSentDate(article.lastSentAt)})
+                              </span>
+                            )}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Articles sent within the last 16 weeks are greyed out until they become eligible again.
+                    </p>
+                    {selectedCampaignArticle && !selectedCampaignArticle.eligible && selectedCampaignArticle.lastSentAt && (
+                      <p className="text-xs text-destructive">
+                        This article was sent on {formatArticleSentDate(selectedCampaignArticle.lastSentAt)}. Choose an article that has not been sent in the last 16 weeks.
+                      </p>
+                    )}
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="campaign-subject">Email subject</Label>
-                  <Input id="campaign-subject" value={campaignSubject} onChange={(event) => setCampaignSubject(event.target.value)} maxLength={200} data-testid="input-campaign-subject" />
+                  <Input
+                    id="campaign-subject"
+                    value={campaignSubject}
+                    readOnly
+                    maxLength={200}
+                    className="bg-muted"
+                    data-testid="input-campaign-subject"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This is always taken from the Knowledge Centre article title.
+                  </p>
                 </div>
               </div>
 
