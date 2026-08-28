@@ -1,10 +1,24 @@
 import { goBack } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, Clock, FileText, MessageSquare, Package } from "lucide-react";
+import { ArrowLeft, Clock, FileText, MessageSquare, XCircle } from "lucide-react";
+import { useState } from "react";
 import { format } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -31,6 +45,8 @@ type CustomerUser = {
 export default function CustomerPendingJobs() {
   const [, setLocation] = useLocation();
   const { isImpersonating } = usePermissions();
+  const { toast } = useToast();
+  const [jobToCancel, setJobToCancel] = useState<Job | null>(null);
 
   const { data: customerUser } = useQuery<CustomerUser>({
     queryKey: ["/api/customer-auth/user"],
@@ -38,6 +54,29 @@ export default function CustomerPendingJobs() {
 
   const { data: pendingJobs = [], isLoading } = useQuery<Job[]>({
     queryKey: ["/api/customer-portal/jobs/pending"],
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      const response = await apiRequest("POST", `/api/customer-portal/jobs/${jobId}/cancel`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      setJobToCancel(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/jobs/pending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/jobs"] });
+      toast({
+        title: "Submission cancelled",
+        description: "The submission has been removed from your pending list.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Unable to cancel submission",
+        description: error.message || "Please refresh and try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -177,12 +216,60 @@ export default function CustomerPendingJobs() {
                       <span>{job.messages?.length} message{job.messages && job.messages.length > 1 ? 's' : ''}</span>
                     </div>
                   )}
+
+                  {!isImpersonating && (
+                    <div className="mt-5 flex justify-end border-t pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setJobToCancel(job);
+                        }}
+                        data-testid={`button-cancel-job-${job.id}`}
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Cancel submission
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
           </div>
         )}
       </main>
+
+      <AlertDialog
+        open={!!jobToCancel}
+        onOpenChange={(open) => {
+          if (!open && !cancelMutation.isPending) setJobToCancel(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this submission?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will cancel <strong>{jobToCancel?.jobName}</strong> before it is reviewed by our team.
+              The submission and its uploaded files will be kept in our records, but it will no longer be processed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelMutation.isPending}>Keep submission</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={cancelMutation.isPending}
+              onClick={() => {
+                if (jobToCancel) cancelMutation.mutate(jobToCancel.id);
+              }}
+              data-testid="button-confirm-cancel-job"
+            >
+              {cancelMutation.isPending ? "Cancelling..." : "Cancel submission"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

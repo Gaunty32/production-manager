@@ -935,6 +935,14 @@ export default function CustomerDashboard() {
               <Lightbulb className="h-4 w-4 mr-2" />
               Suggest a Feature
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/customer/knowledge-centre")}
+              data-testid="button-view-knowledge-centre"
+            >
+              <BookOpen className="h-4 w-4 mr-2" />
+              Knowledge Centre
+            </Button>
           </div>
 
           {/* Mobile: submit button */}

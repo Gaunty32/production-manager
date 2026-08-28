@@ -4215,7 +4215,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customer Portal - Jobs with Line Items
   app.get("/api/customer-portal/jobs", isCustomerAuthenticated, async (req: any, res) => {
     try {
-      const customerUser = await storage.getCustomerUserById((req.session as any).customerUserId);
+      const customerUserId =
+        (req.session as any).impersonationCustomerUserId ||
+        (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
       if (!customerUser) {
         return res.status(404).json({ error: "Customer user not found" });
       }
@@ -4225,10 +4228,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customer = customers.find(c => c.id === customerUser.customerId);
       const pricingTable = customer?.pricingTable2026 ? "2026" : customer?.pricingTable2025 ? "2025" : null;
       
-      // Get all jobs for this customer except those pending approval
-      // pending_customer_approval jobs are shown in a separate "Pending Submissions" page
+      // Get active jobs for this customer. Pending submissions are shown in a
+      // separate page, and cancelled submissions are retained for staff
+      // records but should not appear as active customer jobs.
       const jobs = await storage.getJobsByCustomerId(customerUser.customerId);
-      const visibleJobs = jobs.filter(j => j.status !== 'pending_customer_approval');
+      const visibleJobs = jobs.filter(
+        j => j.status !== 'pending_customer_approval' && j.status !== 'cancelled'
+      );
       
       // Get line items for each job and calculate estimated prices
       const jobsWithLineItems = await Promise.all(
@@ -4328,6 +4334,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching pending jobs:", error);
       res.status(500).json({ error: "Failed to fetch pending jobs" });
+    }
+  });
+
+  // Customer Portal - Cancel a submission that has not yet been reviewed.
+  // Keep the job record and its files/messages for an audit trail, but remove
+  // it from both customer and staff pending queues.
+  app.post("/api/customer-portal/jobs/:jobId/cancel", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId =
+        (req.session as any).impersonationCustomerUserId ||
+        (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) {
+        return res.status(404).json({ error: "Customer user not found" });
+      }
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      if (job.status !== "pending_customer_approval") {
+        return res.status(409).json({
+          error: "This submission has already been reviewed and can no longer be cancelled.",
+        });
+      }
+
+      const cancelledJob = await storage.updateJob(job.id, {
+        status: "cancelled",
+      });
+      res.json(cancelledJob);
+    } catch (error) {
+      console.error("Error cancelling customer job submission:", error);
+      res.status(500).json({ error: "Failed to cancel submission" });
     }
   });
 
