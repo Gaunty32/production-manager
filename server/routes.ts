@@ -10441,7 +10441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 staffName: senderName,
                 subject: convo.subject,
                 firstMessage: req.body.message,
-                portalUrl: `${baseUrl}/customer/messages`,
+                portalUrl: `${baseUrl}/customer/messages?conversationId=${encodeURIComponent(convo.id)}`,
                 isJobChat: false,
               });
             }
@@ -10509,7 +10509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               staffName: senderName,
               subject: convo.subject,
               firstMessage: message,
-              portalUrl: `${baseUrl}/customer/messages`,
+              portalUrl: `${baseUrl}/customer/messages?conversationId=${encodeURIComponent(convo.id)}`,
               isJobChat: false,
             });
           }

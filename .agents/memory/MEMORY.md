@@ -62,3 +62,4 @@
 - [Public website domain structure](public-site-domain-structure.md) — www is the marketing-site home; production remains the app and hosts the focused /demo-access landing page.
 - [HighLevel legacy API](highlevel-legacy-api.md) — the configured location key works with v1 tags/contacts, not LeadConnector v3; campaign audiences need exhaustive v1 pagination.
 - [Public homepage performance](public-home-performance.md) — keep marketing routes on a lightweight entry; never pull the staff/customer shell into the public startup bundle.
+- [Customer email deep links](customer-email-deep-links.md) — authenticate before mounting protected portal pages and preserve the exact destination through sign-in.

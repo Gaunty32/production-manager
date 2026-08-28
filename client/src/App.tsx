@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation, Router, Redirect } from "wouter";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -249,7 +249,13 @@ function PageLoading() {
 }
 
 function CustomerPortalApp() {
-  return (
+  const [location] = useLocation();
+  const isPublicCustomerRoute =
+    location.startsWith("/customer/login") ||
+    location.startsWith("/customer/reset-password") ||
+    location.startsWith("/customer/invite");
+
+  const routes = (
     <Switch>
       <Route path="/customer/login" component={CustomerLogin} />
       <Route path="/customer/reset-password" component={CustomerPasswordReset} />
@@ -263,14 +269,44 @@ function CustomerPortalApp() {
       <Route path="/customer/samples" component={CustomerSamples} />
       <Route path="/customer/payment-methods" component={CustomerPaymentMethods} />
       <Route path="/customer/delivery-address" component={CustomerDeliveryAddress} />
-       <Route path="/customer/knowledge-centre/:slug" component={CustomerKnowledgeCentre} />
-       <Route path="/customer/knowledge-centre" component={CustomerKnowledgeCentre} />
+      <Route path="/customer/knowledge-centre/:slug" component={CustomerKnowledgeCentre} />
+      <Route path="/customer/knowledge-centre" component={CustomerKnowledgeCentre} />
       <Route path="/customer/thread-library">{() => <ThreadColourChart customerView />}</Route>
       <Route path="/customer/dashboard" component={CustomerDashboard} />
       <Route path="/customer" component={CustomerDashboard} />
       <Route component={NotFound} />
     </Switch>
   );
+
+  return isPublicCustomerRoute ? routes : <CustomerAuthGate>{routes}</CustomerAuthGate>;
+}
+
+function CustomerAuthGate({ children }: { children: ReactNode }) {
+  const [status, setStatus] = useState<"checking" | "authenticated">("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/customer-auth/user", { credentials: "include" })
+      .then((response) => {
+        if (cancelled) return;
+        if (response.ok) {
+          setStatus("authenticated");
+          return;
+        }
+        const returnPath = `${window.location.pathname}${window.location.search}`;
+        window.location.replace(`/customer/login?redirect=${encodeURIComponent(returnPath)}`);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          const returnPath = `${window.location.pathname}${window.location.search}`;
+          window.location.replace(`/customer/login?redirect=${encodeURIComponent(returnPath)}`);
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (status === "checking") return <PageLoading />;
+  return <>{children}</>;
 }
 
 function AuthenticatedApp({ style }: { style: Record<string, string> }) {

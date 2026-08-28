@@ -139,6 +139,14 @@ export default function CustomerInbox() {
   const prevTotalUnread = useRef<number | null>(null);
   const [newMessageBanner, setNewMessageBanner] = useState(false);
   const [globalNewMessageConvo, setGlobalNewMessageConvo] = useState<string | null>(null);
+  const [emailConversationId] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("conversationId");
+    } catch {
+      return null;
+    }
+  });
+  const emailConversationApplied = useRef(false);
 
   // Desktop = two-pane layout (list + chat side by side). Matches the Tailwind
   // `sm` breakpoint (640px) used to show/hide the panels below. We only
@@ -286,6 +294,16 @@ export default function CustomerInbox() {
 
   // Auto-select first conversation per tab (desktop two-pane only — on mobile
   // the list must stay visible so the back button can return to it).
+  useEffect(() => {
+    if (emailConversationApplied.current || !emailConversationId || directConversations.length === 0) return;
+    if (directConversations.some(c => c.id === emailConversationId)) {
+      emailConversationApplied.current = true;
+      setTab("direct");
+      setSelected({ type: "direct", conversationId: emailConversationId });
+      window.history.replaceState(null, "", "/customer/messages");
+    }
+  }, [emailConversationId, directConversations]);
+
   useEffect(() => {
     if (!isDesktop) return;
     if (tab === "job" && jobConversations.length > 0 && !jobId) {
@@ -1656,7 +1674,7 @@ function ConvoRow({ isActive, icon, title, subtitle, unread, latest, myLabel, th
           <p className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</p>
           {latest && (
             <p className={`text-xs mt-0.5 truncate ${unread > 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-              {latest.senderType === "customer" ? `${myLabel}: ` : `${theirLabel}: `}{latest.message}
+              {latest.senderType === "customer" ? `${myLabel}: ` : `${theirLabel}: `}{latest.message || "Attachment"}
             </p>
           )}
         </div>
