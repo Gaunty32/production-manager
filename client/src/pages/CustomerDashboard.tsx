@@ -667,7 +667,7 @@ export default function CustomerDashboard() {
                       <MapPin className="h-4 w-4" />
                       Delivery Address
                     </Button>
-                     <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/knowledge-centre")} data-testid="menu-knowledge-centre">
+                     <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/knowledge-centre")} data-testid="menu-knowledge-centre">
                        <BookOpen className="h-4 w-4" />
                        Knowledge Centre
                      </Button>
@@ -961,7 +961,7 @@ export default function CustomerDashboard() {
                      Practical advice from Select Branding Solutions, including the latest articles from our RSS feed.
                    </p>
                  </div>
-                 <Button variant="outline" size="sm" onClick={() => setLocation("/knowledge-centre")} data-testid="button-view-knowledge-centre">
+                 <Button variant="outline" size="sm" onClick={() => setLocation("/customer/knowledge-centre")} data-testid="button-view-knowledge-centre">
                    View all <ArrowRight className="ml-2 h-4 w-4" />
                  </Button>
                </CardHeader>
@@ -977,7 +977,7 @@ export default function CustomerDashboard() {
                          key={article.slug}
                          type="button"
                          className="group rounded-lg border bg-card text-left transition-shadow hover:shadow-md"
-                         onClick={() => setLocation(`/knowledge-centre/${article.slug}`)}
+                          onClick={() => setLocation(`/customer/knowledge-centre/${article.slug}`)}
                          data-testid={`link-customer-article-${article.slug}`}
                        >
                          {article.imageUrl && (

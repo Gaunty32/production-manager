@@ -39,6 +39,7 @@ const StaffLogin = lazy(() => import("@/pages/StaffLogin"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const CustomerDashboard = lazy(() => import("@/pages/CustomerDashboard"));
+const CustomerKnowledgeCentre = lazy(() => import("@/pages/CustomerKnowledgeCentre"));
 const CustomerSubmitJob = lazy(() => import("@/pages/CustomerSubmitJob"));
 const CustomerPendingJobs = lazy(() => import("@/pages/CustomerPendingJobs"));
 const CustomerJobDetail = lazy(() => import("@/pages/CustomerJobDetail"));
@@ -262,6 +263,8 @@ function CustomerPortalApp() {
       <Route path="/customer/samples" component={CustomerSamples} />
       <Route path="/customer/payment-methods" component={CustomerPaymentMethods} />
       <Route path="/customer/delivery-address" component={CustomerDeliveryAddress} />
+       <Route path="/customer/knowledge-centre/:slug" component={CustomerKnowledgeCentre} />
+       <Route path="/customer/knowledge-centre" component={CustomerKnowledgeCentre} />
       <Route path="/customer/thread-library">{() => <ThreadColourChart customerView />}</Route>
       <Route path="/customer/dashboard" component={CustomerDashboard} />
       <Route path="/customer" component={CustomerDashboard} />
