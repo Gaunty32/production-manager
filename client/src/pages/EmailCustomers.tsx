@@ -180,6 +180,10 @@ export default function EmailCustomers() {
     onSuccess: (result) => {
       setCampaignPreviewHtml(result.html);
       setCampaignRecipientCount(result.recipientCount);
+      toast({
+        title: "Audience ready",
+        description: `${result.recipientCount} unique recipient${result.recipientCount === 1 ? "" : "s"} selected. The email preview is shown below.`,
+      });
     },
     onError: (err: any) => toast({ title: "Preview unavailable", description: err?.message || "Could not load the HighLevel audience.", variant: "destructive" }),
   });
@@ -348,7 +352,7 @@ export default function EmailCustomers() {
                   <Select value={campaignAudienceSource} onValueChange={(value: "highlevel_tag" | "customers") => { setCampaignAudienceSource(value); setCampaignRecipientCount(null); setCampaignPreviewHtml(""); }}>
                     <SelectTrigger data-testid="select-campaign-audience-source"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="highlevel_tag">Contacts with a HighLevel tag</SelectItem>
+                      <SelectItem value="highlevel_tag">HighLevel tag + active portal users</SelectItem>
                       <SelectItem value="customers">Existing customer portal users</SelectItem>
                     </SelectContent>
                   </Select>
@@ -368,7 +372,10 @@ export default function EmailCustomers() {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      {campaignRecipientCount == null ? "Preview to check the current audience size." : `${campaignRecipientCount} unique contact${campaignRecipientCount === 1 ? "" : "s"} currently have this tag.`}
+                      {campaignRecipientCount == null ? "Preview to check the current audience size." : `${campaignRecipientCount} unique recipient${campaignRecipientCount === 1 ? "" : "s"} selected, including active portal users.`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      All active customer portal users are included. Matching email addresses are sent one copy only.
                     </p>
                   </div>
                 ) : (
@@ -497,6 +504,11 @@ export default function EmailCustomers() {
                   {saveCampaignMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save campaign
                 </Button>
               </div>
+              {previewCampaignMutation.isPending && (
+                <p className="text-xs text-muted-foreground">
+                  Checking the current audience. The first HighLevel lookup can take up to a minute; subsequent previews use a short-lived cache.
+                </p>
+              )}
 
               <div className="grid gap-6 lg:grid-cols-2">
                 <Card>

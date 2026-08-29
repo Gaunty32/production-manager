@@ -67,6 +67,7 @@ import {
   getCampaignHistory,
   getCustomerAudienceOptions,
   getHighLevelTags,
+  warmHighLevelContacts,
   getNextCampaignLabel,
   saveCampaignConfig,
   sendCampaignTest,
@@ -1773,7 +1774,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/highlevel-campaign/tags", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
     try {
-      res.json({ tags: await getHighLevelTags() });
+      const tags = await getHighLevelTags();
+      // The contact endpoint is the slow part of an audience preview. Warm it
+      // after returning the small tag list so the first preview can reuse the
+      // in-flight request instead of appearing idle for 30+ seconds.
+      warmHighLevelContacts();
+      res.json({ tags });
     } catch (error: any) {
       console.error("[ArticleCampaign] Failed to load tags:", error);
       res.status(502).json({ error: error.message || "Failed to load HighLevel tags" });

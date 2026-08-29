@@ -53,13 +53,28 @@ appModule.then(({ default: App }) => {
     }
   }
 
-  document.getElementById("root")!.innerHTML = `
-    <main style="min-height:100vh;display:grid;place-items:center;padding:24px;font-family:system-ui,sans-serif;text-align:center">
-      <div>
-        <h1 style="font-size:1.25rem;margin:0 0 8px">Production Planner could not load</h1>
-        <p style="color:#666;margin:0 0 20px">Please refresh this window. If the problem continues, close and reopen the app.</p>
-        <button onclick="location.reload()" style="padding:10px 16px;border:0;border-radius:6px;background:#4f46e5;color:white;font-weight:600;cursor:pointer">Refresh</button>
-      </div>
-    </main>
-  `;
+  const root = document.getElementById("root")!;
+  root.replaceChildren();
+
+  const main = document.createElement("main");
+  main.style.cssText = "min-height:100vh;display:grid;place-items:center;padding:24px;font-family:system-ui,sans-serif;text-align:center";
+
+  const content = document.createElement("div");
+  const heading = document.createElement("h1");
+  heading.textContent = "Production Planner could not load";
+  heading.style.cssText = "font-size:1.25rem;margin:0 0 8px";
+
+  const message = document.createElement("p");
+  message.textContent = "Please refresh this window. If the problem continues, close and reopen the app.";
+  message.style.cssText = "color:#666;margin:0 0 20px";
+
+  const refresh = document.createElement("button");
+  refresh.type = "button";
+  refresh.textContent = "Refresh";
+  refresh.style.cssText = "padding:10px 16px;border:0;border-radius:6px;background:#4f46e5;color:white;font-weight:600;cursor:pointer";
+  refresh.addEventListener("click", () => window.location.reload());
+
+  content.append(heading, message, refresh);
+  main.append(content);
+  root.append(main);
 });

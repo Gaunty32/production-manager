@@ -18,6 +18,12 @@
 
       if (isPublicPath) {
         document.documentElement.classList.add("public-entry");
+        if (
+          location.pathname === "/knowledge-centre" ||
+          location.pathname.startsWith("/knowledge-centre/")
+        ) {
+          document.documentElement.classList.add("knowledge-entry");
+        }
       } else if (location.pathname === "/") {
         if (window.__staffAuthSnapshot === false) {
           document.documentElement.classList.add("public-entry");
@@ -63,6 +69,21 @@
           <section><b>Watch the production walkthrough</b></section>
         </main>
       </div>
+      <div id="initial-knowledge-shell" aria-hidden="true">
+        <header>
+          <img src="/logo.png" alt="" width="109" height="56" />
+          <span>Knowledge Centre</span>
+        </header>
+        <main>
+          <p>SELECT BRANDING SOLUTIONS</p>
+          <div class="initial-knowledge-skeleton" aria-hidden="true">
+            <i></i>
+            <i></i>
+            <i></i>
+          </div>
+          <span>Loading Knowledge Centre…</span>
+        </main>
+      </div>
     </div>
     <style>
       #initial-app-shell{display:grid;place-items:center;min-height:100vh;background:#fff;color:#18181b;font-family:system-ui,sans-serif;text-align:center}
@@ -85,6 +106,21 @@
       #initial-public-shell section{aspect-ratio:16/9;max-width:960px;margin:0 auto;border-radius:8px;background:#18181b;color:#fff;display:flex;align-items:center;justify-content:center}
       @media(max-width:850px){#initial-public-shell header nav{display:none}#initial-public-shell h1{font-size:38px}}
       @media(max-width:520px){#initial-public-shell header{height:72px;padding:0 16px}#initial-public-shell header span{font-size:12px;padding:9px}#initial-public-shell main{padding-top:48px}#initial-public-shell h1{font-size:34px}}
+      #initial-knowledge-shell{display:none;min-height:100vh;background:#fff;color:#18181b;font-family:Arial,sans-serif}
+      .public-entry.knowledge-entry #initial-public-shell{display:none}
+      .public-entry.knowledge-entry #initial-knowledge-shell{display:block}
+      #initial-knowledge-shell header{height:81px;border-bottom:1px solid #e4e4e7;display:flex;align-items:center;justify-content:space-between;padding:0 5%;box-sizing:border-box}
+      #initial-knowledge-shell header img{object-fit:contain}
+      #initial-knowledge-shell header span{font-size:14px;color:#52525b}
+      #initial-knowledge-shell main{max-width:768px;margin:0 auto;padding:64px 16px;box-sizing:border-box}
+      #initial-knowledge-shell main>p{margin:0 0 28px;color:#4f46e5;font-size:12px;font-weight:700;letter-spacing:.16em}
+      #initial-knowledge-shell main>span{display:block;color:#71717a;font-size:14px}
+      .initial-knowledge-skeleton{display:grid;gap:18px;margin-bottom:18px}
+      .initial-knowledge-skeleton i{display:block;height:24px;border-radius:5px;background:#f4f4f5}
+      .initial-knowledge-skeleton i:first-child{width:82%;height:52px}
+      .initial-knowledge-skeleton i:nth-child(2){width:42%}
+      .initial-knowledge-skeleton i:nth-child(3){width:100%;height:220px;margin-top:18px;border-radius:10px}
+      @media(max-width:520px){#initial-knowledge-shell header{height:72px;padding:0 16px}#initial-knowledge-shell main{padding-top:48px}}
     </style>
     <script>
       // A restored installed-app window can occasionally leave its first module

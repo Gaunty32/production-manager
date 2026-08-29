@@ -21,6 +21,7 @@ const HIGHLEVEL_BASE = "https://rest.gohighlevel.com/v1";
 const LONDON_TIME_ZONE = "Europe/London";
 const ARTICLE_COOLDOWN_WEEKS = 16;
 const ARTICLE_COOLDOWN_MS = ARTICLE_COOLDOWN_WEEKS * 7 * 24 * 60 * 60 * 1000;
+const HIGHLEVEL_CONTACT_CACHE_MS = 5 * 60 * 1000;
 
 export type HighLevelTag = { id: string; name: string };
 export type HighLevelContact = {
@@ -84,6 +85,47 @@ export async function getHighLevelTags(): Promise<HighLevelTag[]> {
     .sort((a: HighLevelTag, b: HighLevelTag) => a.name.localeCompare(b.name));
 }
 
+let highLevelContactsCache: { expiresAt: number; contacts: any[] } | undefined;
+let highLevelContactsRequest: Promise<any[]> | undefined;
+
+async function getAllHighLevelContacts(): Promise<any[]> {
+  if (highLevelContactsCache && highLevelContactsCache.expiresAt > Date.now()) {
+    return highLevelContactsCache.contacts;
+  }
+  if (highLevelContactsRequest) return highLevelContactsRequest;
+
+  highLevelContactsRequest = (async () => {
+    credentials();
+    const contacts: any[] = [];
+    let nextUrl: string | null = `${HIGHLEVEL_BASE}/contacts/?limit=100`;
+    const visitedUrls = new Set<string>();
+    for (let page = 0; nextUrl; page++) {
+      if (page > 1000 || visitedUrls.has(nextUrl)) {
+        throw new Error("HighLevel returned a repeating pagination link; audience loading stopped to avoid an incomplete send.");
+      }
+      visitedUrls.add(nextUrl);
+      const body = await highLevelFetch(nextUrl);
+      contacts.push(...(Array.isArray(body?.contacts) ? body.contacts : []));
+      nextUrl = typeof body?.meta?.nextPageUrl === "string" && body.meta.nextPageUrl ? body.meta.nextPageUrl : null;
+    }
+    highLevelContactsCache = {
+      contacts,
+      expiresAt: Date.now() + HIGHLEVEL_CONTACT_CACHE_MS,
+    };
+    return contacts;
+  })().finally(() => {
+    highLevelContactsRequest = undefined;
+  });
+
+  return highLevelContactsRequest;
+}
+
+export function warmHighLevelContacts() {
+  void getAllHighLevelContacts().catch((error) => {
+    console.warn("[ArticleCampaign] HighLevel audience warm-up failed:", error.message || error);
+  });
+}
+
 function contactHasTag(contact: any, tag: HighLevelTag): boolean {
   const wantedId = tag.id.toLowerCase();
   const wantedName = tag.name.toLowerCase();
@@ -94,19 +136,7 @@ function contactHasTag(contact: any, tag: HighLevelTag): boolean {
 }
 
 export async function getHighLevelContactsByTag(tag: HighLevelTag): Promise<HighLevelContact[]> {
-  credentials();
-  const contacts: any[] = [];
-  let nextUrl: string | null = `${HIGHLEVEL_BASE}/contacts/?limit=100`;
-  const visitedUrls = new Set<string>();
-  for (let page = 0; nextUrl; page++) {
-    if (page > 1000 || visitedUrls.has(nextUrl)) {
-      throw new Error("HighLevel returned a repeating pagination link; audience loading stopped to avoid an incomplete send.");
-    }
-    visitedUrls.add(nextUrl);
-    const body = await highLevelFetch(nextUrl);
-    contacts.push(...(Array.isArray(body?.contacts) ? body.contacts : []));
-    nextUrl = typeof body?.meta?.nextPageUrl === "string" && body.meta.nextPageUrl ? body.meta.nextPageUrl : null;
-  }
+  const contacts = await getAllHighLevelContacts();
   const seen = new Set<string>();
   return contacts
     .filter((contact) => contactHasTag(contact, tag) && typeof contact.email === "string" && contact.email.includes("@"))
@@ -175,6 +205,16 @@ async function getExistingCustomerRecipients(selection: CampaignAudienceSelectio
       lastName: user.lastName,
       tags: [],
     }));
+}
+
+function mergeUniqueRecipients(...groups: HighLevelContact[][]): HighLevelContact[] {
+  const seen = new Set<string>();
+  return groups.flat().filter((recipient) => {
+    const email = recipient.email.trim().toLowerCase();
+    if (!email || seen.has(email)) return false;
+    seen.add(email);
+    return true;
+  });
 }
 
 export async function getCampaignArticles(): Promise<KnowledgeCentreArticle[]> {
@@ -307,10 +347,23 @@ async function resolveSelection(
 }
 
 async function getAudienceRecipients(selection: CampaignAudienceSelection, tag: HighLevelTag) {
-  const recipients = selection.audienceSource === "customers"
-    ? getExistingCustomerRecipients(selection)
-    : getHighLevelContactsByTag(tag);
-  return filterArticleCampaignRecipients(await recipients);
+  if (selection.audienceSource === "customers") {
+    return filterArticleCampaignRecipients(await getExistingCustomerRecipients(selection));
+  }
+
+  // Portal users are always part of an article campaign. The selected
+  // HighLevel tag adds contacts outside the portal, while the merge prevents
+  // anyone with both records from receiving two copies.
+  const [tagRecipients, portalRecipients] = await Promise.all([
+    getHighLevelContactsByTag(tag),
+    getExistingCustomerRecipients({
+      audienceSource: "customers",
+      customerSelectionMode: "all",
+      selectedCustomerIds: [],
+      excludedCustomerUserIds: [],
+    }),
+  ]);
+  return filterArticleCampaignRecipients(mergeUniqueRecipients(tagRecipients, portalRecipients));
 }
 
 async function getRunBySlot(slotKey: string) {
