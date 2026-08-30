@@ -4472,7 +4472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           jobId: job.id,
           senderType: 'staff',
           senderId: 'system',
-          message: 'Thank you for submitting your files. They are being reviewed by our team.',
+          message: 'Thank you for submitting your job details. We will review the details in the next 24 hours.',
           readByStaff: true,
           readByCustomer: false,
         } as any);

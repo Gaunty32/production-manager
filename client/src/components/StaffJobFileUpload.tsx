@@ -33,7 +33,7 @@ interface StaffJobFileUploadProps {
   autoMessageOnDownload?: boolean;
 }
 
-const AUTO_MESSAGE = "Thank you for submitting your files. They are being reviewed by our team.";
+const AUTO_MESSAGE = "Thank you for submitting your job details. We will review the details in the next 24 hours.";
 
 export function StaffJobFileUpload({ jobId, onFileAdded, autoMessageOnDownload = false }: StaffJobFileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
