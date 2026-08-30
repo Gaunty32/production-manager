@@ -15,6 +15,7 @@ import {
   filterArticleCampaignRecipients,
   isArticleCampaignUnsubscribed,
 } from "./articleCampaignUnsubscribe";
+import { isEmailPermanentlyFailed, recordPermanentEmailFailure } from "./emailSuppression";
 
 const CAMPAIGN_ID = "weekly-article";
 const HIGHLEVEL_BASE = "https://rest.gohighlevel.com/v1";
@@ -485,6 +486,14 @@ async function runScheduledCampaign(slotKey: string) {
       )).returning();
       if (!claimedRecipient) continue;
       try {
+        if (await isEmailPermanentlyFailed(claimedRecipient.email)) {
+          await db.update(weeklyArticleCampaignRecipients).set({
+            status: "suppressed",
+            claimedAt: null,
+            error: "Skipped because this address previously had a permanent delivery failure.",
+          }).where(eq(weeklyArticleCampaignRecipients.id, claimedRecipient.id));
+          continue;
+        }
         if (await isArticleCampaignUnsubscribed(claimedRecipient.email)) {
           await db.update(weeklyArticleCampaignRecipients).set({
             status: "unsubscribed",
@@ -504,6 +513,9 @@ async function runScheduledCampaign(slotKey: string) {
         await db.update(weeklyArticleCampaignRecipients).set({ status: "sent", sentAt: new Date(), claimedAt: null, error: null })
           .where(eq(weeklyArticleCampaignRecipients.id, claimedRecipient.id));
       } catch (error: any) {
+        if (error?.permanent === true) {
+          await recordPermanentEmailFailure(claimedRecipient.email, error);
+        }
         await db.update(weeklyArticleCampaignRecipients).set({
           status: "failed",
           claimedAt: null,

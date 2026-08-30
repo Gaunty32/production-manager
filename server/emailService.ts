@@ -90,6 +90,23 @@ async function sendEmail(
   return result;
 }
 
+export class EmailDeliveryError extends Error {
+  constructor(message: string, public readonly permanent: boolean) {
+    super(message);
+    this.name = "EmailDeliveryError";
+  }
+}
+
+function isPermanentResendRecipientError(error: any) {
+  const code = String(error?.name || error?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  if (["invalid_email", "invalid_recipient", "recipient_not_found"].includes(code)) return true;
+  const mentionsRecipient = /\b(recipient|email|address|to)\b/.test(message);
+  if (code === "validation_error" && mentionsRecipient) return true;
+  const statusCode = Number(error?.statusCode || error?.status);
+  return [400, 422].includes(statusCode) && mentionsRecipient;
+}
+
 function getBaseUrl() {
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
   if (process.env.REPLIT_DOMAINS) return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
@@ -1429,7 +1446,10 @@ export async function sendArticleCampaignEmail(params: {
     html: buildArticleCampaignEmailHtml({ ...params, unsubscribeUrl }),
   });
   if (error) {
-    throw new Error(`Failed to send article campaign email to ${params.to}: ${JSON.stringify(error)}`);
+    throw new EmailDeliveryError(
+      `Failed to send article campaign email to ${params.to}: ${JSON.stringify(error)}`,
+      isPermanentResendRecipientError(error),
+    );
   }
 }
 
@@ -1447,7 +1467,10 @@ export async function sendBroadcastEmail(params: {
     html: buildBroadcastEmailHtml(params.message, params.recipientFirstName),
   });
   if (error) {
-    throw new Error(`Failed to send broadcast email to ${params.to}: ${JSON.stringify(error)}`);
+    throw new EmailDeliveryError(
+      `Failed to send broadcast email to ${params.to}: ${JSON.stringify(error)}`,
+      isPermanentResendRecipientError(error),
+    );
   }
 }
 

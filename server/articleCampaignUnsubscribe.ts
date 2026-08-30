@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { weeklyArticleCampaignUnsubscribes } from "@shared/schema";
+import { filterPermanentlyFailedRecipients } from "./emailSuppression";
 
 const UNSUBSCRIBE_URL = "https://www.selectbranding.co.uk/unsubscribe/weekly-articles";
 
@@ -37,7 +38,9 @@ export async function filterArticleCampaignRecipients<T extends { email: string 
   const rows = await db.select({ email: weeklyArticleCampaignUnsubscribes.email })
     .from(weeklyArticleCampaignUnsubscribes);
   const unsubscribed = new Set(rows.map((row) => normalizeEmail(row.email)));
-  return recipients.filter((recipient) => !unsubscribed.has(normalizeEmail(recipient.email)));
+  return filterPermanentlyFailedRecipients(
+    recipients.filter((recipient) => !unsubscribed.has(normalizeEmail(recipient.email))),
+  );
 }
 
 export async function unsubscribeFromArticleCampaign(email: string) {

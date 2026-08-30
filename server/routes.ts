@@ -77,6 +77,7 @@ import {
   isValidArticleCampaignUnsubscribeToken,
   unsubscribeFromArticleCampaign,
 } from "./articleCampaignUnsubscribe";
+import { filterPermanentlyFailedRecipients, recordPermanentEmailFailure } from "./emailSuppression";
 
 
 // ─── Base URL helper ──────────────────────────────────────────────────────────
@@ -1904,7 +1905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]);
       const customerNameById = new Map(allCustomers.map((c) => [c.id, c.name]));
       const seen = new Set<string>();
-      const recipients = allCustomerUsers
+      const recipients = await filterPermanentlyFailedRecipients(allCustomerUsers
         .filter((u) => u.active && u.email)
         .filter((u) => {
           const key = u.email.toLowerCase();
@@ -1918,7 +1919,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastName: u.lastName,
           customerName: customerNameById.get(u.customerId) || "",
         }))
-        .sort((a, b) => (a.customerName || "").localeCompare(b.customerName || ""));
+        .sort((a, b) => (a.customerName || "").localeCompare(b.customerName || "")));
       res.json({ count: recipients.length, recipients });
     } catch (error: any) {
       console.error("Error fetching broadcast recipients:", error);
@@ -1959,13 +1960,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]);
       const customerNameById = new Map(allCustomers.map((c) => [c.id, c.name]));
       const seen = new Set<string>();
-      const recipients = allCustomerUsers.filter((u) => {
+      const recipients = await filterPermanentlyFailedRecipients(allCustomerUsers.filter((u) => {
         if (!u.active || !u.email) return false;
         const key = u.email.toLowerCase();
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
-      });
+      }));
 
       let sent = 0;
       const failures: string[] = [];
@@ -1980,6 +1981,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sent++;
         } catch (err: any) {
           console.error(`[Broadcast] Failed to send to ${r.email}:`, err?.message || err);
+          if (err?.permanent === true) {
+            await recordPermanentEmailFailure(r.email, err);
+          }
           failures.push(`${r.email}${customerNameById.get(r.customerId) ? ` (${customerNameById.get(r.customerId)})` : ""}`);
         }
         // Gentle pacing to stay under Resend rate limits

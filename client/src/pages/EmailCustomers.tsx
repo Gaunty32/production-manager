@@ -375,7 +375,7 @@ export default function EmailCustomers() {
                       {campaignRecipientCount == null ? "Preview to check the current audience size." : `${campaignRecipientCount} unique recipient${campaignRecipientCount === 1 ? "" : "s"} selected, including active portal users.`}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      All active customer portal users are included. Matching email addresses are sent one copy only.
+                      All active customer portal users are included. Matching email addresses are sent one copy only, and permanently failed addresses are excluded.
                     </p>
                   </div>
                 ) : (
@@ -641,7 +641,7 @@ export default function EmailCustomers() {
                 )}
               </CardTitle>
               <CardDescription>
-                All active customer portal users. Duplicate email addresses are only sent one copy.
+                All active customer portal users. Duplicate email addresses are only sent one copy, and permanently failed addresses are excluded.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

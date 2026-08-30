@@ -1355,6 +1355,15 @@ export const weeklyArticleCampaignUnsubscribes = pgTable("weekly_article_campaig
 
 export type WeeklyArticleCampaignUnsubscribe = typeof weeklyArticleCampaignUnsubscribes.$inferSelect;
 
+export const emailPermanentFailures = pgTable("email_permanent_failures", {
+  email: varchar("email").primaryKey(),
+  lastError: text("last_error").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type EmailPermanentFailure = typeof emailPermanentFailures.$inferSelect;
+
 // Machines table — stores each embroidery machine with capacity and status
 export const machines = pgTable("machines", {
   id: serial("id").primaryKey(),
