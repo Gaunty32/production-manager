@@ -128,6 +128,7 @@ interface JobEditDialogProps {
     goodsReceived: Date | null;
     requiredDispatchDate: Date | null;
     machineId: number | null;
+    responsibleOperatorId?: string | null;
     completed: boolean;
     completedOnTime: boolean | null;
     completedById: string | null;
@@ -608,6 +609,20 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     if (job) {
       setIsSubmitting(true);
       try {
+        // Don't persist a brand-new line item that's still in its untouched
+        // default state. This prevents editing a job's details (e.g. just the
+        // name) from silently creating a line item and moving the job out of
+        // the "Awaiting Line Items" list into the production queue.
+        const isPristineDefault = (item: LineItem) =>
+          !item.id &&
+          item.jobType === "Embroidery" &&
+          (!item.stitchCount || item.stitchCount === 0) &&
+          !(item.description && item.description.trim()) &&
+          !item.machineId &&
+          !item.completed &&
+          !item.logoApproved;
+        const itemsToPersist = lineItems.filter((item) => !isPristineDefault(item));
+
         // Check if job is being marked as complete
         const wasNotCompleted = !job.completed;
         const isNowCompleted = data.completed;
@@ -623,25 +638,34 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           : { ...data, quantity: totalQuantity };
         await apiRequest("PATCH", `/api/jobs/${job.id}`, updateData);
 
+        // A holding-area job has no line items yet, so its operator/machine can
+        // be chosen in this editor before Job Allocation has anything useful
+        // to recommend. Promote one consistent line-item choice to the
+        // job-level allocation first; the server can then create the line item
+        // without rejecting the machine as ownerless.
+        const machineAssignments = itemsToPersist.filter((item) => item.machineId != null);
+        const selectedMachineIds = Array.from(new Set(machineAssignments.map((item) => item.machineId!)));
+        const selectedOperatorIds = Array.from(new Set(
+          machineAssignments.map((item) => item.operatorId).filter((id): id is string => Boolean(id)),
+        ));
+        if (
+          (job.machineId == null || !job.responsibleOperatorId) &&
+          selectedMachineIds.length === 1 &&
+          (job.responsibleOperatorId || selectedOperatorIds.length === 1)
+        ) {
+          await apiRequest("POST", `/api/jobs/${job.id}/allocate`, {
+            responsibleOperatorId: job.responsibleOperatorId || selectedOperatorIds[0],
+            machineId: job.machineId ?? selectedMachineIds[0],
+            machineOverrideReason: null,
+            blockedReason: null,
+          });
+        }
+
         // Handle line item updates
         // Delete removed line items
         for (const id of deletedLineItemIds) {
           await apiRequest("DELETE", `/api/job-line-items/${id}`);
         }
-
-        // Don't persist a brand-new line item that's still in its untouched
-        // default state. This prevents editing a job's details (e.g. just the
-        // name) from silently creating a line item and moving the job out of
-        // the "Awaiting Line Items" list into the production queue.
-        const isPristineDefault = (item: LineItem) =>
-          !item.id &&
-          item.jobType === "Embroidery" &&
-          (!item.stitchCount || item.stitchCount === 0) &&
-          !(item.description && item.description.trim()) &&
-          !item.machineId &&
-          !item.completed &&
-          !item.logoApproved;
-        const itemsToPersist = lineItems.filter((item) => !isPristineDefault(item));
 
         // Create or update line items
         for (const item of itemsToPersist) {
@@ -688,6 +712,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         // All updates successful, refetch data to ensure UI is updated
         await queryClient.refetchQueries({ queryKey: ["/api/jobs"] });
         await queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'line-items'] });
+        await queryClient.invalidateQueries({ queryKey: ["/api/allocation/board"] });
         
         // If job was just completed, award stars to employees who completed line items
         if (justCompleted && data.requiredDispatchDate) {
