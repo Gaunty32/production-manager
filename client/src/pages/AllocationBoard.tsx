@@ -69,6 +69,7 @@ interface BoardData {
 }
 
 interface Machine { id: number; name: string; isActive: boolean }
+interface StaffOption { id: string; name: string; active?: boolean }
 
 function fmtDue(d: string | null) {
   if (!d) return "No date";
@@ -93,6 +94,11 @@ export default function AllocationBoard() {
 
   const { data: board, isLoading } = useQuery<BoardData>({ queryKey: ["/api/allocation/board"] });
   const { data: machines } = useQuery<Machine[]>({ queryKey: ["/api/machines"] });
+  const { data: staff } = useQuery<StaffOption[]>({ queryKey: ["/api/staff"] });
+  const availableOperators = (staff ?? [])
+    .filter(member => member.active !== false)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const availableMachines = (machines ?? []).filter(machine => machine.isActive);
 
   const { data: recommendation } = useQuery<{
     machineId: number | null; machineName: string | null; reason: string;
@@ -347,8 +353,8 @@ export default function AllocationBoard() {
                 <SelectTrigger data-testid="select-responsible-operator"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="unallocated">Unallocated</SelectItem>
-                  {board?.operators.map(op => (
-                    <SelectItem key={op.staffId} value={op.staffId}>{op.name}</SelectItem>
+                  {availableOperators.map(operator => (
+                    <SelectItem key={operator.id} value={operator.id}>{operator.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -368,9 +374,9 @@ export default function AllocationBoard() {
                 <SelectTrigger disabled={operatorId === "unallocated"} data-testid="select-confirmed-machine"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Not set</SelectItem>
-                  {machines?.filter(m => m.isActive).map(m => (
-                    <SelectItem key={m.id} value={String(m.id)}>
-                      {m.name}{recommendation?.machineId === m.id ? " (recommended)" : ""}
+                  {availableMachines.map(machine => (
+                    <SelectItem key={machine.id} value={String(machine.id)}>
+                      {machine.name}{recommendation?.machineId === machine.id ? " (recommended)" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
