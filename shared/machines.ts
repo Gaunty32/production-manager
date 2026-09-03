@@ -1,5 +1,6 @@
-// Dedicated machine for Print jobs. All "Print" line items are run here and
-// assigned to the machine's default operator (Mollie).
+// Dedicated machine for Print jobs. All "Print" line items are run here.
+// The job's responsible operator is selected separately; the machine default
+// is only a fallback for legacy/unallocated work.
 export const PRINT_MACHINE_ID = 6;
 
 export const MACHINE_NAMES: Record<number, string> = {

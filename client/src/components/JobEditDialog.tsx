@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
 import { PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
-import { calculateProductionMetrics } from "@shared/machines";
+import { calculateProductionMetrics, PRINT_MACHINE_ID } from "@shared/machines";
 import { z } from "zod";
 import {
   Dialog,
@@ -152,6 +152,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const [celebrationOnTime, setCelebrationOnTime] = useState(true);
   const [celebrationStaffNames, setCelebrationStaffNames] = useState<string[]>([]);
   const [shippingDialogOpen, setShippingDialogOpen] = useState(false);
+  const [responsibleOperatorId, setResponsibleOperatorId] = useState<string | null>(null);
   
   // Find the staff member associated with the current user
   const { data: currentUserStaff } = useQuery<{ id: string; name: string; userId: string } | null>({
@@ -210,6 +211,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
 
   useEffect(() => {
     if (job) {
+      setResponsibleOperatorId(job.responsibleOperatorId ?? null);
       form.reset({
         customerId: job.customerId,
         jobName: job.jobName,
@@ -502,6 +504,21 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     setLineItems(updated);
   };
 
+  const updateResponsibleOperator = (operatorId: string | null) => {
+    setResponsibleOperatorId(operatorId);
+    setLineItems((current) =>
+      current.map((item) =>
+        item.completed
+          ? item
+          : {
+              ...item,
+              operatorId,
+              machineId: item.jobType === "Print" ? PRINT_MACHINE_ID : item.machineId,
+            },
+      ),
+    );
+  };
+
   const handleSuggestLineItemSchedule = async (index: number) => {
     const values = form.getValues();
     const lineItem = lineItems[index];
@@ -621,7 +638,24 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           !item.machineId &&
           !item.completed &&
           !item.logoApproved;
-        const itemsToPersist = lineItems.filter((item) => !isPristineDefault(item));
+        const itemsToPersist = lineItems
+          .filter((item) => !isPristineDefault(item))
+          .map((item) => ({
+            ...item,
+            machineId: item.jobType === "Print" ? PRINT_MACHINE_ID : item.machineId,
+            operatorId: item.completed ? item.operatorId : responsibleOperatorId,
+          }));
+
+        const hasAssignedMachine = itemsToPersist.some((item) => item.machineId != null);
+        if (hasAssignedMachine && !responsibleOperatorId) {
+          toast({
+            title: "Responsible operator required",
+            description: "Choose who is responsible for this job before saving it.",
+            variant: "destructive",
+          });
+          setIsSubmitting(false);
+          return;
+        }
 
         // Check if job is being marked as complete
         const wasNotCompleted = !job.completed;
@@ -645,16 +679,12 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         // without rejecting the machine as ownerless.
         const machineAssignments = itemsToPersist.filter((item) => item.machineId != null);
         const selectedMachineIds = Array.from(new Set(machineAssignments.map((item) => item.machineId!)));
-        const selectedOperatorIds = Array.from(new Set(
-          machineAssignments.map((item) => item.operatorId).filter((id): id is string => Boolean(id)),
-        ));
-        if (
-          (job.machineId == null || !job.responsibleOperatorId) &&
-          selectedMachineIds.length === 1 &&
-          (job.responsibleOperatorId || selectedOperatorIds.length === 1)
-        ) {
+        const allocationChanged =
+          responsibleOperatorId !== (job.responsibleOperatorId ?? null) ||
+          (selectedMachineIds.length === 1 && selectedMachineIds[0] !== job.machineId);
+        if (responsibleOperatorId && allocationChanged) {
           await apiRequest("POST", `/api/jobs/${job.id}/allocate`, {
-            responsibleOperatorId: job.responsibleOperatorId || selectedOperatorIds[0],
+            responsibleOperatorId,
             machineId: job.machineId ?? selectedMachineIds[0],
             machineOverrideReason: null,
             blockedReason: null,
@@ -996,6 +1026,30 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               )}
 
               <div className="md:col-span-2">
+                <div className="mb-3 max-w-sm">
+                  <FormLabel>Responsible Operator</FormLabel>
+                  <Select
+                    value={responsibleOperatorId || "unassigned"}
+                    onValueChange={(value) => updateResponsibleOperator(value === "unassigned" ? null : value)}
+                  >
+                    <SelectTrigger className="mt-1" data-testid="select-edit-job-responsible-operator">
+                      <SelectValue placeholder="Choose an operator" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Not assigned</SelectItem>
+                      {staff
+                        .filter((member) => member.active !== false || member.id === responsibleOperatorId)
+                        .map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.name}{member.active === false ? " (disabled)" : ""}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Print work stays on the Print machine but can be assigned to any active operator.
+                  </p>
+                </div>
                 <FormLabel>Line Items</FormLabel>
                 <div className="space-y-3 mt-2">
                   {lineItems.map((item, index) => (
@@ -1012,7 +1066,9 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                                 updated[index] = { 
                                   ...updated[index], 
                                   jobType: value,
-                                  stitchCount: PRINT_SIZE_CODE.A4 
+                                  stitchCount: PRINT_SIZE_CODE.A4,
+                                  machineId: PRINT_MACHINE_ID,
+                                  operatorId: responsibleOperatorId,
                                 };
                                 setLineItems(updated);
                               } else {

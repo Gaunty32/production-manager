@@ -4047,9 +4047,9 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  // Idempotently make sure the dedicated "Print" machine (id 6) exists and is
-  // assigned to operator Mollie as its default operator. Safe to call on every
-  // boot — only fills gaps, never overwrites an existing operator choice.
+  // Idempotently make sure the dedicated "Print" machine (id 6) exists.
+  // Mollie remains its fallback default for legacy/unallocated work, while
+  // each job's responsible operator can be selected independently.
   async ensurePrintMachine(): Promise<void> {
     const PRINT_ID = 6;
     const [mollie] = await db
@@ -4070,7 +4070,7 @@ export class DatabaseStorage implements IStorage {
       );
     } else {
       // Normalize an existing id-6 row so it is always the active "Print" machine,
-      // and fill in Mollie as the default operator if one is not already set.
+      // and keep a fallback default operator if one has not been configured.
       const updates: Partial<Machine> = {};
       if (existing.name !== "Print") updates.name = "Print";
       if (!existing.isActive) updates.isActive = true;
