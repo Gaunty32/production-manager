@@ -6803,7 +6803,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parentJob = await storage.getJob(jobId);
       if (!parentJob) return res.status(404).json({ error: "Job not found" });
 
-      // Print jobs always run on the dedicated "Print" machine (operator Mollie)
+      // Print jobs always run on the dedicated Print machine. Ownership comes
+      // from the job's selected responsible operator.
       const isPrintItem = isPrintJobType(data.jobType);
       if (isPrintItem) {
         data.machineId = PRINT_MACHINE_ID;
@@ -6975,9 +6976,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parentJob = await storage.getJob(existingBeforeUpdate.jobId);
       if (!parentJob) return res.status(404).json({ error: "Job not found" });
 
-      // Print jobs always run on the dedicated "Print" machine (operator Mollie).
-      // Use the incoming job type when present, otherwise the saved one.
-      const isPrintItem = isPrintJobType(existingBeforeUpdate.jobType);
+      // Print jobs always run on the dedicated Print machine. Use the incoming
+      // job type when it is being changed, otherwise the saved type.
+      const isPrintItem = isPrintJobType(data.jobType ?? existingBeforeUpdate.jobType);
       if (isPrintItem) {
         data.machineId = PRINT_MACHINE_ID;
       }

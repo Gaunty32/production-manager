@@ -703,6 +703,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
             // Update existing line item
             await apiRequest("PATCH", `/api/job-line-items/${item.id}`, {
               jobType: item.jobType,
+              position: item.position || null,
+              positionOther: item.position === "other" ? item.positionOther || null : null,
               quantity: item.quantity,
               description: item.description || null,
               stitchCount: item.stitchCount,
@@ -724,6 +726,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
             // Create new line item
             await apiRequest("POST", `/api/jobs/${job.id}/line-items`, {
               jobType: item.jobType,
+              position: item.position || null,
+              positionOther: item.position === "other" ? item.positionOther || null : null,
               quantity: item.quantity,
               description: item.description || null,
               stitchCount: item.stitchCount,
@@ -739,9 +743,19 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           }
         }
 
-        // All updates successful, refetch data to ensure UI is updated
-        await queryClient.refetchQueries({ queryKey: ["/api/jobs"] });
-        await queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'line-items'] });
+        // Replace the line-item cache with the server-confirmed result before
+        // closing. With infinite query staleness, invalidation alone could leave
+        // a reopened editor briefly showing the pre-save placeholder item.
+        const refreshedLineItemsResponse = await apiRequest("GET", `/api/jobs/${job.id}/line-items`);
+        const refreshedLineItems = await refreshedLineItemsResponse.json();
+        queryClient.setQueryData(['/api/jobs', job.id, 'line-items'], refreshedLineItems);
+
+        // Refresh every active jobs-list variant (including machine-filtered
+        // lists) so "Needs line items" disappears immediately after saving.
+        await queryClient.refetchQueries({
+          predicate: (query) => query.queryKey[0] === "/api/jobs",
+          type: "active",
+        });
         await queryClient.invalidateQueries({ queryKey: ["/api/allocation/board"] });
         
         // If job was just completed, award stars to employees who completed line items
