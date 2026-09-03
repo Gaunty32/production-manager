@@ -15,6 +15,7 @@ import { DemoAmount } from "@/components/DemoText";
 import { Calendar } from "@/components/ui/calendar";
 import { AlertTriangle, Clock, TrendingUp, Users, Target, Activity, CheckCircle2, CalendarIcon, LineChart as LineChartIcon, Building2, Trophy, AlertCircle, RefreshCw, Gauge, Printer, Factory, ShieldAlert } from "lucide-react";
 import { ProductionWeekSummary } from "@/components/ProductionWeekSummary";
+import { CapacityTab } from "@/components/CapacityTab";
 import { KeyMetricsTab } from "@/components/KeyMetricsTab";
 import { StaffProductivityTab } from "@/components/StaffProductivityTab";
 import { DataQualityTab } from "@/components/DataQualityTab";
@@ -797,6 +798,10 @@ function WeeklyReportsContent() {
             <Factory className="h-4 w-4 mr-2" />
             Weekly Summary
           </TabsTrigger>
+          <TabsTrigger value="capacity" data-testid="tab-capacity">
+            <CalendarIcon className="h-4 w-4 mr-2" />
+            Capacity
+          </TabsTrigger>
           <TabsTrigger value="daily-output" data-testid="tab-daily-output">
             <LineChartIcon className="h-4 w-4 mr-2" />
             Daily Output
@@ -849,6 +854,10 @@ function WeeklyReportsContent() {
 
         <TabsContent value="production-week" className="space-y-4">
           <ProductionWeekSummary />
+        </TabsContent>
+
+        <TabsContent value="capacity" className="space-y-4">
+          <CapacityTab />
         </TabsContent>
 
         <TabsContent value="performance" className="space-y-4">

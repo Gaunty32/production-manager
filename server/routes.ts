@@ -61,6 +61,14 @@ import { shouldSendStaffNotification } from "./notificationThrottle";
 import { KNOWLEDGE_CENTRE_ARTICLES } from "@shared/knowledgeCentre";
 import { EXTERNAL_KNOWLEDGE_FEED_URL, getExternalKnowledgeCentreArticles } from "./knowledgeCentreFeed";
 import {
+  getStaffAvailableSlots,
+  getStaffMachineAllocationSlots,
+  isBankHoliday,
+  isStaffOnHoliday,
+  getMachineAvailableSlots,
+  type TimeSlot,
+} from "@shared/scheduling";
+import {
   buildCampaignPreview,
   getCampaignArticleAvailability,
   getCampaignConfig,
@@ -2938,6 +2946,293 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error building production week report:", error);
       res.status(500).json({ error: "Failed to build production week report" });
+    }
+  });
+
+  // Evidence-based production capacity. Historical throughput comes from
+  // recorded production time and output; forward capacity comes from the
+  // actual rota/machine coverage and booked job schedules. This deliberately
+  // does not use a fixed garments-per-week target.
+  app.get("/api/reports/capacity", isStaffAuthenticated, async (req: any, res) => {
+    try {
+      const requestedWeeks = Number.parseInt(String(req.query.weeks ?? "12"), 10);
+      const historyWeeks = Number.isFinite(requestedWeeks)
+        ? Math.min(52, Math.max(4, requestedWeeks))
+        : 12;
+      const timezone = "Europe/London";
+      const dateKey = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: timezone });
+      const startOfMonday = (date: Date) => {
+        const key = dateKey(date);
+        const noon = new Date(`${key}T12:00:00Z`);
+        const day = noon.getUTCDay();
+        noon.setUTCDate(noon.getUTCDate() - ((day + 6) % 7));
+        noon.setUTCHours(12, 0, 0, 0);
+        return noon;
+      };
+      const addDaysUtc = (date: Date, days: number) => {
+        const result = new Date(date);
+        result.setUTCDate(result.getUTCDate() + days);
+        return result;
+      };
+      const weekKey = (date: Date | string | null | undefined) =>
+        date ? dateKey(startOfMonday(new Date(date))) : null;
+      const intersectSlot = (a: TimeSlot, b: TimeSlot): TimeSlot | null => {
+        const start = Math.max(a.startTime, b.startTime);
+        const end = Math.min(a.endTime, b.endTime);
+        return end > start ? { startTime: start, endTime: end } : null;
+      };
+      const contains = (slot: TimeSlot, minute: number) =>
+        minute >= slot.startTime && minute < slot.endTime;
+
+      const thisMonday = startOfMonday(new Date());
+      const historyStart = addDaysUtc(thisMonday, -historyWeeks * 7);
+      // Include the current week in the rota horizon, plus three future weeks.
+      const horizonEnd = addDaysUtc(thisMonday, 28);
+
+      const [
+        allEntries,
+        allLineItems,
+        staffList,
+        machines,
+        shifts,
+        allocations,
+        holidays,
+        bankHolidays,
+        machineBlocks,
+        jobSchedules,
+      ] = await Promise.all([
+        storage.getProductionEntries(),
+        storage.getAllJobLineItems(),
+        storage.getStaff(),
+        storage.getMachines(),
+        storage.getStaffShifts(undefined, historyStart, horizonEnd),
+        storage.getStaffMachineAllocations(undefined, undefined, historyStart, horizonEnd),
+        storage.getStaffHolidays(undefined, historyStart, horizonEnd),
+        storage.getBankHolidays(historyStart, horizonEnd),
+        storage.getMachineScheduleBlocks(undefined, historyStart, horizonEnd),
+        storage.getJobSchedules(undefined, undefined, undefined, historyStart, horizonEnd),
+      ]);
+
+      const lineItemIdsWithEntries = new Set(allEntries.map((entry) => entry.lineItemId));
+      const historicalWeeks = new Map<string, {
+        completedQuantity: number;
+        actualMinutes: number;
+        recordedSessions: number;
+        fallbackItems: number;
+      }>();
+      for (let i = 0; i < historyWeeks; i++) {
+        const key = dateKey(addDaysUtc(historyStart, i * 7));
+        historicalWeeks.set(key, {
+          completedQuantity: 0,
+          actualMinutes: 0,
+          recordedSessions: 0,
+          fallbackItems: 0,
+        });
+      }
+
+      for (const entry of allEntries) {
+        const key = weekKey(entry.workDate);
+        const week = key ? historicalWeeks.get(key) : undefined;
+        if (!week || entry.quantityCompleted <= 0 || entry.productionTimeMinutes <= 0) continue;
+        week.completedQuantity += entry.quantityCompleted;
+        week.actualMinutes += entry.productionTimeMinutes;
+        week.recordedSessions++;
+      }
+      // A completed line item with no production entries is still usable when
+      // the completion dialog recorded its actual duration. Do not combine this
+      // fallback with entries for the same line item or it would double count.
+      for (const item of allLineItems) {
+        if (!item.completed || lineItemIdsWithEntries.has(item.id)) continue;
+        if (!item.completedAt || !item.actualProductionTimeMinutes || item.actualProductionTimeMinutes <= 0) continue;
+        const key = weekKey(item.completedAt);
+        const week = key ? historicalWeeks.get(key) : undefined;
+        if (!week || item.quantity <= 0) continue;
+        week.completedQuantity += item.quantity;
+        week.actualMinutes += item.actualProductionTimeMinutes;
+        week.fallbackItems++;
+      }
+
+      const activeStaff = staffList.filter((member) => member.active);
+      const activeMachines = machines.filter((machine) => machine.isActive);
+
+      // Calculate maximum simultaneous machine coverage for each day using a
+      // small bipartite match (operator -> machine). This avoids counting one
+      // unallocated operator as if they could run every machine at once.
+      const maximumMatching = (edges: Map<string, number[]>) => {
+        const machineToStaff = new Map<number, string>();
+        const visit = (staffId: string, seen: Set<number>): boolean => {
+          for (const machineId of edges.get(staffId) ?? []) {
+            if (seen.has(machineId)) continue;
+            seen.add(machineId);
+            const previousStaff = machineToStaff.get(machineId);
+            if (!previousStaff || visit(previousStaff, seen)) {
+              machineToStaff.set(machineId, staffId);
+              return true;
+            }
+          }
+          return false;
+        };
+        let count = 0;
+        for (const staffId of edges.keys()) {
+          if (visit(staffId, new Set())) count++;
+        }
+        return count;
+      };
+
+      const rotaMinutesByWeek = new Map<string, number>();
+      for (let dayOffset = 0; dayOffset < 28; dayOffset++) {
+        const day = addDaysUtc(thisMonday, dayOffset);
+        const dayKey = dateKey(day);
+        const currentWeek = weekKey(day);
+        if (!currentWeek) continue;
+        if (isBankHoliday(day, bankHolidays)) {
+          rotaMinutesByWeek.set(currentWeek, rotaMinutesByWeek.get(currentWeek) ?? 0);
+          continue;
+        }
+
+        const staffSlots = new Map<string, TimeSlot[]>();
+        for (const member of activeStaff) {
+          if (isStaffOnHoliday(day, member.id, holidays)) continue;
+          staffSlots.set(member.id, getStaffAvailableSlots(day, member.id, shifts));
+        }
+        const machineSlots = new Map<number, TimeSlot[]>();
+        for (const machine of activeMachines) {
+          machineSlots.set(machine.id, getMachineAvailableSlots(day, machine.id, machineBlocks));
+        }
+
+        const boundaries = new Set<number>([0, 1440]);
+        for (const slots of staffSlots.values()) {
+          for (const slot of slots) {
+            boundaries.add(slot.startTime);
+            boundaries.add(slot.endTime);
+          }
+        }
+        for (const slots of machineSlots.values()) {
+          for (const slot of slots) {
+            boundaries.add(slot.startTime);
+            boundaries.add(slot.endTime);
+          }
+        }
+        // Allocation boundaries matter because an operator can change from
+        // unrestricted to machine-specific coverage during the day.
+        for (const allocation of allocations) {
+          const allocationDate = dateKey(new Date(allocation.date));
+          const recurringToday = allocation.isRecurring && allocation.recurringDaysOfWeek?.includes(day.getUTCDay());
+          if (allocationDate === dayKey || recurringToday) {
+            boundaries.add(allocation.startTime);
+            boundaries.add(allocation.endTime);
+          }
+        }
+
+        const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
+        let capacityMinutes = 0;
+        for (let index = 0; index < sortedBoundaries.length - 1; index++) {
+          const startTime = sortedBoundaries[index];
+          const endTime = sortedBoundaries[index + 1];
+          if (endTime <= startTime) continue;
+          const midpoint = startTime + (endTime - startTime) / 2;
+          const edges = new Map<string, number[]>();
+
+          for (const [staffId, available] of staffSlots) {
+            if (!available.some((slot) => contains(slot, midpoint))) continue;
+            const eligibleMachines: number[] = [];
+            for (const machine of activeMachines) {
+              if (!machineSlots.get(machine.id)?.some((slot) => contains(slot, midpoint))) continue;
+              const allocationSlots = getStaffMachineAllocationSlots(day, machine.id, staffId, allocations);
+              if (allocationSlots !== null && !allocationSlots.some((slot) => contains(slot, midpoint))) continue;
+              eligibleMachines.push(machine.id);
+            }
+            if (eligibleMachines.length) edges.set(staffId, eligibleMachines);
+          }
+          capacityMinutes += maximumMatching(edges) * (endTime - startTime);
+        }
+        rotaMinutesByWeek.set(currentWeek, (rotaMinutesByWeek.get(currentWeek) ?? 0) + capacityMinutes);
+      }
+
+      const scheduledMinutesByWeek = new Map<string, number>();
+      for (const schedule of jobSchedules) {
+        if (schedule.status === "cancelled") continue;
+        const key = weekKey(schedule.scheduledDate);
+        if (!key) continue;
+        scheduledMinutesByWeek.set(
+          key,
+          (scheduledMinutesByWeek.get(key) ?? 0) + Math.max(0, schedule.endTime - schedule.startTime),
+        );
+      }
+
+      const historicalRows = Array.from(historicalWeeks.entries())
+        .map(([weekStart, value]) => ({
+          weekStart,
+          completedQuantity: value.completedQuantity,
+          actualMinutes: value.actualMinutes,
+          recordedSessions: value.recordedSessions,
+          fallbackItems: value.fallbackItems,
+          garmentsPerHour: value.actualMinutes > 0
+            ? Math.round((value.completedQuantity / value.actualMinutes) * 60 * 10) / 10
+            : null,
+        }))
+        .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+
+      const measuredRows = historicalRows.filter((row) => row.actualMinutes > 0 && row.completedQuantity > 0);
+      const totalMeasuredQuantity = measuredRows.reduce((sum, row) => sum + row.completedQuantity, 0);
+      const totalMeasuredMinutes = measuredRows.reduce((sum, row) => sum + row.actualMinutes, 0);
+      const rate = totalMeasuredMinutes > 0
+        ? Math.round((totalMeasuredQuantity / totalMeasuredMinutes) * 60 * 10) / 10
+        : null;
+      const sortedOutputs = measuredRows.map((row) => row.completedQuantity).sort((a, b) => a - b);
+      const percentile = (values: number[], fraction: number) => {
+        if (!values.length) return null;
+        const position = (values.length - 1) * fraction;
+        const lower = Math.floor(position);
+        const upper = Math.ceil(position);
+        if (lower === upper) return values[lower];
+        return Math.round(values[lower] + (values[upper] - values[lower]) * (position - lower));
+      };
+      const forwardRows = [0, 7, 14, 21].map((offset) => {
+        const weekStart = dateKey(addDaysUtc(thisMonday, offset));
+        const staffedMinutes = rotaMinutesByWeek.get(weekStart) ?? 0;
+        const scheduledMinutes = scheduledMinutesByWeek.get(weekStart) ?? 0;
+        return {
+          weekStart,
+          staffedMachineMinutes: staffedMinutes,
+          staffedMachineHours: Math.round((staffedMinutes / 60) * 10) / 10,
+          scheduledMinutes,
+          scheduledHours: Math.round((scheduledMinutes / 60) * 10) / 10,
+          scheduledUtilisation: staffedMinutes > 0
+            ? Math.round((scheduledMinutes / staffedMinutes) * 100)
+            : null,
+          modelledCapacity: rate != null ? Math.round((staffedMinutes / 60) * rate) : null,
+        };
+      });
+      const futureRows = forwardRows.slice(1);
+      const futureStaffedMinutes = futureRows.reduce((sum, row) => sum + row.staffedMachineMinutes, 0);
+      const futureScheduledMinutes = futureRows.reduce((sum, row) => sum + row.scheduledMinutes, 0);
+
+      res.json({
+        history: historicalRows,
+        forward: forwardRows,
+        summary: {
+          measuredWeeks: measuredRows.length,
+          measuredQuantity: totalMeasuredQuantity,
+          measuredMinutes: totalMeasuredMinutes,
+          garmentsPerHour: rate,
+          conservativeWeeklyOutput: percentile(sortedOutputs, 0.25),
+          typicalWeeklyOutput: percentile(sortedOutputs, 0.5),
+          strongWeeklyOutput: percentile(sortedOutputs, 0.75),
+          nextFourWeekStaffedMachineHours: Math.round((futureStaffedMinutes / 60) * 10) / 10,
+          nextFourWeekScheduledHours: Math.round((futureScheduledMinutes / 60) * 10) / 10,
+          nextFourWeekModelledCapacity: rate != null
+            ? Math.round((futureStaffedMinutes / 60 / 4) * rate)
+            : null,
+          nextFourWeekScheduledUtilisation: futureStaffedMinutes > 0
+            ? Math.round((futureScheduledMinutes / futureStaffedMinutes) * 100)
+            : null,
+          confidence: measuredRows.length >= 4 ? "measured" : measuredRows.length > 0 ? "early" : "insufficient",
+        },
+      });
+    } catch (error) {
+      console.error("Capacity report error:", error);
+      res.status(500).json({ error: "Failed to calculate production capacity" });
     }
   });
 
