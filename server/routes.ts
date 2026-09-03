@@ -3928,6 +3928,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Pay an issued Xero invoice using the customer's saved Stripe card.
+  // The invoice is looked up through the authenticated customer's Xero contact
+  // rather than trusting an amount supplied by the browser.
+  app.post("/api/customer-portal/stripe/pay-invoice", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = req.session?.customerUserId || req.session?.impersonationCustomerUserId;
+      if (!customerUserId) return res.status(401).json({ error: "Unauthorized" });
+
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) return res.status(401).json({ error: "User not found" });
+
+      const customers = await storage.getCustomers();
+      const customer = customers.find(c => c.id === customerUser.customerId);
+      if (!customer) return res.status(404).json({ error: "Customer not found" });
+      if (!customer.stripeCustomerId) {
+        return res.status(400).json({ error: "No saved payment card on file. Please add a card first." });
+      }
+
+      const invoiceId = typeof req.body?.invoiceId === "string" ? req.body.invoiceId.trim() : "";
+      if (!invoiceId) return res.status(400).json({ error: "Invoice ID is required" });
+
+      const contact = await xeroService.findContact(customer);
+      if (!contact?.contactID) return res.status(404).json({ error: "Your invoice account could not be found" });
+
+      const invoices = await xeroService.getInvoicesForContact(contact.contactID);
+      const invoice = invoices.find((candidate) => candidate.InvoiceID === invoiceId);
+      if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+      if (invoice.Status === "PAID" || Number(invoice.AmountDue || 0) <= 0) {
+        return res.status(400).json({ error: "This invoice has already been paid" });
+      }
+      if (!["AUTHORISED", "SUBMITTED"].includes(invoice.Status)) {
+        return res.status(400).json({ error: "This invoice is not available for payment yet" });
+      }
+      if ((invoice.CurrencyCode || "GBP").toUpperCase() !== "GBP") {
+        return res.status(400).json({ error: "Online card payment is currently available for GBP invoices only" });
+      }
+
+      const amountDue = Number(Number(invoice.AmountDue).toFixed(2));
+      const reference = `STRIPE-${invoice.InvoiceNumber || invoice.InvoiceID.slice(0, 8)}`;
+      const chargeResult = await chargeCustomerCard(
+        customer.stripeCustomerId,
+        amountDue,
+        `Invoice ${invoice.InvoiceNumber || invoice.InvoiceID}`,
+        reference,
+        `customer-invoice-${invoice.InvoiceID}-${Math.round(amountDue * 100)}`,
+      );
+
+      if (!chargeResult.success) {
+        return res.json({ chargeResult, invoiceNumber: invoice.InvoiceNumber, amountDue });
+      }
+
+      // Keep Xero's AmountDue/status in sync with the Stripe charge.
+      const xeroPayment = await xeroService.recordPayment(
+        invoice.InvoiceID,
+        amountDue,
+        new Date(),
+        reference,
+      );
+
+      res.json({
+        chargeResult,
+        xeroPayment,
+        invoiceNumber: invoice.InvoiceNumber,
+        amountDue,
+      });
+    } catch (error: any) {
+      console.error("Error paying Xero invoice by card:", error);
+      res.status(500).json({ error: error.message || "Payment failed" });
+    }
+  });
+
   // ── End Stripe routes ───────────────────────────────────────────────────────
 
   app.patch("/api/customer-auth/me/notification-settings", isCustomerAuthenticated, async (req: any, res) => {

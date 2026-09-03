@@ -87,6 +87,7 @@ export async function chargeCustomerCard(
   amountGBP: number,
   description: string,
   invoiceReference: string,
+  idempotencyKey?: string,
 ): Promise<ChargeResult> {
   try {
     const stripe = getStripeClient();
@@ -105,16 +106,19 @@ export async function chargeCustomerCard(
     const paymentMethod = methods.data[0];
     const amountPence = Math.round(amountGBP * 100);
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountPence,
-      currency: "gbp",
-      customer: stripeCustomerId,
-      payment_method: paymentMethod.id,
-      off_session: true,
-      confirm: true,
-      description,
-      metadata: { invoiceReference },
-    });
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount: amountPence,
+        currency: "gbp",
+        customer: stripeCustomerId,
+        payment_method: paymentMethod.id,
+        off_session: true,
+        confirm: true,
+        description,
+        metadata: { invoiceReference },
+      },
+      idempotencyKey ? { idempotencyKey } : undefined,
+    );
 
     return {
       success: true,

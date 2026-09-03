@@ -1,13 +1,15 @@
 import { goBack } from "@/lib/utils";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLocation } from "wouter";
-import { ArrowLeft, Receipt, Package, Clock, Download, FileText, CheckCircle2, AlertCircle, Ban } from "lucide-react";
+import { ArrowLeft, Receipt, Package, Clock, Download, FileText, CheckCircle2, AlertCircle, Ban, CreditCard, Landmark } from "lucide-react";
 import { format, isSameMonth, startOfMonth, parseISO } from "date-fns";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type AwaitingJob = {
   id: string;
@@ -108,9 +110,52 @@ function groupXeroByMonth(invoices: XeroInvoice[]): { label: string; date: Date;
 
 function XeroInvoiceCard({ invoice }: { invoice: XeroInvoice }) {
   const { toast } = useToast();
+  const [paying, setPaying] = useState(false);
   const invoiceDate = parseXeroDate(invoice.Date);
   const dueDate = parseXeroDate(invoice.DueDate);
   const isPaid = invoice.Status === "PAID";
+  const canPay =
+    !isPaid &&
+    invoice.AmountDue > 0 &&
+    (invoice.CurrencyCode || "GBP").toUpperCase() === "GBP" &&
+    (invoice.Status === "AUTHORISED" || invoice.Status === "SUBMITTED");
+
+  async function handlePayNow() {
+    if (!window.confirm(`Pay ${formatCurrency(invoice.AmountDue, invoice.CurrencyCode || "GBP")} for invoice ${invoice.InvoiceNumber || ""} using your saved card?`)) {
+      return;
+    }
+    setPaying(true);
+    try {
+      const response = await apiRequest("POST", "/api/customer-portal/stripe/pay-invoice", {
+        invoiceId: invoice.InvoiceID,
+      });
+      const result = await response.json();
+      if (!result.chargeResult?.success) {
+        throw new Error(result.chargeResult?.error || "Payment failed. Please try again.");
+      }
+      if (!result.xeroPayment?.success) {
+        toast({
+          title: "Payment received",
+          description: "Your card was charged, but the invoice needs to be reconciled manually. Please do not try the payment again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Payment successful",
+        description: `${formatCurrency(result.amountDue, invoice.CurrencyCode || "GBP")} paid for ${result.invoiceNumber || invoice.InvoiceNumber}.`,
+      });
+      await queryClient.refetchQueries({ queryKey: ["/api/customer-portal/invoices"] });
+    } catch (error) {
+      toast({
+        title: "Payment failed",
+        description: error instanceof Error ? error.message : "Could not process this payment.",
+        variant: "destructive",
+      });
+    } finally {
+      setPaying(false);
+    }
+  }
 
   async function handleDownload() {
     try {
@@ -143,6 +188,17 @@ function XeroInvoiceCard({ invoice }: { invoice: XeroInvoice }) {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge status={invoice.Status} />
+            {canPay && (
+              <Button
+                size="sm"
+                onClick={handlePayNow}
+                disabled={paying}
+                data-testid={`button-pay-invoice-${invoice.InvoiceID}`}
+              >
+                <CreditCard className="h-3.5 w-3.5 mr-1.5" />
+                {paying ? "Processing…" : "Pay now"}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -275,6 +331,24 @@ export default function CustomerInvoices() {
           </div>
         ) : (
           <div className="space-y-6">
+            <Card className="border-blue-200 bg-blue-50/60 dark:border-blue-900 dark:bg-blue-950/20">
+              <CardContent className="p-4">
+                <p className="font-semibold text-sm flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-primary" />
+                  Payment options
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pay issued invoices instantly with your saved card, or pay by bank transfer using the details below.
+                </p>
+                <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-900 text-xs space-y-0.5">
+                  <p className="font-semibold flex items-center gap-1.5"><Landmark className="h-3.5 w-3.5" />BACS payment details</p>
+                  <p>Account name: <span className="font-medium">Select Branding Solutions Ltd</span></p>
+                  <p>Sort code: <span className="font-medium">04-06-05</span></p>
+                  <p>Account number: <span className="font-medium">30422879</span></p>
+                  <p className="text-muted-foreground pt-1">Please use your invoice number as the payment reference.</p>
+                </div>
+              </CardContent>
+            </Card>
             {/* Jobs completed but not yet invoiced */}
             {awaitingInvoice.length > 0 && (
               <div>
