@@ -44,6 +44,7 @@ type InvoicesResponse = {
   awaitingInvoice: AwaitingJob[];
   xeroInvoices: XeroInvoice[];
   xeroConnected: boolean;
+  cardPaymentsAvailable: boolean;
 };
 
 function parseXeroDate(raw: string): Date | null {
@@ -108,7 +109,7 @@ function groupXeroByMonth(invoices: XeroInvoice[]): { label: string; date: Date;
   return groups.sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
-function XeroInvoiceCard({ invoice }: { invoice: XeroInvoice }) {
+function XeroInvoiceCard({ invoice, cardPaymentsAvailable }: { invoice: XeroInvoice; cardPaymentsAvailable: boolean }) {
   const { toast } = useToast();
   const [paying, setPaying] = useState(false);
   const invoiceDate = parseXeroDate(invoice.Date);
@@ -117,6 +118,7 @@ function XeroInvoiceCard({ invoice }: { invoice: XeroInvoice }) {
   const canPay =
     !isPaid &&
     invoice.AmountDue > 0 &&
+    cardPaymentsAvailable &&
     (invoice.CurrencyCode || "GBP").toUpperCase() === "GBP" &&
     (invoice.Status === "AUTHORISED" || invoice.Status === "SUBMITTED");
 
@@ -364,7 +366,13 @@ export default function CustomerInvoices() {
               <div key={group.label}>
                 <h2 className="text-sm font-semibold text-muted-foreground mb-3">{group.label}</h2>
                 <div className="space-y-3">
-                  {group.invoices.map(inv => <XeroInvoiceCard key={inv.InvoiceID} invoice={inv} />)}
+                      {group.invoices.map(inv => (
+                        <XeroInvoiceCard
+                          key={inv.InvoiceID}
+                          invoice={inv}
+                          cardPaymentsAvailable={Boolean(data.cardPaymentsAvailable)}
+                        />
+                      ))}
                 </div>
               </div>
             ))}

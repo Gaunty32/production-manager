@@ -64,3 +64,4 @@
 - [Broadcast permanent failures](broadcast-permanent-failures.md) — persist recipient-specific permanent failures and exclude them from weekly and one-off broadcast audiences; retry transient provider errors.
 - [Public homepage performance](public-home-performance.md) — keep marketing routes on a lightweight entry; never pull the staff/customer shell into the public startup bundle.
 - [Customer email deep links](customer-email-deep-links.md) — authenticate before mounting protected portal pages and preserve the exact destination through sign-in.
+- [Secret status checks](secret-status-checks.md) — secret metadata can falsely report missing keys; confirm presence in the running shell without printing values.

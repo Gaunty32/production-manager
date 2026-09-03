@@ -11650,7 +11650,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({ awaitingInvoice, xeroInvoices, xeroConnected });
+      const cardPaymentsAvailable = Boolean(
+        process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY,
+      );
+      res.json({ awaitingInvoice, xeroInvoices, xeroConnected, cardPaymentsAvailable });
     } catch (e) {
       console.error("Failed to fetch invoice history:", e);
       res.status(500).json({ error: "Failed to fetch invoice history" });
