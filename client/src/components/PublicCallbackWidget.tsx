@@ -5,6 +5,7 @@ type Availability = {
   available: boolean;
   message: string;
   timeZone: string;
+  staffImageUrl: string | null;
 };
 
 type CallbackResult = {
@@ -30,6 +31,7 @@ export function PublicCallbackWidget() {
         available: false,
         message: "Want us to call you back?",
         timeZone: "Europe/London",
+        staffImageUrl: null,
       }));
   }, []);
 
@@ -65,10 +67,34 @@ export function PublicCallbackWidget() {
   };
 
   return (
-    <div className="fixed bottom-5 right-4 z-[70] sm:bottom-6 sm:right-6">
+    <div className="fixed right-4 top-24 z-[70] flex flex-col items-end sm:right-6 sm:top-28">
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-[3px] border-orange-500 bg-orange-500 text-white shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+        aria-label={open ? "Close callback form" : "Request a callback"}
+        aria-expanded={open}
+        data-testid="button-open-callback"
+      >
+        {availability?.staffImageUrl ? (
+          <img
+            src={availability.staffImageUrl}
+            alt=""
+            className="h-full w-full rounded-full object-cover"
+          />
+        ) : (
+          <Phone className="h-7 w-7" />
+        )}
+        {availability?.staffImageUrl && (
+          <span className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-orange-500">
+            <Phone className="h-3 w-3" />
+          </span>
+        )}
+      </button>
+
       {open && (
         <div
-          className="mb-3 w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-2xl border bg-background shadow-2xl"
+          className="mt-3 w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-2xl border bg-background shadow-2xl"
           role="dialog"
           aria-label="Request a callback"
         >
@@ -156,17 +182,6 @@ export function PublicCallbackWidget() {
           </div>
         </div>
       )}
-
-      <button
-        type="button"
-        onClick={() => setOpen(current => !current)}
-        className="ml-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-        aria-label={open ? "Close callback form" : "Request a callback"}
-        aria-expanded={open}
-        data-testid="button-open-callback"
-      >
-        {open ? <X className="h-6 w-6" /> : <Phone className="h-6 w-6" />}
-      </button>
     </div>
   );
 }

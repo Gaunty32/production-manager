@@ -505,9 +505,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Public callback widget availability. The server owns the London-hours decision.
-  app.get("/api/callback/availability", (_req, res) => {
+  app.get("/api/callback/availability", async (_req, res) => {
     res.set("Cache-Control", "no-store");
-    res.json(getCallbackAvailability());
+    try {
+      const [staffMembers, users] = await Promise.all([
+        storage.getStaff(),
+        storage.getAllUsers(),
+      ]);
+      const linkedStaffImages = staffMembers
+        .filter(member => member.active !== false && member.userId)
+        .map(member => users.find(user => user.id === member.userId)?.profileImageUrl)
+        .filter((url): url is string => !!url)
+        .map(url => normalizeImgUrl(url))
+        .filter((url): url is string => !!url);
+      const staffImages = linkedStaffImages.length > 0
+        ? linkedStaffImages
+        : users
+            .filter(user => user.active !== false && !!user.profileImageUrl)
+            .map(user => normalizeImgUrl(user.profileImageUrl))
+            .filter((url): url is string => !!url);
+      const staffImageUrl = staffImages.length > 0
+        ? staffImages[Math.floor(Math.random() * staffImages.length)]
+        : null;
+
+      res.json({ ...getCallbackAvailability(), staffImageUrl });
+    } catch (error) {
+      console.error("[Callback] Failed to select staff profile image:", error);
+      res.json({ ...getCallbackAvailability(), staffImageUrl: null });
+    }
   });
 
   // Public callback request. The HighLevel webhook URL must remain server-side.
