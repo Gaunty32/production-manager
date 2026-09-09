@@ -72,7 +72,7 @@ export function PublicCallbackWidget() {
         <button
           type="button"
           onClick={() => setOpen(current => !current)}
-          className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-[3px] border-orange-500 bg-orange-500 text-white shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+          className="relative flex h-16 w-16 items-center justify-center rounded-full border-[3px] border-orange-500 bg-orange-500 text-white shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
           aria-label={open ? "Close callback form" : "Request a callback"}
           aria-expanded={open}
           data-testid="button-open-callback"
@@ -87,8 +87,8 @@ export function PublicCallbackWidget() {
             <Phone className="h-7 w-7" />
           )}
           {availability?.staffImageUrl && (
-            <span className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-orange-500">
-              <Phone className="h-3 w-3" />
+            <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-orange-500 shadow-md">
+              <Phone className="h-3.5 w-3.5" />
             </span>
           )}
         </button>
