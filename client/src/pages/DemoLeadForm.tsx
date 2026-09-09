@@ -55,7 +55,7 @@ export default function DemoLeadForm() {
       <div className="text-center space-y-2 mb-8">
         <h2 className="text-3xl font-bold tracking-tight">Book a Discovery Call</h2>
         <p className="text-muted-foreground">
-          Leave your details and we'll send you instant demo access, then follow up to find a time that works.
+          Leave your details and we'll send you instant demo access, we will then give you a call in a couple of days to discuss the next steps!
         </p>
       </div>
 
