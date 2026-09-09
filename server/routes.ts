@@ -498,7 +498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return {
       available,
       message: available
-        ? "Want us to call you in the next 27 seconds?"
+        ? "Want us to call you back in the next 27 seconds?"
         : "Want us to call you back?",
       timeZone: "Europe/London",
     };
