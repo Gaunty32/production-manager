@@ -3,6 +3,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { PRICING_2026, PRINT_PRICING_2026, SEPTEMBER_PRICE_INCREASE } from "@shared/pricing";
 import { ArrowRight, Check, ChevronDown, Clock3, Factory, Menu, Play, ShieldCheck, X } from "lucide-react";
 import sbsLogo from "@assets/logo_transparent.png";
+import { PublicPhoneBar } from "@/components/PublicPhoneBar";
 import floorOne from "@assets/contract-embroidery-floor-1.webp";
 import floorTwo from "@assets/contract-embroidery-floor-2.webp";
 import floorThree from "@assets/contract-embroidery-floor-3.webp";
@@ -206,6 +207,7 @@ export default function ContractEmbroideryPreview() {
   return (
     <div className="min-h-[100dvh] bg-[#f4f2ed] text-[#152326] selection:bg-[#d7ef46] selection:text-[#152326]">
       <header className="sticky top-0 z-40 border-b border-[#d8d8d0] bg-[#f4f2ed]/95 backdrop-blur">
+        <PublicPhoneBar />
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3 lg:px-8">
           <img src={sbsLogo} alt="Select Branding Solutions" className="h-11 w-auto object-contain" />
           <div className="hidden items-center gap-6 md:flex">

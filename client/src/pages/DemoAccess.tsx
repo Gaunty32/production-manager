@@ -4,6 +4,7 @@ import { Layers, CalendarDays, BarChart3, MessageSquare, FileText, Zap, ArrowDow
 import { PRICING_2026, PRINT_PRICING_2026, SEPTEMBER_PRICE_INCREASE } from "@shared/pricing";
 import customerDashboardImg from "@assets/screenshots/production_selectbranding_co_uk_demo.png";
 import customerPortalImg from "@assets/screenshots/production_selectbranding_co_uk_customer_login.png";
+import { PublicPhoneBar } from "@/components/PublicPhoneBar";
 import sbsLogo from "@assets/logo_transparent.png";
 import prodImg1 from "@assets/SWM07349_1778335006727.webp";
 import prodImg2 from "@assets/SWM00610_1778335033870.webp";
@@ -141,6 +142,7 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
+        <PublicPhoneBar />
         <div className={`mx-auto px-5 py-3 ${publicNav ? "max-w-7xl" : "max-w-6xl"}`}>
           <div className={publicNav ? "flex items-center justify-between gap-5" : "relative flex items-center justify-center"}>
             <a href="/" aria-label="Select Branding Solutions home">

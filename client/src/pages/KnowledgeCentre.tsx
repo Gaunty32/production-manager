@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { KnowledgeCentreArticle } from "@shared/knowledgeCentre";
 import sbsLogo from "@assets/logo_transparent.png";
+import { PublicPhoneBar } from "@/components/PublicPhoneBar";
 
 function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+      <PublicPhoneBar />
       <div className="container mx-auto flex items-center justify-between gap-4 px-4 py-3">
         <Link href="/" className="shrink-0">
           <img src={sbsLogo} alt="Select Branding Solutions" className="h-9 object-contain" />

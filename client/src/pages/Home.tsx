@@ -31,6 +31,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import sbsLogo from "@assets/logo_transparent.png";
+import { PublicPhoneBar } from "@/components/PublicPhoneBar";
 import type { KnowledgeCentreArticle } from "@shared/knowledgeCentre";
 
 const SERVICES = [
@@ -154,6 +155,7 @@ export default function Home() {
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
+        <PublicPhoneBar />
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
           <img src={sbsLogo} alt="Select Branding Solutions" className="h-9 object-contain" data-testid="img-logo" />
           <nav className="hidden items-center gap-6 text-sm font-medium md:flex">

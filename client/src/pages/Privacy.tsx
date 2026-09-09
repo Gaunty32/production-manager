@@ -1,9 +1,11 @@
 import sbsLogo from "@assets/logo_transparent.png";
+import { PublicPhoneBar } from "@/components/PublicPhoneBar";
 
 export default function Privacy() {
   return (
     <main className="min-h-screen bg-[#f4f2ed] text-[#152326]">
       <header className="border-b border-[#d8d8d0] bg-[#f4f2ed]">
+        <PublicPhoneBar />
         <div className="mx-auto flex max-w-4xl items-center justify-between px-5 py-4">
           <a href="/demo-access-preview" aria-label="Return to Contract Embroidery preview">
             <img src={sbsLogo} alt="Select Branding Solutions" className="h-10 w-auto" />
