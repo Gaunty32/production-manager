@@ -479,6 +479,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ version: SERVER_START_VERSION });
   });
 
+  const getCallbackAvailability = () => {
+    const londonParts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date());
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      londonParts.find(item => item.type === type)?.value || "";
+    const weekday = part("weekday");
+    const minutes = Number(part("hour")) * 60 + Number(part("minute"));
+    const available = ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday)
+      && minutes >= 9 * 60 + 30
+      && minutes < 16 * 60;
+
+    return {
+      available,
+      message: available
+        ? "Want us to call you in the next 27 seconds?"
+        : "Want us to call you back?",
+      timeZone: "Europe/London",
+    };
+  };
+
+  // Public callback widget availability. The server owns the London-hours decision.
+  app.get("/api/callback/availability", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json(getCallbackAvailability());
+  });
+
+  // Public callback request. The HighLevel webhook URL must remain server-side.
+  app.post("/api/callback", async (req, res) => {
+    const callbackSchema = z.object({
+      phone: z.string().trim().min(7).max(30),
+      website: z.string().max(200).optional().default(""),
+      page: z.string().max(500).optional(),
+    });
+
+    try {
+      const data = callbackSchema.parse(req.body);
+
+      // Honeypot: return a plausible response without forwarding bot submissions.
+      if (data.website) {
+        return res.status(202).json({ success: true, status: "saved", message: "Callback request saved" });
+      }
+
+      const normalizedPhone = data.phone.replace(/[\s().-]/g, "");
+      if (!/^\+?\d{10,15}$/.test(normalizedPhone)) {
+        return res.status(400).json({ error: "Please enter a valid phone number" });
+      }
+
+      const ip = req.ip || "unknown";
+      if (
+        !checkRateLimit(`callback-ip:${ip}`, 5, 60 * 60 * 1000)
+        || !checkRateLimit(`callback-phone:${normalizedPhone}`, 3, 60 * 60 * 1000)
+      ) {
+        return res.status(429).json({ error: "Too many callback requests. Please try again later." });
+      }
+
+      const availability = getCallbackAvailability();
+      const webhookUrl = process.env.HIGHLEVEL_CALLBACK_WEBHOOK_URL;
+      if (!webhookUrl) {
+        console.error("[Callback] HIGHLEVEL_CALLBACK_WEBHOOK_URL is not configured");
+        return res.status(202).json({ success: true, status: "saved", message: "Callback request saved" });
+      }
+
+      try {
+        const webhookResponse = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: normalizedPhone,
+            page: data.page || null,
+            source: "Select Branding Solutions website callback widget",
+            requestedAt: new Date().toISOString(),
+            withinOpeningHours: availability.available,
+            timeZone: availability.timeZone,
+          }),
+          signal: AbortSignal.timeout(8000),
+        });
+
+        if (!webhookResponse.ok) {
+          throw new Error(`HighLevel webhook returned ${webhookResponse.status}`);
+        }
+
+        return res.json({
+          success: true,
+          status: availability.available ? "calling" : "saved",
+          message: availability.available
+            ? "Thanks — we'll call you shortly"
+            : "Callback request saved",
+        });
+      } catch (error) {
+        console.error("[Callback] HighLevel webhook failed:", error);
+        return res.status(202).json({ success: true, status: "saved", message: "Callback request saved" });
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Please enter a valid phone number" });
+      }
+      console.error("[Callback] Request failed:", error);
+      res.status(500).json({ error: "Unable to save callback request" });
+    }
+  });
+
   // Serve object storage files via /api/img/* — distinct path avoids platform CDN interception
   app.get("/api/img/*", async (req, res) => {
     try {

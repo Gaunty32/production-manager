@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Route, Router, Switch } from "wouter";
 import DemoAccess from "@/pages/DemoAccess";
+import { PublicCallbackWidget } from "@/components/PublicCallbackWidget";
 
 const KnowledgeCentre = lazy(() => import("@/pages/KnowledgeCentre"));
 const Privacy = lazy(() => import("@/pages/Privacy"));
@@ -59,6 +60,7 @@ export default function PublicApp() {
     <Suspense fallback={<LoadingPage />}>
       <Router>
         <PublicRoutes />
+        <PublicCallbackWidget />
       </Router>
     </Suspense>
   );
