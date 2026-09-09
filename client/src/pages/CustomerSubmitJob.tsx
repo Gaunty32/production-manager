@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles, Layers, History, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles, Layers, History, CheckCircle2, Eye } from "lucide-react";
 import { customerJobSubmissionSchema } from "@shared/schema";
 import { isMinOrderQtyActive, MIN_ORDER_QTY } from "@shared/pricing";
 import { z } from "zod";
@@ -38,10 +38,27 @@ import {
 import { addDays, format } from "date-fns";
 
 type PreviousJobName = {
+  jobId: string;
   jobName: string;
   jobNumber: number | null;
   completedAt: string | null;
 };
+
+type PreviousJobFile = {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  uploadedBy: string;
+  createdAt: string;
+  viewUrl: string;
+};
+
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
 
 type CustomerUser = {
   id: string;
@@ -128,6 +145,7 @@ export default function CustomerSubmitJob() {
   const [pendingMinimumOrderData, setPendingMinimumOrderData] = useState<FormData | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [repeatHint, setRepeatHint] = useState<string | null>(null);
+  const [selectedPreviousJobId, setSelectedPreviousJobId] = useState<string | null>(null);
   const jobNameWrapperRef = useRef<HTMLDivElement>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -163,6 +181,11 @@ export default function CustomerSubmitJob() {
   const { data: previousJobNames = [] } = useQuery<PreviousJobName[]>({
     queryKey: ["/api/customer-portal/jobs/previous-names"],
     staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: previousJobFiles = [], isLoading: isLoadingPreviousJobFiles } = useQuery<PreviousJobFile[]>({
+    queryKey: [`/api/customer-portal/jobs/${selectedPreviousJobId}/files`],
+    enabled: !!selectedPreviousJobId,
   });
 
   useEffect(() => {
@@ -520,6 +543,7 @@ export default function CustomerSubmitJob() {
                               onChange={(e) => {
                                 field.onChange(e);
                                 setRepeatHint(null);
+                                setSelectedPreviousJobId(null);
                                 setShowSuggestions(true);
                               }}
                               data-testid="input-job-name"
@@ -543,6 +567,7 @@ export default function CustomerSubmitJob() {
                                         field.onChange(prev.jobName);
                                         form.setValue("logoType", "repeat_logo");
                                         setRepeatHint(prev.jobName);
+                                         setSelectedPreviousJobId(prev.jobId);
                                         setShowSuggestions(false);
                                       }}
                                     >
@@ -556,10 +581,44 @@ export default function CustomerSubmitJob() {
                           )}
                         </div>
                         {repeatHint && (
-                          <p className="flex items-center gap-1.5 text-xs text-primary mt-1">
-                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                            Matched a previous job — Logo Type set to <strong>Repeat Logo</strong>
-                          </p>
+                          <>
+                            <p className="flex items-center gap-1.5 text-xs text-primary mt-1">
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                              Matched a previous job — Logo Type set to <strong>Repeat Logo</strong>
+                            </p>
+                            <div className="mt-3 rounded-md border bg-muted/25 p-3" data-testid="previous-job-files">
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-muted-foreground" />
+                                <p className="text-sm font-medium">Files from original job</p>
+                                <span className="text-xs text-muted-foreground">(view only)</span>
+                              </div>
+                              {isLoadingPreviousJobFiles ? (
+                                <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  Loading original files…
+                                </div>
+                              ) : previousJobFiles.length === 0 ? (
+                                <p className="mt-2 text-xs text-muted-foreground">No files were attached to the original job.</p>
+                              ) : (
+                                <ul className="mt-2 divide-y">
+                                  {previousJobFiles.map(file => (
+                                    <li key={file.id} className="flex items-center justify-between gap-3 py-2">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm">{file.fileName}</p>
+                                        <p className="text-[11px] text-muted-foreground">{formatFileSize(file.fileSize)}</p>
+                                      </div>
+                                      <Button variant="outline" size="sm" asChild>
+                                        <a href={file.viewUrl} target="_blank" rel="noopener noreferrer">
+                                          <Eye className="mr-1.5 h-3.5 w-3.5" />
+                                          View
+                                        </a>
+                                      </Button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          </>
                         )}
                         <FormMessage />
                       </FormItem>

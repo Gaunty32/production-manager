@@ -4669,7 +4669,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         j.completed || j.invoiceStatus === "invoiced" || j.status === "completed"
       );
       const seen = new Set<string>();
-      const names: { jobName: string; jobNumber: number | null; completedAt: string | null }[] = [];
+      const names: { jobId: string; jobName: string; jobNumber: number | null; completedAt: string | null }[] = [];
       for (const job of completed.sort((a, b) => {
         const ad = (a as any).completedAt || (a as any).submittedAt;
         const bd = (b as any).completedAt || (b as any).submittedAt;
@@ -4679,6 +4679,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!seen.has(key)) {
           seen.add(key);
           names.push({
+            jobId: job.id,
             jobName: job.jobName.trim(),
             jobNumber: job.jobNumber ?? null,
             completedAt: (job as any).completedAt ?? (job as any).submittedAt ?? null,
@@ -4775,6 +4776,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch job" });
+    }
+  });
+
+  // Customer Portal - View files attached to one of the customer's own jobs.
+  app.get("/api/customer-portal/jobs/:jobId/files", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Customer user not found" });
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const files = await storage.getJobFiles(job.id);
+      res.json(files.filter(file => file.uploadedBy === "customer").map(file => ({
+        id: file.id,
+        fileName: file.fileName,
+        fileSize: file.fileSize,
+        fileType: file.fileType,
+        uploadedBy: file.uploadedBy,
+        createdAt: file.createdAt,
+        viewUrl: `/api/customer-portal/jobs/${job.id}/files/${file.id}/view`,
+      })));
+    } catch (error) {
+      console.error("Error fetching customer job files:", error);
+      res.status(500).json({ error: "Failed to fetch files" });
+    }
+  });
+
+  // Customer Portal - Securely stream a file after checking job ownership.
+  app.get("/api/customer-portal/jobs/:jobId/files/:fileId/view", isCustomerAuthenticated, async (req: any, res) => {
+    try {
+      const customerUserId = (req.session as any).impersonationCustomerUserId || (req.session as any).customerUserId;
+      const customerUser = await storage.getCustomerUserById(customerUserId);
+      if (!customerUser) return res.status(404).json({ error: "Customer user not found" });
+
+      const job = await storage.getJob(req.params.jobId);
+      if (!job || job.customerId !== customerUser.customerId) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const files = await storage.getJobFiles(job.id);
+      const fileRecord = files.find(file => file.id === req.params.fileId && file.uploadedBy === "customer");
+      if (!fileRecord) return res.status(404).json({ error: "File not found" });
+
+      const { ObjectStorageService } = await import("./objectStorage");
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(fileRecord.fileUrl);
+      const safeFileName = fileRecord.fileName.replace(/[^\w.\- ]/g, "_");
+      res.setHeader("Content-Disposition", `inline; filename="${safeFileName}"`);
+      await objectStorageService.downloadObject(objectFile, res, 3600);
+    } catch (error: any) {
+      console.error("Error viewing customer job file:", error);
+      if (error?.name === "ObjectNotFoundError") {
+        return res.status(404).json({ error: "File not found" });
+      }
+      res.status(500).json({ error: "Failed to view file" });
     }
   });
 
