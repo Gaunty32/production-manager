@@ -11951,9 +11951,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Customer: submit a feature request
-  app.post("/api/customer-portal/feature-requests", isCustomerAuthenticated, async (req: any, res) => {
+  app.post("/api/customer-portal/feature-requests", isCustomerAuthenticated, attachCustomerUser, async (req: any, res) => {
     try {
       const customerUser = req.customerUser;
+      if (!customerUser) return res.status(401).json({ error: "Customer authentication required" });
       const { title, description } = req.body;
       if (!title || !description) return res.status(400).json({ error: "title and description are required" });
       const [created] = await db.insert(featureRequests).values({
