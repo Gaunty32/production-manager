@@ -103,7 +103,11 @@ export function PublicCallbackWidget() {
               />
             </defs>
             <text
-              className="fill-orange-600 text-[8px] font-extrabold tracking-[0.08em]"
+              className={`fill-orange-600 font-extrabold ${
+                availability?.available
+                  ? "text-[5.5px] tracking-[0.035em]"
+                  : "text-[8px] tracking-[0.08em]"
+              }`}
               style={{ paintOrder: "stroke", stroke: "white", strokeWidth: 2.5, strokeLinejoin: "round" }}
             >
               <textPath
@@ -111,7 +115,9 @@ export function PublicCallbackWidget() {
                 startOffset="50%"
                 textAnchor="middle"
               >
-                CALL ME BACK
+                {availability?.available
+                  ? "CALL ME BACK IN 27 SECONDS"
+                  : "CALL ME BACK"}
               </textPath>
             </text>
           </svg>
