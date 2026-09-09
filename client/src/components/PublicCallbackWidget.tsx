@@ -91,6 +91,30 @@ export function PublicCallbackWidget() {
               <Phone className="h-3.5 w-3.5" />
             </span>
           )}
+          <svg
+            viewBox="0 0 80 80"
+            className="pointer-events-none absolute -inset-2 h-20 w-20 overflow-visible"
+            aria-hidden="true"
+          >
+            <defs>
+              <path
+                id="callback-button-top-arc"
+                d="M 8,40 A 32,32 0 0,1 72,40"
+              />
+            </defs>
+            <text
+              className="fill-orange-600 text-[8px] font-extrabold tracking-[0.08em]"
+              style={{ paintOrder: "stroke", stroke: "white", strokeWidth: 2.5, strokeLinejoin: "round" }}
+            >
+              <textPath
+                href="#callback-button-top-arc"
+                startOffset="50%"
+                textAnchor="middle"
+              >
+                CALL ME BACK
+              </textPath>
+            </text>
+          </svg>
         </button>
         <div
           className="pointer-events-none invisible absolute right-full top-1/2 mr-3 hidden w-max max-w-[min(20rem,calc(100vw-6rem))] -translate-y-1/2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold leading-snug text-white opacity-0 shadow-xl transition-opacity duration-150 group-hover:visible group-hover:opacity-100 sm:block"
