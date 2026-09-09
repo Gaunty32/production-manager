@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useRoute } from "wouter";
-import { ArrowLeft, Send, FileText, MessageSquare, CheckCircle, XCircle, Clock, Edit2, Save, Users, X, Paperclip } from "lucide-react";
+import { ArrowLeft, Send, FileText, MessageSquare, CheckCircle, XCircle, Clock, Edit2, Save, Users, X, Paperclip, ExternalLink, Download } from "lucide-react";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -43,9 +43,19 @@ type Job = {
 type JobFile = {
   id: string;
   fileName: string;
+  fileUrl: string;
   fileSize: number;
-  uploadedAt: string;
+  fileType: string;
+  uploadedAt?: string;
+  createdAt?: string;
 };
+
+function normalizeFileUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith("/objects/")) return url.replace("/objects", "/api/img");
+  if (url.startsWith("objects/")) return "/" + url.replace("objects/", "api/img/");
+  return url;
+}
 
 type JobMessage = {
   id: string;
@@ -660,6 +670,26 @@ export default function StaffJobDetail() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{file.fileName}</p>
                       </div>
+                      <Button variant="outline" size="sm" asChild>
+                        <a
+                          href={`${normalizeFileUrl(file.fileUrl)}?filename=${encodeURIComponent(file.fileName)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Open ${file.fileName}`}
+                        >
+                          {file.fileType?.startsWith("image") || file.fileType === "application/pdf" ? (
+                            <>
+                              <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                              View
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-3.5 w-3.5 mr-1.5" />
+                              Download
+                            </>
+                          )}
+                        </a>
+                      </Button>
                     </div>
                   ))}
                 </CardContent>
