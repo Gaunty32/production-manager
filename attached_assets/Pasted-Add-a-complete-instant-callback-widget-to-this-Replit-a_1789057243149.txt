@@ -1,0 +1,108 @@
+Add a complete instant-callback widget to this Replit app.
+
+Website name:
+[ENTER WEBSITE NAME]
+
+Website domains:
+https://[ENTER-DOMAIN]
+https://www.[ENTER-DOMAIN]
+
+Requirements:
+
+1. Create a dependency-free callback widget served from:
+
+GET /api/callback-widget.js
+
+The widget must:
+- Appear as a floating “Call me back” button.
+- Ask the visitor for their telephone number.
+- Submit the exact entered number to POST /api/callback.
+- Never contain or substitute a fallback, demo, hard-coded or test telephone number.
+- Determine the API address from the callback-widget.js script URL so it can be embedded on another website.
+- Show a clear success or error message.
+- Include basic spam protection and prevent repeated submissions while one is processing.
+
+2. Create these API endpoints:
+
+GET /api/callback-widget.js
+GET /api/callback/availability
+GET /api/callback/staff-photo
+POST /api/callback
+
+3. Validate and normalize telephone numbers server-side using libphonenumber-js with GB as the default country.
+
+For example:
+
+07908636553
+
+must normalize to:
+
++447908636553
+
+Reject invalid or impossible telephone numbers. The telephone number sent to HighLevel must always originate from the number entered by the website visitor.
+
+4. Add an integrity check immediately before contacting HighLevel:
+
+- Re-normalize the original submitted telephone number.
+- Confirm it matches the stored normalized number.
+- Block the HighLevel request if the two values differ.
+- Never substitute another telephone number.
+
+5. Log these diagnostic fields:
+
+submitted_phone
+normalised_phone
+phone_sent_to_highlevel
+
+Never log API tokens, credentials, authorization headers or secret values.
+
+6. Save callback requests in the Replit PostgreSQL database, including:
+
+- Original submitted telephone number
+- Normalized telephone number
+- Status
+- Creation date
+- HighLevel contact ID
+- Contact-upsert HTTP status, success, response and error
+- Workflow-enrolment HTTP status, success, response and error
+- Page URL and available UTM attribution
+- IP hash for rate limiting
+
+7. Add rate limiting by phone and IP.
+
+Blocked requests may be retained for auditing, but requests with the status blocked_rate_limit must never count toward future rate-limit calculations. This prevents repeated blocked submissions from extending the lockout.
+
+8. Integrate with HighLevel using only these Replit Secrets:
+
+HIGHLEVEL_API_TOKEN2
+HIGHLEVEL_LOCATION_ID2
+HIGHLEVEL_CALLBACK_WORKFLOW_ID2
+
+Also use:
+
+SESSION_SECRET
+ALLOWED_ORIGINS
+
+Do not ask me to paste secret values into chat. Use the Replit Secrets interface.
+
+ALLOWED_ORIGINS must contain:
+
+https://[ENTER-DOMAIN],https://www.[ENTER-DOMAIN]
+
+9. Upsert the HighLevel contact with:
+
+POST https://services.leadconnectorhq.com/contacts/upsert
+
+Use these headers:
+
+Authorization: Bearer HIGHLEVEL_API_TOKEN2
+Version: v3
+Accept: application/json
+Content-Type: application/json
+
+The JSON payload must have this structure:
+
+{
+  "phone": "<NORMALIZED VISITOR NUMBER>",
+  "locationId": "<HIGHLEVEL_LOCATION_ID2>",
+  "source": "[ENTER WEBSITE NAME] Website
