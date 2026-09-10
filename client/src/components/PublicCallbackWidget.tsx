@@ -55,7 +55,7 @@ export function PublicCallbackWidget() {
         body: JSON.stringify({
           phone,
           website,
-          page: window.location.pathname,
+          page: window.location.href,
         }),
       });
       const body = await response.json().catch(() => ({}));

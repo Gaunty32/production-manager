@@ -39,6 +39,7 @@ import {
   insertSampleFileSchema,
   featureRequests,
   contractPartnerEnquiries,
+  callbackRequests,
 } from "@shared/schema";
 import { z } from "zod";
 import { db } from "./db";
@@ -59,6 +60,7 @@ import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, 
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 import { KNOWLEDGE_CENTRE_ARTICLES } from "@shared/knowledgeCentre";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { EXTERNAL_KNOWLEDGE_FEED_URL, getExternalKnowledgeCentreArticles } from "./knowledgeCentreFeed";
 import {
   getStaffAvailableSlots,
@@ -504,30 +506,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
   };
 
+  const getRandomActiveStaffImage = async (): Promise<string | null> => {
+    const [staffMembers, users] = await Promise.all([
+      storage.getStaff(),
+      storage.getAllUsers(),
+    ]);
+    const linkedStaffImages = staffMembers
+      .filter(member => member.active !== false && member.userId)
+      .map(member => users.find(user => user.id === member.userId)?.profileImageUrl)
+      .filter((url): url is string => !!url)
+      .map(url => normalizeImgUrl(url))
+      .filter((url): url is string => !!url);
+    const staffImages = linkedStaffImages.length > 0
+      ? linkedStaffImages
+      : users
+          .filter(user => user.active !== false && !!user.profileImageUrl)
+          .map(user => normalizeImgUrl(user.profileImageUrl))
+          .filter((url): url is string => !!url);
+    return staffImages.length > 0
+      ? staffImages[Math.floor(Math.random() * staffImages.length)]
+      : null;
+  };
+
   // Public callback widget availability. The server owns the London-hours decision.
   app.get("/api/callback/availability", async (_req, res) => {
     res.set("Cache-Control", "no-store");
     try {
-      const [staffMembers, users] = await Promise.all([
-        storage.getStaff(),
-        storage.getAllUsers(),
-      ]);
-      const linkedStaffImages = staffMembers
-        .filter(member => member.active !== false && member.userId)
-        .map(member => users.find(user => user.id === member.userId)?.profileImageUrl)
-        .filter((url): url is string => !!url)
-        .map(url => normalizeImgUrl(url))
-        .filter((url): url is string => !!url);
-      const staffImages = linkedStaffImages.length > 0
-        ? linkedStaffImages
-        : users
-            .filter(user => user.active !== false && !!user.profileImageUrl)
-            .map(user => normalizeImgUrl(user.profileImageUrl))
-            .filter((url): url is string => !!url);
-      const staffImageUrl = staffImages.length > 0
-        ? staffImages[Math.floor(Math.random() * staffImages.length)]
-        : null;
-
+      const staffImageUrl = await getRandomActiveStaffImage();
       res.json({ ...getCallbackAvailability(), staffImageUrl });
     } catch (error) {
       console.error("[Callback] Failed to select staff profile image:", error);
@@ -535,12 +540,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Public callback request. The HighLevel webhook URL must remain server-side.
+  app.get("/api/callback/staff-photo", async (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const staffImageUrl = await getRandomActiveStaffImage();
+      if (!staffImageUrl) return res.status(204).end();
+      return res.redirect(302, staffImageUrl);
+    } catch (error) {
+      console.error("[Callback] Failed to serve staff photo:", error);
+      return res.status(204).end();
+    }
+  });
+
+  // Public callback request. HighLevel credentials remain server-side.
   app.post("/api/callback", async (req, res) => {
     const callbackSchema = z.object({
       phone: z.string().trim().min(7).max(30),
       website: z.string().max(200).optional().default(""),
-      page: z.string().max(500).optional(),
+      page: z.string().max(2000).optional(),
     });
 
     try {
@@ -551,55 +568,171 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(202).json({ success: true, status: "saved", message: "Callback request saved" });
       }
 
-      const normalizedPhone = data.phone.replace(/[\s().-]/g, "");
-      if (!/^\+?\d{10,15}$/.test(normalizedPhone)) {
+      const parsedPhone = parsePhoneNumberFromString(data.phone, "GB");
+      if (!parsedPhone || !parsedPhone.isValid()) {
         return res.status(400).json({ error: "Please enter a valid phone number" });
       }
+      const normalizedPhone = parsedPhone.number;
 
       const ip = req.ip || "unknown";
-      if (
-        !checkRateLimit(`callback-ip:${ip}`, 5, 60 * 60 * 1000)
-        || !checkRateLimit(`callback-phone:${normalizedPhone}`, 3, 60 * 60 * 1000)
-      ) {
+      const hashKey = process.env.SESSION_SECRET;
+      if (!hashKey) {
+        console.error("[Callback] SESSION_SECRET is not configured");
+        return res.status(503).json({ error: "Callback service is unavailable" });
+      }
+      const ipHash = crypto.createHmac("sha256", hashKey).update(ip).digest("hex");
+      let pageUrl: URL | null = null;
+      try {
+        if (data.page) pageUrl = new URL(data.page, `${req.protocol}://${req.get("host")}`);
+      } catch {
+        pageUrl = null;
+      }
+      const attribution = {
+        utmSource: pageUrl?.searchParams.get("utm_source") || null,
+        utmMedium: pageUrl?.searchParams.get("utm_medium") || null,
+        utmCampaign: pageUrl?.searchParams.get("utm_campaign") || null,
+        utmTerm: pageUrl?.searchParams.get("utm_term") || null,
+        utmContent: pageUrl?.searchParams.get("utm_content") || null,
+      };
+      const [requestRow] = await db.insert(callbackRequests).values({
+        submittedPhone: data.phone,
+        normalizedPhone,
+        status: "received",
+        pageUrl: pageUrl?.toString() || data.page || null,
+        ...attribution,
+        ipHash,
+      }).returning({ id: callbackRequests.id });
+
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const [phoneCountResult, ipCountResult] = await Promise.all([
+        db.select({ count: drizzleSql<number>`count(*)::int` })
+          .from(callbackRequests)
+          .where(and(
+            eq(callbackRequests.normalizedPhone, normalizedPhone),
+            gte(callbackRequests.createdAt, oneHourAgo),
+            ne(callbackRequests.status, "blocked_rate_limit"),
+          )),
+        db.select({ count: drizzleSql<number>`count(*)::int` })
+          .from(callbackRequests)
+          .where(and(
+            eq(callbackRequests.ipHash, ipHash),
+            gte(callbackRequests.createdAt, oneHourAgo),
+            ne(callbackRequests.status, "blocked_rate_limit"),
+          )),
+      ]);
+      if (Number(phoneCountResult[0]?.count || 0) > 3 || Number(ipCountResult[0]?.count || 0) > 5) {
+        await db.update(callbackRequests)
+          .set({ status: "blocked_rate_limit", updatedAt: new Date() })
+          .where(eq(callbackRequests.id, requestRow.id));
         return res.status(429).json({ error: "Too many callback requests. Please try again later." });
       }
 
       const availability = getCallbackAvailability();
-      const webhookUrl = process.env.HIGHLEVEL_CALLBACK_WEBHOOK_URL;
-      if (!webhookUrl) {
-        console.error("[Callback] HIGHLEVEL_CALLBACK_WEBHOOK_URL is not configured");
-        return res.status(202).json({ success: true, status: "saved", message: "Callback request saved" });
+      const apiToken = process.env.HIGHLEVEL_API_TOKEN2;
+      const locationId = process.env.HIGHLEVEL_LOCATION_ID2;
+      const workflowId = process.env.HIGHLEVEL_CALLBACK_WORKFLOW_ID2;
+      if (!apiToken || !locationId || !workflowId) {
+        await db.update(callbackRequests)
+          .set({ status: "configuration_error", updatedAt: new Date() })
+          .where(eq(callbackRequests.id, requestRow.id));
+        console.error("[Callback] Direct HighLevel credentials are not fully configured");
+        return res.status(503).json({ error: "Callback service is unavailable" });
       }
 
+      const verifiedPhone = parsePhoneNumberFromString(data.phone, "GB")?.number;
+      if (verifiedPhone !== normalizedPhone) {
+        await db.update(callbackRequests)
+          .set({ status: "blocked_integrity_check", updatedAt: new Date() })
+          .where(eq(callbackRequests.id, requestRow.id));
+        console.error("[Callback] Phone integrity check failed");
+        return res.status(400).json({ error: "Unable to verify the telephone number" });
+      }
+
+      console.info("[Callback] Phone diagnostics", {
+        submitted_phone: data.phone,
+        normalised_phone: normalizedPhone,
+        phone_sent_to_highlevel: verifiedPhone,
+      });
+
+      const headers = {
+        Authorization: `Bearer ${apiToken}`,
+        Version: "v3",
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      };
+
       try {
-        const webhookResponse = await fetch(webhookUrl, {
+        const contactResponse = await fetch("https://services.leadconnectorhq.com/contacts/upsert", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
-            phone: normalizedPhone,
-            page: data.page || null,
+            phone: verifiedPhone,
+            locationId,
             source: "Select Branding Solutions website callback widget",
-            requestedAt: new Date().toISOString(),
-            withinOpeningHours: availability.available,
-            timeZone: availability.timeZone,
           }),
           signal: AbortSignal.timeout(8000),
         });
-
-        if (!webhookResponse.ok) {
-          throw new Error(`HighLevel webhook returned ${webhookResponse.status}`);
+        const contactText = await contactResponse.text();
+        let contactBody: any = null;
+        try {
+          contactBody = contactText ? JSON.parse(contactText) : {};
+        } catch {
+          contactBody = { raw: contactText.slice(0, 4000) };
+        }
+        const contactId = contactBody?.contact?.id || contactBody?.id || null;
+        await db.update(callbackRequests).set({
+          highlevelContactId: contactId,
+          contactUpsertHttpStatus: contactResponse.status,
+          contactUpsertSuccess: contactResponse.ok && !!contactId,
+          contactUpsertResponse: contactBody,
+          contactUpsertError: contactResponse.ok && contactId ? null : "HighLevel contact upsert failed",
+          status: contactResponse.ok && contactId ? "contact_upserted" : "contact_upsert_failed",
+          updatedAt: new Date(),
+        }).where(eq(callbackRequests.id, requestRow.id));
+        if (!contactResponse.ok || !contactId) {
+          console.error("[Callback] HighLevel contact upsert failed", { status: contactResponse.status });
+          return res.status(502).json({ error: "We could not start the callback. Please call us instead." });
         }
 
-        return res.json({
-          success: true,
-          status: availability.available ? "calling" : "saved",
-          message: availability.available
-            ? "Thanks — we'll call you shortly"
-            : "Callback request saved",
-        });
+        const workflowResponse = await fetch(
+          `https://services.leadconnectorhq.com/contacts/${encodeURIComponent(contactId)}/workflow/${encodeURIComponent(workflowId)}`,
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ eventStartTime: new Date().toISOString() }),
+            signal: AbortSignal.timeout(8000),
+          },
+        );
+        const workflowText = await workflowResponse.text();
+        let workflowBody: any = null;
+        try {
+          workflowBody = workflowText ? JSON.parse(workflowText) : {};
+        } catch {
+          workflowBody = { raw: workflowText.slice(0, 4000) };
+        }
+        await db.update(callbackRequests).set({
+          workflowEnrollmentHttpStatus: workflowResponse.status,
+          workflowEnrollmentSuccess: workflowResponse.ok,
+          workflowEnrollmentResponse: workflowBody,
+          workflowEnrollmentError: workflowResponse.ok ? null : "HighLevel workflow enrollment failed",
+          status: workflowResponse.ok ? "workflow_enrolled" : "workflow_enrollment_failed",
+          updatedAt: new Date(),
+        }).where(eq(callbackRequests.id, requestRow.id));
+        if (!workflowResponse.ok) {
+          console.error("[Callback] HighLevel workflow enrollment failed", { status: workflowResponse.status });
+          return res.status(502).json({ error: "We saved your number but could not start the callback. Please call us instead." });
+        }
+
+        return res.json({ success: true, status: availability.available ? "calling" : "saved", message: availability.available ? "Thanks — we'll call you shortly" : "Callback request saved" });
       } catch (error) {
-        console.error("[Callback] HighLevel webhook failed:", error);
-        return res.status(202).json({ success: true, status: "saved", message: "Callback request saved" });
+        const errorMessage = error instanceof Error ? error.message : "Unknown HighLevel error";
+        await db.update(callbackRequests).set({
+          status: "highlevel_request_failed",
+          contactUpsertError: errorMessage,
+          updatedAt: new Date(),
+        }).where(eq(callbackRequests.id, requestRow.id));
+        console.error("[Callback] HighLevel request failed:", errorMessage);
+        return res.status(502).json({ error: "We could not start the callback. Please call us instead." });
       }
     } catch (error) {
       if (error instanceof z.ZodError) {

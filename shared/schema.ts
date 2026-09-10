@@ -63,6 +63,37 @@ export const contractPartnerEnquiries = pgTable("contract_partner_enquiries", {
 
 export type ContractPartnerEnquiry = typeof contractPartnerEnquiries.$inferSelect;
 
+export const callbackRequests = pgTable("callback_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submittedPhone: varchar("submitted_phone", { length: 64 }).notNull(),
+  normalizedPhone: varchar("normalized_phone", { length: 32 }).notNull(),
+  status: varchar("status", { length: 64 }).notNull().default("received"),
+  highlevelContactId: varchar("highlevel_contact_id"),
+  contactUpsertHttpStatus: integer("contact_upsert_http_status"),
+  contactUpsertSuccess: boolean("contact_upsert_success"),
+  contactUpsertResponse: jsonb("contact_upsert_response"),
+  contactUpsertError: text("contact_upsert_error"),
+  workflowEnrollmentHttpStatus: integer("workflow_enrollment_http_status"),
+  workflowEnrollmentSuccess: boolean("workflow_enrollment_success"),
+  workflowEnrollmentResponse: jsonb("workflow_enrollment_response"),
+  workflowEnrollmentError: text("workflow_enrollment_error"),
+  pageUrl: text("page_url"),
+  utmSource: varchar("utm_source"),
+  utmMedium: varchar("utm_medium"),
+  utmCampaign: varchar("utm_campaign"),
+  utmTerm: varchar("utm_term"),
+  utmContent: varchar("utm_content"),
+  ipHash: varchar("ip_hash", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("callback_requests_created_at_idx").on(table.createdAt),
+  index("callback_requests_phone_created_idx").on(table.normalizedPhone, table.createdAt),
+  index("callback_requests_ip_created_idx").on(table.ipHash, table.createdAt),
+]);
+
+export type CallbackRequest = typeof callbackRequests.$inferSelect;
+
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
