@@ -628,9 +628,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const availability = getCallbackAvailability();
-      const apiToken = process.env.HIGHLEVEL_API_TOKEN2;
-      const locationId = process.env.HIGHLEVEL_LOCATION_ID2;
-      const workflowId = process.env.HIGHLEVEL_CALLBACK_WORKFLOW_ID2;
+      const apiToken = process.env.HIGHLEVEL_API_TOKEN2?.trim().replace(/^Bearer\s+/i, "");
+      const locationId = process.env.HIGHLEVEL_LOCATION_ID2?.trim();
+      const workflowId = process.env.HIGHLEVEL_CALLBACK_WORKFLOW_ID2?.trim();
       if (!apiToken || !locationId || !workflowId) {
         await db.update(callbackRequests)
           .set({ status: "configuration_error", updatedAt: new Date() })
