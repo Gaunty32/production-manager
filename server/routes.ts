@@ -492,7 +492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const weekday = part("weekday");
     const minutes = Number(part("hour")) * 60 + Number(part("minute"));
     const available = ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(weekday)
-      && minutes >= 9 * 60 + 30
+      && minutes >= 10 * 60
       && minutes < 16 * 60;
 
     return {

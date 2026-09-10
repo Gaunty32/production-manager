@@ -214,7 +214,7 @@ export function PublicCallbackWidget() {
                   )}
                 </button>
                 <p className="mt-3 text-center text-[11px] text-muted-foreground">
-                  Monday–Friday, 9:30am–4:00pm
+                  Monday–Friday, 10:00am–4:00pm
                 </p>
               </form>
             )}
