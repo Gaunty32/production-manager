@@ -699,7 +699,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           {
             method: "POST",
             headers,
-            body: JSON.stringify({ eventStartTime: new Date().toISOString() }),
+            body: JSON.stringify({
+              eventStartTime: new Date().toISOString().replace("Z", "+00:00"),
+            }),
             signal: AbortSignal.timeout(8000),
           },
         );

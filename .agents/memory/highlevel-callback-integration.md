@@ -7,4 +7,4 @@ Use direct LeadConnector contact upsert followed by workflow enrollment for inst
 
 **Why:** The previous webhook returned HTTP 200 while the intended HighLevel automation did not run. Direct API responses make each step independently verifiable and auditable.
 
-**How to apply:** Keep the private integration token, location ID, and workflow ID from the same HighLevel sub-account. Verify read access to both workflows and contacts before trusting a new credential set, and never report callback success when either write step fails.
+**How to apply:** Keep the private integration token, location ID, and workflow ID from the same HighLevel sub-account. Verify read access to both workflows and contacts before trusting a new credential set, and never report callback success when either write step fails. Workflow `eventStartTime` must end with an explicit numeric offset such as `+00:00`; HighLevel rejects an otherwise valid ISO timestamp ending in `Z` with HTTP 422.
