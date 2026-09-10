@@ -15,6 +15,14 @@ type CallbackResult = {
 };
 
 export function PublicCallbackWidget() {
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.sessionStorage.getItem("public-callback-dismissed") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState("");
   const [website, setWebsite] = useState("");
@@ -24,6 +32,7 @@ export function PublicCallbackWidget() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (dismissed) return;
     fetch("/api/callback/availability", { cache: "no-store" })
       .then(response => response.ok ? response.json() : Promise.reject())
       .then(setAvailability)
@@ -33,7 +42,7 @@ export function PublicCallbackWidget() {
         timeZone: "Europe/London",
         staffImageUrl: null,
       }));
-  }, []);
+  }, [dismissed]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -66,9 +75,28 @@ export function PublicCallbackWidget() {
     setError("");
   };
 
+  const dismissWidget = () => {
+    try {
+      window.sessionStorage.setItem("public-callback-dismissed", "true");
+    } catch {
+      // The widget can still be dismissed when browser storage is unavailable.
+    }
+    setDismissed(true);
+  };
+
+  if (dismissed) return null;
+
   return (
     <div className="fixed right-4 top-24 z-[70] flex flex-col items-end sm:right-6 sm:top-28">
       <div className="group relative">
+        <button
+          type="button"
+          onClick={dismissWidget}
+          className="absolute -left-8 top-5 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:hidden"
+          aria-label="Hide callback button"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
         <button
           type="button"
           onClick={() => setOpen(current => !current)}
