@@ -24,6 +24,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   Sheet,
@@ -62,6 +63,27 @@ export default function Customers() {
   const [isSendingMobileGuide, setIsSendingMobileGuide] = useState<string | null>(null); // userId being actioned
   const [portalUserToDelete, setPortalUserToDelete] = useState<{ id: string; email: string } | null>(null);
   const [showReEngagement, setShowReEngagement] = useState(false);
+
+  const syncHighLevelMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/admin/highlevel-campaign/sync-customers");
+      return response.json() as Promise<{ synced: number; skipped: number; failed: number }>;
+    },
+    onSuccess: (result) => {
+      toast({
+        title: result.failed ? "HighLevel sync partly completed" : "HighLevel sync completed",
+        description: `${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed.`,
+        variant: result.failed ? "destructive" : "default",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "HighLevel sync failed",
+        description: error?.message || "No customer contacts were changed.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const { data: dormantData, isLoading: isLoadingDormant, refetch: refetchDormant } = useQuery<{
     customers: Array<{
@@ -470,6 +492,26 @@ export default function Customers() {
               }}
               isPending={createCustomerUserMutation.isPending}
             />
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" disabled={syncHighLevelMutation.isPending} data-testid="button-sync-highlevel-customers">
+                  <RefreshCw className={`h-4 w-4 mr-2 ${syncHighLevelMutation.isPending ? "animate-spin" : ""}`} />
+                  {syncHighLevelMutation.isPending ? "Syncing…" : "Sync HighLevel"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Sync all customers to HighLevel?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This includes active and inactive customer companies and active portal users. It adds the “contract embroidery” and “contract embroidery customer” tags without removing existing tags.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => syncHighLevelMutation.mutate()}>Start sync</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <CustomerFormDialog
               trigger={
                 <Button data-testid="button-add-customer">
