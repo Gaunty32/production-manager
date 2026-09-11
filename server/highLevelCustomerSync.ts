@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { customerUsers, customers } from "@shared/schema";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { db } from "./db";
 
 const HIGHLEVEL_BASE_URL = "https://services.leadconnectorhq.com";
@@ -15,6 +16,13 @@ type SyncContact = {
 
 function clean(value: string | null | undefined) {
   return value?.trim() || undefined;
+}
+
+function normalizePhone(value: string | null | undefined) {
+  const phone = clean(value);
+  if (!phone) return undefined;
+  const parsed = parsePhoneNumberFromString(phone, "GB");
+  return parsed?.isValid() ? parsed.number : undefined;
 }
 
 function contactKey(contact: SyncContact) {
@@ -49,7 +57,7 @@ async function loadContacts() {
   const add = (contact: SyncContact) => {
     const normalized = {
       email: clean(contact.email),
-      phone: clean(contact.phone),
+      phone: normalizePhone(contact.phone),
       firstName: clean(contact.firstName),
       lastName: clean(contact.lastName),
       companyName: clean(contact.companyName),
@@ -96,6 +104,25 @@ async function parseResponse(response: Response) {
   }
 }
 
+function responseReason(body: any, fallback: string) {
+  const reason = body?.message || body?.error || body?.msg;
+  return typeof reason === "string" && reason.trim() ? reason.trim().slice(0, 240) : fallback;
+}
+
+async function highLevelRequest(url: string, init: RequestInit) {
+  let lastResponse: Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(12000) });
+    lastResponse = response;
+    if (response.status !== 429 && response.status < 500) return response;
+    if (attempt < 2) {
+      const retryAfter = Number(response.headers.get("retry-after"));
+      await new Promise((resolve) => setTimeout(resolve, Number.isFinite(retryAfter) ? retryAfter * 1000 : 750 * (attempt + 1)));
+    }
+  }
+  return lastResponse!;
+}
+
 export async function syncCustomersToHighLevel() {
   const apiToken = process.env.HIGHLEVEL_API_TOKEN2?.trim().replace(/^Bearer\s+/i, "");
   const locationId = process.env.HIGHLEVEL_LOCATION_ID2?.trim();
@@ -109,38 +136,44 @@ export async function syncCustomersToHighLevel() {
     "Content-Type": "application/json",
   };
   let synced = 0;
-  const failures: Array<{ status: number; stage: "contact" | "tags" }> = [];
+  const failures: Array<{ status: number; stage: "contact" | "tags"; reason: string }> = [];
 
   for (let index = 0; index < contacts.length; index += 4) {
     const batch = contacts.slice(index, index + 4);
     await Promise.all(batch.map(async (contact) => {
       try {
-        const contactResponse = await fetch(`${HIGHLEVEL_BASE_URL}/contacts/upsert`, {
+        const contactResponse = await highLevelRequest(`${HIGHLEVEL_BASE_URL}/contacts/upsert`, {
           method: "POST",
           headers,
           body: JSON.stringify({ ...contact, locationId, source: "Select Branding Solutions customer portal" }),
-          signal: AbortSignal.timeout(12000),
         });
         const contactBody = await parseResponse(contactResponse);
         const contactId = contactBody?.contact?.id || contactBody?.id;
         if (!contactResponse.ok || !contactId) {
-          failures.push({ status: contactResponse.status, stage: "contact" });
+          failures.push({
+            status: contactResponse.status,
+            stage: "contact",
+            reason: responseReason(contactBody, "HighLevel rejected the contact"),
+          });
           return;
         }
-        const tagResponse = await fetch(`${HIGHLEVEL_BASE_URL}/contacts/${encodeURIComponent(contactId)}/tags`, {
+        const tagResponse = await highLevelRequest(`${HIGHLEVEL_BASE_URL}/contacts/${encodeURIComponent(contactId)}/tags`, {
           method: "POST",
           headers,
           body: JSON.stringify({ tags: CUSTOMER_TAGS }),
-          signal: AbortSignal.timeout(12000),
         });
-        await tagResponse.text();
+        const tagBody = await parseResponse(tagResponse);
         if (!tagResponse.ok) {
-          failures.push({ status: tagResponse.status, stage: "tags" });
+          failures.push({
+            status: tagResponse.status,
+            stage: "tags",
+            reason: responseReason(tagBody, "HighLevel rejected the tags"),
+          });
           return;
         }
         synced += 1;
       } catch {
-        failures.push({ status: 0, stage: "contact" });
+        failures.push({ status: 0, stage: "contact", reason: "HighLevel request timed out or could not connect" });
       }
     }));
     if (index + 4 < contacts.length) await new Promise((resolve) => setTimeout(resolve, 250));
@@ -151,7 +184,13 @@ export async function syncCustomersToHighLevel() {
     synced,
     skipped,
     failed: failures.length,
-    failures: failures.slice(0, 20),
+    failures: Object.values(failures.reduce<Record<string, { status: number; stage: "contact" | "tags"; reason: string; count: number }>>((groups, failure) => {
+      const key = `${failure.stage}:${failure.status}:${failure.reason}`;
+      groups[key] = groups[key]
+        ? { ...groups[key], count: groups[key].count + 1 }
+        : { ...failure, count: 1 };
+      return groups;
+    }, {})).slice(0, 20),
     tags: CUSTOMER_TAGS,
   };
 }

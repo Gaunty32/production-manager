@@ -67,12 +67,17 @@ export default function Customers() {
   const syncHighLevelMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/admin/highlevel-campaign/sync-customers");
-      return response.json() as Promise<{ synced: number; skipped: number; failed: number }>;
+      return response.json() as Promise<{
+        synced: number;
+        skipped: number;
+        failed: number;
+        failures?: Array<{ status: number; stage: "contact" | "tags"; reason: string; count: number }>;
+      }>;
     },
     onSuccess: (result) => {
       toast({
         title: result.failed ? "HighLevel sync partly completed" : "HighLevel sync completed",
-        description: `${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed.`,
+        description: `${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed.${result.failures?.[0] ? ` ${result.failures[0].count} failed at ${result.failures[0].stage}: ${result.failures[0].reason}` : ""}`,
         variant: result.failed ? "destructive" : "default",
       });
     },

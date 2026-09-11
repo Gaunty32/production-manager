@@ -13,4 +13,4 @@ Bulk customer contact syncs use all customer companies (active and inactive) plu
 
 **Why:** Customer companies and portal users often represent the same person, and sending tags in an upsert risks changing unrelated contact tags.
 
-**How to apply:** Keep bulk sync super-admin initiated, preserve existing tags, process in throttled batches, and report partial failures rather than treating the whole run as successful.
+**How to apply:** Keep bulk sync super-admin initiated, preserve existing tags, normalize stored phones to E.164 (omit invalid phones when email is usable), retry rate-limit/server responses, and report grouped provider errors rather than treating a partial run as successful.
