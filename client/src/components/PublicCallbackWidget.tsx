@@ -111,55 +111,32 @@ export function PublicCallbackWidget() {
         <button
           type="button"
           onClick={() => setOpen(current => !current)}
-          className="relative flex h-20 w-20 items-center justify-center rounded-full border-[3px] border-orange-500 bg-orange-500 text-white shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+          className="relative flex items-center text-white shadow-xl transition-transform hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
           aria-label={open ? "Close callback form" : "Request a callback"}
           aria-expanded={open}
           data-testid="button-open-callback"
         >
-          {availability?.staffImageUrl ? (
-            <img
-              src={availability.staffImageUrl}
-              alt=""
-              className="h-full w-full rounded-full object-cover"
-            />
-          ) : (
-            <Phone className="h-8 w-8" />
-          )}
-          {availability?.staffImageUrl && (
-            <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-orange-500 shadow-md">
-              <Phone className="h-4 w-4" />
-            </span>
-          )}
-          <svg
-            viewBox="0 0 96 96"
-            className="pointer-events-none absolute -inset-2 h-24 w-24 overflow-visible"
-            aria-hidden="true"
-          >
-            <defs>
-              <path
-                id="callback-button-top-arc"
-                d="M 9,48 A 39,39 0 0,1 87,48"
+          <span className="mr-[-12px] rounded-l-full rounded-r-md bg-orange-500 py-2.5 pl-4 pr-6 text-[10px] font-black uppercase leading-none tracking-[0.04em] sm:text-xs">
+            {availability?.available
+              ? "Call me back in 27 seconds"
+              : "Call me back"}
+          </span>
+          <span className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-[3px] border-orange-500 bg-orange-500 sm:h-20 sm:w-20">
+            {availability?.staffImageUrl ? (
+              <img
+                src={availability.staffImageUrl}
+                alt=""
+                className="h-full w-full rounded-full object-cover"
               />
-            </defs>
-            <text
-              className={`fill-orange-600 font-extrabold ${
-                availability?.available
-                  ? "text-[8.5px] tracking-[0.04em]"
-                  : "text-[10px] tracking-[0.08em]"
-              }`}
-              style={{ paintOrder: "stroke", stroke: "white", strokeWidth: 2.5, strokeLinejoin: "round" }}
-            >
-              <textPath
-                href="#callback-button-top-arc"
-                startOffset="50%"
-                textAnchor="middle"
-              >
-                {availability?.available
-                  ? "CALL BACK · 27s"
-                  : "CALL ME BACK"}
-              </textPath>
-            </text>
-          </svg>
+            ) : (
+              <Phone className="h-7 w-7 sm:h-8 sm:w-8" />
+            )}
+            {availability?.staffImageUrl && (
+              <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-orange-500 shadow-md">
+                <Phone className="h-4 w-4" />
+              </span>
+            )}
+          </span>
         </button>
         <div
           className="pointer-events-none invisible absolute right-full top-1/2 mr-3 hidden w-max max-w-[min(20rem,calc(100vw-6rem))] -translate-y-1/2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold leading-snug text-white opacity-0 shadow-xl transition-opacity duration-150 group-hover:visible group-hover:opacity-100 sm:block"
