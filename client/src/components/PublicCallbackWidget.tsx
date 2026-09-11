@@ -29,6 +29,7 @@ export function PublicCallbackWidget() {
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<CallbackResult | null>(null);
+  const [secondsRemaining, setSecondsRemaining] = useState(27);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -43,6 +44,14 @@ export function PublicCallbackWidget() {
         staffImageUrl: null,
       }));
   }, [dismissed]);
+
+  useEffect(() => {
+    if (result?.status !== "calling" || secondsRemaining <= 0) return;
+    const timer = window.setTimeout(() => {
+      setSecondsRemaining(current => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [result?.status, secondsRemaining]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -61,6 +70,7 @@ export function PublicCallbackWidget() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Unable to request a callback");
       setResult(body);
+      setSecondsRemaining(27);
       setPhone("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to request a callback");
@@ -72,6 +82,7 @@ export function PublicCallbackWidget() {
   const close = () => {
     setOpen(false);
     setResult(null);
+    setSecondsRemaining(27);
     setError("");
   };
 
@@ -191,6 +202,21 @@ export function PublicCallbackWidget() {
               <div className="py-3 text-center">
                 <CheckCircle2 className="mx-auto h-10 w-10 text-green-600" />
                 <p className="mt-3 font-semibold">{result.message}</p>
+                {result.status === "calling" && (
+                  <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-orange-800">
+                      Estimated callback time
+                    </p>
+                    <p className="mt-1 text-3xl font-black tabular-nums text-orange-600">
+                      00:{String(secondsRemaining).padStart(2, "0")}
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-orange-900/75">
+                      {secondsRemaining > 0
+                        ? "HighLevel has received your request. This is an estimate, not live call tracking."
+                        : "Your estimated callback time has elapsed. Our team should be calling shortly."}
+                    </p>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={close}
