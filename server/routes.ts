@@ -82,6 +82,7 @@ import {
   saveCampaignConfig,
   sendCampaignTest,
 } from "./highLevelCampaign";
+import { syncCustomersToHighLevel } from "./highLevelCustomerSync";
 import {
   isArticleCampaignUnsubscribed,
   isValidArticleCampaignUnsubscribeToken,
@@ -2056,6 +2057,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[ArticleCampaign] Failed to load tags:", error);
       res.status(502).json({ error: error.message || "Failed to load HighLevel tags" });
+    }
+  });
+
+  app.post("/api/admin/highlevel-campaign/sync-customers", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      const result = await syncCustomersToHighLevel();
+      res.status(result.failed > 0 ? 207 : 200).json(result);
+    } catch (error: any) {
+      console.error("[HighLevelCustomerSync] Sync failed:", error?.message || error);
+      res.status(502).json({ error: error?.message || "Failed to sync customers to HighLevel" });
     }
   });
 

@@ -46,6 +46,14 @@ interface SendResult {
   failures?: string[];
 }
 
+interface HighLevelSyncResult {
+  total: number;
+  synced: number;
+  skipped: number;
+  failed: number;
+  tags: string[];
+}
+
 interface CampaignTag { id: string; name: string }
 interface CampaignArticle {
   slug: string;
@@ -227,6 +235,26 @@ export default function EmailCustomers() {
     onError: (err: any) => toast({ title: "Test email failed", description: err?.message || "Please try again.", variant: "destructive" }),
   });
 
+  const syncHighLevelMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/highlevel-campaign/sync-customers");
+      return res.json() as Promise<HighLevelSyncResult>;
+    },
+    onSuccess: (result) => {
+      refetchTags();
+      toast({
+        title: result.failed ? "HighLevel sync partly completed" : "HighLevel sync completed",
+        description: `${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed.`,
+        variant: result.failed ? "destructive" : "default",
+      });
+    },
+    onError: (err: any) => toast({
+      title: "HighLevel sync failed",
+      description: err?.message || "No customer contacts were changed.",
+      variant: "destructive",
+    }),
+  });
+
   // Live preview (debounced)
   useEffect(() => {
     if (!isAllowed) return;
@@ -322,6 +350,40 @@ export default function EmailCustomers() {
           </p>
         </div>
       </div>
+
+      <Card data-testid="card-highlevel-customer-sync">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <RefreshCw className="h-5 w-5" />
+            Sync customers to HighLevel
+          </CardTitle>
+          <CardDescription>
+            Add all customer companies, including inactive customers, and all active portal users to HighLevel with the tags “contract embroidery” and “contract embroidery customer”. Existing contacts keep their other tags.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button disabled={syncHighLevelMutation.isPending} data-testid="button-sync-highlevel-customers">
+                {syncHighLevelMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                {syncHighLevelMutation.isPending ? "Syncing customers…" : "Sync customers now"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Sync all customers?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will include active and inactive customer companies, create or update contacts in HighLevel, and add both contract embroidery tags. It will not remove existing HighLevel tags.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => syncHighLevelMutation.mutate()}>Start sync</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </CardContent>
+      </Card>
 
       <Card data-testid="card-weekly-article-campaign">
         <CardHeader>
