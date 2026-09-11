@@ -294,6 +294,7 @@ export const logoSetups = pgTable("logo_setups", {
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
   jobName: text("job_name").notNull(),
+  setupType: varchar("setup_type").notNull().default("embroidery"),
   approved: boolean("approved").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   approvedAt: timestamp("approved_at"),
@@ -301,6 +302,16 @@ export const logoSetups = pgTable("logo_setups", {
   invoiceReference: varchar("invoice_reference"),
   notes: text("notes"),
 });
+
+export type SetupType = "embroidery" | "dtf";
+
+export function getSetupPrice(setupType: string | null | undefined): number {
+  return setupType === "dtf" ? 15 : 12;
+}
+
+export function getSetupTypeLabel(setupType: string | null | undefined): string {
+  return setupType === "dtf" ? "DTF Set-Up" : "Embroidery Set-Up";
+}
 
 // Customer portal: customer user accounts
 export const customerUsers = pgTable("customer_users", {

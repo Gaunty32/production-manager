@@ -59,8 +59,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useMachines } from "@/hooks/useMachines";
 import { getMachineName } from "@shared/machines";
-import type { Customer, Job, JobWithLineItems, JobLineItem, Staff, LogoSetup, User } from "@shared/schema";
-import { canViewPrices } from "@shared/schema";
+import type { Customer, Job, JobWithLineItems, JobLineItem, Staff, LogoSetup, User, SetupType } from "@shared/schema";
+import { canViewPrices, getSetupPrice, getSetupTypeLabel } from "@shared/schema";
 import { useParams, useLocation } from "wouter";
 import { isPast, isToday, format, addDays, startOfDay, endOfDay } from "date-fns";
 import { calculateJobPrice, type PricingTable } from "@shared/pricing";
@@ -74,6 +74,7 @@ export default function Dashboard() {
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [showCustomerDialog, setShowCustomerDialog] = useState(false);
   const [showLogoSetupDialog, setShowLogoSetupDialog] = useState(false);
+  const [newSetupType, setNewSetupType] = useState<SetupType>("embroidery");
   const [showCompletedSetups, setShowCompletedSetups] = useState(false);
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
   const [completedOrdersOpen, setCompletedOrdersOpen] = useState(false);
@@ -829,9 +830,13 @@ export default function Dashboard() {
                   <Users className="h-4 w-4 mr-2" />
                   Add Customer
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowLogoSetupDialog(true)} data-testid="menu-add-logo-setup">
+                <DropdownMenuItem onClick={() => { setNewSetupType("embroidery"); setShowLogoSetupDialog(true); }} data-testid="menu-add-logo-setup">
                   <Palette className="h-4 w-4 mr-2" />
                   New Embroidery Set-Up
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setNewSetupType("dtf"); setShowLogoSetupDialog(true); }} data-testid="menu-add-dtf-setup">
+                  <Palette className="h-4 w-4 mr-2" />
+                  New DTF Set-Up
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -848,6 +853,7 @@ export default function Dashboard() {
               onOpenChange={setShowLogoSetupDialog}
               customers={activeCustomers}
               jobs={jobs}
+              setupType={newSetupType}
             />
           </div>
         </div>
@@ -1008,6 +1014,17 @@ export default function Dashboard() {
                 <Button variant="outline" data-testid="button-add-setup-main">
                   <Palette className="h-4 w-4 mr-2" />
                   New Embroidery Set-Up
+                </Button>
+              }
+              customers={activeCustomers}
+              jobs={jobs}
+            />
+            <LogoSetupDialog
+              setupType="dtf"
+              trigger={
+                <Button variant="outline" data-testid="button-add-dtf-setup-main">
+                  <Palette className="h-4 w-4 mr-2" />
+                  New DTF Set-Up
                 </Button>
               }
               customers={activeCustomers}
@@ -1920,7 +1937,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-xl font-semibold text-foreground">
-                  Embroidery Set-Up Queue
+                  Set-Up Queue
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   {filteredLogoSetups.length} of {pendingLogoSetups.length} pending set-ups
@@ -1953,6 +1970,7 @@ export default function Dashboard() {
                             <DemoText className="font-medium">{customer?.name || "Unknown Customer"}</DemoText>
                             <span className="text-muted-foreground">-</span>
                             <span className="text-sm">{setup.jobName}</span>
+                            <Badge variant="outline">{getSetupTypeLabel(setup.setupType)}</Badge>
                           </div>
                           {relatedJob && (
                             <p className="text-sm text-foreground mt-1">
@@ -1976,7 +1994,7 @@ export default function Dashboard() {
                             data-testid={`button-approve-${setup.id}`}
                           >
                             <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve (£12)
+                            Approve (£{getSetupPrice(setup.setupType)})
                           </Button>
                           <Button
                             size="sm"
@@ -2032,6 +2050,7 @@ export default function Dashboard() {
                               <DemoText className="font-medium">{customer?.name || "Unknown Customer"}</DemoText>
                               <span className="text-muted-foreground">-</span>
                               <span className="text-sm">{setup.jobName}</span>
+                              <Badge variant="outline">{getSetupTypeLabel(setup.setupType)}</Badge>
                             </div>
                             {relatedJob && (
                               <p className="text-sm text-foreground mt-1">
@@ -2048,7 +2067,7 @@ export default function Dashboard() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground border rounded px-2 py-1">Invoiced £12</span>
+                            <span className="text-xs text-muted-foreground border rounded px-2 py-1">Invoiced £{getSetupPrice(setup.setupType)}</span>
                           </div>
                         </div>
                       );

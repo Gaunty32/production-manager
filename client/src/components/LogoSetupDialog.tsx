@@ -30,7 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { insertLogoSetupSchema, type Customer, type Job } from "@shared/schema";
+import { insertLogoSetupSchema, getSetupPrice, getSetupTypeLabel, type Customer, type Job, type SetupType } from "@shared/schema";
 import { z } from "zod";
 
 const formSchema = insertLogoSetupSchema.extend({
@@ -46,9 +46,10 @@ interface LogoSetupDialogProps {
   jobs?: Job[];
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  setupType?: SetupType;
 }
 
-export function LogoSetupDialog({ trigger, customers, jobs = [], open: controlledOpen, onOpenChange }: LogoSetupDialogProps) {
+export function LogoSetupDialog({ trigger, customers, jobs = [], open: controlledOpen, onOpenChange, setupType = "embroidery" }: LogoSetupDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const { toast } = useToast();
   
@@ -72,14 +73,14 @@ export function LogoSetupDialog({ trigger, customers, jobs = [], open: controlle
 
   const createMutation = useMutation({
     mutationFn: async (data: LogoSetupFormData) => {
-      const res = await apiRequest("POST", "/api/logo-setups", data);
+      const res = await apiRequest("POST", "/api/logo-setups", { ...data, setupType });
       return res.json();
     },
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: ["/api/logo-setups"] });
       toast({
         title: "Success",
-        description: "Logo set-up request added successfully",
+        description: `${getSetupTypeLabel(setupType)} request added successfully`,
       });
       form.reset();
       setOpen(false);
@@ -87,7 +88,7 @@ export function LogoSetupDialog({ trigger, customers, jobs = [], open: controlle
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to add logo set-up request",
+        description: error.message || `Failed to add ${getSetupTypeLabel(setupType).toLowerCase()} request`,
         variant: "destructive",
       });
     },
@@ -102,9 +103,9 @@ export function LogoSetupDialog({ trigger, customers, jobs = [], open: controlle
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Logo Set-Up Request</DialogTitle>
+          <DialogTitle>Add {getSetupTypeLabel(setupType)} Request</DialogTitle>
           <DialogDescription>
-            Create a new logo set-up request. Approved set-ups will be charged at £12.
+            Create a new {getSetupTypeLabel(setupType).toLowerCase()} request. Approved set-ups will be charged at £{getSetupPrice(setupType)}.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -179,7 +180,7 @@ export function LogoSetupDialog({ trigger, customers, jobs = [], open: controlle
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="e.g., Left Chest Logo"
+                      placeholder={setupType === "dtf" ? "e.g., Front Print Design" : "e.g., Left Chest Logo"}
                       data-testid="input-job-name"
                     />
                   </FormControl>
@@ -222,7 +223,7 @@ export function LogoSetupDialog({ trigger, customers, jobs = [], open: controlle
                 disabled={createMutation.isPending}
                 data-testid="button-submit"
               >
-                {createMutation.isPending ? "Adding..." : "Add Logo Set-Up"}
+                {createMutation.isPending ? "Adding..." : `Add ${getSetupTypeLabel(setupType)}`}
               </Button>
             </div>
           </form>

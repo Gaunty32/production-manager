@@ -52,7 +52,7 @@ import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthe
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
 import { registerCasualShiftRoutes } from "./casualShiftRoutes";
 import { registerPurchasingRoutes } from "./purchasingRoutes";
-import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, canViewReports, updateMachineSchema, insertTaskSchema, type Job } from "@shared/schema";
+import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, canViewReports, updateMachineSchema, insertTaskSchema, getSetupPrice, getSetupTypeLabel, type Job } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
@@ -10314,13 +10314,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       for (const setup of customerLogoSetups) {
         lineItemsWithPricing.push({
-          jobName: "Logo Set-Up",
+          jobName: getSetupTypeLabel(setup.setupType),
           poNumber: null,
-          description: `Logo Set-Up - ${setup.jobName}`,
+          description: `${getSetupTypeLabel(setup.setupType)} - ${setup.jobName}`,
           quantity: 1,
-          unitPrice: 12, // £12 per approved logo setup
+          unitPrice: getSetupPrice(setup.setupType),
           stitchCount: 0,
-          itemCode: "EMB Set-Up",
+          itemCode: setup.setupType === "dtf" ? "DTF Set-Up" : "EMB Set-Up",
         });
       }
 
@@ -10749,20 +10749,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Attribute logo setup costs to the first job (or stand-alone if logo-only invoice)
-      const logoSetupTotal = customerLogoSetups.length * 12;
+      const logoSetupTotal = customerLogoSetups.reduce((total, setup) => total + getSetupPrice(setup.setupType), 0);
       if (logoSetupTotal > 0 && selectedJobs.length > 0) {
         jobInvoiceTotals[selectedJobs[0].id] = (jobInvoiceTotals[selectedJobs[0].id] || 0) + logoSetupTotal;
       }
 
       for (const setup of customerLogoSetups) {
         lineItemsWithPricing.push({
-          jobName: "Logo Set-Up",
+          jobName: getSetupTypeLabel(setup.setupType),
           poNumber: null,
-          description: `Logo Set-Up - ${setup.jobName}`,
+          description: `${getSetupTypeLabel(setup.setupType)} - ${setup.jobName}`,
           quantity: 1,
-          unitPrice: 12, // £12 per approved logo setup
+          unitPrice: getSetupPrice(setup.setupType),
           stitchCount: 0,
-          itemCode: "EMB Set-Up",
+          itemCode: setup.setupType === "dtf" ? "DTF Set-Up" : "EMB Set-Up",
         });
       }
 
@@ -10898,7 +10898,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/logo-setups", isStaffAuthenticated, async (req, res) => {
     try {
-      const parsed = insertLogoSetupSchema.parse(req.body);
+      const parsed = insertLogoSetupSchema.extend({
+        setupType: z.enum(["embroidery", "dtf"]).default("embroidery"),
+      }).parse(req.body);
       const logoSetup = await storage.createLogoSetup(parsed);
       res.status(201).json(logoSetup);
     } catch (error) {

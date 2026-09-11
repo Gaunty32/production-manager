@@ -14,7 +14,7 @@ import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SI
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import { canViewPrices, type Job, type Customer, type LogoSetup } from "@shared/schema";
+import { canViewPrices, getSetupPrice, getSetupTypeLabel, type Job, type Customer, type LogoSetup } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -1153,9 +1153,9 @@ export default function InvoicingQueue() {
     const customerLogos = getCustomerApprovedLogos(customerId);
     for (const logo of customerLogos) {
       previewLines.push({
-        description: `Logo Set-Up - ${logo.jobName}`,
+        description: `${getSetupTypeLabel(logo.setupType)} - ${logo.jobName}`,
         quantity: 1,
-        unitPrice: 12,
+        unitPrice: getSetupPrice(logo.setupType),
         itemCode: "-",
       });
     }
@@ -1230,11 +1230,11 @@ export default function InvoicingQueue() {
       }
     });
 
-    // Add approved logo setup charges (£12 each) if any jobs are selected for this customer
+    // Add approved set-up charges if any jobs are selected for this customer
     if (selectedCustomerJobs.length > 0) {
       const customerId = selectedCustomerJobs[0].customerId;
       const approvedLogos = getCustomerApprovedLogos(customerId);
-      total += approvedLogos.length * 12;
+      total += approvedLogos.reduce((sum, setup) => sum + getSetupPrice(setup.setupType), 0);
     }
 
     // If any item is TBA or POA, return that
@@ -1255,9 +1255,9 @@ export default function InvoicingQueue() {
       }
     });
 
-    // Add all approved logo setups
+    // Add all approved set-ups
     const allApprovedLogos = logoSetups.filter(ls => ls.approved);
-    total += allApprovedLogos.length * 12;
+    total += allApprovedLogos.reduce((sum, setup) => sum + getSetupPrice(setup.setupType), 0);
 
     return total;
   })();
@@ -1611,7 +1611,7 @@ export default function InvoicingQueue() {
               const someSelected = customerJobs.some(job => selectedJobs.has(job.id));
               const totalPrice = getTotalPrice(customerJobs);
               const selectedCount = customerJobs.filter(job => selectedJobs.has(job.id)).length;
-              const logoSetupTotal = customerLogoSetups.length * 12;
+              const logoSetupTotal = customerLogoSetups.reduce((sum, setup) => sum + getSetupPrice(setup.setupType), 0);
               // Customer can invoice logo setups when no jobs are selected (either because they have no jobs, or because they deselected all)
               const canInvoiceLogoSetupsOnly = selectedCount === 0 && customerLogoSetups.length > 0;
               const hasOnlyLogoSetups = customerJobs.length === 0 && customerLogoSetups.length > 0;
@@ -2069,6 +2069,9 @@ export default function InvoicingQueue() {
                                 >
                                   <div className="flex-1">
                                     <p className="font-medium text-sm">{logo.jobName}</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {getSetupTypeLabel(logo.setupType)} · £{getSetupPrice(logo.setupType)}
+                                    </p>
                                     {logo.notes && (
                                       <p className="text-xs text-muted-foreground mt-1">{logo.notes}</p>
                                     )}
