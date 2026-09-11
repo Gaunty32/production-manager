@@ -99,7 +99,7 @@ export function PublicCallbackWidget() {
 
   return (
     <div className="fixed right-4 top-24 z-[70] flex flex-col items-end sm:right-6 sm:top-28">
-      <div className="group relative">
+      <div className="relative">
         <button
           type="button"
           onClick={dismissWidget}
@@ -138,13 +138,6 @@ export function PublicCallbackWidget() {
             )}
           </span>
         </button>
-        <div
-          className="pointer-events-none invisible absolute right-full top-1/2 mr-3 hidden w-max max-w-[min(20rem,calc(100vw-6rem))] -translate-y-1/2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold leading-snug text-white opacity-0 shadow-xl transition-opacity duration-150 group-hover:visible group-hover:opacity-100 sm:block"
-          role="tooltip"
-        >
-          {availability?.message || "Want us to call you back?"}
-          <span className="absolute left-full top-1/2 -translate-y-1/2 border-[7px] border-transparent border-l-slate-950" />
-        </div>
       </div>
 
       {open && (
