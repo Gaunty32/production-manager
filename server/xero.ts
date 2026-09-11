@@ -516,6 +516,43 @@ export class XeroService {
     });
   }
 
+  private verifyCreatedInvoiceLines(
+    data: any,
+    expectedLineItems: XeroInvoiceLineItem[],
+  ): void {
+    const invoice = data?.Invoices?.[0];
+    const invoiceNumber = invoice?.InvoiceNumber || invoice?.InvoiceID || "the new invoice";
+    const returnedLineItems = invoice?.LineItems ?? invoice?.lineItems;
+
+    if (!Array.isArray(returnedLineItems)) {
+      throw new Error(
+        `Xero created ${invoiceNumber}, but did not return its line items for verification. ` +
+        `The jobs were not marked as invoiced. Check ${invoiceNumber} in Xero before retrying.`,
+      );
+    }
+
+    const signature = (line: any) => {
+      const description = String(line.Description ?? line.description ?? "").trim();
+      const quantity = Number(line.Quantity ?? line.quantity ?? 0).toFixed(4);
+      const unitAmount = Number(line.UnitAmount ?? line.unitAmount ?? 0).toFixed(4);
+      return `${description}|${quantity}|${unitAmount}`;
+    };
+
+    const expected = expectedLineItems.map(signature).sort();
+    const returned = returnedLineItems.map(signature).sort();
+    const matches =
+      expected.length === returned.length &&
+      expected.every((value, index) => value === returned[index]);
+
+    if (!matches) {
+      throw new Error(
+        `Xero created ${invoiceNumber}, but its returned lines do not match the invoice preview ` +
+        `(${returned.length} returned, ${expected.length} expected). The jobs were not marked as invoiced. ` +
+        `Check ${invoiceNumber} in Xero before retrying.`,
+      );
+    }
+  }
+
   async createInvoice(
     job: Job, 
     customer: Customer, 
@@ -562,7 +599,9 @@ export class XeroService {
       throw new Error("Failed to create invoice in Xero. Please check your connection.");
     }
 
-    return response.json();
+    const data = await response.json();
+    this.verifyCreatedInvoiceLines(data, xeroLineItems);
+    return data;
   }
 
   /**
@@ -758,9 +797,12 @@ export class XeroService {
       throw new Error(errorMessage);
     }
 
-    console.log("Invoice created successfully!");
+    const data = await response.json();
+    this.verifyCreatedInvoiceLines(data, xeroLineItems);
+
+    console.log("Invoice created and line items verified successfully!");
     console.log("=============================");
-    return response.json();
+    return data;
   }
 
   async getInvoicesForContact(contactId: string): Promise<Array<{

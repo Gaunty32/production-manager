@@ -66,3 +66,4 @@
 - [Public homepage performance](public-home-performance.md) — keep marketing routes on a lightweight entry; never pull the staff/customer shell into the public startup bundle.
 - [Customer email deep links](customer-email-deep-links.md) — authenticate before mounting protected portal pages and preserve the exact destination through sign-in.
 - [Secret status checks](secret-status-checks.md) — secret metadata can falsely report missing keys; confirm presence in the running shell without printing values.
+- [Xero invoice line verification](xero-invoice-line-verification.md) — never mark selected jobs invoiced until Xero returns every previewed line with matching quantity and unit amount.
