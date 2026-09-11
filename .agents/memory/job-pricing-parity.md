@@ -8,3 +8,7 @@ description: Why awaiting-payment amounts showed £0.00 + POA, and how pricing i
 - **Fix/decision:** `/api/jobs` now returns server-computed `amountDue`, `amountDuePoa`, and `customerName` per job (same `calculateJobPrice` path as the customer portal); the Dashboard prefers these over any client-side calculation.
 - **Why:** server-side pricing can't race with client cache state and guarantees staff see the same figure the customer sees.
 - **How to apply:** any new staff surface showing a job price should read the server fields from `/api/jobs`, not recompute in the browser. Known residual divergence: portal prices missing-stitch-count items at 0 while staff marks POA (follow-up task exists to unify).
+
+- **Rule:** effective-date price changes must be applied inside the shared pricing functions, not only added to price-list displays.
+- **Why:** the 1 September 2026 £0.20 increase appeared correctly in marketing and pricing tables while invoice previews and created invoices still used the base rates.
+- **How to apply:** pass the calculation date through shared pricing helpers and verify one known example against the external calculations sheet before release.

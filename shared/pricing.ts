@@ -310,7 +310,8 @@ export interface PrintPriceLookupResult {
 export function getPrice(
   quantity: number,
   stitchCount: number,
-  pricingTable: PricingTable = "2026"
+  pricingTable: PricingTable = "2026",
+  now: Date = new Date()
 ): PriceLookupResult {
   const tiers = pricingTable === "2026" ? PRICING_2026 : PRICING_2025;
 
@@ -350,10 +351,15 @@ export function getPrice(
     };
   }
 
-  const totalPrice = priceEntry.price * quantity;
+  const unitPrice = priceEntry.price + (
+    pricingTable === "2026" && isSeptemberPriceIncreaseActive(now)
+      ? SEPTEMBER_PRICE_INCREASE
+      : 0
+  );
+  const totalPrice = unitPrice * quantity;
 
   return {
-    unitPrice: priceEntry.price,
+    unitPrice: parseFloat(unitPrice.toFixed(2)),
     totalPrice: parseFloat(totalPrice.toFixed(2)),
     tier: tierLabel,
     stitchRange: stitchRangeLabel,
@@ -370,7 +376,8 @@ export function formatPrice(price: number | "POA"): string {
 export function getPrintPrice(
   quantity: number,
   printSizeCode: number,
-  pricingTable: PricingTable = "2026"
+  pricingTable: PricingTable = "2026",
+  now: Date = new Date()
 ): PrintPriceLookupResult {
   const tiers = pricingTable === "2026" ? PRINT_PRICING_2026 : PRINT_PRICING_2025;
   
@@ -396,7 +403,11 @@ export function getPrintPrice(
     };
   }
 
-  const unitPrice = tier.prices[printSize];
+  const unitPrice = tier.prices[printSize] + (
+    pricingTable === "2026" && isSeptemberPriceIncreaseActive(now)
+      ? SEPTEMBER_PRICE_INCREASE
+      : 0
+  );
   const totalPrice = unitPrice * quantity;
 
   const tierLabel = tier.maxQty === null 
@@ -452,6 +463,11 @@ export function getBaggingPrice(
 // ── September 2026 price increase ────────────────────────────────────────────
 // From 1st September 2026 all per-unit prices increase by £0.20.
 export const SEPTEMBER_PRICE_INCREASE = 0.2;
+export const SEPTEMBER_PRICE_INCREASE_START = new Date("2026-09-01T00:00:00+01:00");
+
+export function isSeptemberPriceIncreaseActive(now: Date = new Date()): boolean {
+  return now >= SEPTEMBER_PRICE_INCREASE_START;
+}
 
 // ── Minimum order quantity (from 1st September 2026) ────────────────────────
 // Orders of fewer than MIN_ORDER_QTY items per logo are charged at the
@@ -509,10 +525,10 @@ export function calculateJobPrice(
     const chargedQty = moqActive ? billedQuantity(item, now) : item.quantity;
     // For print jobs, use print pricing
     if (item.jobType === "Print") {
-      return getPrintPrice(chargedQty, item.stitchCount, pricingTable);
+      return getPrintPrice(chargedQty, item.stitchCount, pricingTable, now);
     }
     // For embroidery and other types, use standard pricing
-    return getPrice(chargedQty, item.stitchCount, pricingTable);
+    return getPrice(chargedQty, item.stitchCount, pricingTable, now);
   });
 
   // If any line item is POA, the whole job is POA
