@@ -92,7 +92,7 @@ export function PublicCallbackWidget() {
         <button
           type="button"
           onClick={dismissWidget}
-          className="absolute -left-8 top-5 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:hidden"
+          className="absolute -left-8 top-7 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-orange-500 sm:hidden"
           aria-label="Hide callback button"
         >
           <X className="h-3.5 w-3.5" />
@@ -100,7 +100,7 @@ export function PublicCallbackWidget() {
         <button
           type="button"
           onClick={() => setOpen(current => !current)}
-          className="relative flex h-16 w-16 items-center justify-center rounded-full border-[3px] border-orange-500 bg-orange-500 text-white shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+          className="relative flex h-20 w-20 items-center justify-center rounded-full border-[3px] border-orange-500 bg-orange-500 text-white shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
           aria-label={open ? "Close callback form" : "Request a callback"}
           aria-expanded={open}
           data-testid="button-open-callback"
@@ -112,29 +112,29 @@ export function PublicCallbackWidget() {
               className="h-full w-full rounded-full object-cover"
             />
           ) : (
-            <Phone className="h-7 w-7" />
+            <Phone className="h-8 w-8" />
           )}
           {availability?.staffImageUrl && (
-            <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-orange-500 shadow-md">
-              <Phone className="h-3.5 w-3.5" />
+            <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-orange-500 shadow-md">
+              <Phone className="h-4 w-4" />
             </span>
           )}
           <svg
-            viewBox="0 0 80 80"
-            className="pointer-events-none absolute -inset-2 h-20 w-20 overflow-visible"
+            viewBox="0 0 96 96"
+            className="pointer-events-none absolute -inset-2 h-24 w-24 overflow-visible"
             aria-hidden="true"
           >
             <defs>
               <path
                 id="callback-button-top-arc"
-                d="M 8,40 A 32,32 0 0,1 72,40"
+                d="M 9,48 A 39,39 0 0,1 87,48"
               />
             </defs>
             <text
               className={`fill-orange-600 font-extrabold ${
                 availability?.available
-                  ? "text-[5.5px] tracking-[0.035em]"
-                  : "text-[8px] tracking-[0.08em]"
+                  ? "text-[8.5px] tracking-[0.04em]"
+                  : "text-[10px] tracking-[0.08em]"
               }`}
               style={{ paintOrder: "stroke", stroke: "white", strokeWidth: 2.5, strokeLinejoin: "round" }}
             >
@@ -144,7 +144,7 @@ export function PublicCallbackWidget() {
                 textAnchor="middle"
               >
                 {availability?.available
-                  ? "CALL ME BACK IN 27 SECONDS"
+                  ? "CALL BACK · 27s"
                   : "CALL ME BACK"}
               </textPath>
             </text>
