@@ -103,10 +103,12 @@ export default function EmailCustomers() {
   const { user, isLoading: authLoading } = useAuth();
   const isAllowed = isSuperAdmin(user?.role);
   const [subject, setSubject] = useState("");
+  const [previewText, setPreviewText] = useState("");
   const [message, setMessage] = useState("");
   const [testEmail, setTestEmail] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
   const [recipientsOpen, setRecipientsOpen] = useState(false);
+  const [includeInactiveCustomers, setIncludeInactiveCustomers] = useState(false);
   const [lastResult, setLastResult] = useState<SendResult | null>(null);
   const [campaignEnabled, setCampaignEnabled] = useState(false);
   const [campaignTagId, setCampaignTagId] = useState("");
@@ -122,7 +124,7 @@ export default function EmailCustomers() {
   const [campaignRecipientCount, setCampaignRecipientCount] = useState<number | null>(null);
 
   const { data: recipientsData, isLoading: recipientsLoading } = useQuery<RecipientsResponse>({
-    queryKey: ["/api/admin/broadcast-recipients"],
+    queryKey: [`/api/admin/broadcast-recipients?includeInactiveCustomers=${includeInactiveCustomers}`],
     enabled: isAllowed,
   });
 
@@ -232,7 +234,7 @@ export default function EmailCustomers() {
     if (!isAllowed) return;
     const t = setTimeout(async () => {
       try {
-        const res = await apiRequest("POST", "/api/admin/broadcast-preview", { message });
+        const res = await apiRequest("POST", "/api/admin/broadcast-preview", { message, previewText });
         const data = await res.json();
         setPreviewHtml(data.html || "");
       } catch {
@@ -240,10 +242,10 @@ export default function EmailCustomers() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [message, isAllowed]);
+  }, [message, previewText, isAllowed]);
 
   const sendMutation = useMutation({
-    mutationFn: async (payload: { subject: string; message: string; testEmail?: string }) => {
+    mutationFn: async (payload: { subject: string; previewText: string; message: string; includeInactiveCustomers: boolean; testEmail?: string }) => {
       const res = await apiRequest("POST", "/api/admin/broadcast-email", payload);
       return (await res.json()) as SendResult;
     },
@@ -584,6 +586,18 @@ export default function EmailCustomers() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="broadcast-preview-text">Preview text</Label>
+                <Input
+                  id="broadcast-preview-text"
+                  placeholder="Secondary line shown in the recipient’s inbox"
+                  value={previewText}
+                  maxLength={300}
+                  onChange={(e) => setPreviewText(e.target.value)}
+                  data-testid="input-broadcast-preview-text"
+                />
+                <p className="text-xs text-muted-foreground">Also called preheader text. It appears after the subject in most inboxes.</p>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="broadcast-message">Message</Label>
                 <Textarea
                   id="broadcast-message"
@@ -621,7 +635,7 @@ export default function EmailCustomers() {
                 <Button
                   variant="outline"
                   disabled={!canSend || !testEmail.trim() || sendMutation.isPending}
-                  onClick={() => sendMutation.mutate({ subject, message, testEmail: testEmail.trim() })}
+                  onClick={() => sendMutation.mutate({ subject, previewText, message, includeInactiveCustomers, testEmail: testEmail.trim() })}
                   data-testid="button-send-test"
                 >
                   {sendMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FlaskConical className="h-4 w-4 mr-2" />}
@@ -641,10 +655,22 @@ export default function EmailCustomers() {
                 )}
               </CardTitle>
               <CardDescription>
-                All active customer portal users. Duplicate email addresses are only sent one copy, and permanently failed addresses are excluded.
+                Active portal users for the selected customer status. Duplicate email addresses receive one copy, and permanently failed addresses are excluded.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+                <div>
+                  <Label htmlFor="include-inactive-customers">Include inactive customers</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Also email active portal users belonging to inactive customer companies.</p>
+                </div>
+                <Switch
+                  id="include-inactive-customers"
+                  checked={includeInactiveCustomers}
+                  onCheckedChange={setIncludeInactiveCustomers}
+                  data-testid="switch-include-inactive-customers"
+                />
+              </div>
               <Collapsible open={recipientsOpen} onOpenChange={setRecipientsOpen}>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" data-testid="button-toggle-recipients">
@@ -682,14 +708,14 @@ export default function EmailCustomers() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Send this email to everyone?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will email all {recipientCount} active customer portal users with the subject
+                      This will email {recipientCount} active portal users {includeInactiveCustomers ? "from active and inactive customers" : "from active customers"} with the subject
                       {" "}<strong>"{subject}"</strong>. This cannot be undone. We recommend sending yourself a test first.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel data-testid="button-cancel-send">Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => sendMutation.mutate({ subject, message })}
+                      onClick={() => sendMutation.mutate({ subject, previewText, message, includeInactiveCustomers })}
                       data-testid="button-confirm-send"
                     >
                       Yes, send to everyone
@@ -732,7 +758,10 @@ export default function EmailCustomers() {
             </CardTitle>
             <CardDescription>
               {subject.trim() ? (
-                <>Subject: <span className="font-medium text-foreground">{subject}</span></>
+                <span className="space-y-1 block">
+                  <span className="block">Subject: <span className="font-medium text-foreground">{subject}</span></span>
+                  {previewText.trim() && <span className="block">Preview text: <span className="font-medium text-foreground">{previewText}</span></span>}
+                </span>
               ) : (
                 "This is exactly what customers will receive (example name shown)."
               )}

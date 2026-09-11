@@ -1388,12 +1388,16 @@ export async function sendDeliverabilityTestEmail(params: { to: string; cc?: str
 }
 
 // ─── Broadcast email to all customers ────────────────────────────────────────
-export function buildBroadcastEmailHtml(message: string, recipientFirstName?: string | null): string {
+export function buildBroadcastEmailHtml(message: string, recipientFirstName?: string | null, previewText?: string): string {
   const safeMessage = sanitizeHtml(message).replace(/\r\n/g, '\n').replace(/\n/g, '<br />');
+  const preheader = previewText?.trim()
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">${sanitizeHtml(previewText.trim())}</div>`
+    : "";
   const greeting = recipientFirstName?.trim()
     ? `<p style="margin:0 0 18px;">Hi ${sanitizeHtml(recipientFirstName.trim())},</p>`
     : '';
   const body = `
+    ${preheader}
     ${greeting}
     <p style="margin:0 0 18px;">${safeMessage}</p>
     <p style="margin:0 0 8px;">
@@ -1457,6 +1461,7 @@ export async function sendBroadcastEmail(params: {
   to: string;
   subject: string;
   message: string;
+  previewText?: string;
   recipientFirstName?: string | null;
 }): Promise<void> {
   const { client, fromEmail } = await getUncachableResendClient();
@@ -1464,7 +1469,7 @@ export async function sendBroadcastEmail(params: {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: params.to,
     subject: params.subject,
-    html: buildBroadcastEmailHtml(params.message, params.recipientFirstName),
+    html: buildBroadcastEmailHtml(params.message, params.recipientFirstName, params.previewText),
   });
   if (error) {
     throw new EmailDeliveryError(

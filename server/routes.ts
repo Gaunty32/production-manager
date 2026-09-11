@@ -2180,16 +2180,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/broadcast-recipients", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
+  app.get("/api/admin/broadcast-recipients", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
     try {
+      const includeInactiveCustomers = req.query.includeInactiveCustomers === "true";
       const [allCustomerUsers, allCustomers] = await Promise.all([
         storage.getAllCustomerUsers(),
         storage.getCustomers(),
       ]);
       const customerNameById = new Map(allCustomers.map((c) => [c.id, c.name]));
+      const customerActiveById = new Map(allCustomers.map((c) => [c.id, c.active !== false]));
       const seen = new Set<string>();
       const recipients = await filterPermanentlyFailedRecipients(allCustomerUsers
-        .filter((u) => u.active && u.email)
+        .filter((u) => u.active && u.email && (includeInactiveCustomers || customerActiveById.get(u.customerId)))
         .filter((u) => {
           const key = u.email.toLowerCase();
           if (seen.has(key)) return false;
@@ -2213,7 +2215,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/broadcast-preview", isStaffAuthenticated, requireSuperAdmin, async (req, res) => {
     try {
       const message = typeof req.body?.message === "string" ? req.body.message : "";
-      res.json({ html: buildBroadcastEmailHtml(message, "Sam") });
+      const previewText = typeof req.body?.previewText === "string" ? req.body.previewText : "";
+      res.json({ html: buildBroadcastEmailHtml(message, "Sam", previewText) });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Failed to build preview" });
     }
@@ -2223,7 +2226,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const subject = typeof req.body?.subject === "string" ? req.body.subject.trim() : "";
       const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+      const previewText = typeof req.body?.previewText === "string" ? req.body.previewText.trim().slice(0, 300) : "";
       const testEmail = typeof req.body?.testEmail === "string" ? req.body.testEmail.trim() : "";
+      const includeInactiveCustomers = req.body?.includeInactiveCustomers === true;
       if (!subject || !message) {
         return res.status(400).json({ error: "Subject and message are required" });
       }
@@ -2233,7 +2238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail)) {
           return res.status(400).json({ error: "Invalid test email address" });
         }
-        await sendBroadcastEmail({ to: testEmail, subject, message, recipientFirstName: null });
+        await sendBroadcastEmail({ to: testEmail, subject, message, previewText, recipientFirstName: null });
         return res.json({ test: true, sent: 1, failed: 0 });
       }
 
@@ -2242,9 +2247,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getCustomers(),
       ]);
       const customerNameById = new Map(allCustomers.map((c) => [c.id, c.name]));
+      const customerActiveById = new Map(allCustomers.map((c) => [c.id, c.active !== false]));
       const seen = new Set<string>();
       const recipients = await filterPermanentlyFailedRecipients(allCustomerUsers.filter((u) => {
-        if (!u.active || !u.email) return false;
+        if (!u.active || !u.email || (!includeInactiveCustomers && !customerActiveById.get(u.customerId))) return false;
         const key = u.email.toLowerCase();
         if (seen.has(key)) return false;
         seen.add(key);
@@ -2259,6 +2265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             to: r.email,
             subject,
             message,
+            previewText,
             recipientFirstName: r.firstName,
           });
           sent++;
