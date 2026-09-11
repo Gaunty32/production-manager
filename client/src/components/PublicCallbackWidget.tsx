@@ -111,17 +111,17 @@ export function PublicCallbackWidget() {
         <button
           type="button"
           onClick={() => setOpen(current => !current)}
-          className="relative flex items-center text-white shadow-xl transition-transform hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+          className="relative flex items-center bg-transparent text-white shadow-none transition-transform hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
           aria-label={open ? "Close callback form" : "Request a callback"}
           aria-expanded={open}
           data-testid="button-open-callback"
         >
-          <span className="mr-[-12px] rounded-l-full rounded-r-md bg-orange-500 py-2.5 pl-4 pr-6 text-[10px] font-black uppercase leading-none tracking-[0.04em] sm:text-xs">
+          <span className="mr-[-12px] rounded-l-full rounded-r-md bg-orange-500 py-2.5 pl-4 pr-6 text-[10px] font-black uppercase leading-none tracking-[0.04em] shadow-lg sm:text-xs">
             {availability?.available
               ? "Call me back in 27 seconds"
               : "Call me back"}
           </span>
-          <span className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-[3px] border-orange-500 bg-orange-500 sm:h-20 sm:w-20">
+          <span className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-[3px] border-orange-500 bg-orange-500 shadow-lg sm:h-20 sm:w-20">
             {availability?.staffImageUrl ? (
               <img
                 src={availability.staffImageUrl}
