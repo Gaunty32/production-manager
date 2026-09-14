@@ -503,6 +503,36 @@ export function billedQuantity(
   return chargedQuantity(item.quantity, now);
 }
 
+function matchingPriceGroupKey(item: { stitchCount: number; jobType?: string | null }): string | null {
+  const jobType = (item.jobType || "Embroidery").trim().toLowerCase();
+  if (MOQ_EXEMPT_JOB_TYPES.some(type => type.toLowerCase() === jobType)) return null;
+  return `${jobType}|${item.stitchCount}`;
+}
+
+/**
+ * Invoice quantity for one source line after matching same-logo lines in the
+ * same job. Any minimum-order uplift is assigned to the first matching line so
+ * merged invoice lines add up to the correct billed quantity.
+ */
+export function billedQuantityForMatchingLine(
+  lineItems: Array<{ quantity: number; stitchCount: number; jobType?: string | null }>,
+  index: number,
+  now: Date = new Date(),
+): number {
+  const item = lineItems[index];
+  const key = matchingPriceGroupKey(item);
+  if (!key) return billedQuantity(item, now);
+
+  const matchingIndexes = lineItems
+    .map((candidate, candidateIndex) => matchingPriceGroupKey(candidate) === key ? candidateIndex : -1)
+    .filter(candidateIndex => candidateIndex >= 0);
+  const totalQuantity = matchingIndexes.reduce((sum, candidateIndex) => sum + lineItems[candidateIndex].quantity, 0);
+  const groupBilledQuantity = billedQuantity({ ...item, quantity: totalQuantity }, now);
+  const minimumOrderUplift = groupBilledQuantity - totalQuantity;
+
+  return item.quantity + (matchingIndexes[0] === index ? minimumOrderUplift : 0);
+}
+
 export function calculateJobPrice(
   lineItems: Array<{ quantity: number; stitchCount: number; jobType?: string }>,
   pricingTable: PricingTable = "2026",
@@ -511,28 +541,49 @@ export function calculateJobPrice(
   lineItemPrices: (PriceLookupResult | PrintPriceLookupResult | FlatRatePriceLookupResult)[];
   totalPrice: number | "POA";
 } {
-  const moqActive = isMinOrderQtyActive(now);
-  const lineItemPrices = lineItems.map((item) => {
-    // For bagging (30p or 40p per item based on pricing table)
-    if (item.jobType === "Bagging") {
-      return getBaggingPrice(item.quantity, pricingTable);
+  const lineItemPrices: (PriceLookupResult | PrintPriceLookupResult | FlatRatePriceLookupResult)[] = new Array(lineItems.length);
+  const processedGroups = new Set<string>();
+  const groupTotals: Array<number | "POA"> = [];
+
+  lineItems.forEach((item, index) => {
+    const groupKey = matchingPriceGroupKey(item);
+
+    // Bagging and flat-rate initials/name lines are intentionally independent.
+    if (!groupKey) {
+      const result = item.jobType === "Bagging"
+        ? getBaggingPrice(item.quantity, pricingTable)
+        : getFlatRatePrice(item.quantity, item.jobType || "Flat Rate");
+      lineItemPrices[index] = result;
+      groupTotals.push(result.totalPrice);
+      return;
     }
-    // For flat-rate job types (£2.50 each)
-    if (item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name") {
-      return getFlatRatePrice(item.quantity, item.jobType);
-    }
-    // Minimum order quantity: charge small runs as MIN_ORDER_QTY items
-    const chargedQty = moqActive ? billedQuantity(item, now) : item.quantity;
-    // For print jobs, use print pricing
-    if (item.jobType === "Print") {
-      return getPrintPrice(chargedQty, item.stitchCount, pricingTable, now);
-    }
-    // For embroidery and other types, use standard pricing
-    return getPrice(chargedQty, item.stitchCount, pricingTable, now);
+
+    if (processedGroups.has(groupKey)) return;
+    processedGroups.add(groupKey);
+
+    const matchingIndexes = lineItems
+      .map((candidate, candidateIndex) => matchingPriceGroupKey(candidate) === groupKey ? candidateIndex : -1)
+      .filter(candidateIndex => candidateIndex >= 0);
+    const totalQuantity = matchingIndexes.reduce((sum, candidateIndex) => sum + lineItems[candidateIndex].quantity, 0);
+    const chargedQty = billedQuantity({ ...item, quantity: totalQuantity }, now);
+    const groupResult = item.jobType === "Print"
+      ? getPrintPrice(chargedQty, item.stitchCount, pricingTable, now)
+      : getPrice(chargedQty, item.stitchCount, pricingTable, now);
+
+    groupTotals.push(groupResult.totalPrice);
+    matchingIndexes.forEach(candidateIndex => {
+      const billedQty = billedQuantityForMatchingLine(lineItems, candidateIndex, now);
+      lineItemPrices[candidateIndex] = {
+        ...groupResult,
+        totalPrice: groupResult.totalPrice === "POA"
+          ? "POA"
+          : parseFloat((groupResult.unitPrice * billedQty).toFixed(2)),
+      };
+    });
   });
 
   // If any line item is POA, the whole job is POA
-  const hasPOA = lineItemPrices.some((item) => item.totalPrice === "POA");
+  const hasPOA = groupTotals.some(total => total === "POA");
 
   if (hasPOA) {
     return {
@@ -541,8 +592,8 @@ export function calculateJobPrice(
     };
   }
 
-  const totalPrice = lineItemPrices.reduce(
-    (sum, item) => sum + (item.totalPrice as number),
+  const totalPrice = groupTotals.reduce<number>(
+    (sum, total) => sum + (total as number),
     0
   );
 

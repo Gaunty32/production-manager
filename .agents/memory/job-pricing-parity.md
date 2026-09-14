@@ -12,3 +12,7 @@ description: Why awaiting-payment amounts showed £0.00 + POA, and how pricing i
 - **Rule:** effective-date price changes must be applied inside the shared pricing functions, not only added to price-list displays.
 - **Why:** the 1 September 2026 £0.20 increase appeared correctly in marketing and pricing tables while invoice previews and created invoices still used the base rates.
 - **How to apply:** pass the calculation date through shared pricing helpers and verify one known example against the external calculations sheet before release.
+
+- **Rule:** within one job, production lines with the same job type and exact stitch count/print-size code are priced as one logo quantity and merged into one invoice line.
+- **Why:** the same logo can be produced as separate operations for different positions or machines, but quantity-band pricing is based on total applications of that logo.
+- **How to apply:** keep production rows separate; aggregate only pricing and invoice output. If staff enter different manual unit prices, keep those invoice lines separate.

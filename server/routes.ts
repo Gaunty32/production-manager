@@ -47,7 +47,7 @@ import { staffHolidays as staffHolidaysTable } from "@shared/schema";
 import { sql as drizzleSql, and, eq, lte, gte, ne } from "drizzle-orm";
 import { xeroService } from "./xero";
 import { dpdService } from "./dpd";
-import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantity, isMinOrderQtyActive, MIN_ORDER_QTY } from "@shared/pricing";
+import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantity, billedQuantityForMatchingLine, isMinOrderQtyActive, MIN_ORDER_QTY } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
 import { loginStaff, registerStaff, isStaffAuthenticated, attachUser } from "./staffAuth";
 import { registerCasualShiftRoutes } from "./casualShiftRoutes";
@@ -92,6 +92,47 @@ import { filterPermanentlyFailedRecipients, recordPermanentEmailFailure } from "
 
 
 // ─── Base URL helper ──────────────────────────────────────────────────────────
+type InvoicePricingLine = {
+  jobName: string;
+  poNumber: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  stitchCount: number;
+  itemCode: string;
+};
+
+function mergeMatchingInvoiceLines<T extends InvoicePricingLine>(lines: T[]): T[] {
+  const merged: T[] = [];
+  const matchingIndexes = new Map<string, number>();
+
+  for (const line of lines) {
+    const canMerge = line.itemCode === "Emb" || line.itemCode === "Print DTF";
+    if (!canMerge) {
+      merged.push(line);
+      continue;
+    }
+
+    const key = [
+      line.jobName,
+      line.poNumber || "",
+      line.itemCode,
+      line.stitchCount,
+      line.unitPrice,
+    ].join("|");
+    const existingIndex = matchingIndexes.get(key);
+
+    if (existingIndex === undefined) {
+      matchingIndexes.set(key, merged.length);
+      merged.push({ ...line });
+    } else {
+      merged[existingIndex].quantity += line.quantity;
+    }
+  }
+
+  return merged;
+}
+
 const MARKETING_BASE_URL = "https://www.selectbranding.co.uk";
 
 function getBaseUrl() {
@@ -10258,7 +10299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Build line items with pricing and stitch count
-      const lineItemsWithPricing = jobLineItems.map((lineItem, index) => {
+      const rawLineItemsWithPricing = jobLineItems.map((lineItem, index) => {
         let unitPrice: number;
         
         // Use manual price if provided for this line item, otherwise use calculated price
@@ -10288,7 +10329,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Minimum order quantity (from 1st Sept): bill small runs at 6 items
-        const billedQty = billedQuantity(lineItem);
+        const billedQty = billedQuantityForMatchingLine(jobLineItems, index);
         if (billedQty !== lineItem.quantity) {
           description = description
             ? `${description} (minimum order ${MIN_ORDER_QTY})`
@@ -10305,6 +10346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           itemCode,
         };
       });
+      const lineItemsWithPricing = mergeMatchingInvoiceLines(rawLineItemsWithPricing);
 
       // Add approved logo setups for this customer
       const approvedLogoSetups = await storage.getLogoSetups();
@@ -10548,6 +10590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           priceResult = null;
         }
 
+        const jobInvoiceLines: typeof lineItemsWithPricing = [];
         jobLineItems.forEach((lineItem, index) => {
           let unitPrice: number;
           
@@ -10561,7 +10604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Minimum order quantity (from 1st Sept): bill small runs at 6 items
-          const billedQty = billedQuantity(lineItem);
+          const billedQty = billedQuantityForMatchingLine(jobLineItems, index);
 
           // Accumulate per-job invoice total
           jobInvoiceTotals[job.id] = (jobInvoiceTotals[job.id] || 0) + (billedQty || 0) * unitPrice;
@@ -10589,7 +10632,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               : `Minimum order ${MIN_ORDER_QTY}`;
           }
 
-          lineItemsWithPricing.push({
+          jobInvoiceLines.push({
             jobName: job.jobName,
             poNumber: job.poNumber,
             description,
@@ -10599,6 +10642,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             itemCode,
           });
         });
+        lineItemsWithPricing.push(...mergeMatchingInvoiceLines(jobInvoiceLines));
 
         if (job.shippingCost === "TBA") {
           // A TBA job is covered if ANY job in the same tracking-number group

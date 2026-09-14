@@ -10,7 +10,7 @@ import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Pale
 import { CustomerPickingSlip } from "@/components/CustomerPickingSlip";
 import type { JobLineItem } from "@shared/schema";
 import { format } from "date-fns";
-import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantity } from "@shared/pricing";
+import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantityForMatchingLine } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
@@ -1010,6 +1010,8 @@ export default function InvoicingQueue() {
       shipmentJobsMap.get(shipmentKey)!.push(job);
       
       const jobLineItems = getJobLineItems(job.id);
+      const jobPreviewLines: Array<{ description: string; quantity: number; unitPrice: number | string; itemCode: string; lineItemId?: string }> = [];
+      const matchingPreviewIndexes = new Map<string, number>();
       
       let priceResult: any = null;
       try {
@@ -1065,8 +1067,21 @@ export default function InvoicingQueue() {
           }
         }
         
-        previewLines.push({ description, quantity: billedQuantity(lineItem), unitPrice, itemCode, lineItemId: lineItem.id });
+        const quantity = billedQuantityForMatchingLine(jobLineItems, index);
+        const canMerge = itemCode === "Emb" || itemCode === "DTF";
+        const mergeKey = canMerge
+          ? `${job.id}|${itemCode}|${lineItem.stitchCount}|${unitPrice}`
+          : null;
+        const existingIndex = mergeKey ? matchingPreviewIndexes.get(mergeKey) : undefined;
+
+        if (existingIndex === undefined) {
+          if (mergeKey) matchingPreviewIndexes.set(mergeKey, jobPreviewLines.length);
+          jobPreviewLines.push({ description, quantity, unitPrice, itemCode, lineItemId: lineItem.id });
+        } else {
+          jobPreviewLines[existingIndex].quantity += quantity;
+        }
       });
+      previewLines.push(...jobPreviewLines);
       
       if (shipmentLastIndex.get(shipmentKey) === i) {
         const shipmentJobs = shipmentJobsMap.get(shipmentKey)!;
