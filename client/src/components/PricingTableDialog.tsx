@@ -29,17 +29,12 @@ const DTF_SIZE_LABELS = [
   { key: "A3", label: "A3", sublabel: "" },
 ];
 
-// From 1st September all prices increase by £0.20 — show both until then
+// Current prices include the increase effective from 1st September 2026.
 import { SEPTEMBER_PRICE_INCREASE as SEPTEMBER_INCREASE } from "@shared/pricing";
 
-function DualPrice({ price }: { price: number }) {
+function CurrentPrice({ price }: { price: number }) {
   return (
-    <div className="leading-tight">
-      <div>£{price.toFixed(2)}</div>
-      <div className="text-xs text-primary font-medium">
-        £{(price + SEPTEMBER_INCREASE).toFixed(2)}
-      </div>
-    </div>
+    <span className="font-medium">£{(price + SEPTEMBER_INCREASE).toFixed(2)}</span>
   );
 }
 
@@ -67,9 +62,9 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
         </DialogHeader>
 
         <div className="p-3 bg-primary/10 rounded-md text-sm text-center" data-testid="banner-september-prices">
-          <span className="font-medium text-foreground">Price update:</span>{" "}
+          <span className="font-medium text-foreground">Current pricing:</span>{" "}
           <span className="text-muted-foreground">
-            the price shown in <span className="text-primary font-medium">purple</span> applies from <span className="font-medium text-foreground">1st September</span>, along with a <span className="font-medium text-foreground">6-item minimum per logo</span>.
+            prices are effective from <span className="font-medium text-foreground">1st September 2026</span>, with a <span className="font-medium text-foreground">6-item minimum per logo</span>.
           </span>
         </div>
         
@@ -82,7 +77,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
           {/* Embroidery Pricing Tab */}
           <TabsContent value="embroidery" className="space-y-4">
             <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-minimum-order">
-              <p className="font-medium mb-1">Minimum order: 6 items per logo <span className="text-primary font-normal">(from 1st September)</span></p>
+              <p className="font-medium mb-1">Minimum order: 6 items per logo</p>
               <p className="text-muted-foreground">
                 Orders of 1&ndash;5 items are charged at the 6-item price for that stitch count. Example: 3 polos with a 4,000-stitch logo = 6 &times; the &lt;5,000 unit price.
               </p>
@@ -123,7 +118,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
                         const price = priceEntry?.price;
                         return (
                           <td key={stitches} className="border border-border px-2 py-1.5 text-center">
-                            {typeof price === "number" ? <DualPrice price={price} /> : price || "-"}
+                            {typeof price === "number" ? <CurrentPrice price={price} /> : price || "-"}
                           </td>
                         );
                       })}
@@ -188,7 +183,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
           {/* DTF Print and Apply Pricing Tab */}
           <TabsContent value="dtf" className="space-y-4">
             <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-dtf-minimum-order">
-              <p className="font-medium mb-1">Minimum order: 6 items per logo <span className="text-primary font-normal">(from 1st September)</span></p>
+              <p className="font-medium mb-1">Minimum order: 6 items per logo</p>
               <p className="text-muted-foreground">
                 Orders of 1&ndash;5 items are charged at the 6-item price for that print size.
               </p>
@@ -228,7 +223,7 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
                       </td>
                       {DTF_SIZE_LABELS.map(size => (
                         <td key={size.key} className="border border-border px-3 py-1.5 text-center">
-                          <DualPrice price={tier.prices[size.key as keyof typeof tier.prices]} />
+                          <CurrentPrice price={tier.prices[size.key as keyof typeof tier.prices]} />
                         </td>
                       ))}
                     </tr>
