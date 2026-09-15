@@ -1,0 +1,1353 @@
+## PROJECT: SELECT BRANDING SOLUTIONS — CONTRACT CUSTOMER INTEGRATION HUB
+
+We want to extend the existing Select Branding Solutions production/contract customer platform so that our contract customers can integrate their own systems directly with ours.
+
+This must be designed as a GENERIC, REUSABLE INTEGRATION FRAMEWORK.
+
+Do NOT build an integration specifically for Abode Home & Gifts or Not On The High Street.
+
+Abode will be our first real-world use case, but the architecture must allow future contract customers to connect their own:
+
+* Websites
+* Ecommerce platforms
+* Bespoke order systems
+* ERP systems
+* Order management systems
+* Shipping platforms
+* Courier/carrier accounts
+
+The long-term objective is:
+
+CUSTOMER ORDER SYSTEM
+↓
+SELECT INTEGRATION API
+↓
+SELECT PRODUCTION PLANNER
+↓
+PRODUCTION
+↓
+PACKING / DISPATCH
+↓
+CUSTOMER'S CHOSEN SHIPPING SYSTEM
+↓
+TRACKING / DISPATCH DATA
+↓
+CUSTOMER ORDER SYSTEM
+
+The customer should ultimately be able to send an order into Select, have us manufacture/personalise it, and receive dispatch/tracking information back without either business manually rekeying information.
+
+---
+
+# 1. FIRST PRINCIPLE — DO NOT BREAK EXISTING PRODUCTION
+
+This is an extension of the existing Select production system.
+
+Before making changes:
+
+1. Audit the existing architecture.
+2. Identify the existing order, job, customer, production planner and dispatch data models.
+3. Identify existing APIs, webhooks and integrations.
+4. Identify how contract customer orders currently enter production.
+5. Identify how jobs move through production statuses.
+6. Identify how dispatch/tracking is currently recorded.
+
+Reuse existing architecture wherever sensible.
+
+Do NOT create duplicate order systems or duplicate production records simply to support API orders.
+
+All API-created jobs must ultimately become normal production jobs within the existing production workflow.
+
+Do not disrupt any existing customer ordering, production planning or dispatch functionality.
+
+---
+
+# 2. CREATE AN INTEGRATION LAYER
+
+Create a dedicated:
+
+**Select Contract Integration Hub**
+
+This should sit between external customer systems and our internal production system.
+
+It must handle:
+
+* Authentication
+* Customer identification
+* Incoming orders
+* Validation
+* Data transformation
+* Product/SKU mapping
+* Personalisation data
+* Order status
+* Production status
+* Shipping instructions
+* Dispatch
+* Tracking
+* Webhooks
+* Error handling
+* Retry handling
+* Logging
+* Audit history
+
+External systems should NEVER communicate directly with internal production database tables.
+
+Everything must pass through the integration layer.
+
+---
+
+# 3. CUSTOMER-SPECIFIC INTEGRATIONS
+
+Every contract customer must have their own integration configuration.
+
+Within the customer record/admin area create:
+
+**Integrations**
+
+This should allow us to see and configure:
+
+Order Integration
+
+Shipping Integration
+
+Status/Dispatch Integration
+
+Each customer may have:
+
+NO integration
+
+ORDER integration only
+
+SHIPPING integration only
+
+ORDER + SHIPPING integration
+
+FULL TWO-WAY integration
+
+---
+
+# 4. INCOMING ORDER API
+
+Create a secure REST/JSON API allowing approved contract customers to push orders into Select.
+
+Suggested endpoint structure:
+
+POST /api/v1/orders
+
+GET /api/v1/orders/{order_id}
+
+GET /api/v1/orders/{order_id}/status
+
+POST /api/v1/orders/{order_id}/cancel
+
+Actual routes should follow the existing application's architecture and conventions.
+
+Do not blindly create these routes if equivalent functionality already exists.
+
+---
+
+# 5. MINIMUM ORDER DATA
+
+The API should be capable of accepting:
+
+Customer account ID
+
+Customer order reference
+
+External order reference
+
+Order date/time
+
+Recipient/customer name
+
+Company name where applicable
+
+Delivery address:
+
+Address line 1
+Address line 2
+Town/city
+County
+Postcode
+Country
+
+Email if required for shipping
+
+Telephone if required for shipping
+
+Product/SKU
+
+Product description
+
+Quantity
+
+Personalisation text
+
+Personalisation option
+
+Logo/design reference where applicable
+
+Thread colour
+
+Font
+
+Position
+
+Garment/product size
+
+Garment/product colour
+
+Shipping service
+
+Customer notes
+
+Production notes
+
+Packing instructions
+
+Dispatch note reference/content
+
+Not every field should be mandatory.
+
+The required fields must be configurable according to the customer's integration/profile.
+
+---
+
+# 6. MULTI-LINE ORDERS
+
+The API MUST support:
+
+One order → one product
+
+One order → multiple identical personalised products
+
+One order → multiple different products
+
+One order → multiple different personalisations
+
+Example:
+
+ORDER 12345
+
+1 × Red Stocking — SOPHIE
+1 × Red Stocking — JACK
+1 × Green Stocking — OLIVER
+
+All three belong to the same customer shipment.
+
+Production may treat these as separate production items, but fulfilment must understand that they belong to ONE external customer order.
+
+This is extremely important.
+
+---
+
+# 7. IDEMPOTENCY / DUPLICATE PROTECTION
+
+External systems will occasionally retry API calls.
+
+We must NEVER accidentally create duplicate production orders.
+
+Use:
+
+Customer ID + external order reference
+
+and/or an idempotency key.
+
+If an identical order is submitted twice, the API should recognise it rather than creating another production job.
+
+Log duplicate attempts.
+
+---
+
+# 8. PRODUCT & SKU MAPPING
+
+Different customers will use different SKUs from Select.
+
+Create customer-specific SKU mapping.
+
+Example:
+
+Customer SKU:
+
+XMAS-STOCK-RED
+
+maps internally to:
+
+Select production product / process / embroidery specification.
+
+This mapping should be manageable through the admin interface.
+
+The same principle should eventually work for:
+
+Workwear
+
+Schoolwear
+
+Teamwear
+
+Personalised products
+
+Embroidery
+
+Print
+
+Other decoration processes
+
+---
+
+# 9. PERSONALISATION RULES
+
+Allow customer-specific production rules.
+
+For example Abode may have:
+
+Product: Cable Knit Stocking
+
+Font options:
+Font A
+Font B
+Font C
+
+Thread options:
+White
+Gold
+Red
+
+Position:
+Stocking cuff
+
+Maximum characters:
+Configurable
+
+Text size:
+Defined after production testing
+
+These rules should be stored against the customer/product mapping wherever practical.
+
+Incoming orders that violate agreed rules should be flagged rather than automatically entering production.
+
+Example:
+
+PERSONALISATION REQUIRES REVIEW
+
+Do not silently alter customer personalisation.
+
+---
+
+# 10. ORDER VALIDATION
+
+Before an incoming order becomes production-ready validate:
+
+Customer authenticated
+
+Customer account active
+
+External reference valid
+
+Required address information present
+
+Recognised SKU
+
+Quantity valid
+
+Personalisation rules valid
+
+Shipping method recognised
+
+Required artwork/design reference available
+
+If validation fails:
+
+Do NOT silently discard the order.
+
+Create an integration exception.
+
+Show clearly:
+
+Customer
+
+Order reference
+
+Error
+
+Time received
+
+Required action
+
+Also make the error available to the customer's API.
+
+---
+
+# 11. ORDER STATUS MODEL
+
+Create a consistent external status model.
+
+For example:
+
+RECEIVED
+
+VALIDATION_REQUIRED
+
+ACCEPTED
+
+QUEUED
+
+IN_PRODUCTION
+
+PRODUCTION_COMPLETE
+
+PACKING
+
+READY_FOR_DISPATCH
+
+DISPATCHED
+
+EXCEPTION
+
+CANCELLED
+
+The external API statuses should map cleanly onto the existing internal production statuses.
+
+Do not rebuild the production planner purely to accommodate these names.
+
+---
+
+# 12. OUTBOUND WEBHOOKS
+
+Customers should be able to register a secure webhook URL.
+
+When important events occur, Select can notify their system automatically.
+
+Potential events:
+
+order.received
+
+order.accepted
+
+order.exception
+
+order.in_production
+
+order.completed
+
+order.dispatched
+
+order.cancelled
+
+shipment.created
+
+shipment.dispatched
+
+shipment.exception
+
+Example dispatch payload should be capable of returning:
+
+Select order ID
+
+Customer order reference
+
+External order reference
+
+Status
+
+Carrier
+
+Shipping service
+
+Tracking number
+
+Tracking URL
+
+Dispatch timestamp
+
+Number of parcels
+
+Exception information if applicable
+
+Webhooks must be signed/authenticated.
+
+Implement retries with sensible backoff if the customer's endpoint is temporarily unavailable.
+
+Maintain webhook delivery history.
+
+---
+
+# 13. SHIPPING INTEGRATION HUB
+
+This is equally important as incoming orders.
+
+A contract customer must eventually be able to choose:
+
+**Ship using Select's carrier account**
+
+OR
+
+**Ship using my own carrier/shipping account**
+
+The integration architecture must support both.
+
+---
+
+# 14. SELECT SHIPPING
+
+For customers using Select shipping:
+
+The production system should create the shipment using our configured shipping provider.
+
+For example our current DPD service.
+
+Store:
+
+Carrier
+
+Service
+
+Tracking number
+
+Tracking URL
+
+Cost where available
+
+Dispatch timestamp
+
+Shipment reference
+
+Then return the tracking data to the customer's system.
+
+---
+
+# 15. CUSTOMER'S OWN SHIPPING ACCOUNT
+
+Customers should also be able to connect their own shipping system/account.
+
+Examples may include:
+
+ShipStation
+
+DPD
+
+Royal Mail
+
+Parcel brokers
+
+Other carrier APIs
+
+Do NOT hard-code the architecture around any single provider.
+
+Create a provider/adapter architecture.
+
+Conceptually:
+
+ShippingProvider
+
+→ DPDAdapter
+
+→ RoyalMailAdapter
+
+→ ShipStationAdapter
+
+→ FutureProviderAdapter
+
+This allows additional shipping providers to be added without rewriting the production system.
+
+---
+
+# 16. CUSTOMER SHIPPING CREDENTIALS
+
+Customers must NEVER send API credentials inside individual orders.
+
+Credentials should be securely stored against their integration configuration.
+
+Use appropriate encrypted secrets storage.
+
+Never expose:
+
+API secrets
+
+Passwords
+
+Tokens
+
+Private credentials
+
+in logs, dashboards or API responses.
+
+Admin users should be able to see:
+
+CONNECTED
+
+NOT CONNECTED
+
+AUTHENTICATION FAILED
+
+ACTION REQUIRED
+
+but never the actual secret.
+
+---
+
+# 17. SHIPPING LABELS
+
+Where supported, the system should:
+
+Create shipment
+
+Select requested service
+
+Generate shipping label
+
+Store label securely
+
+Make label available to the packing station
+
+Print/apply label
+
+Record tracking number
+
+Mark shipment dispatched
+
+Return tracking to customer system
+
+We should not require customers to email shipping labels if their shipping provider can be integrated.
+
+However, manual customer-supplied labels must remain available as a fallback.
+
+---
+
+# 18. SHIPPING RULES
+
+Allow customer-specific shipping rules.
+
+Example:
+
+Standard → Royal Mail Tracked 48
+
+Express → Royal Mail Tracked 24
+
+OR
+
+Standard → DPD Next Day
+
+These mappings should be configurable.
+
+Do not allow an external customer's arbitrary text to accidentally select an incorrect service.
+
+Map external service codes to approved internal services.
+
+---
+
+# 19. PACKING & FULFILMENT INSTRUCTIONS
+
+Store customer-specific fulfilment rules.
+
+Examples:
+
+Plain packaging
+
+Customer branded packaging
+
+Insert dispatch note
+
+No Select Branding paperwork
+
+White-label dispatch
+
+Specific packing slip
+
+Gift note
+
+Named wearer bag
+
+Specific carton requirements
+
+These instructions should automatically appear at the packing/dispatch stage.
+
+---
+
+# 20. WHITE-LABEL PROTECTION
+
+This is extremely important.
+
+Many Select contract customers are trade businesses.
+
+Their end customer must NOT accidentally receive:
+
+Select Branding paperwork
+
+Select Branding pricing
+
+Select Branding marketing
+
+Select Branding contact information
+
+when the customer is configured for white-label fulfilment.
+
+Add clear safeguards around this.
+
+---
+
+# 21. DAILY DISPATCH REPORT
+
+Even where API/webhook integration exists, retain the ability to produce a daily customer dispatch report.
+
+It should contain at minimum:
+
+Customer order reference
+
+Recipient
+
+Dispatch date
+
+Carrier
+
+Service
+
+Tracking number
+
+Tracking URL
+
+Status
+
+Allow:
+
+CSV export
+
+Email report
+
+Admin download
+
+Eventually allow customers to view this from their portal.
+
+---
+
+# 22. CUSTOMER PORTAL — INTEGRATIONS
+
+Add an appropriate Integrations area to the contract customer portal.
+
+Depending on permissions, customers should eventually be able to see:
+
+Order integration status
+
+Shipping integration status
+
+API credentials
+
+Webhook configuration
+
+Recent API activity
+
+Recent webhook activity
+
+Integration errors
+
+Documentation
+
+Test mode/live mode
+
+Do NOT expose internal system architecture.
+
+---
+
+# 23. API CREDENTIALS
+
+Each customer should have unique credentials.
+
+Provide the ability to:
+
+Generate
+
+Revoke
+
+Rotate
+
+Separate TEST and LIVE credentials.
+
+Use modern secure authentication appropriate to the existing stack.
+
+Do not invent a weaker authentication system if the platform already has an appropriate secure mechanism.
+
+---
+
+# 24. SANDBOX / TEST MODE
+
+We specifically need to be able to answer customers who ask:
+
+"Do you have sandbox/test credentials?"
+
+Create a proper test mode.
+
+Test orders must:
+
+Pass through API validation
+
+Be visible in integration logs
+
+Allow webhook testing
+
+Allow shipping integration testing where provider sandbox support exists
+
+NEVER become genuine live production orders unless deliberately promoted/converted.
+
+NEVER accidentally purchase live shipping labels.
+
+Clearly label everything:
+
+TEST
+
+or
+
+LIVE.
+
+---
+
+# 25. API DOCUMENTATION
+
+Create clear developer documentation.
+
+A customer's developer should be able to understand without speaking to us:
+
+Authentication
+
+Endpoints
+
+Required headers
+
+Order schema
+
+Example JSON order
+
+Multi-line orders
+
+Personalisation fields
+
+Shipping options
+
+Status responses
+
+Webhook events
+
+Webhook signatures
+
+Error codes
+
+Rate limits
+
+Idempotency
+
+Test mode
+
+Live mode
+
+Provide copyable example requests and responses.
+
+---
+
+# 26. INTEGRATION ADMIN DASHBOARD
+
+Create an internal dashboard for Select.
+
+We do NOT want a dashboard full of meaningless technical logs.
+
+The operational view should immediately answer:
+
+Are integrations healthy?
+
+How many API orders arrived today?
+
+Which customers sent orders?
+
+How many were accepted?
+
+How many failed validation?
+
+Are any orders stuck?
+
+Are any shipping integrations failing?
+
+Are any webhooks failing?
+
+Does somebody at Select need to take action?
+
+Use exception-based management.
+
+GREEN = operating normally
+
+AMBER = attention may be required
+
+RED = human intervention required.
+
+---
+
+# 27. AUDIT TRAIL
+
+Every external interaction should be traceable.
+
+For each order we should be able to see:
+
+When received
+
+Where it came from
+
+Original external reference
+
+Validation result
+
+When accepted
+
+Production status changes
+
+Shipment creation
+
+Carrier response
+
+Tracking number
+
+Dispatch confirmation
+
+Outbound webhook attempts
+
+Errors
+
+Manual interventions
+
+Do not allow logs to expose sensitive credentials.
+
+---
+
+# 28. MANUAL FALLBACK
+
+Automation must NEVER prevent us from doing the job manually.
+
+If an integration fails, authorised staff should be able to:
+
+Create/import the order manually
+
+Correct mappings
+
+Enter tracking manually
+
+Upload a customer shipping label
+
+Mark dispatched
+
+Retry webhook
+
+Resolve exception
+
+The production team must be able to keep orders moving even if an external API is unavailable.
+
+---
+
+# 29. CSV IMPORT
+
+As an intermediate option between email and full API integration, support structured CSV order import.
+
+This could be valuable for customers who cannot develop an API integration.
+
+CSV imports should use the SAME validation and mapping layer as API orders.
+
+Do not create a completely separate processing workflow.
+
+---
+
+# 30. EMAIL / MANUAL ORDER PATH
+
+Existing email/manual ordering must remain supported.
+
+Long term we may want to parse structured order emails automatically, but DO NOT build unreliable AI-based email ordering into this phase unless an existing safe capability already exists.
+
+---
+
+# 31. ABODE HOME & GIFTS — FIRST USE CASE
+
+Once the generic framework exists, configure a TEST integration profile for:
+
+Abode Home & Gifts
+
+Their expected workflow is:
+
+NOTHS
+
+↓
+
+Abode custom PHP order platform
+
+↓
+
+Select Integration API
+
+↓
+
+Select production
+
+↓
+
+Packing/dispatch
+
+↓
+
+DPD initially OR Abode-selected shipping integration in future
+
+↓
+
+Tracking/status returned to Abode
+
+↓
+
+Abode updates NOTHS.
+
+Likely incoming fields:
+
+Abode order reference
+
+Recipient/customer name
+
+Delivery address
+
+Product/SKU
+
+Quantity
+
+Personalisation name/text
+
+Font
+
+Thread colour
+
+Shipping service
+
+Dispatch note data/reference
+
+Potential outbound fields:
+
+Abode order reference
+
+Select order reference
+
+Status
+
+Carrier
+
+Service
+
+Tracking number
+
+Tracking URL
+
+Dispatch timestamp.
+
+Do NOT attempt to connect directly to NOTHS.
+
+Abode remains responsible for the NOTHS side unless requirements change later.
+
+---
+
+# 32. ABODE LAUNCH MUST NOT DEPEND ON API
+
+This is critical.
+
+Abode's Christmas campaign will initially launch using:
+
+Email/manual order receipt
+
+48-hour production SLA
+
+Select DPD shipping
+
+Daily dispatch/tracking report.
+
+Do NOT make the API integration a dependency for their launch.
+
+We want to prove the physical production and fulfilment process first.
+
+Then automate it.
+
+---
+
+# 33. FUTURE PLATFORM CONNECTORS
+
+Design the integration framework so that future adapters/connectors can be added for systems such as:
+
+WooCommerce
+
+Shopify
+
+Bespoke PHP systems
+
+ERP platforms
+
+Order management systems
+
+ShipStation
+
+Carrier APIs
+
+Do NOT build all of these integrations now.
+
+We want the architecture to support them.
+
+Only implement providers/connectors where we have a genuine requirement and appropriate credentials/documentation.
+
+---
+
+# 34. SECURITY
+
+Treat this as a business-critical system handling customer and recipient personal data.
+
+Review:
+
+Authentication
+
+Authorisation
+
+Tenant/customer isolation
+
+Encryption
+
+Secrets management
+
+API rate limiting
+
+Replay protection
+
+Webhook signing
+
+Input validation
+
+SQL/injection protection
+
+Logging
+
+PII exposure
+
+Retention
+
+Backups
+
+GDPR implications.
+
+One customer must NEVER be able to access another customer's:
+
+Orders
+
+Recipients
+
+Tracking
+
+Credentials
+
+Pricing
+
+Integration settings.
+
+---
+
+# 35. DATA RETENTION
+
+Do not retain end-customer personal data indefinitely simply because it arrived through the API.
+
+Review the existing retention requirements and propose an appropriate retention/anonymisation policy for fulfilment recipient data.
+
+Do not implement destructive retention changes without approval.
+
+---
+
+# 36. MONITORING
+
+Create automated monitoring for:
+
+API availability
+
+Failed authentication spikes
+
+Order validation failures
+
+Webhook failures
+
+Shipping API failures
+
+Orders stuck between statuses
+
+Duplicate submissions
+
+Unexpected volume spikes.
+
+Operationally important failures should surface clearly in the Select dashboard.
+
+---
+
+# 37. DO NOT OVERENGINEER V1
+
+We want the architecture correct, but we do NOT want months spent building a theoretical enterprise integration platform before we process an order.
+
+Think:
+
+BUILD THE GENERIC FOUNDATION.
+
+PROVE IT WITH ABODE.
+
+LEARN.
+
+THEN EXPAND.
+
+The first production use case remains manual.
+
+---
+
+# PHASED DELIVERY
+
+## PHASE 1 — AUDIT & DESIGN
+
+First inspect the existing system.
+
+Return to me with:
+
+1. Existing architecture relevant to this project.
+2. What can be reused.
+3. What needs creating.
+4. Proposed integration architecture.
+5. Proposed database/schema changes.
+6. Proposed API endpoint structure.
+7. Proposed authentication method.
+8. Proposed webhook architecture.
+9. Proposed shipping-provider adapter architecture.
+10. Security implications.
+11. Any risks to the existing production planner.
+12. Recommended V1 scope.
+
+DO NOT begin major structural changes until this audit is complete.
+
+---
+
+## PHASE 2 — CORE INTEGRATION FRAMEWORK
+
+After approval, build:
+
+Customer integration profiles
+
+API authentication
+
+Incoming order API
+
+Order validation
+
+Idempotency
+
+SKU mapping
+
+Personalisation mapping
+
+External/internal status mapping
+
+Integration logs
+
+Exception handling
+
+Test/live environments.
+
+---
+
+## PHASE 3 — OUTBOUND STATUS
+
+Build:
+
+Webhooks
+
+Dispatch callbacks
+
+Tracking callbacks
+
+Retry system
+
+Webhook logs
+
+Daily dispatch reporting.
+
+---
+
+## PHASE 4 — SHIPPING
+
+Build the generic shipping-provider framework.
+
+Then connect the first genuinely required provider.
+
+Do not create fake integrations.
+
+---
+
+## PHASE 5 — CUSTOMER SELF-SERVICE
+
+Add appropriate integration management to the contract customer portal.
+
+---
+
+## PHASE 6 — ABODE TEST
+
+Create Abode TEST credentials.
+
+Provide us with a package we can send to their developer containing:
+
+API documentation
+
+Test base URL
+
+Test credentials/setup instructions
+
+Example order payload
+
+Example multi-item payload
+
+Example response
+
+Webhook instructions
+
+Example dispatch payload
+
+Error responses
+
+Testing checklist.
+
+---
+
+# IMPORTANT COMMERCIAL PRINCIPLE
+
+Select Branding Solutions is becoming an outsourced production and fulfilment partner.
+
+The technology should support the proposition:
+
+**"Connect your orders to us. We produce them. We dispatch them. Your customer sees you."**
+
+Customers should not need to change how they sell simply because Select is manufacturing or fulfilling the order behind the scenes.
+
+Build the integration layer around that principle.
+
+---
+
+# FIRST ACTION
+
+Do NOT start coding the whole project immediately.
+
+Audit the existing application against this specification.
+
+Then respond with:
+
+**SELECT CONTRACT INTEGRATION HUB — TECHNICAL AUDIT & IMPLEMENTATION PLAN**
+
+Clearly identify:
+
+ALREADY EXISTS
+
+CAN BE REUSED
+
+NEEDS MODIFICATION
+
+NEEDS BUILDING
+
+RISKS
+
+SECURITY CONCERNS
+
+RECOMMENDED V1
+
+ESTIMATED IMPLEMENTATION SEQUENCE
+
+and any questions that genuinely require my business decision before development begins.
