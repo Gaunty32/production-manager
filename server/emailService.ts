@@ -439,6 +439,7 @@ export async function sendNewJobSubmissionEmail(
   staffEmails: string[],
   jobDetails: {
     jobName: string;
+    requestedJobType: "Embroidery" | "Print" | "Mix";
     customerName: string;
     quantity: number;
     poNumber: string | null;
@@ -450,12 +451,14 @@ export async function sendNewJobSubmissionEmail(
   const viewUrl = `${getBaseUrl()}/holding-area`;
 
   const safeJobName = sanitizeHtml(jobDetails.jobName);
+  const safeRequestedJobType = sanitizeHtml(jobDetails.requestedJobType);
   const safeCustomerName = sanitizeHtml(jobDetails.customerName);
   const safePONumber = sanitizeHtml(jobDetails.poNumber);
   const safeDispatchDate = sanitizeHtml(jobDetails.requiredDispatchDate);
 
   const tableRows = [
     { label: 'Job Name', value: safeJobName },
+    { label: 'Job Type', value: safeRequestedJobType },
     { label: 'Customer', value: safeCustomerName },
     { label: 'Quantity', value: `${jobDetails.quantity} garments` },
     ...(safePONumber ? [{ label: 'PO Number', value: safePONumber }] : []),

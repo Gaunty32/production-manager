@@ -27,6 +27,7 @@ import {
 type Job = {
   id: string;
   jobName: string;
+  requestedJobType: "Embroidery" | "Print" | "Mix" | null;
   poNumber: string | null;
   quantity: number;
   requiredDispatchDate: string | null;
@@ -608,6 +609,12 @@ export default function StaffJobDetail() {
                       <p className="text-sm text-muted-foreground mb-1">Job Name</p>
                       <p className="font-medium" data-testid="text-job-name">{job.jobName}</p>
                     </div>
+                    {job.requestedJobType && (
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">Requested Job Type</p>
+                        <p className="font-medium" data-testid="text-requested-job-type">{job.requestedJobType}</p>
+                      </div>
+                    )}
                     {job.poNumber && (
                       <div>
                         <p className="text-sm text-muted-foreground mb-1">PO Number</p>

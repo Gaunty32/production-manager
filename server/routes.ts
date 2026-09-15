@@ -5207,6 +5207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const job = await storage.createJob({
         customerId: customerUser.customerId,
         jobName: data.jobName,
+        requestedJobType: data.requestedJobType,
         poNumber: data.poNumber || null,
         quantity: data.quantity ?? 0,
         goodsReceived: null,
@@ -5245,6 +5246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const dispatchDate = job.requiredDispatchDate ? new Date(job.requiredDispatchDate).toLocaleDateString('en-GB') : 'Not specified';
           await sendNewJobSubmissionEmail(staffEmails, {
             jobName: job.jobName,
+            requestedJobType: data.requestedJobType,
             customerName: customer.name,
             quantity: job.quantity,
             poNumber: job.poNumber,

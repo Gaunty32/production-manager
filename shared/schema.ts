@@ -132,6 +132,7 @@ export const jobs = pgTable("jobs", {
   jobNumber: integer("job_number").unique(),
   customerId: varchar("customer_id").notNull().references(() => customers.id),
   jobName: text("job_name").notNull(),
+  requestedJobType: text("requested_job_type"),
   poNumber: text("po_number"),
   quantity: integer("quantity").notNull(),
   goodsReceived: timestamp("goods_received"),
@@ -1099,6 +1100,9 @@ export const insertJobFileSchema = createInsertSchema(jobFiles).omit({
 // Customer job submission schema
 export const customerJobSubmissionSchema = z.object({
   jobName: z.string().min(1, "Job name is required"),
+  requestedJobType: z.enum(["Embroidery", "Print", "Mix"], {
+    required_error: "Job type is required",
+  }),
   poNumber: z.string().optional(),
   quantity: z.number().int().min(1).optional().nullable(),
   notes: z.string().optional(),
