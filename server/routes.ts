@@ -422,10 +422,11 @@ async function validateSchedulePlacement(
   },
 ): Promise<void> {
   const { findAvailableSlots } = await import("@shared/scheduling");
-  const [job, machine, staffMember] = await Promise.all([
+  const [job, machine, staffMember, lineItem] = await Promise.all([
     storage.getJob(data.jobId),
     storage.getMachine(data.machineId),
     storage.getStaff().then(rows => rows.find(s => s.id === data.staffId)),
+    data.lineItemId ? storage.getJobLineItem(data.lineItemId) : Promise.resolve(null),
   ]);
   if (!job) throw new Error("Job not found");
   if (!job.responsibleOperatorId) throw new Error("Choose a responsible operator before scheduling");
@@ -434,13 +435,13 @@ async function validateSchedulePlacement(
   }
   if (!staffMember || staffMember.active === false) throw new Error("Assigned operator is inactive");
   if (!machine || !machine.isActive) throw new Error("Selected machine is offline");
-  if (job.machineId != null && job.machineId !== data.machineId) {
+  const usesDedicatedPrintMachine = lineItem != null && isPrintJobType(lineItem.jobType);
+  if (job.machineId != null && job.machineId !== data.machineId && !usesDedicatedPrintMachine) {
     throw new Error("Schedule machine must match the job's confirmed machine");
   }
   if (data.lineItemId) {
-    const item = await storage.getJobLineItem(data.lineItemId);
-    if (!item || item.jobId !== data.jobId) throw new Error("Line item does not belong to this job");
-    if (item.operatorId && item.operatorId !== data.staffId) throw new Error("Line-item operator conflicts with the responsible operator");
+    if (!lineItem || lineItem.jobId !== data.jobId) throw new Error("Line item does not belong to this job");
+    if (lineItem.operatorId && lineItem.operatorId !== data.staffId) throw new Error("Line-item operator conflicts with the responsible operator");
   }
   const date = new Date(data.scheduledDate);
   date.setHours(0, 0, 0, 0);
@@ -7266,7 +7267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.machineId && !parentJob.responsibleOperatorId) {
         return res.status(400).json({ error: "Choose a responsible operator in Job Allocation before assigning a machine" });
       }
-      if (data.machineId && parentJob.machineId != null && data.machineId !== parentJob.machineId) {
+      if (data.machineId && parentJob.machineId != null && data.machineId !== parentJob.machineId && !isPrintItem) {
         return res.status(400).json({ error: "Line-item machine must match the job's confirmed machine" });
       }
 

@@ -448,8 +448,8 @@ export function getBaggingPrice(
   quantity: number,
   pricingTable: PricingTable = "2026"
 ): FlatRatePriceLookupResult {
-  // 30p for 2025 table, 40p for 2026 table
-  const unitPrice = pricingTable === "2025" ? 0.30 : 0.40;
+  // Legacy customers remain on 30p; the current 2026 table is 50p.
+  const unitPrice = pricingTable === "2025" ? 0.30 : 0.50;
   const totalPrice = unitPrice * quantity;
 
   return {

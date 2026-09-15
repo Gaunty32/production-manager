@@ -1087,6 +1087,12 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                                 setLineItems(updated);
                               } else {
                                 updateLineItem(index, 'jobType', value);
+                                if (value === "Bagging") {
+                                  updateLineItem(index, 'position', null);
+                                  updateLineItem(index, 'positionOther', null);
+                                  updateLineItem(index, 'machineId', null);
+                                  updateLineItem(index, 'stitchCount', 0);
+                                }
                               }
                             }}
                           >
@@ -1100,7 +1106,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="flex-1 min-w-[140px]">
+                        {item.jobType !== "Bagging" && <div className="flex-1 min-w-[140px]">
                           <label className="text-xs text-muted-foreground">Position</label>
                           <Select 
                             value={item.position || undefined}
@@ -1123,7 +1129,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                               ))}
                             </SelectContent>
                           </Select>
-                        </div>
+                        </div>}
                         <div className="flex-1 min-w-[140px]">
                           <label className="text-xs text-muted-foreground">Quantity</label>
                           <Input

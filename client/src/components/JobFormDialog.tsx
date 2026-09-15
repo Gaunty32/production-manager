@@ -5,7 +5,7 @@ import { insertJobSchema, type Customer } from "@shared/schema";
 import { suggestMachine } from "@shared/machines";
 import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
-import { getPrice, getPrintPrice, formatPrice, chargedQuantity, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
+import { getPrice, getPrintPrice, getBaggingPrice, formatPrice, chargedQuantity, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
@@ -287,14 +287,10 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
 
       try {
         if (item.jobType === "Bagging") {
-          // Use bagging pricing (30p for 2025, 40p for 2026)
-          const unitPrice = pricingTable === "2025" ? 0.30 : 0.40;
-          const totalPrice = unitPrice * item.quantity;
+          const baggingPrice = getBaggingPrice(item.quantity, pricingTable);
           return {
-            unitPrice,
-            totalPrice: parseFloat(totalPrice.toFixed(2)),
-            tier: "Flat Rate",
-            lineTotal: parseFloat(totalPrice.toFixed(2)),
+            ...baggingPrice,
+            lineTotal: baggingPrice.totalPrice,
           };
         } else if (item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name") {
           // Use flat rate pricing (£2.50)
@@ -1050,19 +1046,26 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                                 updated[index] = { 
                                   ...updated[index], 
                                   jobType: value,
-                                  stitchCount: PRINT_SIZE_CODE.A4 
+                                  stitchCount: PRINT_SIZE_CODE.A4,
                                 };
                               } else if (currentMachine === null) {
                                 const suggested = suggestMachine(item.quantity, value, item.stitchCount);
                                 updated[index] = { 
                                   ...updated[index], 
                                   jobType: value,
-                                  machineId: suggested
+                                  machineId: suggested,
+                                  position: value === "Bagging" ? null : updated[index].position,
+                                  positionOther: value === "Bagging" ? null : updated[index].positionOther,
+                                  stitchCount: value === "Bagging" ? 0 : updated[index].stitchCount,
                                 };
                               } else {
                                 updated[index] = { 
                                   ...updated[index], 
-                                  jobType: value
+                                  jobType: value,
+                                  position: value === "Bagging" ? null : updated[index].position,
+                                  positionOther: value === "Bagging" ? null : updated[index].positionOther,
+                                  machineId: value === "Bagging" ? null : updated[index].machineId,
+                                  stitchCount: value === "Bagging" ? 0 : updated[index].stitchCount,
                                 };
                               }
                               setLineItems(updated);
@@ -1078,7 +1081,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="flex-1 min-w-[140px]">
+                        {item.jobType !== "Bagging" && <div className="flex-1 min-w-[140px]">
                           <label className="text-xs text-muted-foreground font-medium">Position</label>
                           <Select 
                             value={item.position || undefined}
@@ -1103,7 +1106,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                               ))}
                             </SelectContent>
                           </Select>
-                        </div>
+                        </div>}
                         <div className="flex-1 min-w-[140px]">
                           <label className="text-xs text-muted-foreground font-medium">Quantity</label>
                           <Input
