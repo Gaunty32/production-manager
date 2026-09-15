@@ -40,3 +40,15 @@ preserves the no-flash staff handoff without penalising anonymous visitors.
 **How to apply:** Any server path that transforms or serves the SPA index must
 replace the auth snapshot placeholder from the current request session. Do not
 let static middleware serve `index.html` before that transformation.
+
+Production must keep Express response compression enabled before API and static
+middleware. The hosting proxy does not automatically compress these assets; without
+app-level compression, hashed JS/CSS and HTML are transferred at full size.
+
+**Why:** Live asset checks showed no Content-Encoding despite large bundles; app-level
+gzip reduced representative HTML from about 52 KB to 16 KB and the main JS from
+about 332 KB to roughly 101 KB.
+
+**How to apply:** Preserve compression middleware ordering and verify with a request
+that sends `Accept-Encoding: gzip`; expect `Content-Encoding: gzip` and `Vary:
+Accept-Encoding`.

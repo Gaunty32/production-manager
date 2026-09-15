@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import compression from "compression";
 import { registerRoutes, autoScheduleLineItem } from "./routes";
 import { PRINT_MACHINE_ID, isPrintJobType } from "@shared/machines";
 import { setupVite, serveStatic, log } from "./vite";
@@ -15,6 +16,7 @@ import { scheduleWeeklyArticleCampaign } from "./highLevelCampaign";
 
 const app = express();
 app.set("trust proxy", 1);
+app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(getSession());
