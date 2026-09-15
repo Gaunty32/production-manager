@@ -8,6 +8,7 @@ Principle: people own jobs, machines provide capacity. `jobs` carries responsibl
 Rules:
 - A job's responsible operator is authoritative for every new schedule. Machine defaults are legacy display/history fallbacks only; automatic scheduling must fail visibly rather than silently choosing somebody else.
 - A mixed job may contain a Print line on the dedicated Print machine even when the job's confirmed/default machine is an embroidery machine; creation and schedule validation must preserve this exception.
+- A Print-only job may be saved without a responsible operator: its machine assignment is the fixed Print-machine routing, not an operator allocation. Mixed and non-Print jobs still require an operator before machine assignment.
 - Production assignment is ordered: responsible operator first, then an availability-aware machine choice. Direct job/line-item mutation routes must not bypass this invariant.
 - allocationStatus is DERIVED in `allocateJob` (blocked > allocated > unallocated); never set it directly from other write paths or it drifts.
 - The machine recommendation is snapshotted at first allocation using the operator being set in that same request (pass the intended operator into `recommendMachineForJob`), otherwise the recommended-vs-overridden audit is computed against the stale operator.

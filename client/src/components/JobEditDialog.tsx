@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
 import { PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
-import { calculateProductionMetrics, PRINT_MACHINE_ID } from "@shared/machines";
+import { calculateProductionMetrics, isPrintJobType, PRINT_MACHINE_ID } from "@shared/machines";
 import { z } from "zod";
 import {
   Dialog,
@@ -646,8 +646,10 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
             operatorId: item.completed ? item.operatorId : responsibleOperatorId,
           }));
 
-        const hasAssignedMachine = itemsToPersist.some((item) => item.machineId != null);
-        if (hasAssignedMachine && !responsibleOperatorId) {
+        const hasAssignedNonPrintMachine = itemsToPersist.some(
+          (item) => item.machineId != null && !isPrintJobType(item.jobType),
+        );
+        if (hasAssignedNonPrintMachine && !responsibleOperatorId) {
           toast({
             title: "Responsible operator required",
             description: "Choose who is responsible for this job before saving it.",

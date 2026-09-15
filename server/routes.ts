@@ -7266,7 +7266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isPrintItem) {
         data.machineId = PRINT_MACHINE_ID;
       }
-      if (data.machineId && !parentJob.responsibleOperatorId) {
+      if (data.machineId && !isPrintItem && !parentJob.responsibleOperatorId) {
         return res.status(400).json({ error: "Choose a responsible operator in Job Allocation before assigning a machine" });
       }
       if (data.machineId && parentJob.machineId != null && data.machineId !== parentJob.machineId && !isPrintItem) {
@@ -7440,7 +7440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         data.machineId = PRINT_MACHINE_ID;
       }
 
-      if (data.completed !== true && (data.machineId !== undefined || data.operatorId !== undefined)) {
+      if (data.completed !== true && !isPrintItem && (data.machineId !== undefined || data.operatorId !== undefined)) {
         if (!parentJob.responsibleOperatorId) {
           return res.status(400).json({ error: "Choose a responsible operator in Job Allocation first" });
         }
