@@ -13,6 +13,7 @@ import { scheduleFortnightlyRecalibration } from "./calibration";
 import { scheduleInactiveCustomerChecks } from "./inactiveCustomers";
 import { scheduleWeeklySummary } from "./weeklySummary";
 import { scheduleWeeklyArticleCampaign } from "./highLevelCampaign";
+import { startCustomerOrderNotificationRetryWorker } from "./customerOrderNotifications";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -113,6 +114,7 @@ app.use((req, res, next) => {
   scheduleInactiveCustomerChecks();
   scheduleWeeklySummary();
   scheduleWeeklyArticleCampaign();
+  startCustomerOrderNotificationRetryWorker();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

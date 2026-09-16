@@ -180,6 +180,10 @@ export const jobs = pgTable("jobs", {
   machineOverrideReason: text("machine_override_reason"),
   allocatedById: varchar("allocated_by_id").references(() => users.id),
   allocatedAt: timestamp("allocated_at"),
+  productionStartedEmailQueuedAt: timestamp("production_started_email_queued_at"),
+  productionStartedEmailSentAt: timestamp("production_started_email_sent_at"),
+  dispatchEmailQueuedAt: timestamp("dispatch_email_queued_at"),
+  dispatchEmailSentAt: timestamp("dispatch_email_sent_at"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {

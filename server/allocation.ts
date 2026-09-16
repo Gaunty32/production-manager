@@ -7,6 +7,7 @@ import { db } from "./db";
 import { jobs, jobLineItems, jobSchedule, staff, machines, customers, productionEntries, staffShifts, machineScheduleBlocks, staffMachineAllocations, staffHolidays, bankHolidays } from "@shared/schema";
 import { and, eq, ne, isNull, inArray, gte, lt } from "drizzle-orm";
 import { PRINT_MACHINE_ID, isPrintJobType } from "@shared/machines";
+import { maybeSendProductionStartedNotification } from "./customerOrderNotifications";
 import { findAvailableSlots, minutesToTime } from "@shared/scheduling";
 
 /** London calendar date (yyyy-MM-dd) for "today". */
@@ -500,6 +501,15 @@ export async function allocateJob(
   const allocationChanged =
     (input.responsibleOperatorId !== undefined && input.responsibleOperatorId !== job.responsibleOperatorId) ||
     (input.machineId !== undefined && input.machineId !== job.machineId);
+  if (
+    finalOperator &&
+    finalMachine != null &&
+    !finalBlocked &&
+    !job.productionStartedEmailSentAt &&
+    !job.productionStartedEmailQueuedAt
+  ) {
+    updates.productionStartedEmailQueuedAt = new Date();
+  }
   const result = await db.transaction(async (tx) => {
     const [updated] = await tx.update(jobs).set(updates).where(eq(jobs.id, jobId)).returning();
     let replanLineItemIds: string[] = [];
@@ -529,6 +539,7 @@ export async function allocateJob(
     }
     return { ...updated, planning: { replanLineItemIds } };
   });
+  await maybeSendProductionStartedNotification(jobId);
   return result;
 }
 

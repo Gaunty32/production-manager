@@ -56,7 +56,8 @@ import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema
 import { setupProductionDatabase } from "./setup-production";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
-import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendWebsiteEnquiryEmails, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendDispatchNotificationEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail, buildBroadcastEmailHtml, sendBroadcastEmail } from "./emailService";
+import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendWebsiteEnquiryEmails, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail, buildBroadcastEmailHtml, sendBroadcastEmail } from "./emailService";
+import { maybeSendDispatchNotification, maybeSendProductionStartedNotification } from "./customerOrderNotifications";
 import { getOrCreateStripeCustomer, createSetupIntent, listSavedCards, deletePaymentMethod, setDefaultPaymentMethod, chargeCustomerCard } from "./stripeService";
 import { shouldSendStaffNotification } from "./notificationThrottle";
 import { KNOWLEDGE_CENTRE_ARTICLES } from "@shared/knowledgeCentre";
@@ -5866,8 +5867,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'production',
         approvedById: staff?.id || null,
         approvedAt: new Date() as any,
+        ...(
+          job.responsibleOperatorId &&
+          job.machineId != null &&
+          job.allocationStatus === "allocated" &&
+          !job.productionStartedEmailSentAt &&
+          !job.productionStartedEmailQueuedAt
+            ? { productionStartedEmailQueuedAt: new Date() }
+            : {}
+        ),
       });
       console.log('[JOB APPROVE] Job updated. New status:', updatedJob.status, 'Job ID:', updatedJob.id);
+      await maybeSendProductionStartedNotification(updatedJob.id);
 
       res.json({ success: true });
     } catch (error) {
@@ -7081,6 +7092,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const data = updateJobSchema.parse(req.body);
+      const existingJob = await storage.getJob(id);
+      if (!existingJob) return res.status(404).json({ error: "Job not found" });
       if (data.machineId !== undefined) {
         return res.status(400).json({
           error: "Assign the responsible operator and machine together from Job Allocation",
@@ -7135,6 +7148,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               completed: true, // Mark as completed
               invoiceStatus: "ready", // Ready for invoicing
               conversationArchivedByStaff: true, // Auto-archive chat when job moves to invoicing
+              ...((updates.dhlTrackingNumber as string | null)?.trim()
+                ? { dispatchEmailQueuedAt: new Date() }
+                : {}),
             } as any);
           }
         } else {
@@ -7167,8 +7183,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             : shippingCost.cost;
         }
       }
+      const finalCompleted = updates.completed ?? existingJob.completed;
+      const finalTrackingNumber = (
+        updates.dhlTrackingNumber !== undefined
+          ? updates.dhlTrackingNumber
+          : existingJob.dhlTrackingNumber
+      ) as string | null;
+      if (
+        finalCompleted &&
+        finalTrackingNumber?.trim() &&
+        !existingJob.dispatchEmailSentAt &&
+        !existingJob.dispatchEmailQueuedAt
+      ) {
+        updates.dispatchEmailQueuedAt = new Date();
+      }
       
       const job = await storage.updateJob(id, updates);
+      const notificationJobIds = [id, ...consolidatedJobIds];
+      await Promise.all(notificationJobIds.map((jobId) => maybeSendDispatchNotification(jobId)));
       res.json(job);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -7546,6 +7578,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             completed: true,
             invoiceStatus: "ready",
             conversationArchivedByStaff: true, // Auto-archive chat when job moves to invoicing
+            ...(job.dhlTrackingNumber && !job.dispatchEmailSentAt && !job.dispatchEmailQueuedAt
+              ? { dispatchEmailQueuedAt: new Date() }
+              : {}),
           } as any);
 
           // Push the job to the customer's Drive Calculations sheet so the
@@ -7588,6 +7623,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
+      await maybeSendDispatchNotification(lineItem.jobId);
       
       res.json(lineItem);
     } catch (error) {
@@ -12194,50 +12230,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Save the tracking number to all jobs
       await Promise.all(
-        allJobIds.map(id =>
-          storage.updateJob(id, { dhlTrackingNumber: result.trackingNumber.trim() })
-        )
+        allJobIds.map(async (id) => {
+          const job = validJobs.find((candidate) => candidate?.id === id);
+          await storage.updateJob(id, {
+            dhlTrackingNumber: result.trackingNumber.trim(),
+            ...(job?.completed && !job.dispatchEmailSentAt && !job.dispatchEmailQueuedAt
+              ? { dispatchEmailQueuedAt: new Date() }
+              : {}),
+          });
+        })
       );
-
-      // Send dispatch notification emails to opted-in customer users
-      try {
-        // Group jobs by customer so we send one email per customer
-        const customerJobMap = new Map<string, { jobNames: string[]; customerName: string; logoUrl: string | null }>();
-        for (const job of validJobs) {
-          if (!job) continue;
-          const customerId = job.customerId;
-          if (!customerJobMap.has(customerId)) {
-            const customer = await storage.getCustomer(customerId);
-            customerJobMap.set(customerId, {
-              jobNames: [],
-              customerName: customer?.name ?? "Customer",
-              logoUrl: customer?.logoUrl ?? null,
-            });
-          }
-          customerJobMap.get(customerId)!.jobNames.push(job.jobName);
-        }
-
-        const portalUrl = `${process.env.REPLIT_DEPLOYMENT_URL || process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://your-portal.com"}/customer/orders`;
-
-        for (const [customerId, { jobNames, customerName, logoUrl }] of customerJobMap) {
-          const customerUsersList = await storage.getCustomerUsersByCustomerId(customerId);
-          const emailsToNotify = customerUsersList
-            .filter(u => u.active && u.emailNotificationsDispatch && u.email)
-            .map(u => u.email);
-
-          if (emailsToNotify.length > 0) {
-            sendDispatchNotificationEmail(emailsToNotify, {
-              customerName,
-              jobNames,
-              trackingNumber: result.trackingNumber.trim(),
-              portalUrl,
-              customerLogoUrl: logoUrl,
-            }).catch(err => console.error("[DPD] Dispatch email error:", err));
-          }
-        }
-      } catch (emailErr) {
-        console.error("[DPD] Failed to send dispatch notification emails:", emailErr);
-      }
+      await Promise.all(allJobIds.map((id) => maybeSendDispatchNotification(id)));
 
       res.json({
         trackingNumber: result.trackingNumber,

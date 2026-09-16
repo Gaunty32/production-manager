@@ -79,13 +79,14 @@ function noReplyNotice(): string {
 async function sendEmail(
   client: Resend,
   params: Parameters<Resend['emails']['send']>[0],
+  options?: Parameters<Resend['emails']['send']>[1],
 ): ReturnType<Resend['emails']['send']> {
   // Always set replyTo so replies land in a real inbox, not spam
   const enriched = {
     replyTo: 'info@selectbranding.co.uk',
     ...params,
   };
-  const result = await client.emails.send(enriched);
+  const result = await client.emails.send(enriched, options);
   if (!result.error) recordEmailSent();
   return result;
 }
@@ -107,10 +108,58 @@ function isPermanentResendRecipientError(error: any) {
   return [400, 422].includes(statusCode) && mentionsRecipient;
 }
 
-function getBaseUrl() {
+export function getBaseUrl() {
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
   if (process.env.REPLIT_DOMAINS) return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
   return 'http://localhost:5000';
+}
+
+export async function sendProductionStartedEmail(
+  customerEmail: string,
+  details: {
+    customerFirstName: string;
+    jobName: string;
+    operatorName: string;
+    operatorProfileImageUrl?: string | null;
+    requiredDispatchDate: string;
+    portalUrl: string;
+    customerLogoUrl?: string | null;
+    customerName: string;
+    idempotencyKey: string;
+  },
+) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const safeFirstName = sanitizeHtml(details.customerFirstName);
+  const safeJobName = sanitizeHtml(details.jobName);
+  const safeOperatorName = sanitizeHtml(details.operatorName);
+  const safeDispatchDate = sanitizeHtml(details.requiredDispatchDate);
+  const safeProfileUrl = details.operatorProfileImageUrl && /^https?:\/\//i.test(details.operatorProfileImageUrl)
+    ? sanitizeHtml(details.operatorProfileImageUrl)
+    : null;
+  const operatorBlock = safeProfileUrl
+    ? `<div style="display:flex;align-items:center;gap:12px;margin:18px 0;padding:14px;background:#f4f4f5;border-radius:8px;">
+        <img src="${safeProfileUrl}" alt="${safeOperatorName}" width="56" height="56" style="width:56px;height:56px;border-radius:50%;object-fit:cover;display:block;" />
+        <div><div style="font-size:12px;color:#71717a;">Your production operator</div><div style="font-size:16px;font-weight:700;color:#18181b;">${safeOperatorName}</div></div>
+      </div>`
+    : infoTable([{ label: "Your production operator", value: safeOperatorName }]);
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Your Order Is Now in Production</h2>
+    <p style="margin:0 0 12px;font-size:15px;color:#3f3f46;">Hi ${safeFirstName},</p>
+    <p style="margin:0 0 12px;font-size:15px;color:#3f3f46;">Great news — your order <strong>${safeJobName}</strong> is now in work and has been allocated to ${safeOperatorName}.</p>
+    ${operatorBlock}
+    ${infoTable([{ label: "Expected despatch date", value: safeDispatchDate }])}
+    <p style="margin:16px 0 20px;font-size:14px;color:#71717a;">You can follow the order's progress in your customer planner.</p>
+    ${ctaButton(details.portalUrl, "View Your Order")}
+  `;
+
+  const { error } = await sendEmail(client, {
+    from: fromEmail || "info@selectbranding.co.uk",
+    to: customerEmail,
+    subject: `Your order is now in production — ${safeJobName}`,
+    html: brandedEmail(body, { customerLogoUrl: details.customerLogoUrl, customerName: details.customerName }),
+  }, { idempotencyKey: details.idempotencyKey });
+  if (error) throw new Error(`Failed to send production-started email: ${error.message}`);
 }
 
 // ─── Branded email wrapper ────────────────────────────────────────────────────
@@ -1242,27 +1291,44 @@ export async function sendDispatchNotificationEmail(
   customerEmails: string[],
   details: {
     customerName: string;
+    customerFirstName?: string;
     jobNames: string[];
     trackingNumber: string;
     portalUrl: string;
+    completedByName?: string | null;
+    operatorProfileImageUrl?: string | null;
     customerLogoUrl?: string | null;
+    idempotencyKey?: string;
   }
 ) {
   if (!customerEmails.length) return;
   const { client, fromEmail } = await getUncachableResendClient();
-  const safeName = sanitizeHtml(details.customerName);
+  const safeName = sanitizeHtml(details.customerFirstName || details.customerName);
   const safeTracking = sanitizeHtml(details.trackingNumber);
+  const safeCompletedBy = sanitizeHtml(details.completedByName || "");
+  const safeProfileUrl = details.operatorProfileImageUrl && /^https?:\/\//i.test(details.operatorProfileImageUrl)
+    ? sanitizeHtml(details.operatorProfileImageUrl)
+    : null;
   const jobList = details.jobNames.map(j => `<li style="margin:4px 0;color:#18181b;font-size:14px;">${sanitizeHtml(j)}</li>`).join('');
+  const completionText = safeCompletedBy
+    ? `${safeCompletedBy} has now completed and despatched your order.`
+    : "Your order has now been completed and despatched.";
+  const operatorBlock = safeProfileUrl && safeCompletedBy
+    ? `<div style="display:flex;align-items:center;gap:12px;margin:18px 0;padding:14px;background:#f4f4f5;border-radius:8px;">
+        <img src="${safeProfileUrl}" alt="${safeCompletedBy}" width="56" height="56" style="width:56px;height:56px;border-radius:50%;object-fit:cover;display:block;" />
+        <div><div style="font-size:12px;color:#71717a;">Completed by</div><div style="font-size:16px;font-weight:700;color:#18181b;">${safeCompletedBy}</div></div>
+      </div>`
+    : "";
 
   const body = `
     <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Your Order Has Been Dispatched</h2>
     <p style="margin:0 0 12px;font-size:15px;color:#3f3f46;">Hi ${safeName},</p>
-    <p style="margin:0 0 20px;font-size:15px;color:#3f3f46;">Great news — your order has been dispatched via DPD and is on its way to you.</p>
-    ${infoTable([{ label: 'DPD Tracking Number', value: safeTracking }])}
+    <p style="margin:0 0 20px;font-size:15px;color:#3f3f46;">Great news — ${completionText}</p>
+    ${operatorBlock}
     <p style="margin:16px 0 8px;font-size:14px;font-weight:600;color:#18181b;">Order(s) included:</p>
     <ul style="margin:0 0 20px;padding-left:20px;">${jobList}</ul>
-    <p style="margin:0 0 20px;font-size:14px;color:#71717a;">Log in to your customer portal to view full tracking details and order status.</p>
-    ${ctaButton(details.portalUrl, 'Track Your Order')}
+    <p style="margin:0 0 20px;font-size:14px;color:#71717a;">Your DPD tracking number (${safeTracking}) and tracking link are available in your customer planner.</p>
+    ${ctaButton(details.portalUrl, 'View Tracking in Your Planner')}
     ${muted('If you have any questions about your delivery, please don\'t hesitate to get in touch.')}
   `;
 
@@ -1271,10 +1337,10 @@ export async function sendDispatchNotificationEmail(
     to: customerEmails,
     subject: `Your order has been dispatched — DPD tracking: ${safeTracking}`,
     html: brandedEmail(body, { customerLogoUrl: details.customerLogoUrl, customerName: details.customerName }),
-  });
+  }, details.idempotencyKey ? { idempotencyKey: details.idempotencyKey } : undefined);
 
   if (error) {
-    console.error('Failed to send dispatch notification email:', error);
+    throw new Error(`Failed to send dispatch notification email: ${error.message}`);
   }
 }
 
