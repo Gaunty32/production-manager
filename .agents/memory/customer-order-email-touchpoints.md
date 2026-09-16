@@ -25,3 +25,12 @@ job sharing the same consignment.
 
 **How to apply:** Any new dispatch trigger must call the shared grouping helper;
 never send directly from a single-job DPD or completion route.
+
+The customer approved both the production-started and dispatch email designs,
+including the consolidated multi-job dispatch format.
+
+**Why:** Future changes should preserve the approved content, branding, and
+overall layout unless a redesign is explicitly requested.
+
+**How to apply:** Treat the current templates as the accepted baseline and make
+only targeted content or reliability changes by default.
