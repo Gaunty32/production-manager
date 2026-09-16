@@ -40,6 +40,7 @@ import {
   featureRequests,
   contractPartnerEnquiries,
   callbackRequests,
+  jobs,
 } from "@shared/schema";
 import { z } from "zod";
 import { db } from "./db";
@@ -5179,6 +5180,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const data = customerJobSubmissionSchema.parse(req.body);
       console.log('[JOB SUBMISSION] Request data parsed:', data);
+      const submissionId = data.submissionId || crypto.randomUUID();
+
+      const [existingSubmission] = await db
+        .select()
+        .from(jobs)
+        .where(and(
+          eq(jobs.customerId, customerUser.customerId),
+          eq(jobs.submittedById, customerUserId),
+          eq(jobs.customerSubmissionId, submissionId),
+        ))
+        .limit(1);
+      if (existingSubmission) {
+        console.log('[JOB SUBMISSION] Returning existing idempotent submission:', existingSubmission.id);
+        return res.json(existingSubmission);
+      }
 
       if (
         isMinOrderQtyActive() &&
@@ -5205,21 +5221,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create job with pending status
       console.log('[JOB SUBMISSION] Creating job...');
-      const job = await storage.createJob({
-        customerId: customerUser.customerId,
-        jobName: data.jobName,
-        requestedJobType: data.requestedJobType,
-        poNumber: data.poNumber || null,
-        quantity: data.quantity ?? 0,
-        goodsReceived: null,
-        requiredDispatchDate: new Date(data.requiredDispatchDate) as any,
-        machineId: null,
-        notes: data.notes || null,
-        status: 'pending_customer_approval',
-        deliveryAddress: data.deliveryAddress || customer.address || null,
-        submittedById: customerUserId,
-        submittedAt: new Date() as any,
-      });
+      let job;
+      try {
+        job = await storage.createJob({
+          customerId: customerUser.customerId,
+          jobName: data.jobName,
+          requestedJobType: data.requestedJobType,
+          poNumber: data.poNumber || null,
+          quantity: data.quantity ?? 0,
+          goodsReceived: null,
+          requiredDispatchDate: new Date(data.requiredDispatchDate) as any,
+          machineId: null,
+          notes: data.notes || null,
+          status: 'pending_customer_approval',
+          deliveryAddress: data.deliveryAddress || customer.address || null,
+          submittedById: customerUserId,
+          submittedAt: new Date() as any,
+          customerSubmissionId: submissionId,
+        });
+      } catch (createError: any) {
+        if (createError?.code !== "23505") throw createError;
+        const [concurrentSubmission] = await db
+          .select()
+          .from(jobs)
+          .where(and(
+            eq(jobs.customerId, customerUser.customerId),
+            eq(jobs.submittedById, customerUserId),
+            eq(jobs.customerSubmissionId, submissionId),
+          ))
+          .limit(1);
+        if (!concurrentSubmission) throw createError;
+        console.log('[JOB SUBMISSION] Recovered concurrent idempotent submission:', concurrentSubmission.id);
+        return res.json(concurrentSubmission);
+      }
       console.log('[JOB SUBMISSION] Job created successfully:', job.id);
 
       // Create automatic welcome message to open the chat thread
@@ -5355,6 +5389,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing file URL or object key" });
       }
       const fileUrl = objectStorageService.normalizeObjectEntityPath(rawFileUrl);
+      const existingFile = (await storage.getJobFiles(job.id)).find(
+        (file) => file.uploadedBy === "customer" && file.fileUrl === fileUrl,
+      );
+      if (existingFile) return res.json(existingFile);
 
       const fileData = insertJobFileSchema.parse({
         jobId: req.params.jobId,

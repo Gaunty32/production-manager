@@ -68,3 +68,4 @@
 - [Secret status checks](secret-status-checks.md) — secret metadata can falsely report missing keys; confirm presence in the running shell without printing values.
 - [Xero invoice line verification](xero-invoice-line-verification.md) — never mark selected jobs invoiced until Xero returns every previewed line with matching quantity and unit amount.
 - [Customer order email touchpoints](customer-order-email-touchpoints.md) — allocation and dispatch emails use durable queues plus provider idempotency; historical jobs must never be swept.
+- [Customer submission idempotency](customer-submission-idempotency.md) — persist draft keys across reloads; enforce job/file dedupe and serialize MAX+1 job numbering in the database.

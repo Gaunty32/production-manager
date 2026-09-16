@@ -158,6 +158,7 @@ export const jobs = pgTable("jobs", {
   actualProductionTime: real("actual_production_time"),
   submittedById: varchar("submitted_by_id").references(() => customerUsers.id),
   submittedAt: timestamp("submitted_at"),
+  customerSubmissionId: varchar("customer_submission_id", { length: 100 }).unique(),
   approvedById: varchar("approved_by_id").references(() => users.id),
   approvedAt: timestamp("approved_at"),
   rejectedById: varchar("rejected_by_id").references(() => users.id),
@@ -412,7 +413,13 @@ export const jobFiles = pgTable("job_files", {
   uploadedBy: varchar("uploaded_by").notNull(), // 'customer' or 'staff'
   uploaderId: varchar("uploader_id").notNull(), // customerUserId or userId
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("job_files_job_uploader_url_unique").on(
+    table.jobId,
+    table.uploadedBy,
+    table.fileUrl,
+  ),
+]);
 
 // Direct conversations - not tied to a specific job
 export const conversations = pgTable("conversations", {
@@ -1103,6 +1110,7 @@ export const insertJobFileSchema = createInsertSchema(jobFiles).omit({
 
 // Customer job submission schema
 export const customerJobSubmissionSchema = z.object({
+  submissionId: z.string().min(16).max(100).optional(),
   jobName: z.string().min(1, "Job name is required"),
   requestedJobType: z.enum(["Embroidery", "Print", "Mix"], {
     required_error: "Job type is required",

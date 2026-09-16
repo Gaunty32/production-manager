@@ -84,6 +84,24 @@ type UploadedFile = {
   fileType: string;
 };
 
+const SUBMISSION_DRAFT_KEY = "customer-job-submission-draft";
+
+function getPersistentSubmissionId(fingerprint: string): string {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SUBMISSION_DRAFT_KEY) || "null");
+    if (saved?.fingerprint === fingerprint && typeof saved?.id === "string") return saved.id;
+  } catch {
+    // Replace invalid or unavailable draft state below.
+  }
+  const id = crypto.randomUUID();
+  try {
+    sessionStorage.setItem(SUBMISSION_DRAFT_KEY, JSON.stringify({ id, fingerprint }));
+  } catch {
+    // The in-memory mutation still remains protected from double clicks.
+  }
+  return id;
+}
+
 const UK_BANK_HOLIDAYS = [
   "2024-01-01","2024-03-29","2024-04-01","2024-05-06","2024-05-27","2024-08-26","2024-12-25","2024-12-26",
   "2025-01-01","2025-04-18","2025-04-21","2025-05-05","2025-05-26","2025-08-25","2025-12-25","2025-12-26",
@@ -418,10 +436,13 @@ export default function CustomerSubmitJob() {
         ...data,
         quantity: data.quantity ? Number(data.quantity) : undefined,
       };
-      const res = await apiRequest("POST", "/api/customer-portal/jobs", payload);
+      const fingerprint = JSON.stringify(payload);
+      const submissionId = getPersistentSubmissionId(fingerprint);
+      const res = await apiRequest("POST", "/api/customer-portal/jobs", { ...payload, submissionId });
       const job = await res.json();
+      let failedFileCount = 0;
       if (uploadedFiles.length > 0) {
-        await Promise.all(
+        const results = await Promise.allSettled(
           uploadedFiles.map((file) =>
             apiRequest("POST", `/api/customer-portal/jobs/${job.id}/files`, {
               objectKey: file.objectKey,
@@ -431,14 +452,23 @@ export default function CustomerSubmitJob() {
             })
           )
         );
+        failedFileCount = results.filter((result) => result.status === "rejected").length;
       }
-      return job;
+      return { job, failedFileCount };
     },
-    onSuccess: () => {
+    onSuccess: ({ failedFileCount }) => {
+      try {
+        sessionStorage.removeItem(SUBMISSION_DRAFT_KEY);
+      } catch {
+        // Submission has still been confirmed by the server.
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/customer-portal/jobs/pending"] });
       toast({
-        title: "Job Submitted Successfully",
-        description: "We will review and confirm your order within 24 Hours",
+        title: failedFileCount ? "Job submitted — file upload incomplete" : "Job Submitted Successfully",
+        description: failedFileCount
+          ? `${failedFileCount} file${failedFileCount === 1 ? "" : "s"} could not be attached. Your job was still submitted successfully.`
+          : "We will review and confirm your order within 24 Hours",
+        variant: failedFileCount ? "destructive" : "default",
       });
       setLocation("/customer/pending");
     },

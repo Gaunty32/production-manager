@@ -655,22 +655,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createJob(insertJob: InsertJob): Promise<Job> {
-    // Get the maximum job number and increment by 1
-    const maxJobNumberResult = await db
-      .select({ maxJobNumber: sql<number>`COALESCE(MAX(job_number), 0)` })
-      .from(jobs);
-    const nextJobNumber = (maxJobNumberResult[0]?.maxJobNumber || 0) + 1;
-    
-    const [job] = await db
-      .insert(jobs)
-      .values({
-        ...insertJob,
-        jobNumber: nextJobNumber,
-        goodsReceived: insertJob.goodsReceived ? new Date(insertJob.goodsReceived) : null,
-        requiredDispatchDate: insertJob.requiredDispatchDate ? new Date(insertJob.requiredDispatchDate) : null,
-      })
-      .returning();
-    return job;
+    return db.transaction(async (tx) => {
+      // MAX(job_number) + 1 must be serialized or simultaneous submissions can
+      // choose the same unique job number and make one successful request look
+      // like a failure to the customer.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(71024001)`);
+      const maxJobNumberResult = await tx
+        .select({ maxJobNumber: sql<number>`COALESCE(MAX(job_number), 0)` })
+        .from(jobs);
+      const nextJobNumber = (maxJobNumberResult[0]?.maxJobNumber || 0) + 1;
+
+      const [job] = await tx
+        .insert(jobs)
+        .values({
+          ...insertJob,
+          jobNumber: nextJobNumber,
+          goodsReceived: insertJob.goodsReceived ? new Date(insertJob.goodsReceived) : null,
+          requiredDispatchDate: insertJob.requiredDispatchDate ? new Date(insertJob.requiredDispatchDate) : null,
+        })
+        .returning();
+      return job;
+    });
   }
 
   async updateJob(id: string, updates: Partial<Job>): Promise<Job> {
@@ -1931,8 +1936,22 @@ export class DatabaseStorage implements IStorage {
     const [newFile] = await db
       .insert(jobFiles)
       .values(file)
+      .onConflictDoNothing({
+        target: [jobFiles.jobId, jobFiles.uploadedBy, jobFiles.fileUrl],
+      })
       .returning();
-    return newFile;
+    if (newFile) return newFile;
+    const [existingFile] = await db
+      .select()
+      .from(jobFiles)
+      .where(and(
+        eq(jobFiles.jobId, file.jobId),
+        eq(jobFiles.uploadedBy, file.uploadedBy),
+        eq(jobFiles.fileUrl, file.fileUrl),
+      ))
+      .limit(1);
+    if (!existingFile) throw new Error("Could not create or recover job file");
+    return existingFile;
   }
 
   async deleteJobFile(id: string): Promise<void> {
