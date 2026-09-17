@@ -26,10 +26,11 @@ async function getOperatorDetails(operatorId: string | null) {
   const operator = (await storage.getStaff()).find((member) => member.id === operatorId);
   if (!operator) return null;
   const user = operator.userId ? await storage.getUser(operator.userId) : undefined;
+  const storedProfileImage = operator.profileImageUrl || user?.profileImageUrl;
   return {
     name: operator.name,
-    profileImageUrl: user?.profileImageUrl
-      ? new URL(user.profileImageUrl, `${getBaseUrl()}/`).toString()
+    profileImageUrl: storedProfileImage
+      ? new URL(storedProfileImage, `${getBaseUrl()}/`).toString()
       : null,
   };
 }

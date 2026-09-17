@@ -6556,7 +6556,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/staff", isStaffAuthenticated, async (req, res) => {
     try {
       const staff = await storage.getStaff();
-      res.json(staff);
+      const users = await storage.getAllUsers();
+      const usersById = new Map(users.map((user) => [user.id, user]));
+      res.json(staff.map((member) => ({
+        ...member,
+        profileImageUrl: normalizeImgUrl(
+          member.profileImageUrl || (member.userId ? usersById.get(member.userId)?.profileImageUrl : null),
+        ),
+      })));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch staff" });
     }

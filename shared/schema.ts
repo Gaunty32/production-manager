@@ -122,6 +122,7 @@ export const staff = pgTable("staff", {
   email: text("email"),
   telephone: text("telephone"),
   userId: varchar("user_id").references(() => users.id),
+  profileImageUrl: varchar("profile_image_url"),
   holidayAllowance: real("holiday_allowance").notNull().default(23),
   canApproveHolidays: boolean("can_approve_holidays").notNull().default(false),
   active: boolean("active").notNull().default(true),
@@ -540,6 +541,7 @@ export const insertStaffSchema = createInsertSchema(staff).omit({
 
 export const updateStaffSchema = z.object({
   name: z.string().optional(),
+  profileImageUrl: z.string().nullable().optional(),
   holidayAllowance: z.coerce.number().min(0).max(366).optional(),
   canApproveHolidays: z.boolean().optional(),
   active: z.boolean().optional(),

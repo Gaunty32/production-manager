@@ -34,3 +34,13 @@ overall layout unless a redesign is explicitly requested.
 
 **How to apply:** Treat the current templates as the accepted baseline and make
 only targeted content or reliability changes by default.
+
+Operator photos use the Team member's own photo first, then the linked system
+user's photo as a fallback.
+
+**Why:** Regular team members may work on customer orders without having a
+system login, while existing system-user photos should continue to work without
+being uploaded twice.
+
+**How to apply:** Any customer-facing operator identity should resolve the staff
+record first and only fall back to the linked user profile when it has no photo.

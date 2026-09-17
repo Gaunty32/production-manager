@@ -1,4 +1,4 @@
-import { Plus, Trash2, Pencil, UserX, UserCheck, Smartphone } from "lucide-react";
+import { Plus, Trash2, Pencil, UserX, UserCheck, Smartphone, Camera } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -26,6 +26,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
+import { useRef } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ImageCropDialog } from "@/components/ImageCropDialog";
 
 export default function StaffPage() {
   const { toast } = useToast();
@@ -33,6 +36,10 @@ export default function StaffPage() {
   const [staffToEdit, setStaffToEdit] = useState<Staff | null>(null);
   const [staffToInvite, setStaffToInvite] = useState<Staff | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [profileTargetStaffId, setProfileTargetStaffId] = useState<string | null>(null);
+  const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
+  const [uploadingProfileFor, setUploadingProfileFor] = useState<string | null>(null);
+  const profileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: staffData = [], isLoading } = useQuery<Staff[]>({
     queryKey: ["/api/staff"],
@@ -162,6 +169,51 @@ export default function StaffPage() {
     setStaffToDelete(id);
   };
 
+  const handleProfilePhotoClick = (staffId: string) => {
+    setProfileTargetStaffId(staffId);
+    if (profileInputRef.current) {
+      profileInputRef.current.value = "";
+      profileInputRef.current.click();
+    }
+  };
+
+  const handleProfileImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !profileTargetStaffId) return;
+    setPendingCropFile(file);
+    event.target.value = "";
+  };
+
+  const handleCropConfirm = async (blob: Blob) => {
+    if (!profileTargetStaffId) return;
+    const staffId = profileTargetStaffId;
+    setPendingCropFile(null);
+    setUploadingProfileFor(staffId);
+    try {
+      const uploadRes = await apiRequest("POST", "/api/staff/objects/upload", {});
+      const { url, key } = await uploadRes.json();
+      const putRes = await fetch(url, {
+        method: "PUT",
+        body: blob,
+        headers: { "Content-Type": "image/jpeg" },
+      });
+      if (!putRes.ok) throw new Error("Photo upload failed");
+      const normalizedKey = key.startsWith("/api/img") ? key : `/api/img${key.replace("/objects", "")}`;
+      await apiRequest("PATCH", `/api/staff/${staffId}`, { profileImageUrl: normalizedKey });
+      await queryClient.invalidateQueries({ queryKey: ["/api/staff"] });
+      toast({ title: "Team photo updated" });
+    } catch (error) {
+      toast({
+        title: "Failed to update team photo",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingProfileFor(null);
+      setProfileTargetStaffId(null);
+    }
+  };
+
   const confirmDelete = () => {
     if (staffToDelete) {
       deleteStaffMutation.mutate(staffToDelete);
@@ -178,6 +230,21 @@ export default function StaffPage() {
 
   return (
     <div>
+      <input
+        ref={profileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleProfileImageSelect}
+      />
+      <ImageCropDialog
+        file={pendingCropFile}
+        onConfirm={handleCropConfirm}
+        onCancel={() => {
+          setPendingCropFile(null);
+          setProfileTargetStaffId(null);
+        }}
+      />
       <div>
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -223,11 +290,29 @@ export default function StaffPage() {
                     return (
                     <tr key={staffMember.id} className={`hover-elevate ${isActive ? "" : "opacity-60"}`} data-testid={`row-staff-${staffMember.id}`}>
                       <td className="py-3 px-4 text-sm">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span>{staffMember.name}</span>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            className="relative group rounded-full"
+                            onClick={() => handleProfilePhotoClick(staffMember.id)}
+                            disabled={uploadingProfileFor === staffMember.id}
+                            aria-label={`Change ${staffMember.name}'s profile photo`}
+                            data-testid={`button-staff-photo-${staffMember.id}`}
+                          >
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={staffMember.profileImageUrl || undefined} alt={staffMember.name} />
+                              <AvatarFallback>{staffMember.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <span className="absolute inset-0 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 group-focus:opacity-100 flex items-center justify-center transition-opacity">
+                              <Camera className="h-4 w-4" />
+                            </span>
+                          </button>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>{staffMember.name}</span>
                           {!isActive && (
                             <Badge variant="secondary" data-testid={`badge-inactive-${staffMember.id}`}>Disabled</Badge>
                           )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-3 px-4">
