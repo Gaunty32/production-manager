@@ -5,7 +5,7 @@ import { insertJobSchema, type Customer } from "@shared/schema";
 import { suggestMachine } from "@shared/machines";
 import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
-import { getPrice, getPrintPrice, getBaggingPrice, formatPrice, chargedQuantity, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
+import { getPrice, getPrintPrice, getBaggingPrice, getFlatRatePrice, formatPrice, chargedQuantity, NAMES_INITIALS_UNIT_PRICE, type PricingTable, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
@@ -293,14 +293,10 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
             lineTotal: baggingPrice.totalPrice,
           };
         } else if (item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name") {
-          // Use flat rate pricing (£2.50)
-          const unitPrice = 2.50;
-          const totalPrice = unitPrice * item.quantity;
+          const flatRatePrice = getFlatRatePrice(item.quantity, item.jobType);
           return {
-            unitPrice,
-            totalPrice: parseFloat(totalPrice.toFixed(2)),
-            tier: "Flat Rate",
-            lineTotal: parseFloat(totalPrice.toFixed(2)),
+            ...flatRatePrice,
+            lineTotal: flatRatePrice.totalPrice,
           };
         } else if (item.jobType === "Print") {
           // Skip pricing if size is not set
@@ -1161,7 +1157,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                             <>
                               <label className="text-xs text-muted-foreground font-medium">Price</label>
                               <div className="mt-1 px-3 py-2 rounded-md bg-muted/30 border text-sm font-semibold text-primary">
-                                £2.50 per item
+                                £{NAMES_INITIALS_UNIT_PRICE.toFixed(2)} per item
                               </div>
                             </>
                           ) : item.jobType === "Bagging" ? (

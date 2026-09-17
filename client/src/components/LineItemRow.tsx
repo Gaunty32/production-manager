@@ -12,7 +12,7 @@ import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import { calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
 import { getCustomerColorClasses } from "@shared/colors";
-import { formatPrice, getPrice, chargedQuantity, requiresStitchCount } from "@shared/pricing";
+import { formatPrice, getFlatRatePrice, getPrice, chargedQuantity, requiresStitchCount } from "@shared/pricing";
 import type { JobLineItem, Customer } from "@shared/schema";
 import { DemoText } from "@/components/DemoText";
 
@@ -98,7 +98,7 @@ export function LineItemRow({
     try {
       // Check if it's a flat-rate job type
       if (lineItem.jobType === "Print Initials/Name" || lineItem.jobType === "Embroidery Initials/Name") {
-        return lineItem.quantity * 2.5; // £2.50 per item
+        return getFlatRatePrice(lineItem.quantity, lineItem.jobType).totalPrice;
       } else if (requiresStitchCount(lineItem.jobType) && !lineItem.stitchCount) {
         // Stitch count still TBA — can't price yet
         return null;

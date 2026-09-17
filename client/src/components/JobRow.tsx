@@ -12,7 +12,7 @@ import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import { calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
 import { getCustomerColorClasses } from "@shared/colors";
-import { calculateJobPrice, formatPrice, getPrice, chargedQuantity, requiresStitchCount } from "@shared/pricing";
+import { calculateJobPrice, formatPrice, getFlatRatePrice, getPrice, chargedQuantity, requiresStitchCount } from "@shared/pricing";
 import type { JobLineItem, Customer } from "@shared/schema";
 
 interface JobRowProps {
@@ -207,7 +207,7 @@ export function JobRow({ job, customer, showPrices = true, onEdit, onDelete, onP
                     try {
                       // Check if it's a flat-rate job type
                       if (item.jobType === "Print Initials/Name" || item.jobType === "Embroidery Initials/Name") {
-                        unitPrice = "£2.50";
+                        unitPrice = formatPrice(getFlatRatePrice(item.quantity, item.jobType).unitPrice);
                       } else if (requiresStitchCount(item.jobType) && !item.stitchCount) {
                         unitPrice = null; // stitch count TBA
                       } else {

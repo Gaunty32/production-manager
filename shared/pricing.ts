@@ -429,11 +429,13 @@ export interface FlatRatePriceLookupResult {
   jobType: string;
 }
 
+export const NAMES_INITIALS_UNIT_PRICE = 3;
+
 export function getFlatRatePrice(
   quantity: number,
   jobType: string
 ): FlatRatePriceLookupResult {
-  const unitPrice = 2.50;
+  const unitPrice = NAMES_INITIALS_UNIT_PRICE;
   const totalPrice = unitPrice * quantity;
 
   return {

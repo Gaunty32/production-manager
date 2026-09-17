@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, Zap, PoundSterling, HardHat } from "lucide-react";
-import { PRICING_2026 } from "@shared/pricing";
+import { NAMES_INITIALS_UNIT_PRICE, PRICING_2026 } from "@shared/pricing";
 
 interface PricingTableDialogProps {
   trigger?: React.ReactNode;
@@ -64,8 +64,17 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
         <div className="p-3 bg-primary/10 rounded-md text-sm text-center" data-testid="banner-september-prices">
           <span className="font-medium text-foreground">Current pricing:</span>{" "}
           <span className="text-muted-foreground">
-            prices are effective from <span className="font-medium text-foreground">1st September 2026</span>, with a <span className="font-medium text-foreground">6-item minimum per logo</span>.
+            prices are effective from <span className="font-medium text-foreground">1st September 2026</span>, with a <span className="font-medium text-foreground">6-item minimum per logo</span>. Names and initials are exempt.
           </span>
+        </div>
+
+        <div className="p-4 border rounded-md" data-testid="info-personalisation-pricing">
+          <h3 className="font-semibold text-foreground">Names &amp; Initials</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Embroidered or printed names and initials are charged at a flat rate of{" "}
+            <span className="font-medium text-foreground">£{NAMES_INITIALS_UNIT_PRICE.toFixed(2)} per item</span>.
+            There is no minimum order quantity and no set-up fee.
+          </p>
         </div>
         
         <Tabs defaultValue="embroidery" className="w-full">

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
-import { PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
+import { NAMES_INITIALS_UNIT_PRICE, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { calculateProductionMetrics, isPrintJobType, PRINT_MACHINE_ID } from "@shared/machines";
 import { z } from "zod";
 import {
@@ -1170,7 +1170,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             <>
                               <label className="text-xs text-muted-foreground">Price</label>
                               <div className="mt-1 px-3 py-2 rounded-md bg-muted/30 border text-sm font-semibold text-primary">
-                                £2.50 per item
+                                £{NAMES_INITIALS_UNIT_PRICE.toFixed(2)} per item
                               </div>
                             </>
                           ) : item.jobType === "Bagging" ? (
