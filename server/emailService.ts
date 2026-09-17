@@ -141,9 +141,8 @@ export async function sendProductionStartedEmail(
     ? sanitizeHtml(details.operatorProfileImageUrl)
     : null;
   const operatorBlock = safeProfileUrl
-    ? `<div style="display:flex;align-items:center;gap:16px;margin:18px 0;">
+    ? `<div style="margin:18px 0;">
         <img src="${safeProfileUrl}" alt="" width="112" height="112" style="width:112px;height:112px;border-radius:50%;object-fit:cover;display:block;" />
-        <div style="font-size:16px;font-weight:700;color:#18181b;">${safeOperatorName}</div>
       </div>`
     : `<div style="margin:18px 0;font-size:16px;font-weight:700;color:#18181b;">${safeOperatorName}</div>`;
 
@@ -1318,9 +1317,8 @@ export async function sendDispatchNotificationEmail(
     ? `${safeCompletedBy} has now completed and despatched your order.`
     : "Your order has now been completed and despatched.";
   const operatorBlock = safeProfileUrl && safeCompletedBy
-    ? `<div style="display:flex;align-items:center;gap:16px;margin:18px 0;">
+    ? `<div style="margin:18px 0;">
         <img src="${safeProfileUrl}" alt="" width="112" height="112" style="width:112px;height:112px;border-radius:50%;object-fit:cover;display:block;" />
-        <div style="font-size:16px;font-weight:700;color:#18181b;">${safeCompletedBy}</div>
       </div>`
     : "";
 
