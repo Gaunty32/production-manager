@@ -114,6 +114,10 @@ export function getBaseUrl() {
   return 'http://localhost:5000';
 }
 
+function firstNameOnly(name: string): string {
+  return name.trim().split(/\s+/)[0] || name.trim();
+}
+
 export async function sendProductionStartedEmail(
   customerEmail: string,
   details: {
@@ -131,17 +135,17 @@ export async function sendProductionStartedEmail(
   const { client, fromEmail } = await getUncachableResendClient();
   const safeFirstName = sanitizeHtml(details.customerFirstName);
   const safeJobName = sanitizeHtml(details.jobName);
-  const safeOperatorName = sanitizeHtml(details.operatorName);
+  const safeOperatorName = sanitizeHtml(firstNameOnly(details.operatorName));
   const safeDispatchDate = sanitizeHtml(details.requiredDispatchDate);
   const safeProfileUrl = details.operatorProfileImageUrl && /^https?:\/\//i.test(details.operatorProfileImageUrl)
     ? sanitizeHtml(details.operatorProfileImageUrl)
     : null;
   const operatorBlock = safeProfileUrl
-    ? `<div style="display:flex;align-items:center;gap:12px;margin:18px 0;padding:14px;background:#f4f4f5;border-radius:8px;">
-        <img src="${safeProfileUrl}" alt="${safeOperatorName}" width="56" height="56" style="width:56px;height:56px;border-radius:50%;object-fit:cover;display:block;" />
-        <div><div style="font-size:12px;color:#71717a;">Your production operator</div><div style="font-size:16px;font-weight:700;color:#18181b;">${safeOperatorName}</div></div>
+    ? `<div style="display:flex;align-items:center;gap:16px;margin:18px 0;">
+        <img src="${safeProfileUrl}" alt="${safeOperatorName}" width="112" height="112" style="width:112px;height:112px;border-radius:50%;object-fit:cover;display:block;" />
+        <div style="font-size:16px;font-weight:700;color:#18181b;">${safeOperatorName}</div>
       </div>`
-    : infoTable([{ label: "Your production operator", value: safeOperatorName }]);
+    : `<div style="margin:18px 0;font-size:16px;font-weight:700;color:#18181b;">${safeOperatorName}</div>`;
 
   const body = `
     <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Your Order Is Now in Production</h2>
@@ -1305,7 +1309,7 @@ export async function sendDispatchNotificationEmail(
   const { client, fromEmail } = await getUncachableResendClient();
   const safeName = sanitizeHtml(details.customerFirstName || details.customerName);
   const safeTracking = sanitizeHtml(details.trackingNumber);
-  const safeCompletedBy = sanitizeHtml(details.completedByName || "");
+  const safeCompletedBy = sanitizeHtml(firstNameOnly(details.completedByName || ""));
   const safeProfileUrl = details.operatorProfileImageUrl && /^https?:\/\//i.test(details.operatorProfileImageUrl)
     ? sanitizeHtml(details.operatorProfileImageUrl)
     : null;
@@ -1314,9 +1318,9 @@ export async function sendDispatchNotificationEmail(
     ? `${safeCompletedBy} has now completed and despatched your order.`
     : "Your order has now been completed and despatched.";
   const operatorBlock = safeProfileUrl && safeCompletedBy
-    ? `<div style="display:flex;align-items:center;gap:12px;margin:18px 0;padding:14px;background:#f4f4f5;border-radius:8px;">
-        <img src="${safeProfileUrl}" alt="${safeCompletedBy}" width="56" height="56" style="width:56px;height:56px;border-radius:50%;object-fit:cover;display:block;" />
-        <div><div style="font-size:12px;color:#71717a;">Completed by</div><div style="font-size:16px;font-weight:700;color:#18181b;">${safeCompletedBy}</div></div>
+    ? `<div style="display:flex;align-items:center;gap:16px;margin:18px 0;">
+        <img src="${safeProfileUrl}" alt="${safeCompletedBy}" width="112" height="112" style="width:112px;height:112px;border-radius:50%;object-fit:cover;display:block;" />
+        <div style="font-size:16px;font-weight:700;color:#18181b;">${safeCompletedBy}</div>
       </div>`
     : "";
 
