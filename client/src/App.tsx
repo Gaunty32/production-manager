@@ -313,6 +313,9 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   const { isAuthenticated, isLoading, user, isStaffImpersonating, realUser } = useAuth();
   const [location] = useLocation();
   const { toast } = useToast();
+  const isMarketingHostname =
+    window.location.hostname === "www.selectbranding.co.uk" ||
+    window.location.hostname === "selectbranding.co.uk";
 
   // If the URL is a customer portal path, render the customer portal without staff chrome.
   // This handles client-side navigation to /customer/... while the staff app is mounted.
@@ -329,9 +332,9 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
   }
 
   if (!isAuthenticated) {
-    // Anonymous visitors on the root URL see the public marketing site;
-    // deep links to staff pages still show the staff login.
-    if (location === "/") {
+    // Keep the public website on the marketing domain. The production domain is
+    // the operational portal, so anonymous visitors there must see staff login.
+    if (location === "/" && isMarketingHostname) {
       return <DemoAccess publicNav />;
     }
     return <StaffLogin />;
