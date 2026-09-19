@@ -6,6 +6,7 @@ id = "XYLhXaWnPBfn3aqIBM2lk"
 uri = "file://exports/profile-pictures-implementation-guide.md"
 type = "text"
 title = "Profile Pictures Implementation Guide"
+logical_id = "a292cbd5-f8bf-4d21-b316-2a7e980b2742"
 
 [[outputs]]
 id = "5NSiY2YXD9sVXynTXKOAv"
@@ -13,6 +14,7 @@ uri = "file://marketing/highlevel-cold-outreach-sequence.md"
 type = "text"
 title = "HighLevel cold outreach sequence (10 emails)"
 description = "Ready-to-paste 10-email series for contract customer outreach, with the 1st September price list, cadence and merge fields."
+logical_id = "163ce24e-6ef4-49a9-b13c-b9775fa1bce8"
 
 [[outputs]]
 id = "tEPJm6MRfmGRrgWdZcgrx"
@@ -20,6 +22,7 @@ uri = "file://reports/high-maintenance-customers-2026-08-10.md"
 type = "text"
 title = "High-Maintenance Customer Report"
 description = "One-off effort score for all customers with 2+ jobs in the last 6 months, with the main driver and education angle per customer."
+logical_id = "8fdd490a-6905-4954-97ae-3a2920b46085"
 
 [[outputs]]
 id = "AhBeRRqEEgy4VZDZDUfih"
@@ -27,6 +30,7 @@ uri = "file://reports/production-performance-last-16-weeks.xlsx"
 type = "table"
 title = "Production Performance — Last 16 Weeks"
 description = "Excel workbook with weekly orders, average order size, production, embroidery stitch count, and reconciled production by machine and employee."
+logical_id = "37f4d4fb-bf10-4643-93cb-0cb321e59bd0"
 
 [[outputs]]
 id = "bZ-pyhAcgWjrhVnRczfxM"
@@ -34,3 +38,18 @@ uri = "file://screenshots/contract-embroidery-preview-desktop.jpg"
 type = "image"
 title = "Contract Embroidery preview — desktop"
 description = "Capacity-campaign first viewport of the review-only landing-page preview."
+logical_id = "fe8ba9d2-6c2b-4f74-be1d-79f54106541a"
+
+[[outputs]]
+id = "GzXbwLWYBrFGk0TMgBVPi"
+uri = "file://exports/customer-list.xlsx"
+type = "table"
+title = "Customer List"
+description = "Production customer contacts and order metrics, including job count, average order quantity, average price per logo, and last order date."
+logical_id = "027a7811-2a40-4c75-b743-95bb39cecbb6"
+content_hash = "sha256:e2103004468aafca3381e1f59c249aa0c1747ea2165b37e402f01bce58c44c67"
+size = 28162
+mtime_ms = 1789831202480
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:fc4bbb5b-689a-4128-a66e-b029382025d3/027a7811-2a40-4c75-b743-95bb39cecbb6/a52ae670-b799-4a55-ad82-47c5ca782b23"
+storage_version_token = "1789831206556002"
+content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
