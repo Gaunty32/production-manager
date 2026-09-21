@@ -528,7 +528,9 @@ export async function sendNewJobSubmissionEmail(
   const { data, error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: staffEmails,
-    subject: `New Job Submission: ${safeJobName}`,
+    // Email subjects are plain text, so HTML-escaping turns "&" into the
+    // visible text "&amp;". Keep HTML escaping for the body only.
+    subject: `New Job Submission: ${cleanHeader(jobDetails.jobName)}`,
     html: brandedEmail(body),
   });
 
