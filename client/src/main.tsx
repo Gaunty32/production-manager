@@ -15,8 +15,12 @@ if (window.location.hash.startsWith("#/")) {
 }
 
 const pathname = window.location.pathname;
+const hostname = window.location.hostname;
+const isMarketingHostname =
+  hostname === "www.selectbranding.co.uk" ||
+  hostname === "selectbranding.co.uk";
 const isMarketingRoute =
-  (pathname === "/" && window.__staffAuthSnapshot !== true) ||
+  (pathname === "/" && isMarketingHostname && window.__staffAuthSnapshot !== true) ||
   pathname === "/demo-access" ||
   pathname === "/privacy" ||
   pathname === "/knowledge-centre" ||
