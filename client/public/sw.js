@@ -1,8 +1,7 @@
-const CACHE_NAME = 'select-v5';
+const CACHE_NAME = 'select-v6';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE = [
-  '/',
   '/offline.html',
   '/manifest.json',
 ];
