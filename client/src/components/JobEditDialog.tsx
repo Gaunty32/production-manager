@@ -1078,23 +1078,34 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                             onValueChange={(value) => {
                               // When switching to Print, set default print size to A4
                               if (value === "Print" && item.jobType !== "Print") {
-                                const updated = [...lineItems];
-                                updated[index] = { 
-                                  ...updated[index], 
-                                  jobType: value,
-                                  stitchCount: PRINT_SIZE_CODE.A4,
-                                  machineId: PRINT_MACHINE_ID,
-                                  operatorId: responsibleOperatorId,
-                                };
-                                setLineItems(updated);
+                                setLineItems((current) =>
+                                  current.map((lineItem, lineItemIndex) =>
+                                    lineItemIndex === index
+                                      ? {
+                                          ...lineItem,
+                                          jobType: value,
+                                          stitchCount: PRINT_SIZE_CODE.A4,
+                                          machineId: PRINT_MACHINE_ID,
+                                          operatorId: responsibleOperatorId,
+                                        }
+                                      : lineItem,
+                                  ),
+                                );
                               } else {
-                                updateLineItem(index, 'jobType', value);
-                                if (value === "Bagging") {
-                                  updateLineItem(index, 'position', null);
-                                  updateLineItem(index, 'positionOther', null);
-                                  updateLineItem(index, 'machineId', null);
-                                  updateLineItem(index, 'stitchCount', 0);
-                                }
+                                setLineItems((current) =>
+                                  current.map((lineItem, lineItemIndex) =>
+                                    lineItemIndex === index
+                                      ? {
+                                          ...lineItem,
+                                          jobType: value,
+                                          position: value === "Bagging" ? null : lineItem.position,
+                                          positionOther: value === "Bagging" ? null : lineItem.positionOther,
+                                          machineId: value === "Bagging" ? null : lineItem.machineId,
+                                          stitchCount: value === "Bagging" ? 0 : lineItem.stitchCount,
+                                        }
+                                      : lineItem,
+                                  ),
+                                );
                               }
                             }}
                           >
