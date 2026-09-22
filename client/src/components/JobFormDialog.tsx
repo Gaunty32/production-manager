@@ -1167,7 +1167,10 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                                 {(() => {
                                   const customerId = form.watch("customerId");
                                   const customer = customers.find(c => c.id === customerId);
-                                  return customer?.pricingTable2025 ? "£0.30 per item" : "£0.40 per item";
+                                  return `£${getBaggingPrice(
+                                    1,
+                                    customer?.pricingTable2025 ? "2025" : "2026",
+                                  ).unitPrice.toFixed(2)} per item`;
                                 })()}
                               </div>
                             </>
