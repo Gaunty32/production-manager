@@ -1,0 +1,202 @@
+Paste this into the **Production Management** app’s Replit Agent:
+
+---
+
+## DPD INTEGRATION AUDIT FOR SELECT INTELLIGENCE
+
+Perform a read-only audit of the existing DPD integration in this Production Management app.
+
+The purpose is to determine whether the integration can supply live consignment tracking data to another Replit app called **Select Intelligence**, where we intend to build a carrier-agnostic **Delivery Monitor**.
+
+### Safety rules
+
+- Do not change code, configuration, workflows, database records, DPD data or credentials.
+- Do not create or expose an API endpoint yet.
+- Do not display secret values, tokens, passwords, account numbers or connection strings.
+- Report environment-variable and secret **names only**.
+- Do not call any DPD write, booking, cancellation, collection or label-generation operation.
+- Read-only DPD requests are allowed if needed to confirm the response contract.
+- Do not scrape public DPD tracking pages.
+
+### 1. Locate the existing DPD integration
+
+Identify:
+
+- Relevant source files.
+- DPD client or connector implementation.
+- Authentication implementation.
+- DPD API base URL and API version.
+- Secret/environment-variable names.
+- Existing workflows or schedules that call DPD.
+- Existing routes or internal services that expose DPD data.
+- Database tables that store consignments, parcels, tracking events or delivery status.
+
+Do not reveal credential values.
+
+### 2. Confirm available DPD capabilities
+
+Determine whether the existing integration can retrieve:
+
+- Consignment number.
+- Parent consignment identity for multi-parcel shipments.
+- Parcel numbers and parcel count.
+- Carrier and service.
+- Collection/despatch timestamp.
+- Expected delivery date.
+- Current status.
+- Complete tracking-event history.
+- Event codes and event descriptions.
+- First delivery-attempt timestamp.
+- Delivered timestamp.
+- Exception/problem status.
+- Exception reason.
+- Recipient-action delay, where DPD identifies this.
+- Tracking URL.
+- Proof-of-delivery availability.
+
+Distinguish fields genuinely returned by DPD from fields calculated or stored by Production Management.
+
+### 3. Confirm consignment-level behavior
+
+Establish:
+
+- Whether DPD returns one record per consignment or per parcel.
+- How multi-parcel consignments are represented.
+- Which identifier should be used as the stable consignment ID.
+- Whether every parcel can be linked to one parent consignment.
+- Whether delivery should be considered complete only when every parcel is delivered.
+- How split or partially delivered consignments appear.
+
+### 4. Trace the Production Management data source
+
+Determine how Production Management knows which shipments to query:
+
+- Does it store DPD consignment numbers when labels are created?
+- Can consignments be linked to a stable order number?
+- Is the collection/despatch date stored?
+- Are customer or business names available?
+- Is the DPD service name stored?
+- Is parcel count stored?
+- How much historical tracking data exists?
+- What is the earliest available collection/despatch date?
+- Are tracking events persisted or requested live?
+- Are completed consignments retained permanently?
+
+Return counts and date coverage where they can be obtained safely.
+
+### 5. Inspect authentication and operating limits
+
+Report:
+
+- Authentication method, without revealing credentials.
+- Secret/environment-variable names required.
+- Whether credentials are production or test credentials.
+- DPD rate-limit behavior.
+- Token/session expiry and refresh behavior.
+- Any request throttling already implemented.
+- Whether DPD supports webhooks in this integration.
+- Whether the current credentials permit tracking reads.
+- Whether the credentials are restricted by IP address, account or environment.
+
+### 6. Assess reuse by Select Intelligence
+
+Determine the safest architecture:
+
+**Option A:** Select Intelligence calls a new authenticated, read-only endpoint in Production Management.
+
+**Option B:** Select Intelligence gets its own DPD credentials and calls DPD directly.
+
+Prefer Option A if Production Management already owns shipment creation, order linkage and DPD authentication.
+
+Assess:
+
+- Whether Production Management is published and continuously available.
+- Whether it can safely provide a server-to-server read-only endpoint.
+- What service authentication should protect that endpoint.
+- Whether data should be returned live or from persisted tracking records.
+- What request volume the Delivery Monitor would create.
+
+Do not copy DPD secrets to Select Intelligence.
+
+### 7. Define the minimum read-only contract
+
+If reuse is viable, propose—but do not implement—the smallest endpoint contract needed by Select Intelligence.
+
+It should return one record per consignment with:
+
+- `shipment_id`
+- `order_id`
+- `customer_name`
+- `carrier`
+- `service`
+- `consignment_number`
+- `parcel_count`
+- `collection_date`
+- `expected_delivery_date`
+- `first_delivery_attempt`
+- `delivered_at`
+- `current_status`
+- `status_code`
+- `exception_reason`
+- `recipient_action_delay`
+- `tracking_url`
+- `last_tracking_event_at`
+- `tracking_events`
+- `source_updated_at`
+
+Also specify:
+
+- Pagination.
+- Filters for collection-date range and consignment number.
+- Stable ordering.
+- Freshness semantics.
+- Error responses.
+- Rate limits.
+- Server-to-server authentication.
+- Whether event descriptions contain personal information that should be removed.
+- An idempotent response model suitable for daily monitoring.
+
+### 8. Provide an anonymised example
+
+Return one anonymised example response using the real response shape, but replace:
+
+- Names.
+- Addresses.
+- Postcodes.
+- Emails.
+- Telephone numbers.
+- Order numbers.
+- Consignment and parcel numbers.
+- Any account identifiers.
+
+Do not invent fields that are not available.
+
+### Required final report
+
+Create `dpd-integration-audit.md` containing:
+
+1. Executive conclusion.
+2. Existing integration evidence.
+3. DPD capabilities confirmed.
+4. Missing capabilities.
+5. Existing data coverage and counts.
+6. Multi-parcel behavior.
+7. Authentication and rate-limit findings.
+8. Recommended cross-app architecture.
+9. Proposed read-only endpoint contract.
+10. Anonymised example response.
+11. Exact blockers or decisions still needed.
+12. Relevant source-file paths and line references.
+
+Finish with exactly one of:
+
+- `DPD INTEGRATION REUSABLE`
+- `DPD INTEGRATION REQUIRES EXTENSION`
+- `DPD INTEGRATION NOT SUITABLE`
+- `DPD INTEGRATION STATE UNRESOLVED`
+
+Return the report only. Do not implement anything.
+
+---
+
+Once it finishes, attach `dpd-integration-audit.md` here.

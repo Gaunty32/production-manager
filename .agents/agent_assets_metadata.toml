@@ -53,3 +53,17 @@ mtime_ms = 1789831465797
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:fc4bbb5b-689a-4128-a66e-b029382025d3/027a7811-2a40-4c75-b743-95bb39cecbb6/c8b45b26-44d8-46ef-b107-17bc127ca038"
 storage_version_token = "1789831592762357"
 content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+[[outputs]]
+id = "ueOHM-WsFCQi50aU4LV0R"
+uri = "file://dpd-integration-audit.md"
+type = "text"
+title = "DPD Integration Audit"
+description = "Read-only audit of the Production Management DPD integration for Select Intelligence."
+logical_id = "6a3f7cdd-6643-46ff-8c07-ed0cc23541bf"
+content_hash = "sha256:f8e9bf393a18b8fa6291e3ce8d8e0c1be26e846c407b551910b6bd50b6cc2a63"
+size = 21105
+mtime_ms = 1790068016330
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:fc4bbb5b-689a-4128-a66e-b029382025d3/6a3f7cdd-6643-46ff-8c07-ed0cc23541bf/91514a22-6c68-4695-b8e5-a7191f54ddbf"
+storage_version_token = "1790068029256989"
+content_type = "text/markdown"
