@@ -253,32 +253,12 @@ export const PRINT_PRICING_2025: PrintPricingTier[] = [
 export const PRINT_PRICING_2026: PrintPricingTier[] = [
   {
     minQty: 0,
-    maxQty: 49,
+    maxQty: null,
     prices: {
       A6: 1.75,
       A5: 2.00,
       A4: 2.50,
       A3: 3.50,
-    },
-  },
-  {
-    minQty: 50,
-    maxQty: 99,
-    prices: {
-      A6: 1.50,
-      A5: 1.75,
-      A4: 2.00,
-      A3: 2.50,
-    },
-  },
-  {
-    minQty: 100,
-    maxQty: null,
-    prices: {
-      A6: 1.25,
-      A5: 1.50,
-      A4: 1.75,
-      A3: 2.00,
     },
   },
 ];

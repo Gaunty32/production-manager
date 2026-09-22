@@ -413,7 +413,7 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
           <div className="max-w-5xl mx-auto space-y-10">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold tracking-tight">Transparent pricing per garment</h2>
-              <p className="text-muted-foreground">Per-unit embroidery and DTF print pricing based on quantity, stitch count, and print size. No hidden fees.</p>
+              <p className="text-muted-foreground">Embroidery pricing is based on quantity and stitch count. DTF Print &amp; Apply pricing is fixed by print size. No hidden fees.</p>
             </div>
 
             {/* Embroidery pricing grid — 2026 table, columns up to 25k stitches */}
@@ -480,13 +480,14 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
             <div className="space-y-4">
               <div className="text-center space-y-1">
                 <h3 className="text-xl font-semibold tracking-tight">DTF Print &amp; Apply</h3>
-                <p className="text-sm text-muted-foreground">Per-unit pricing based on print size.</p>
+                <p className="text-sm text-muted-foreground">
+                  Prices are per application and based on artwork size. Artwork must fit within the selected print size. Prices are fixed regardless of quantity.
+                </p>
               </div>
               <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-muted/60 border-b">
-                      <th className="text-left px-4 py-3 font-semibold">Qty</th>
                       {[
                         { key: "A6", label: "A6", sublabel: "¼ A4" },
                         { key: "A5", label: "A5", sublabel: "½ A4" },
@@ -501,30 +502,20 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
                     </tr>
                   </thead>
                   <tbody>
-                    {PRINT_PRICING_2026.map((tier, i) => {
-                      const qtyLabel = tier.maxQty === null
-                        ? `${tier.minQty}+`
-                        : i === 0
-                          ? `Up to ${tier.maxQty}`
-                          : `${tier.minQty}–${tier.maxQty}`;
-                      return (
-                        <tr key={i} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
-                          <td className="px-4 py-3 font-semibold whitespace-nowrap">{qtyLabel}</td>
-                          {(["A6", "A5", "A4", "A3"] as const).map(size => (
-                            <td key={size} className="px-3 py-3 text-center">
-                              <span className="font-medium">
-                                £{(tier.prices[size] + SEPTEMBER_PRICE_INCREASE).toFixed(2)}
-                              </span>
-                            </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
+                    <tr className="border-b last:border-0">
+                      {(["A6", "A5", "A4", "A3"] as const).map(size => (
+                        <td key={size} className="px-3 py-3 text-center">
+                          <span className="font-medium">
+                            £{(PRINT_PRICING_2026[0].prices[size] + SEPTEMBER_PRICE_INCREASE).toFixed(2)}
+                          </span>
+                        </td>
+                      ))}
+                    </tr>
                   </tbody>
                   <tfoot>
                     <tr className="border-t bg-muted/30">
-                      <td colSpan={5} className="px-4 py-2 text-xs text-muted-foreground">
-                        All prices per item, excluding VAT. Prices effective from 1st September 2026. Minimum order 6 items per design — orders of 1–5 items are charged at the 6-item price.
+                      <td colSpan={4} className="px-4 py-2 text-xs text-muted-foreground">
+                        All prices per application, excluding VAT. Minimum order: 6 items per logo. Orders of 1–5 items are charged at the 6-item minimum.
                       </td>
                     </tr>
                   </tfoot>

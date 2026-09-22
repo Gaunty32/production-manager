@@ -9,18 +9,11 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, Zap, PoundSterling, HardHat } from "lucide-react";
-import { NAMES_INITIALS_UNIT_PRICE, PRICING_2026 } from "@shared/pricing";
+import { NAMES_INITIALS_UNIT_PRICE, PRICING_2026, PRINT_PRICING_2026 } from "@shared/pricing";
 
 interface PricingTableDialogProps {
   trigger?: React.ReactNode;
 }
-
-// DTF Print and Apply pricing data
-const DTF_PRICING = [
-  { minQty: 0, maxQty: 49, prices: { A6: 1.75, A5: 2.00, A4: 2.50, A3: 3.50 } },
-  { minQty: 50, maxQty: 99, prices: { A6: 1.50, A5: 1.75, A4: 2.00, A3: 2.50 } },
-  { minQty: 99, maxQty: null, prices: { A6: 1.25, A5: 1.50, A4: 1.75, A3: 2.00 } },
-];
 
 const DTF_SIZE_LABELS = [
   { key: "A6", label: "A6", sublabel: "(1/4 A4)" },
@@ -191,17 +184,17 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
           
           {/* DTF Print and Apply Pricing Tab */}
           <TabsContent value="dtf" className="space-y-4">
-            <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-dtf-minimum-order">
-              <p className="font-medium mb-1">Minimum order: 6 items per logo</p>
+            <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-dtf-pricing-model">
+              <p className="font-medium mb-1">Price per application</p>
               <p className="text-muted-foreground">
-                Orders of 1&ndash;5 items are charged at the 6-item price for that print size.
+                Prices are per application and are based on the size of the artwork. The artwork must fit within the selected print size. Prices are fixed regardless of quantity.
               </p>
             </div>
 
-            <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-dtf-logo-size">
-              <p className="font-medium mb-1">Logo Size</p>
+            <div className="p-3 bg-muted/50 rounded-md text-sm" data-testid="info-dtf-minimum-order">
+              <p className="font-medium mb-1">Minimum order: 6 items per logo</p>
               <p className="text-muted-foreground">
-                Prices are based on the print size. A6 is 1/4 of A4, A5 is 1/2 of A4. Larger prints cost more per item.
+                Orders of 1&ndash;5 items are charged at the 6-item minimum.
               </p>
             </div>
             
@@ -209,11 +202,6 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
               <table className="w-full text-sm border-collapse" data-testid="table-pricing-dtf">
                 <thead>
                   <tr className="bg-muted">
-                    <th className="border border-border px-2 py-1.5 text-left font-medium">Quantity</th>
-                    <th className="border border-border px-2 py-1.5 text-center font-medium" colSpan={4}>Logo Size</th>
-                  </tr>
-                  <tr className="bg-muted">
-                    <th className="border border-border px-2 py-1.5"></th>
                     {DTF_SIZE_LABELS.map(size => (
                       <th key={size.key} className="border border-border px-3 py-1.5 text-center font-medium whitespace-nowrap">
                         <div>{size.label}</div>
@@ -223,20 +211,13 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {DTF_PRICING.map((tier, idx) => (
-                    <tr key={idx} className={idx % 2 === 0 ? "bg-background" : "bg-muted/30"}>
-                      <td className="border border-border px-2 py-1.5 font-medium whitespace-nowrap">
-                        {tier.maxQty === null 
-                          ? `${tier.minQty}+` 
-                          : `${tier.minQty}-${tier.maxQty}`}
+                  <tr className="bg-background">
+                    {DTF_SIZE_LABELS.map(size => (
+                      <td key={size.key} className="border border-border px-3 py-2 text-center">
+                        <CurrentPrice price={PRINT_PRICING_2026[0].prices[size.key as keyof typeof PRINT_PRICING_2026[0]["prices"]]} />
                       </td>
-                      {DTF_SIZE_LABELS.map(size => (
-                        <td key={size.key} className="border border-border px-3 py-1.5 text-center">
-                          <CurrentPrice price={tier.prices[size.key as keyof typeof tier.prices]} />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                    ))}
+                  </tr>
                 </tbody>
               </table>
             </div>
