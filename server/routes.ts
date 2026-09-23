@@ -7506,7 +7506,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // For embroidery jobs, require machine, staff, and actual production time
-        if (existingLineItem.jobType === "Embroidery" || existingLineItem.jobType === "Embroidery Initials/Name") {
+        const resultingJobType = data.jobType ?? existingLineItem.jobType;
+        if (resultingJobType === "Embroidery" || resultingJobType === "Embroidery Initials/Name") {
           const machineId = data.machineId !== undefined ? data.machineId : existingLineItem.machineId;
           const completedById = data.completedById !== undefined ? data.completedById : existingLineItem.completedById;
           const actualProductionTimeMinutes = data.actualProductionTimeMinutes !== undefined 

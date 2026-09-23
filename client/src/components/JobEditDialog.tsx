@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
@@ -153,6 +153,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const [celebrationStaffNames, setCelebrationStaffNames] = useState<string[]>([]);
   const [shippingDialogOpen, setShippingDialogOpen] = useState(false);
   const [responsibleOperatorId, setResponsibleOperatorId] = useState<string | null>(null);
+  const hydratedLineItemsFor = useRef<string | null>(null);
   
   // Find the staff member associated with the current user
   const { data: currentUserStaff } = useQuery<{ id: string; name: string; userId: string } | null>({
@@ -187,7 +188,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   });
 
   // Fetch line items for the job
-  const { data: fetchedLineItems } = useQuery<Array<{
+  const { data: fetchedLineItems, isFetching: lineItemsFetching } = useQuery<Array<{
     id: string;
     jobType: string;
     position: string | null;
@@ -229,7 +230,13 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   }, [job, form]);
 
   useEffect(() => {
-    if (fetchedLineItems && open) {
+    if (!open) {
+      hydratedLineItemsFor.current = null;
+      return;
+    }
+    // Load the latest server values once per opening. Subsequent background
+    // refetches must not replace unsaved changes to the job type or other fields.
+    if (fetchedLineItems && !lineItemsFetching && job && hydratedLineItemsFor.current !== job.id) {
       if (fetchedLineItems.length > 0) {
         // Job has line items - use them
         setLineItems(fetchedLineItems.map((item) => ({
@@ -287,8 +294,9 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         }]);
       }
       setDeletedLineItemIds([]);
+      hydratedLineItemsFor.current = job.id;
     }
-  }, [fetchedLineItems, open, job]);
+  }, [fetchedLineItems, lineItemsFetching, open, job?.id, job?.quantity]);
 
   const addLineItem = () => {
     setLineItems([...lineItems, { jobType: "Embroidery", position: null, positionOther: null, quantity: 1, description: "", stitchCount: 0, logoApproved: false, awaitingStock: false, completed: false, completedById: null, completedAt: null, actualProductionTimeMinutes: null, machineId: null, operatorId: null }]);
@@ -1322,7 +1330,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                         <Input
                           value={item.description}
                           onChange={(e) => updateLineItem(index, 'description', e.target.value)}
-                          placeholder=""
+                          placeholder="Notes only — choose Bagging in Job Type above to change the line"
                           className="mt-1"
                           data-testid={`input-edit-line-item-description-${index}`}
                         />

@@ -857,6 +857,7 @@ export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
 });
 
 export const updateJobLineItemSchema = z.object({
+  jobType: z.string().min(1).optional(),
   quantity: z.coerce.number().int().min(0).optional(),
   description: z.string().nullable().optional(),
   stitchCount: z.coerce.number().int().min(0).optional(),
@@ -889,8 +890,8 @@ export const updateJobLineItemSchema = z.object({
 }).refine(
   (data) => {
     // If completed is true and this is an embroidery job, require machineId, completedById, and actualProductionTime
-    // Note: We can't check jobType here as it's not in the update schema
-    // The UI/backend will need to enforce this based on the line item's jobType
+    // Completion requirements specific to embroidery are checked against
+    // the resulting job type in the update route.
     if (data.completed === true) {
       const hasContributors = Array.isArray(data.contributors) && data.contributors.length > 0;
       return hasContributors || (data.completedById !== null && data.completedById !== undefined);
