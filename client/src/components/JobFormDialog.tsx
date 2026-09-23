@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema, type Customer } from "@shared/schema";
@@ -135,6 +135,8 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const [showExpressWarning, setShowExpressWarning] = useState(false);
   const [expressWarningConfirmed, setExpressWarningConfirmed] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<z.infer<typeof formSchema> | null>(null);
+  // A failed line-item request must resume the order, not create another one.
+  const pendingCreation = useRef<{ id: string; jobNumber: number | null; nextIndex: number } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -442,19 +444,27 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
         return;
       }
 
-      const jobData = {
-        ...data,
-        quantity: totalQuantity,
-        // The date pickers can be cleared to undefined; the API represents
-        // an intentionally unset date as null.
-        goodsReceived: data.goodsReceived ?? null,
-        requiredDispatchDate: data.requiredDispatchDate ?? null,
-      };
-      
-      const jobResponse = await apiRequest("POST", "/api/jobs", jobData);
-      const createdJob: any = await jobResponse.json();
-      
-      for (const lineItem of lineItems) {
+      if (!pendingCreation.current) {
+        const responsibleOperatorId = lineItems.find(
+          item => item.quantity > 0 && requiresMachineOperator(item.jobType),
+        )?.operatorId ?? null;
+        const jobData = {
+          ...data,
+          quantity: totalQuantity,
+          responsibleOperatorId,
+          // The date pickers can be cleared to undefined; the API represents
+          // an intentionally unset date as null.
+          goodsReceived: data.goodsReceived ?? null,
+          requiredDispatchDate: data.requiredDispatchDate ?? null,
+        };
+        const jobResponse = await apiRequest("POST", "/api/jobs", jobData);
+        const createdJob: { id: string; jobNumber: number | null } = await jobResponse.json();
+        pendingCreation.current = { ...createdJob, nextIndex: 0 };
+      }
+
+      const createdJob = pendingCreation.current;
+      for (let index = createdJob.nextIndex; index < lineItems.length; index++) {
+        const lineItem = lineItems[index];
         if (lineItem.quantity > 0) {
           await apiRequest("POST", `/api/jobs/${createdJob.id}/line-items`, {
             jobType: lineItem.jobType,
@@ -471,6 +481,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
             positionOther: lineItem.positionOther || null,
           });
         }
+        createdJob.nextIndex = index + 1;
       }
       
       toast({
@@ -479,6 +490,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       });
       
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      pendingCreation.current = null;
       setOpen(false);
       form.reset();
       setCurrentStep(1);
@@ -490,8 +502,10 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       }
     } catch (error) {
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create order",
+        title: pendingCreation.current ? "Order saved, but not finished" : "Could not create order",
+        description: pendingCreation.current
+          ? `Order #${pendingCreation.current.jobNumber ?? pendingCreation.current.id} was saved, but a line item failed: ${error instanceof Error ? error.message : "Unknown error"}. Your details are still here; retry Create Order to finish this order.`
+          : error instanceof Error ? error.message : "Failed to create order",
         variant: "destructive",
       });
     } finally {
@@ -562,6 +576,22 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       });
       return;
     }
+
+    // Ownership is job-level. A single order cannot assign its machine work
+    // to multiple responsible operators.
+    const machineOperators = new Set(
+      lineItems
+        .filter(item => item.quantity > 0 && requiresMachineOperator(item.jobType))
+        .map(item => item.operatorId),
+    );
+    if (machineOperators.size > 1) {
+      toast({
+        title: "Choose one responsible operator",
+        description: "All machine-assigned line items in this order must use the same operator.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     // Check for express service requirement: < 300 items AND < 3 working days
     if (requiresExpressService(data.requiredDispatchDate) && !confirmedExpress) {
@@ -602,6 +632,19 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
     if (!newOpen) {
+      if (pendingCreation.current) {
+        const unfinished = pendingCreation.current;
+        pendingCreation.current = null;
+        toast({
+          title: "Order saved but not finished",
+          description: `Order #${unfinished.jobNumber ?? unfinished.id} already exists. Complete its missing line items from the order worksheet; do not create it again.`,
+          variant: "destructive",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+        form.reset();
+        setLineItems([{ jobType: "Embroidery", quantity: 0, description: "", stitchCount: 0, logoApproved: false, completed: false, completedById: null, completedAt: null, machineId: null, operatorId: null, position: null, positionOther: null }]);
+        onJobCreated?.(unfinished.id);
+      }
       setCurrentStep(1);
       setDuckConfirmed(false);
       setExpressWarningConfirmed(false);
@@ -1373,6 +1416,12 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Step 4: Notes & Review</h3>
                 </div>
+                {pendingCreation.current && (
+                  <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                    Order #{pendingCreation.current.jobNumber ?? pendingCreation.current.id} has already been saved.
+                    Retry below to finish its remaining line items. Changes to the order details above will not be saved.
+                  </p>
+                )}
 
                 {/* Notes */}
                 <FormField
@@ -1476,7 +1525,7 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
                     disabled={isSubmitting}
                     data-testid="button-create-job"
                   >
-                    {isSubmitting ? "Creating..." : "Create Order"}
+                    {isSubmitting ? "Creating..." : pendingCreation.current ? "Finish Order" : "Create Order"}
                   </Button>
                 </div>
               </div>

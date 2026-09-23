@@ -6995,7 +6995,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/jobs", isStaffAuthenticated, async (req, res) => {
     try {
       const data = insertJobSchema.parse(req.body);
+      if (data.responsibleOperatorId) {
+        const operator = (await storage.getStaff()).find(
+          s => s.id === data.responsibleOperatorId && s.active !== false,
+        );
+        if (!operator) return res.status(400).json({ error: "Choose an active responsible operator" });
+      }
       const job = await storage.createJob(data);
+      if (data.responsibleOperatorId) {
+        try {
+          const { allocateJob } = await import("./allocation");
+          const allocated = await allocateJob(job.id, {
+            responsibleOperatorId: data.responsibleOperatorId,
+            allocatedById: req.session.userId!,
+          });
+          return res.json(allocated);
+        } catch (error) {
+          // No line items have been added yet; do not strand a partial order.
+          await storage.deleteJob(job.id);
+          throw error;
+        }
+      }
       res.json(job);
     } catch (error) {
       if (error instanceof z.ZodError) {
