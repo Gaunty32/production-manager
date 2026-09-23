@@ -198,7 +198,7 @@ function AppRouter() {
         </Route>
 
         <Route path="/">
-          <PublicHome />
+          <AuthenticatedApp style={style} />
         </Route>
         
         {/* Authenticated Staff Routes - handles all non-specific paths */}
@@ -208,17 +208,6 @@ function AppRouter() {
       </Switch>
     </>
   );
-}
-
-function PublicHome() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) setLocation("/dashboard");
-  }, [isAuthenticated, isLoading, setLocation]);
-
-  return <DemoAccess publicNav />;
 }
 
 export default function App() {

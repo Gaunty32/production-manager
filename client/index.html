@@ -24,7 +24,11 @@
         ) {
           document.documentElement.classList.add("knowledge-entry");
         }
-      } else if (location.pathname === "/") {
+      } else if (
+        location.pathname === "/" &&
+        (location.hostname === "www.selectbranding.co.uk" ||
+          location.hostname === "selectbranding.co.uk")
+      ) {
         if (window.__staffAuthSnapshot === false) {
           document.documentElement.classList.add("public-entry");
         } else if (window.__staffAuthSnapshot !== true) {
