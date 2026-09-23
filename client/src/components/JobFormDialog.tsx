@@ -445,6 +445,10 @@ export function JobFormDialog({ trigger, customers, staff, onJobCreated }: JobFo
       const jobData = {
         ...data,
         quantity: totalQuantity,
+        // The date pickers can be cleared to undefined; the API represents
+        // an intentionally unset date as null.
+        goodsReceived: data.goodsReceived ?? null,
+        requiredDispatchDate: data.requiredDispatchDate ?? null,
       };
       
       const jobResponse = await apiRequest("POST", "/api/jobs", jobData);

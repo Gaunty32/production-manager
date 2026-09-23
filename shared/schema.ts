@@ -557,11 +557,11 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
   ),
   goodsReceived: z.preprocess(
     (val) => val === "" ? null : val,
-    z.union([z.string(), z.null()])
+    z.union([z.string(), z.null()]).optional()
   ),
   requiredDispatchDate: z.preprocess(
     (val) => val === "" ? null : val,
-    z.union([z.string(), z.null()])
+    z.union([z.string(), z.null()]).optional()
   ),
   machineId: z.preprocess(
     (val) => {
