@@ -7,6 +7,8 @@ import type { KnowledgeCentreArticle } from "@shared/knowledgeCentre";
 import sbsLogo from "@assets/logo_transparent.png";
 import { PublicPhoneBar } from "@/components/PublicPhoneBar";
 
+const ARTICLES_PER_PAGE = 12;
+
 function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
@@ -35,6 +37,7 @@ export default function KnowledgeCentre() {
   const [, params] = useRoute("/knowledge-centre/:slug");
   const [externalArticles, setExternalArticles] = useState<KnowledgeCentreArticle[]>([]);
   const [externalLoaded, setExternalLoaded] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(ARTICLES_PER_PAGE);
   const article = params?.slug
     ? externalArticles.find((item) => item.slug === params.slug)
     : undefined;
@@ -141,10 +144,10 @@ export default function KnowledgeCentre() {
                 Practical guidance for businesses buying, selling and producing branded workwear, sportswear, uniforms and merchandise.
               </p>
             </div>
-            <div className="mx-auto mt-14 grid max-w-5xl gap-6 md:grid-cols-2">
-              {articles.map((item) => (
+            <div className="mx-auto mt-14 grid max-w-7xl gap-6 md:grid-cols-2 lg:grid-cols-4">
+              {articles.slice(0, visibleCount).map((item) => (
                 <Card key={item.slug} className="transition-shadow hover:shadow-md">
-                  <CardContent className="flex h-full flex-col p-6">
+                  <CardContent className="flex h-full flex-col p-5">
                     {item.imageUrl && (
                       <img
                         src={item.imageUrl}
@@ -158,9 +161,9 @@ export default function KnowledgeCentre() {
                       {item.category}
                       {item.source === "external" && <span className="ml-2 text-muted-foreground">· Latest</span>}
                     </p>
-                    <h2 className="mt-3 text-2xl font-semibold">{item.title}</h2>
-                    <p className="mt-3 flex-1 leading-relaxed text-muted-foreground">{item.excerpt}</p>
-                    <div className="mt-6 flex items-center justify-between gap-4">
+                    <h2 className="mt-3 text-xl font-semibold">{item.title}</h2>
+                    <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">{item.excerpt}</p>
+                    <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
                       <span className="flex items-center gap-1 text-sm text-muted-foreground"><Clock3 className="h-4 w-4" /> {item.readTime}</span>
                       <Link href={`/knowledge-centre/${item.slug}`} data-testid={`link-article-${item.slug}`}>
                         <Button variant="outline" size="sm">Read article <ArrowRight className="ml-2 h-4 w-4" /></Button>
@@ -170,6 +173,18 @@ export default function KnowledgeCentre() {
                 </Card>
               ))}
             </div>
+            {articles.length > visibleCount && (
+              <div className="mt-10 flex justify-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setVisibleCount((count) => count + ARTICLES_PER_PAGE)}
+                  data-testid="button-load-more-articles"
+                >
+                  Read more articles
+                </Button>
+              </div>
+            )}
           </>
         )}
       </main>
