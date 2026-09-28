@@ -202,6 +202,22 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
               </p>
             </div>
 
+            {/* CTA */}
+            <div className="flex flex-col items-center gap-3">
+              <Button size="lg" onClick={scrollToForm} className="text-base px-8" data-testid="button-hero-cta">
+                Book a Discovery Call
+              </Button>
+              <button
+                type="button"
+                onClick={scrollToForm}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                data-testid="button-scroll-down"
+              >
+                <ArrowDown className="h-3.5 w-3.5" />
+                Takes 30 seconds
+              </button>
+            </div>
+
             {/* Video */}
             <div className="rounded-lg overflow-hidden shadow-2xl border border-border/50 aspect-video">
               {videoStarted ? (
@@ -235,22 +251,6 @@ export default function DemoAccess({ publicNav = false }: { publicNav?: boolean 
                   </span>
                 </button>
               )}
-            </div>
-
-            {/* CTA */}
-            <div className="flex flex-col items-center gap-3">
-              <Button size="lg" onClick={scrollToForm} className="text-base px-8" data-testid="button-hero-cta">
-                Book a Discovery Call
-              </Button>
-              <button
-                type="button"
-                onClick={scrollToForm}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                data-testid="button-scroll-down"
-              >
-                <ArrowDown className="h-3.5 w-3.5" />
-                Takes 30 seconds
-              </button>
             </div>
           </div>
         </section>
