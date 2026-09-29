@@ -180,7 +180,7 @@ async function notifyMentionedStaff(
 
     for (const handle of [...new Set(handles)]) {
       // First try to match against a staff record by first name
-      const staffMatch = allStaff.find(s => s.name.split(' ')[0].toLowerCase() === handle);
+      const staffMatch = allStaff.find(s => s.active !== false && s.name.split(' ')[0].toLowerCase() === handle);
 
       let mentionedName: string;
       let userRecord: typeof allUsers[number] | undefined;
@@ -203,7 +203,7 @@ async function notifyMentionedStaff(
           : handle;
       }
 
-      if (!userRecord?.email) continue;
+      if (!userRecord?.active || !userRecord.email) continue;
       // Don't notify the sender themselves
       if (userRecord.id === senderUserId) continue;
 
@@ -6569,7 +6569,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Returns every person who can be @mentioned: staff records + users without a staff record (excluding demo role)
+  // Returns active people who can be @mentioned: staff records + users without a staff record (excluding demo role)
   app.get("/api/staff/mentionable", isStaffAuthenticated, async (req, res) => {
     try {
       const staffMembers = await storage.getStaff();
@@ -6600,7 +6600,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
           email: u.email ?? null,
         }));
-      const staffPeople = staffMembers.map(s => ({
+      const staffPeople = staffMembers.filter(s =>
+        s.active !== false &&
+        (!s.userId || allUsers.find(u => u.id === s.userId)?.active !== false)
+      ).map(s => ({
         id: s.id,
         name: s.name,
         email: s.email ?? (s.userId ? (userIdToEmail.get(s.userId) ?? null) : null),

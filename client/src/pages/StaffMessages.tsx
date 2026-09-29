@@ -933,10 +933,10 @@ export default function StaffMessages() {
     }
   };
 
-  const staffEmailSet = new Set(staffList.map(s => s.email).filter(Boolean) as string[]);
+  const staffEmailSet = new Set(staffList.map(s => s.email?.toLowerCase()).filter(Boolean) as string[]);
 
   const customerMentions = currentConvoCustomerUsers
-    .filter(u => u.active && !staffEmailSet.has(u.email))
+    .filter(u => u.active && !staffEmailSet.has(u.email.toLowerCase()))
     .map(u => ({
       id: u.id,
       name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
@@ -944,8 +944,8 @@ export default function StaffMessages() {
     }));
 
   const allMentionCandidates = [
+    ...(currentCustomerId && (selected?.type !== "job" || !isInternal) ? customerMentions : []),
     ...staffList.map(s => ({ ...s, isCustomer: false })),
-    ...customerMentions,
   ];
 
   const filteredMentions = allMentionCandidates
