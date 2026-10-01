@@ -23,6 +23,18 @@ export interface XeroInvoice {
   status: "DRAFT" | "SUBMITTED" | "AUTHORISED";
 }
 
+export interface ReminderInvoice {
+  InvoiceID: string;
+  InvoiceNumber: string;
+  Date: string;
+  DueDate: string;
+  Status: "AUTHORISED" | "SUBMITTED";
+  AmountDue: number;
+  Total: number;
+  CurrencyCode: string;
+  Type: "ACCREC";
+}
+
 interface XeroTokens {
   access_token: string;
   refresh_token: string;
@@ -39,6 +51,8 @@ export class XeroService {
   private clientSecret: string;
   private tokens: XeroTokens | null = null;
   private pendingStates: Map<string, number> = new Map(); // state -> timestamp
+  private reminderRequestTail: Promise<void> = Promise.resolve();
+  private lastReminderRequestAt = 0;
 
   constructor() {
     this.clientId = process.env.XERO_CLIENT_ID || "";
@@ -270,6 +284,207 @@ export class XeroService {
       throw new Error("No tenant ID available. Please reconnect to Xero.");
     }
     return this.tokens.tenant_id;
+  }
+
+  /**
+   * Makes reminder-path Xero requests sequentially, with a conservative pause
+   * between requests to stay comfortably below Xero's rate limits.
+   */
+  private async reminderApiRequest(url: string, headers: Record<string, string>): Promise<Response> {
+    const request = this.reminderRequestTail.then(async () => {
+      const elapsed = Date.now() - this.lastReminderRequestAt;
+      if (this.lastReminderRequestAt && elapsed < 1100) {
+        await new Promise(resolve => setTimeout(resolve, 1100 - elapsed));
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      try {
+        return await fetch(url, { method: "GET", headers, signal: controller.signal });
+      } catch {
+        throw new Error("Xero reminder request failed or timed out.");
+      } finally {
+        clearTimeout(timeout);
+        this.lastReminderRequestAt = Date.now();
+      }
+    });
+    this.reminderRequestTail = request.then(() => undefined, () => undefined);
+    return request;
+  }
+
+  private async parseReminderContacts(response: Response): Promise<any[]> {
+    if (!response.ok) {
+      throw new Error(`Xero contact lookup failed with HTTP ${response.status}.`);
+    }
+    let data: any;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("Xero returned malformed contact data.");
+    }
+    if (!data || !Array.isArray(data.Contacts)) {
+      throw new Error("Xero returned malformed contact data.");
+    }
+    for (const contact of data.Contacts) {
+      if (!contact || typeof contact.ContactID !== "string" || !contact.ContactID ||
+          typeof contact.Name !== "string" || !contact.Name) {
+        throw new Error("Xero returned malformed contact data.");
+      }
+    }
+    return data.Contacts;
+  }
+
+  /**
+   * Reminder-specific contact resolution intentionally avoids the fuzzy
+   * fallback used by ordinary invoice creation.
+   */
+  async findContactForReminder(customer: Customer): Promise<{ contactID: string; name: string } | null> {
+    const token = await this.getAccessToken();
+    const tenantId = this.getTenantId();
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      "xero-tenant-id": tenantId,
+      Accept: "application/json",
+    };
+
+    if (customer.xeroContactId) {
+      const storedId = customer.xeroContactId;
+      const response = await this.reminderApiRequest(
+        `${this.apiUrl}/Contacts/${encodeURIComponent(storedId)}`,
+        headers,
+      );
+      const contacts = await this.parseReminderContacts(response);
+      const contact = contacts.find(candidate => candidate.ContactID === storedId);
+      if (!contact) {
+        throw new Error("The customer's stored Xero contact ID could not be verified.");
+      }
+      return { contactID: contact.ContactID, name: contact.Name };
+    }
+
+    const escapedName = customer.name.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const nameWhere = `Name=="${escapedName}"`;
+    const nameResponse = await this.reminderApiRequest(
+      `${this.apiUrl}/Contacts?where=${encodeURIComponent(nameWhere)}`,
+      headers,
+    );
+    const nameContacts = await this.parseReminderContacts(nameResponse);
+    const normalise = (value: string) => value.trim().toLocaleLowerCase("en-GB");
+    const exactNameContacts = nameContacts.filter(
+      contact => normalise(contact.Name) === normalise(customer.name),
+    );
+    if (exactNameContacts.length > 1) {
+      throw new Error("More than one Xero contact exactly matches the customer's name.");
+    }
+    if (exactNameContacts.length === 1) {
+      const contact = exactNameContacts[0];
+      return { contactID: contact.ContactID, name: contact.Name };
+    }
+
+    if (!customer.email) return null;
+    const escapedEmail = customer.email.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const emailWhere = `EmailAddress=="${escapedEmail}"`;
+    const emailResponse = await this.reminderApiRequest(
+      `${this.apiUrl}/Contacts?where=${encodeURIComponent(emailWhere)}`,
+      headers,
+    );
+    const emailContacts = await this.parseReminderContacts(emailResponse);
+    const exactEmailContacts = emailContacts.filter(contact =>
+      typeof contact.EmailAddress === "string" &&
+      normalise(contact.EmailAddress) === normalise(customer.email!),
+    );
+    if (exactEmailContacts.length > 1) {
+      throw new Error("More than one Xero contact exactly matches the customer's email address.");
+    }
+    if (exactEmailContacts.length === 0) return null;
+    const contact = exactEmailContacts[0];
+    return { contactID: contact.ContactID, name: contact.Name };
+  }
+
+  async getInvoicesForReminder(contactId: string): Promise<ReminderInvoice[]> {
+    if (!contactId.trim()) throw new Error("A Xero contact ID is required for invoice reminders.");
+    const token = await this.getAccessToken();
+    const tenantId = this.getTenantId();
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      "xero-tenant-id": tenantId,
+      Accept: "application/json",
+    };
+    const pageSize = 100;
+    const maxPages = 1000;
+    const where = `Contact.ContactID==Guid("${contactId.replace(/"/g, '\\"')}") AND Type=="ACCREC" AND (Status=="AUTHORISED" OR Status=="SUBMITTED")`;
+    const invoices: ReminderInvoice[] = [];
+    const seenIds = new Set<string>();
+
+    const normaliseDate = (value: unknown): string => {
+      if (typeof value !== "string" || !value) {
+        throw new Error("Xero returned malformed invoice date data.");
+      }
+      const xeroDate = value.match(/^\/Date\((-?\d+)(?:[+-]\d{4})?\)\/$/);
+      if (xeroDate) {
+        const parsed = new Date(Number(xeroDate[1]));
+        if (!Number.isNaN(parsed.getTime())) return value;
+      }
+      const isoDate = value.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (isoDate && !Number.isNaN(Date.parse(value))) return value;
+      throw new Error("Xero returned malformed invoice date data.");
+    };
+
+    for (let page = 1; page <= maxPages; page++) {
+      const params = new URLSearchParams({
+        where,
+        page: String(page),
+        pageSize: String(pageSize),
+      });
+      const response = await this.reminderApiRequest(`${this.apiUrl}/Invoices?${params}`, headers);
+      if (!response.ok) {
+        throw new Error(`Xero invoice lookup failed with HTTP ${response.status}.`);
+      }
+      let data: any;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error("Xero returned malformed invoice data.");
+      }
+      if (!data || !Array.isArray(data.Invoices)) {
+        throw new Error("Xero returned malformed invoice data.");
+      }
+      const pageInvoices = data.Invoices;
+      if (pageInvoices.length > pageSize) {
+        throw new Error("Xero returned an invalid invoice page.");
+      }
+
+      for (const invoice of pageInvoices) {
+        if (!invoice || typeof invoice.InvoiceID !== "string" || !invoice.InvoiceID ||
+            typeof invoice.InvoiceNumber !== "string" ||
+            !["AUTHORISED", "SUBMITTED"].includes(invoice.Status) ||
+            invoice.Type !== "ACCREC" ||
+            typeof invoice.AmountDue !== "number" || !Number.isFinite(invoice.AmountDue) ||
+            typeof invoice.Total !== "number" || !Number.isFinite(invoice.Total) ||
+            typeof invoice.CurrencyCode !== "string" || !invoice.CurrencyCode) {
+          throw new Error("Xero returned malformed invoice data.");
+        }
+        if (seenIds.has(invoice.InvoiceID)) {
+          throw new Error("Xero returned duplicate invoices while paging reminder data.");
+        }
+        seenIds.add(invoice.InvoiceID);
+        if (invoice.AmountDue <= 0) continue;
+        invoices.push({
+          InvoiceID: invoice.InvoiceID,
+          InvoiceNumber: invoice.InvoiceNumber,
+          Date: normaliseDate(invoice.Date),
+          DueDate: typeof invoice.DueDate === "string" ? invoice.DueDate : "",
+          Status: invoice.Status,
+          AmountDue: invoice.AmountDue,
+          Total: invoice.Total,
+          CurrencyCode: invoice.CurrencyCode,
+          Type: "ACCREC",
+        });
+      }
+
+      if (pageInvoices.length < pageSize) return invoices;
+    }
+
+    throw new Error(`Xero invoice pagination exceeded the ${maxPages}-page safety limit.`);
   }
 
   async findContact(customer: Customer): Promise<{ contactID: string; name: string } | null> {

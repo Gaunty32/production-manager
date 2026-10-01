@@ -12,6 +12,7 @@ import { scheduleDailyReEngagementCheck } from "./reEngagement";
 import { scheduleFortnightlyRecalibration } from "./calibration";
 import { scheduleInactiveCustomerChecks } from "./inactiveCustomers";
 import { scheduleWeeklySummary } from "./weeklySummary";
+import { scheduleOverdueInvoiceReminders } from "./overdueInvoiceReminders";
 import { scheduleWeeklyArticleCampaign } from "./highLevelCampaign";
 import { startCustomerOrderNotificationRetryWorker } from "./customerOrderNotifications";
 
@@ -113,6 +114,7 @@ app.use((req, res, next) => {
   scheduleFortnightlyRecalibration();
   scheduleInactiveCustomerChecks();
   scheduleWeeklySummary();
+  scheduleOverdueInvoiceReminders();
   scheduleWeeklyArticleCampaign();
   startCustomerOrderNotificationRetryWorker();
   const server = await registerRoutes(app);

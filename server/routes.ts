@@ -5,6 +5,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { storage } from "./storage";
+import { isOverdueInvoice, parseXeroInvoiceDate } from "./overdueInvoiceRules";
 import { buildDashboardTvData, TOKEN_KEY, SLUG_KEY, DAILY_TARGET_KEY, DEFAULT_DAILY_TARGET, generateTvSlug } from "./dashboardTv";
 import { PRINT_MACHINE_ID, isPrintJobType } from "@shared/machines";
 import bcrypt from "bcrypt";
@@ -12183,12 +12184,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Xero invoice dates can come back as ISO strings or in the legacy
       // "/Date(1234567890000+0000)/" format, so parse both robustly.
-      const parseXeroDate = (raw: string | null | undefined): number => {
-        if (!raw) return NaN;
-        const msMatch = raw.match(/\/Date\((\d+)([+-]\d+)?\)\//);
-        if (msMatch) return parseInt(msMatch[1]);
-        return new Date(raw).getTime();
-      };
 
       let overdueInvoices: Array<{
         invoiceNumber: string;
@@ -12208,22 +12203,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           const invoices = await xeroService.getInvoicesForContact(contact.contactID);
           const now = Date.now();
-          const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
           overdueInvoices = invoices
-            .filter((inv) => {
-              const isUnpaid = (inv.Status === "AUTHORISED" || inv.Status === "SUBMITTED") && (inv.AmountDue ?? 0) > 0;
-              if (!isUnpaid) return false;
-              const invDate = parseXeroDate(inv.Date);
-              if (isNaN(invDate)) return false;
-              return now - invDate > THIRTY_DAYS_MS;
-            })
+            .filter((inv) => isOverdueInvoice(inv, now))
             .map((inv) => ({
               invoiceNumber: inv.InvoiceNumber,
               date: inv.Date,
               dueDate: inv.DueDate,
               amountDue: inv.AmountDue ?? 0,
               total: inv.Total ?? 0,
-              daysOld: Math.floor((now - parseXeroDate(inv.Date)) / (24 * 60 * 60 * 1000)),
+              daysOld: Math.floor((now - parseXeroInvoiceDate(inv.Date)) / (24 * 60 * 60 * 1000)),
             }));
         }
       }

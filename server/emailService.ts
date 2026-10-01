@@ -1015,6 +1015,155 @@ function cleanHeader(text: string): string {
   return text.replace(/[\r\n\x00-\x1f\x7f]/g, ' ').trim();
 }
 
+export interface OverdueReminderEmail {
+  to: string[];
+  customerName: string;
+  customerFirstName: string;
+  invoices: Array<{
+    invoiceNumber: string;
+    date: string;
+    amountDue: number;
+    currencyCode: string;
+  }>;
+}
+
+function formatReminderDate(date: string): string {
+  const legacy = date.match(/\/Date\((-?\d+)([+-]\d+)?\)\//);
+  const dateOnly = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const parsed = legacy ? new Date(Number(legacy[1])) : dateOnly
+    ? new Date(Date.UTC(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])))
+    : new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(parsed);
+}
+
+function formatReminderCurrency(amount: number, currencyCode: string): string {
+  const currency = currencyCode.trim().toUpperCase();
+  try {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+export function buildOverdueInvoiceReminderEmail(params: OverdueReminderEmail): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const safeCustomerName = sanitizeHtml(params.customerName);
+  const safeFirstName = sanitizeHtml(params.customerFirstName);
+  const currencyTotals = new Map<string, number>();
+  const invoiceRowsHtml = params.invoices.map(invoice => {
+    if (!Number.isFinite(invoice.amountDue)) {
+      throw new Error('Invoice reminder amounts must be finite numbers.');
+    }
+    const currency = invoice.currencyCode.trim().toUpperCase();
+    currencyTotals.set(currency, (currencyTotals.get(currency) || 0) + invoice.amountDue);
+    const safeInvoiceNumber = sanitizeHtml(invoice.invoiceNumber);
+    const date = formatReminderDate(invoice.date);
+    return `<tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #e4e4e7;">${safeInvoiceNumber}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e4e4e7;">${sanitizeHtml(date)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e4e4e7;text-align:right;">${sanitizeHtml(formatReminderCurrency(invoice.amountDue, currency))}</td>
+    </tr>`;
+  }).join('');
+  const totalsText = Array.from(currencyTotals.entries())
+    .map(([currency, total]) => `${currency}: ${formatReminderCurrency(total, currency)}`);
+  const totalsHtml = Array.from(currencyTotals.entries())
+    .map(([currency, total]) => `<li>${sanitizeHtml(currency)}: ${sanitizeHtml(formatReminderCurrency(total, currency))}</li>`)
+    .join('');
+  const textInvoices = params.invoices.map(invoice =>
+    `• ${invoice.invoiceNumber} — ${formatReminderDate(invoice.date)} — ${formatReminderCurrency(invoice.amountDue, invoice.currencyCode)}`,
+  );
+  const subject = cleanHeader(`Overdue invoices — ${params.customerName}`);
+  const warning = 'If payment is not received by return, any future orders will need to be paid for at the time they are submitted to the portal.';
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">Overdue invoices</h2>
+    <p style="margin:0 0 12px;">Hi ${safeFirstName},</p>
+    <p style="margin:0 0 16px;">Our records show the following invoices remain unpaid:</p>
+    <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e4e4e7;border-collapse:collapse;margin:20px 0;">
+      <thead><tr>
+        <th style="padding:10px 12px;text-align:left;background:#f4f4f5;">Invoice</th>
+        <th style="padding:10px 12px;text-align:left;background:#f4f4f5;">Invoice date</th>
+        <th style="padding:10px 12px;text-align:right;background:#f4f4f5;">Amount due</th>
+      </tr></thead>
+      <tbody>${invoiceRowsHtml}</tbody>
+    </table>
+    ${totalsHtml ? `<p style="margin:0 0 8px;font-weight:600;">Outstanding totals by currency:</p><ul style="margin:0 0 18px;padding-left:22px;">${totalsHtml}</ul>` : ''}
+    <p style="margin:0 0 12px;">If you have already made payment, please contact us so we can update our records.</p>
+    <p style="margin:0 0 12px;">${sanitizeHtml(warning)}</p>
+    <p style="margin:20px 0 0;">Kind regards,<br /><strong>Select Branding Solutions</strong></p>
+  `;
+  const text = [
+    `Overdue invoices for ${params.customerName}`,
+    '',
+    `Hi ${params.customerFirstName},`,
+    '',
+    'Our records show the following invoices remain unpaid:',
+    ...textInvoices,
+    ...(totalsText.length ? ['', `Outstanding totals by currency: ${totalsText.join('; ')}`] : []),
+    '',
+    'If you have already made payment, please contact us so we can update our records.',
+    warning,
+    '',
+    'Kind regards,',
+    'Select Branding Solutions',
+  ].join('\n');
+
+  return {
+    subject,
+    html: brandedEmail(body, { customerName: params.customerName }),
+    text,
+  };
+}
+
+export async function sendOverdueInvoiceReminderEmail(
+  params: OverdueReminderEmail,
+  idempotencyKey: string,
+  frozen?: { subject: string; html: string; text: string },
+): Promise<string> {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const message = frozen || buildOverdueInvoiceReminderEmail(params);
+  let result: Awaited<ReturnType<typeof sendEmail>>;
+  try {
+    result = await sendEmail(client, {
+      from: fromEmail || 'info@selectbranding.co.uk',
+      to: params.to,
+      cc: ['info@selectbranding.co.uk'],
+      replyTo: 'info@selectbranding.co.uk',
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+    }, { idempotencyKey });
+  } catch (error: any) {
+    throw new EmailDeliveryError(
+      `Failed to send overdue invoice reminder: ${error?.message || 'email provider request failed'}`,
+      isPermanentResendRecipientError(error),
+    );
+  }
+  if (result.error) {
+    throw new EmailDeliveryError(
+      `Failed to send overdue invoice reminder: ${result.error.message || 'email provider rejected the message'}`,
+      isPermanentResendRecipientError(result.error),
+    );
+  }
+  const providerId = result.data?.id;
+  if (typeof providerId !== 'string' || !providerId.trim()) {
+    throw new EmailDeliveryError('Email provider did not return a message ID for the overdue invoice reminder.', false);
+  }
+  return providerId;
+}
+
 export async function sendWebsiteEnquiryEmails(params: {
   name: string;
   company: string;
