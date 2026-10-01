@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import { storage } from "./storage";
 import { isOverdueInvoice, parseXeroInvoiceDate } from "./overdueInvoiceRules";
+import { sendWebsiteLeadNotification } from "./emailService";
 import { buildDashboardTvData, TOKEN_KEY, SLUG_KEY, DAILY_TARGET_KEY, DEFAULT_DAILY_TARGET, generateTvSlug } from "./dashboardTv";
 import { PRINT_MACHINE_ID, isPrintJobType } from "@shared/machines";
 import bcrypt from "bcrypt";
@@ -674,6 +675,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const availability = getCallbackAvailability();
+      const verifiedPhone = parsePhoneNumberFromString(data.phone, "GB")?.number;
+      if (verifiedPhone !== normalizedPhone) {
+        await db.update(callbackRequests)
+          .set({ status: "blocked_integrity_check", updatedAt: new Date() })
+          .where(eq(callbackRequests.id, requestRow.id));
+        console.error("[Callback] Phone integrity check failed");
+        return res.status(400).json({ error: "Unable to verify the telephone number" });
+      }
+
+      // Notify the inbox even if HighLevel later fails, so the team can follow up.
+      // A mail outage must not prevent the existing callback workflow from running.
+      let notificationFailed = false;
+      try {
+        await sendWebsiteLeadNotification({
+          kind: "callback",
+          submittedPhone: data.phone,
+          normalizedPhone,
+          pageUrl: pageUrl?.toString() || data.page || null,
+          available: availability.available,
+          attribution,
+          requestId: requestRow.id,
+        });
+      } catch (error) {
+        notificationFailed = true;
+        console.error(`[Callback] Inbox email failed for request ${requestRow.id}:`, error);
+      }
+
       const apiToken = process.env.HIGHLEVEL_API_TOKEN2?.trim().replace(/^Bearer\s+/i, "");
       const locationId = process.env.HIGHLEVEL_LOCATION_ID2?.trim();
       const workflowId = process.env.HIGHLEVEL_CALLBACK_WORKFLOW_ID2?.trim();
@@ -683,15 +711,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(eq(callbackRequests.id, requestRow.id));
         console.error("[Callback] Direct HighLevel credentials are not fully configured");
         return res.status(503).json({ error: "Callback service is unavailable" });
-      }
-
-      const verifiedPhone = parsePhoneNumberFromString(data.phone, "GB")?.number;
-      if (verifiedPhone !== normalizedPhone) {
-        await db.update(callbackRequests)
-          .set({ status: "blocked_integrity_check", updatedAt: new Date() })
-          .where(eq(callbackRequests.id, requestRow.id));
-        console.error("[Callback] Phone integrity check failed");
-        return res.status(400).json({ error: "Unable to verify the telephone number" });
       }
 
       console.info("[Callback] Phone diagnostics", {
@@ -769,6 +788,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(502).json({ error: "We saved your number but could not start the callback. Please call us instead." });
         }
 
+        if (notificationFailed) {
+          return res.status(502).json({
+            error: "Your callback has been requested, but the email notification could not be sent. Please call us if you do not hear back.",
+          });
+        }
         return res.json({ success: true, status: availability.available ? "calling" : "saved", message: availability.available ? "Thanks — we'll call you shortly" : "Callback request saved" });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown HighLevel error";
@@ -1368,6 +1392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserRole(existing.id, "demo");
         await storage.updateUserActive(existing.id, true);
       }
+      await sendWebsiteLeadNotification({ kind: "demo", ...data });
       await sendDemoAccessEmail({
         firstName: data.firstName,
         lastName: data.lastName,

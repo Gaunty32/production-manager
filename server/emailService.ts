@@ -1015,6 +1015,78 @@ function cleanHeader(text: string): string {
   return text.replace(/[\r\n\x00-\x1f\x7f]/g, ' ').trim();
 }
 
+export type WebsiteLeadNotification =
+  | {
+    kind: 'demo';
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    company: string;
+  }
+  | {
+    kind: 'callback';
+    submittedPhone: string;
+    normalizedPhone: string;
+    pageUrl: string | null;
+    available: boolean;
+    attribution: {
+      utmSource: string | null;
+      utmMedium: string | null;
+      utmCampaign: string | null;
+      utmTerm: string | null;
+      utmContent: string | null;
+    };
+    requestId: string;
+  };
+
+/** Internal notice, separate from the prospect's demo-access email. */
+export function buildWebsiteLeadNotificationEmail(params: WebsiteLeadNotification) {
+  const title = params.kind === 'demo' ? 'New website demo enquiry' : 'New website callback request';
+  const rows = params.kind === 'demo' ? [
+    { label: 'First name', value: params.firstName },
+    { label: 'Last name', value: params.lastName },
+    { label: 'Email', value: params.email },
+    { label: 'Phone', value: params.phone },
+    { label: 'Company', value: params.company },
+  ] : [
+    { label: 'Submitted phone', value: params.submittedPhone },
+    { label: 'Callback number', value: params.normalizedPhone },
+    { label: 'Page', value: params.pageUrl || '' },
+    { label: 'Callback timing', value: params.available ? 'During callback hours' : 'Outside callback hours' },
+    { label: 'UTM source', value: params.attribution.utmSource || '' },
+    { label: 'UTM medium', value: params.attribution.utmMedium || '' },
+    { label: 'UTM campaign', value: params.attribution.utmCampaign || '' },
+    { label: 'UTM term', value: params.attribution.utmTerm || '' },
+    { label: 'UTM content', value: params.attribution.utmContent || '' },
+    { label: 'Request reference', value: params.requestId },
+  ];
+  const subjectDetail = params.kind === 'demo'
+    ? `${params.firstName} ${params.lastName}`.trim()
+    : params.normalizedPhone;
+  return {
+    to: 'info@selectbranding.co.uk',
+    replyTo: params.kind === 'demo' ? params.email : 'info@selectbranding.co.uk',
+    subject: `${title} — ${cleanHeader(subjectDetail)}`,
+    html: brandedEmail(`
+      <h2 style="margin:0 0 18px;font-size:18px;color:#18181b;">${title}</h2>
+      ${infoTable(rows.map(row => ({ label: row.label, value: sanitizeHtml(row.value) || '—' })))}
+    `),
+    text: [title, '', ...rows.map(row => `${row.label}: ${row.value || '—'}`)].join('\n'),
+  };
+}
+
+export async function sendWebsiteLeadNotification(params: WebsiteLeadNotification): Promise<void> {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const result = await sendEmail(client, {
+    from: fromEmail || 'info@selectbranding.co.uk',
+    ...buildWebsiteLeadNotificationEmail(params),
+  }, params.kind === 'callback' ? { idempotencyKey: `website-callback-${params.requestId}` } : undefined);
+  if (result.error || !result.data?.id) {
+    throw new Error('Failed to send website enquiry notification to info@selectbranding.co.uk');
+  }
+}
+
 export interface OverdueReminderEmail {
   to: string[];
   customerName: string;
