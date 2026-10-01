@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
+import { getCustomerShippingOptionLabel } from "@shared/shipping-options";
 import { getBaggingPrice, NAMES_INITIALS_UNIT_PRICE, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
 import { calculateProductionMetrics, isPrintJobType, PRINT_MACHINE_ID } from "@shared/machines";
 import { z } from "zod";
@@ -135,6 +136,7 @@ interface JobEditDialogProps {
     notes?: string | null;
     deliveryAddressType?: string | null;
     deliveryAddress?: string | null;
+    requestedShippingMethod?: string | null;
   } | null;
   customers: Array<{ id: string; name: string; address?: string | null; pricingTable2025?: boolean | null; pricingTable2026?: boolean | null }>;
   staff: Array<{ id: string; name: string; active?: boolean }>;
@@ -992,6 +994,12 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               />
 
               {/* Delivery Address */}
+              {job?.requestedShippingMethod && (
+                <div className="border rounded-lg p-3 bg-muted/20" data-testid="edit-customer-shipment-option">
+                  <p className="text-sm font-medium">Customer Shipment Option</p>
+                  <p className="text-sm mt-1">{getCustomerShippingOptionLabel(job.requestedShippingMethod)}</p>
+                </div>
+              )}
               <FormField
                 control={form.control}
                 name="deliveryAddressType"

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Printer, X } from "lucide-react";
 import type { JobWithLineItems, Customer } from "@shared/schema";
 import { getMachineName, calculateProductionMetrics, formatTimeDisplay } from "@shared/machines";
+import { getCustomerShippingOptionLabel } from "@shared/shipping-options";
 
 interface ProductionWorksheetProps {
   job: JobWithLineItems;
@@ -177,6 +178,9 @@ export function ProductionWorksheet({ job, customer, onClose }: ProductionWorksh
           {/* Shipping/Delivery Information */}
           <div className="mb-6 p-4 border-2 border-gray-300 bg-gray-50 print:bg-white print:mb-3 print:p-2">
             <h3 className="font-semibold text-sm uppercase text-gray-600 mb-2">Shipping & Delivery</h3>
+            <p className="font-semibold text-sm mb-3" data-testid="worksheet-customer-shipment-option">
+              Customer Shipment Option: {getCustomerShippingOptionLabel(job.requestedShippingMethod)}
+            </p>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="font-medium">Delivery Type:</p>

@@ -28,6 +28,7 @@ import {
 import { StaffJobFileUpload } from "@/components/StaffJobFileUpload";
 import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobEditDialog } from "@/components/JobEditDialog";
+import { getCustomerShippingOptionLabel } from "@shared/shipping-options";
 
 type Job = {
   id: string;
@@ -43,6 +44,7 @@ type Job = {
   notes: string | null;
   staffNotes: string | null;
   deliveryAddress: string | null;
+  requestedShippingMethod?: string | null;
   submittedAt: string;
   submittedById?: string | null;
   submitterEmail?: string | null;
@@ -322,6 +324,7 @@ export default function StaffHoldingArea() {
     ${row("Required Date", esc(requiredDate))}
     ${row("Submitted", esc(submitted))}
     ${row("Files", esc(job.files?.length || 0))}
+    ${row("Customer Shipment Option", esc(getCustomerShippingOptionLabel(job.requestedShippingMethod)))}
   </div>
   ${block("Delivery Address", job.deliveryAddress ? esc(job.deliveryAddress) : "")}
   ${block("Notes", job.notes ? esc(job.notes) : "")}
@@ -548,6 +551,13 @@ export default function StaffHoldingArea() {
                     </div>
                   </div>
                 </div>
+
+                {job.requestedShippingMethod && (
+                  <div data-testid={`holding-shipment-option-${job.id}`}>
+                    <p className="text-xs text-muted-foreground mb-1">Customer Shipment Option</p>
+                    <p className="text-sm font-medium">{getCustomerShippingOptionLabel(job.requestedShippingMethod)}</p>
+                  </div>
+                )}
 
                 {job.deliveryAddress && (
                   <div>

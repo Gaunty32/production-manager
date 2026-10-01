@@ -5234,7 +5234,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           machineId: null,
           notes: data.notes || null,
           status: 'pending_customer_approval',
-          deliveryAddress: data.deliveryAddress || customer.address || null,
+          requestedShippingMethod: data.requestedShippingMethod,
+          deliveryAddressType: data.requestedShippingMethod === "customer_collection"
+            ? "collection"
+            : data.deliveryAddress?.trim() ? "custom" : "customer",
+          deliveryAddress: data.requestedShippingMethod === "customer_collection"
+            ? null
+            : data.deliveryAddress || customer.address || null,
           submittedById: customerUserId,
           submittedAt: new Date() as any,
           customerSubmissionId: submissionId,

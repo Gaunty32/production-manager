@@ -149,6 +149,7 @@ export const jobs = pgTable("jobs", {
   invoiceReference: text("invoice_reference"),
   invoiceTotal: real("invoice_total"), // Total invoice amount (excluding VAT)
   shippingMethod: text("shipping_method"),
+  requestedShippingMethod: text("requested_shipping_method"),
   dhlTrackingNumber: text("dhl_tracking_number"),
   packageCount: integer("package_count"),
   packageType: text("package_type"),
@@ -1136,6 +1137,7 @@ export const customerJobSubmissionSchema = z.object({
     { message: "Despatch date must be in the future" }
   ),
   logoType: z.enum(["repeat_logo", "new_logo", "new_logo_files_supplied"]).default("repeat_logo"),
+  requestedShippingMethod: z.enum(["dpd", "customer_collection", "courier_label_provided"]).default("dpd"),
   minimumOrderAcknowledged: z.boolean().optional().default(false),
 });
 

@@ -21,6 +21,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles, Layers, History, CheckCircle2, Eye, Shirt, Printer, Combine } from "lucide-react";
 import { customerJobSubmissionSchema } from "@shared/schema";
+import { CUSTOMER_SHIPPING_OPTIONS } from "@shared/shipping-options";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { isMinOrderQtyActive, MIN_ORDER_QTY } from "@shared/pricing";
 import { z } from "zod";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
@@ -229,6 +231,7 @@ export default function CustomerSubmitJob() {
       deliveryAddress: "",
       requiredDispatchDate: format(getMinDispatchDateFor(14), "yyyy-MM-dd"),
       logoType: "repeat_logo" as const,
+      requestedShippingMethod: "dpd" as const,
     },
   });
 
@@ -871,6 +874,34 @@ export default function CustomerSubmitJob() {
 
                 <FormField
                   control={form.control}
+                  name="requestedShippingMethod"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Shipment Option *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-customer-shipment-option">
+                            <SelectValue placeholder="Select shipment option" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {CUSTOMER_SHIPPING_OPTIONS.map(option => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {field.value === "courier_label_provided" && (
+                        <FormDescription>Please attach your courier label with the order files below.</FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {form.watch("requestedShippingMethod") !== "customer_collection" && <FormField
+                  control={form.control}
                   name="deliveryAddress"
                   render={({ field }) => (
                     <FormItem>
@@ -886,7 +917,7 @@ export default function CustomerSubmitJob() {
                       <FormMessage />
                     </FormItem>
                   )}
-                />
+                />}
 
                 <FormField
                   control={form.control}
