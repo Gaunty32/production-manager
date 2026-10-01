@@ -54,13 +54,6 @@ export function PricingTableDialog({ trigger }: PricingTableDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="p-3 bg-primary/10 rounded-md text-sm text-center" data-testid="banner-september-prices">
-          <span className="font-medium text-foreground">Current pricing:</span>{" "}
-          <span className="text-muted-foreground">
-            prices are effective from <span className="font-medium text-foreground">1st September 2026</span>, with a <span className="font-medium text-foreground">6-item minimum per logo</span>. Names and initials are exempt.
-          </span>
-        </div>
-
         <div className="p-4 border rounded-md" data-testid="info-personalisation-pricing">
           <h3 className="font-semibold text-foreground">Names &amp; Initials</h3>
           <p className="mt-1 text-sm text-muted-foreground">
