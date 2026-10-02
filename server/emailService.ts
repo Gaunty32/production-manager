@@ -493,6 +493,8 @@ export async function sendNewJobSubmissionEmail(
     jobName: string;
     requestedJobType: "Embroidery" | "Print" | "Mix";
     customerName: string;
+    submittedByName: string | null;
+    submittedByEmail: string | null;
     quantity: number;
     poNumber: string | null;
     requiredDispatchDate: string;
@@ -505,6 +507,8 @@ export async function sendNewJobSubmissionEmail(
   const safeJobName = sanitizeHtml(jobDetails.jobName);
   const safeRequestedJobType = sanitizeHtml(jobDetails.requestedJobType);
   const safeCustomerName = sanitizeHtml(jobDetails.customerName);
+  const safeSubmittedByName = sanitizeHtml(jobDetails.submittedByName);
+  const safeSubmittedByEmail = sanitizeHtml(jobDetails.submittedByEmail);
   const safePONumber = sanitizeHtml(jobDetails.poNumber);
   const safeDispatchDate = sanitizeHtml(jobDetails.requiredDispatchDate);
 
@@ -512,6 +516,8 @@ export async function sendNewJobSubmissionEmail(
     { label: 'Job Name', value: safeJobName },
     { label: 'Job Type', value: safeRequestedJobType },
     { label: 'Customer', value: safeCustomerName },
+    { label: 'Submitted By', value: safeSubmittedByName || safeSubmittedByEmail || 'Not recorded' },
+    { label: 'Submitter Email', value: safeSubmittedByEmail || 'Not recorded' },
     { label: 'Quantity', value: `${jobDetails.quantity} garments` },
     ...(safePONumber ? [{ label: 'PO Number', value: safePONumber }] : []),
     { label: 'Required Dispatch', value: safeDispatchDate },

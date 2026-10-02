@@ -5315,6 +5315,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             jobName: job.jobName,
             requestedJobType: data.requestedJobType,
             customerName: customer.name,
+            submittedByName: [customerUser.firstName, customerUser.lastName].filter(Boolean).join(" ").trim() || null,
+            submittedByEmail: customerUser.email,
             quantity: job.quantity,
             poNumber: job.poNumber,
             requiredDispatchDate: dispatchDate,

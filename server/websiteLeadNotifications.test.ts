@@ -88,6 +88,54 @@ test("existing demo prospect email and Chris/James copies remain unchanged", asy
   assert.deepEqual(envelope.cc, ["chris@selectbranding.co.uk", "james@selectuniforms.co.uk"]);
 });
 
+test("order notifications identify the submitter while preserving recipients and order details", async () => {
+  let envelope: any;
+  (globalThis as any)[sendSymbol] = async (params: any) => {
+    envelope = params;
+    return { data: { id: "fixture-email-id" }, error: null };
+  };
+  await emailService.sendNewJobSubmissionEmail(["staff@example.test"], {
+    jobName: "Example order", requestedJobType: "Print", customerName: "Example Company",
+    submittedByName: "Alex & <Customer>", submittedByEmail: "alex@example.test",
+    quantity: 50, poNumber: "PO-123", requiredDispatchDate: "08/10/2026", jobId: "fixture-job",
+  });
+  assert.deepEqual(envelope.to, ["staff@example.test"]);
+  assert.equal(envelope.subject, "New Job Submission: Example order");
+  for (const value of ["Submitted By", "Alex &amp; &lt;Customer&gt;", "Submitter Email", "alex@example.test",
+    "Example Company", "50 garments", "PO-123", "08/10/2026", "Review in Holding Area"]) {
+    assert.ok(envelope.html.includes(value), `Notification must include ${value}`);
+  }
+  assert.equal(envelope.replyTo, "info@selectbranding.co.uk");
+});
+
+test("order notifications use the submitter email when no profile name exists", async () => {
+  let envelope: any;
+  (globalThis as any)[sendSymbol] = async (params: any) => {
+    envelope = params;
+    return { data: { id: "fixture-email-id" }, error: null };
+  };
+  const details = {
+    jobName: "Example order", requestedJobType: "Embroidery" as const, customerName: "Example Company",
+    submittedByName: null, submittedByEmail: "alex@example.test",
+    quantity: 10, poNumber: null, requiredDispatchDate: "08/10/2026", jobId: "fixture-job",
+  };
+  await emailService.sendNewJobSubmissionEmail(["staff@example.test"], details);
+  assert.equal(envelope.html.split("alex@example.test").length - 1, 2);
+  await emailService.sendNewJobSubmissionEmail(["staff@example.test"], { ...details, submittedByEmail: null });
+  assert.equal(envelope.html.split("Not recorded").length - 1, 2);
+  assert.ok(!envelope.html.includes("undefined"));
+});
+
+test("order notification identity comes from the authenticated customer account", async () => {
+  const source = await readFile("server/routes.ts", "utf8");
+  const start = source.indexOf('  app.post("/api/customer-portal/jobs",');
+  const end = source.indexOf("  // Customer Portal - Get upload URL", start);
+  assert.ok(start >= 0 && end > start);
+  const submissionRoute = source.slice(start, end);
+  assert.match(submissionRoute, /submittedByName: \[customerUser\.firstName, customerUser\.lastName\]/);
+  assert.match(submissionRoute, /submittedByEmail: customerUser\.email/);
+});
+
 test("provider errors and missing acceptance IDs fail explicitly", async () => {
   for (const result of [
     { data: null, error: { message: "Fixture provider rejection" } },
