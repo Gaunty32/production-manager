@@ -57,6 +57,7 @@ import { registerCasualShiftRoutes } from "./casualShiftRoutes";
 import { registerPurchasingRoutes } from "./purchasingRoutes";
 import { customerLoginSchema, insertCustomerUserSchema, updateCustomerUserSchema, staffLoginSchema, staffRegisterSchema, passwordResetRequestSchema, passwordResetConfirmSchema, customerJobSubmissionSchema, insertJobFileSchema, insertJobMessageSchema, canViewPrices, canViewReports, updateMachineSchema, insertTaskSchema, getSetupPrice, getSetupTypeLabel, type Job } from "@shared/schema";
 import { setupProductionDatabase } from "./setup-production";
+import { normalizeCustomerLogoType } from "@shared/customer-logo-options";
 import { checkRateLimit, resetRateLimit } from "./rateLimiter";
 import { requestPasswordReset, confirmPasswordReset } from "./passwordReset";
 import { sendLoginCodeEmail, sendPasswordResetEmail, sendNewJobSubmissionEmail, sendJobApprovedEmail, sendJobRejectedEmail, sendStaffMessageToCustomerEmail, sendStaffMessageCCEmail, sendNewChatEmail, sendTeamInviteEmail, sendDemoAccessEmail, sendWebsiteEnquiryEmails, sendNewLogoSetupEmail, sendNewPrintJobEmail, sendCustomerDirectMessageNotificationEmail, sendMobileGuideEmail, sendPaymentReceiptEmail, sendMentionNotificationEmail, sendDeliverabilityTestEmail, buildBroadcastEmailHtml, sendBroadcastEmail } from "./emailService";
@@ -5205,6 +5206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[JOB SUBMISSION] Customer user found:', customerUser.email);
 
       const data = customerJobSubmissionSchema.parse(req.body);
+      data.logoType = normalizeCustomerLogoType(data.requestedJobType, data.logoType);
       console.log('[JOB SUBMISSION] Request data parsed:', data);
       const submissionId = data.submissionId || crypto.randomUUID();
 

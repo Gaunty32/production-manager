@@ -1137,7 +1137,7 @@ export const customerJobSubmissionSchema = z.object({
     { message: "Despatch date must be in the future" }
   ),
   logoType: z.enum(["repeat_logo", "new_logo", "new_logo_files_supplied"]).default("repeat_logo"),
-  requestedShippingMethod: z.enum(["dpd", "customer_collection", "courier_label_provided"]).default("dpd"),
+  requestedShippingMethod: z.enum(["dpd", "customer_collection", "local_delivery", "courier_label_provided"]).default("dpd"),
   minimumOrderAcknowledged: z.boolean().optional().default(false),
 });
 

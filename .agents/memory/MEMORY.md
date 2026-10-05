@@ -70,4 +70,5 @@
 - [Customer order email touchpoints](customer-order-email-touchpoints.md) — allocation and dispatch emails use durable queues plus provider idempotency; historical jobs must never be swept.
 - [Customer submission idempotency](customer-submission-idempotency.md) — persist draft keys across reloads; enforce job/file dedupe and serialize MAX+1 job numbering in the database.
 - [Customer shipment preferences](customer-shipment-preferences.md) — preserve customer delivery requests separately from actual dispatch booking and carriage billing.
+- [Customer print artwork](customer-print-artwork.md) — print-only customers supply artwork at the correct colour and size; embroidery preparation requirements do not apply.
 - [Overdue reminder policy](overdue-reminder-policy.md) — user chose existing app timers with delayed catch-up, not a project migration; reminders must not automatically change credit terms.

@@ -22,6 +22,7 @@ import { useLocation } from "wouter";
 import { ArrowLeft, Upload, FileText, X, AlertTriangle, Loader2, RefreshCw, Sparkles, Layers, History, CheckCircle2, Eye, Shirt, Printer, Combine } from "lucide-react";
 import { customerJobSubmissionSchema } from "@shared/schema";
 import { CUSTOMER_SHIPPING_OPTIONS } from "@shared/shipping-options";
+import { getCustomerLogoOptions, normalizeCustomerLogoType } from "@shared/customer-logo-options";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { isMinOrderQtyActive, MIN_ORDER_QTY } from "@shared/pricing";
 import { z } from "zod";
@@ -87,6 +88,11 @@ type UploadedFile = {
 };
 
 const SUBMISSION_DRAFT_KEY = "customer-job-submission-draft";
+const logoOptionIcons = {
+  repeat_logo: RefreshCw,
+  new_logo: Sparkles,
+  new_logo_files_supplied: Layers,
+};
 
 function getPersistentSubmissionId(fingerprint: string): string {
   try {
@@ -237,6 +243,15 @@ export default function CustomerSubmitJob() {
 
   const watchedQuantity = form.watch("quantity");
   const watchedDispatch = form.watch("requiredDispatchDate");
+  const watchedJobType = form.watch("requestedJobType");
+  const watchedLogoType = form.watch("logoType");
+
+  useEffect(() => {
+    const logoType = normalizeCustomerLogoType(watchedJobType, watchedLogoType);
+    if (logoType !== watchedLogoType) {
+      form.setValue("logoType", logoType, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [watchedJobType, watchedLogoType, form]);
 
   // Minimum lead time is driven by the total outstanding quantity in the
   // production queue (under 2,000 → 4 days; 2,000–5,000 → 7; over 5,000 → 14).
@@ -437,6 +452,7 @@ export default function CustomerSubmitJob() {
     mutationFn: async (data: FormData) => {
       const payload = {
         ...data,
+        logoType: normalizeCustomerLogoType(data.requestedJobType, data.logoType),
         quantity: data.quantity ? Number(data.quantity) : undefined,
       };
       const fingerprint = JSON.stringify(payload);
@@ -714,29 +730,8 @@ export default function CustomerSubmitJob() {
                       <FormLabel>Logo Type *</FormLabel>
                       <FormControl>
                         <div className="flex flex-col gap-2 pt-1">
-                          {([
-                            {
-                              value: "repeat_logo",
-                              icon: RefreshCw,
-                              label: "Repeat Logo",
-                              description: "We already have this logo set up and ready to go",
-                              testId: "button-logo-type-repeat",
-                            },
-                            {
-                              value: "new_logo",
-                              icon: Sparkles,
-                              label: "Digitising Required",
-                              description: "New logo setup — £12 charge, allow 48 hours for a sample",
-                              testId: "button-logo-type-new",
-                            },
-                            {
-                              value: "new_logo_files_supplied",
-                              icon: Layers,
-                              label: "New Logo — Embroidery files & Madeira thread colours supplied",
-                              description: "You are providing your own embroidery files and thread colour references",
-                              testId: "button-logo-type-files-supplied",
-                            },
-                          ] as const).map(({ value, icon: Icon, label, description, testId }) => {
+                          {getCustomerLogoOptions(watchedJobType).map(({ value, label, description, testId }) => {
+                            const Icon = logoOptionIcons[value];
                             const selected = field.value === value;
                             return (
                               <button
