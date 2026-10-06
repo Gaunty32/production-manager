@@ -57,6 +57,7 @@
 
 - [Auth session patterns](auth-session-patterns.md) — staff=userId (regenerates), customer=customerUserId (legacy login does NOT regenerate); any new login path MUST regenerate before attaching id. OTP lives in login_codes table.
 - [Server hot-reload gap](server-hot-reload-gap.md) — backend edits may not auto-reload in dev; restart the workflow before curl-testing new server behavior or you test stale code.
+- [Publishing port and tooling](publishing-port-tooling.md) — the primary app port must come first; use Vite's command to exclude preview-only plugins from builds.
 - [External tokened embeds](external-tokened-embeds.md) — cross-app TV embeds: tokened URL goes in an env var served via the token-gated data endpoint, never hardcoded in client code.
 - [Firestick keep-awake](firestick-keep-awake.md) — hidden 1px videos are ignored by Silk; screensaver defence needs a visible (background-coloured) video + wake-lock retry loop.
 - [Public website domain structure](public-site-domain-structure.md) — www is the marketing-site home; production remains the app and hosts the focused /demo-access landing page.
