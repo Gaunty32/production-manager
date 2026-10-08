@@ -17,6 +17,22 @@ import { scheduleWeeklyArticleCampaign } from "./highLevelCampaign";
 import { startCustomerOrderNotificationRetryWorker } from "./customerOrderNotifications";
 
 const app = express();
+// Allow the HighLevel landing page to use the public callback API.
+app.use("/api/callback", (req, res, next) => {
+  const allowedOrigin = "https://go.selectbranding.co.uk";
+  res.vary("Origin");
+  if (req.get("Origin") !== allowedOrigin) {
+    return next();
+  }
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  next();
+});
+
 app.set("trust proxy", 1);
 app.use(compression());
 app.use(express.json());
