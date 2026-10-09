@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { getMinimumOrderComparison, isMinimumOrderDifference, type MinimumOrderComparison } from "@shared/drive-minimum-order";
 
 interface LineItem {
   id: string;
@@ -94,6 +95,7 @@ interface CustomerDriveData {
 interface InvoiceJobForCheck {
   name: string;
   total: number | "POA" | "TBA" | null;
+  minimumOrderComparison?: MinimumOrderComparison | null;
 }
 
 function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], sidePanel = false, loadDelay = 0, onApiReady }: { customerId: number | string; customerName: string; invoiceJobs?: InvoiceJobForCheck[]; sidePanel?: boolean; loadDelay?: number; onApiReady?: (api: { hideMatchedRows: () => Promise<number> }) => void }) {
@@ -240,6 +242,8 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
       driveTotal: number;
       hasDrive: boolean;
       rowIndices: number[];
+      invoiceJobs: InvoiceJobForCheck[];
+      driveRows: DriveSheetRow[];
     };
     const buckets: Bucket[] = [];
     const findBucket = (toks: Set<string>): Bucket | null => {
@@ -270,6 +274,8 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
           driveTotal: 0,
           hasDrive: false,
           rowIndices: [],
+          invoiceJobs: [],
+          driveRows: [],
         };
         buckets.push(b);
       } else {
@@ -278,6 +284,7 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
         toks.forEach(t => b!.tokens.add(t));
       }
       b.hasInvoice = true;
+      b.invoiceJobs.push(j);
       if (j.total === "POA") b.hasPOA = true;
       else if (typeof j.total === "number") b.invoiceTotal += j.total;
     }
@@ -295,6 +302,8 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
           driveTotal: 0,
           hasDrive: false,
           rowIndices: [],
+          invoiceJobs: [],
+          driveRows: [],
         };
         buckets.push(b);
       } else {
@@ -304,10 +313,12 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
       b.hasDrive = true;
       b.driveTotal += driveAmount(r);
       b.rowIndices.push(r.rowIndex);
+      b.driveRows.push(r);
     }
 
     type Mismatch = { name: string; invoice: number | "POA" | null; drive: number | null; kind: "diff" | "missing_drive" | "missing_invoice" };
     const mismatches: Mismatch[] = [];
+    const minimumOrderDifferences: Array<MinimumOrderComparison & { name: string; invoice: number; drive: number }> = [];
     const matchedRowIndices: number[] = [];
     let invoiceCount = 0;
     let driveCount = 0;
@@ -326,7 +337,13 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
           continue;
         }
         if (Math.abs(b.invoiceTotal - b.driveTotal) > 0.01) {
-          mismatches.push({ name: b.display, invoice: b.invoiceTotal, drive: b.driveTotal, kind: "diff" });
+          const comparison = b.invoiceJobs.length === 1 ? b.invoiceJobs[0].minimumOrderComparison : null;
+          if (isMinimumOrderDifference(comparison, b.driveRows, b.invoiceTotal, b.driveTotal)) {
+            minimumOrderDifferences.push({ ...comparison, name: b.display, invoice: b.invoiceTotal, drive: b.driveTotal });
+            matchedRowIndices.push(...b.rowIndices);
+          } else {
+            mismatches.push({ name: b.display, invoice: b.invoiceTotal, drive: b.driveTotal, kind: "diff" });
+          }
         } else {
           matchedRowIndices.push(...b.rowIndices);
         }
@@ -369,7 +386,7 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
       if (usedDrive.has(i)) continue;
       mismatches.push({ name: driveOnly[i].display, invoice: null, drive: driveOnly[i].driveTotal, kind: "missing_invoice" });
     }
-    return { mismatches, invoiceCount, driveCount, matchedRowIndices };
+    return { mismatches, minimumOrderDifferences, invoiceCount, driveCount, matchedRowIndices };
   })();
 
   const allMatch = !!reconciliation && reconciliation.mismatches.length === 0 && (reconciliation.invoiceCount > 0 || reconciliation.driveCount > 0);
@@ -395,7 +412,11 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
         <div className="flex items-center gap-2 px-3 py-2.5 border-b">
           <HardDrive className="h-4 w-4 text-primary shrink-0" />
           <span className="text-sm font-semibold">Drive Verification</span>
-          {allMatch ? (
+          {allMatch && reconciliation!.minimumOrderDifferences.length > 0 ? (
+            <Badge variant="outline" className="ml-1 text-xs border-amber-500 text-amber-700 dark:text-amber-400">
+              Minimum order
+            </Badge>
+          ) : allMatch ? (
             <Badge variant="outline" className="ml-1 text-xs border-green-600 text-green-700 dark:text-green-400">
               <CheckCircle2 className="h-3 w-3 mr-1" />Match
             </Badge>
@@ -427,9 +448,23 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
             </p>
           )}
 
+          {!!reconciliation?.minimumOrderDifferences.length && (
+            <div className="space-y-2 mb-3" data-testid={`drive-minimum-order-${customerId}`}>
+              {reconciliation.minimumOrderDifferences.map((difference, index) => (
+                <div key={index} className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                  <p className="font-medium">{difference.name}: minimum order charge</p>
+                  <p className="mt-1">
+                    Drive records {difference.actualQuantity} items (£{difference.drive.toFixed(2)}); the invoice bills {difference.billedQuantity} (£{difference.invoice.toFixed(2)}) because of the 6-item minimum per logo.
+                    {" "}No investigation needed.
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
           {allMatch && (
             <div className="space-y-2" data-testid={`drive-match-${customerId}`}>
-              <div className="flex items-start gap-2 text-sm p-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
+              {reconciliation!.minimumOrderDifferences.length === 0 && <div className="flex items-start gap-2 text-sm p-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
                 <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="font-medium text-green-800 dark:text-green-300">Invoice matches Drive</p>
@@ -437,7 +472,7 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
                     {reconciliation!.driveCount} job{reconciliation!.driveCount === 1 ? "" : "s"} reconciled across {data!.rows.length} sheet row{data!.rows.length === 1 ? "" : "s"}.
                   </p>
                 </div>
-              </div>
+              </div>}
               <Button
                 variant="outline"
                 size="sm"
@@ -2291,7 +2326,18 @@ export default function InvoicingQueue() {
                       <DriveVerificationPanel
                         customerId={customerId}
                         customerName={customer.name}
-                        invoiceJobs={customerJobs.map(j => ({ name: j.jobName, total: getJobPrice(j) }))}
+                        invoiceJobs={customerJobs.map(j => {
+                          const total = getJobPrice(j);
+                          const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
+                          const lineItems = getJobLineItems(j.id);
+                          return {
+                            name: j.jobName,
+                            total,
+                            minimumOrderComparison: pricingTable && !lineItems.some(item => manualPrices[item.id])
+                              ? getMinimumOrderComparison(lineItems, pricingTable, total)
+                              : null,
+                          };
+                        })}
                         sidePanel
                         loadDelay={customerIndex * 800}
                         onApiReady={(api) => { drivePanelApiRef.current.set(String(customerId), api); }}

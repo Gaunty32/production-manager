@@ -44,3 +44,11 @@ invoice total is the only reliable signal when names differ.
 sides** (count totals in each leftover set; require exactly 1 each). Exclude POA invoices
 from amount matching. **Why:** two unrelated orders with the same total must not silently
 reconcile and hide a real discrepancy on a money/invoicing screen.
+
+## Expected minimum-order differences
+
+When Drive records actual quantities below the six-unit minimum but the invoice bills the minimum, show a small explanatory notification rather than an unexplained mismatch. The user does not want to investigate those cases further.
+
+**Why:** This is an intentional billing rule, not a reconciliation error.
+
+**How to apply:** Only excuse the difference when the matched Drive quantity and actual-quantity value agree with the job, and the invoice agrees with the existing grouped minimum-order calculation. Keep genuine price/quantity discrepancies, ambiguous matches, unknown prices and manual price overrides flagged for investigation. Do not change invoice prices or Drive quantities to force a match.
