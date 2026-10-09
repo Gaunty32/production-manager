@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff, GripVertical, CheckCircle2, Circle, Printer, X } from "lucide-react";
+import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff, GripVertical, CheckCircle2, Circle, Printer, X, RefreshCw } from "lucide-react";
 import { CustomerPickingSlip } from "@/components/CustomerPickingSlip";
 import type { JobLineItem } from "@shared/schema";
 import { format } from "date-fns";
@@ -113,14 +113,14 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
     }
   }, [loadDelay]);
 
-  const { data, isLoading, isError, error, refetch } = useQuery<CustomerDriveData>({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery<CustomerDriveData>({
     queryKey: ["/api/google-drive/customer-rows", customerName],
     queryFn: async () => {
-      const res = await fetch(`/api/google-drive/customer-rows?customerName=${encodeURIComponent(customerName)}`, { credentials: "include" });
+      const res = await fetch(`/api/google-drive/customer-rows?customerName=${encodeURIComponent(customerName)}`, { credentials: "include", cache: "no-store" });
       if (res.status === 429) {
         const retryAfter = parseInt(res.headers.get("Retry-After") || "2", 10);
         await new Promise(r => setTimeout(r, (retryAfter + 1) * 1000));
-        const retry = await fetch(`/api/google-drive/customer-rows?customerName=${encodeURIComponent(customerName)}`, { credentials: "include" });
+        const retry = await fetch(`/api/google-drive/customer-rows?customerName=${encodeURIComponent(customerName)}`, { credentials: "include", cache: "no-store" });
         if (!retry.ok) {
           const body = await retry.json().catch(() => ({}));
           throw new Error(body.error || `HTTP ${retry.status}`);
@@ -135,6 +135,7 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
     },
     enabled: ready && (sidePanel || expanded),
     staleTime: 60_000,
+    refetchOnWindowFocus: "always",
     retry: 2,
     retryDelay: (attempt) => attempt * 2000,
   });
@@ -389,12 +390,28 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
     return { mismatches, minimumOrderDifferences, invoiceCount, driveCount, matchedRowIndices };
   })();
 
-  const allMatch = !!reconciliation && reconciliation.mismatches.length === 0 && (reconciliation.invoiceCount > 0 || reconciliation.driveCount > 0);
-  const hasMismatches = !!reconciliation && reconciliation.mismatches.length > 0;
+  const allMatch = !isError && !!reconciliation && reconciliation.mismatches.length === 0 && (reconciliation.invoiceCount > 0 || reconciliation.driveCount > 0);
+  const hasMismatches = !isError && !!reconciliation && reconciliation.mismatches.length > 0;
+
+  const refreshDriveButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="ml-auto h-6 w-6 shrink-0"
+      disabled={isFetching || !ready}
+      onClick={() => { void refetch(); }}
+      title="Refresh Drive values"
+      aria-label={`Refresh Drive values for ${customerName}`}
+      data-testid={`button-refresh-drive-${customerId}`}
+    >
+      <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+    </Button>
+  );
 
   // Keep hideMatchedRowsRef pointing at a function that always uses the latest data
   hideMatchedRowsRef.current = async () => {
-    const idx = reconciliation?.matchedRowIndices ?? [];
+    const idx = !isError && !isFetching ? reconciliation?.matchedRowIndices ?? [] : [];
     if (idx.length === 0) return 0;
     await hideRowIndices(idx);
     return idx.length;
@@ -412,7 +429,9 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
         <div className="flex items-center gap-2 px-3 py-2.5 border-b">
           <HardDrive className="h-4 w-4 text-primary shrink-0" />
           <span className="text-sm font-semibold">Drive Verification</span>
-          {allMatch && reconciliation!.minimumOrderDifferences.length > 0 ? (
+          {isFetching ? (
+            <Badge variant="outline" className="ml-1 text-xs">Checking…</Badge>
+          ) : allMatch && reconciliation!.minimumOrderDifferences.length > 0 ? (
             <Badge variant="outline" className="ml-1 text-xs border-amber-500 text-amber-700 dark:text-amber-400">
               Minimum order
             </Badge>
@@ -429,6 +448,7 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
               {isLoading ? "loading…" : data ? `${data.rows.length} rows` : "Calculations sheet"}
             </Badge>
           )}
+          {refreshDriveButton}
         </div>
         <div className="p-3">
           {isLoading && (
@@ -448,7 +468,7 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
             </p>
           )}
 
-          {!!reconciliation?.minimumOrderDifferences.length && (
+          {!isError && !!reconciliation?.minimumOrderDifferences.length && (
             <div className="space-y-2 mb-3" data-testid={`drive-minimum-order-${customerId}`}>
               {reconciliation.minimumOrderDifferences.map((difference, index) => (
                 <div key={index} className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
@@ -477,7 +497,7 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
                 variant="outline"
                 size="sm"
                 className="w-full"
-                disabled={hiding || !data || data.rows.length === 0}
+                disabled={hiding || isFetching || isError || !data || data.rows.length === 0}
                 onClick={hideAllVisible}
                 data-testid={`button-drive-hide-all-matched-${customerId}`}
               >
@@ -627,6 +647,10 @@ function DriveVerificationPanel({ customerId, customerName, invoiceJobs = [], si
 
       {expanded && (
         <div className="mt-3">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{isFetching ? "Checking Drive…" : "Drive values"}</span>
+            {refreshDriveButton}
+          </div>
           {isLoading && (
             <div className="space-y-2">
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-8 w-full" />)}

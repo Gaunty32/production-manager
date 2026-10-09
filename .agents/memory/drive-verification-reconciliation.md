@@ -52,3 +52,11 @@ When Drive records actual quantities below the six-unit minimum but the invoice 
 **Why:** This is an intentional billing rule, not a reconciliation error.
 
 **How to apply:** Only excuse the difference when the matched Drive quantity and actual-quantity value agree with the job, and the invoice agrees with the existing grouped minimum-order calculation. Keep genuine price/quantity discrepancies, ambiguous matches, unknown prices and manual price overrides flagged for investigation. Do not change invoice prices or Drive quantities to force a match.
+
+## Values edited in Sheets while the invoicing page stays open
+
+Provide an explicit fresh read and refetch when returning from the external sheet; do not treat React Query's stale-time expiry as an automatic refresh.
+
+**Why:** The panel retained old sheet prices after the sheet was corrected, producing a false mismatch even though a fresh Google read reconciled. Stale-time expiry only marks data stale; with focus refresh disabled, an open page keeps the old values.
+
+**How to apply:** Preserve throttled Google reads, use no-store responses and an on-demand refresh rather than aggressive background polling. Do not report cached reconciliation as current or automatically hide matched rows after a refresh failure.

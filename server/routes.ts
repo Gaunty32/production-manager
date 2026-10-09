@@ -12380,6 +12380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Uses @replit/connectors-sdk to access Google Drive + Sheets
 
   app.get("/api/google-drive/customer-rows", isStaffAuthenticated, async (req, res) => {
+    res.set("Cache-Control", "no-store");
     try {
       const { customerName } = req.query;
       if (!customerName || typeof customerName !== "string") {
