@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart, Phone, Mail, MessageCircle, Headphones, Lightbulb, MapPin, BookOpen, ArrowRight } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import sbsLogo from "@assets/logo_transparent.png";
@@ -690,6 +690,46 @@ export default function CustomerDashboard() {
           />
         </div>
 
+        {/* Compact Knowledge Centre preview */}
+        <section
+          className="mb-6 rounded-md border bg-card px-4 py-3"
+          aria-labelledby="heading-knowledge-centre-preview"
+          data-testid="card-knowledge-centre"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <h2 id="heading-knowledge-centre-preview" className="flex items-center gap-2 text-base font-semibold">
+              <BookOpen className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              Knowledge Centre
+            </h2>
+            <Link
+              href="/customer/knowledge-centre"
+              className="inline-flex shrink-0 items-center text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              data-testid="button-view-all-knowledge-centre"
+            >
+              View all <ArrowRight className="ml-1 h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
+          {isLoadingKnowledge ? (
+            <p className="mt-2 text-sm text-muted-foreground" role="status">Loading articles...</p>
+          ) : knowledgeArticles.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">New advice will appear here soon.</p>
+          ) : (
+            <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5" aria-label="Latest Knowledge Centre articles">
+              {knowledgeArticles.map((article) => (
+                <li key={article.slug} className="min-w-0 max-w-full">
+                  <Link
+                    href={`/customer/knowledge-centre/${article.slug}`}
+                    className="block max-w-full break-words text-sm text-foreground underline decoration-border underline-offset-4 hover:text-primary hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    data-testid={`link-customer-article-${article.slug}`}
+                  >
+                    {article.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {/* Contact Us section */}
         <div className="mb-6">
           <h2 className="text-center text-lg font-semibold mb-3" data-testid="heading-contact-us">Contact Us</h2>
@@ -938,51 +978,6 @@ export default function CustomerDashboard() {
           </div>
 
           <div>
-             <Card className="mb-6 overflow-hidden" data-testid="card-knowledge-centre">
-               <CardHeader className="flex flex-row items-center justify-between gap-4">
-                 <div>
-                   <CardTitle className="flex items-center gap-2 text-xl">
-                     <BookOpen className="h-5 w-5 text-primary" />
-                     Knowledge Centre
-                   </CardTitle>
-                   <p className="mt-1 text-sm text-muted-foreground">
-                     Practical advice from Select Branding Solutions, including the latest articles from our RSS feed.
-                   </p>
-                 </div>
-                 <Button variant="outline" size="sm" onClick={() => setLocation("/customer/knowledge-centre")} data-testid="button-view-knowledge-centre">
-                   View all <ArrowRight className="ml-2 h-4 w-4" />
-                 </Button>
-               </CardHeader>
-               <CardContent>
-                 {isLoadingKnowledge ? (
-                   <p className="text-sm text-muted-foreground">Loading articles...</p>
-                 ) : knowledgeArticles.length === 0 ? (
-                   <p className="text-sm text-muted-foreground">New advice will appear here soon.</p>
-                 ) : (
-                   <div className="grid gap-4 md:grid-cols-3">
-                     {knowledgeArticles.map((article) => (
-                       <button
-                         key={article.slug}
-                         type="button"
-                         className="group rounded-lg border bg-card text-left transition-shadow hover:shadow-md"
-                          onClick={() => setLocation(`/customer/knowledge-centre/${article.slug}`)}
-                         data-testid={`link-customer-article-${article.slug}`}
-                       >
-                         {article.imageUrl && (
-                           <img src={article.imageUrl} alt="" className="aspect-[16/9] w-full rounded-t-lg object-cover" loading="lazy" decoding="async" />
-                         )}
-                         <div className="p-4">
-                           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{article.category}</p>
-                           <h3 className="mt-2 line-clamp-2 font-semibold group-hover:text-primary">{article.title}</h3>
-                           <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{article.excerpt}</p>
-                           <span className="mt-3 inline-flex items-center text-sm font-medium text-primary">Read article <ArrowRight className="ml-1 h-3.5 w-3.5" /></span>
-                         </div>
-                       </button>
-                     ))}
-                   </div>
-                 )}
-               </CardContent>
-             </Card>
             <h2 className="text-xl font-semibold text-foreground mb-2">Production Queue</h2>
             <p className="text-sm text-muted-foreground">
               View the status and progress of your orders in production
