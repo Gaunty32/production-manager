@@ -15,6 +15,7 @@ import { scheduleWeeklySummary } from "./weeklySummary";
 import { scheduleOverdueInvoiceReminders } from "./overdueInvoiceReminders";
 import { scheduleWeeklyArticleCampaign } from "./highLevelCampaign";
 import { startCustomerOrderNotificationRetryWorker } from "./customerOrderNotifications";
+import { scheduleAwaitingGarmentsReminders } from "./awaitingGarmentsReminders";
 
 const app = express();
 // Allow the HighLevel landing page to use the public callback API.
@@ -131,6 +132,7 @@ app.use((req, res, next) => {
   scheduleInactiveCustomerChecks();
   scheduleWeeklySummary();
   scheduleOverdueInvoiceReminders();
+  scheduleAwaitingGarmentsReminders();
   scheduleWeeklyArticleCampaign();
   startCustomerOrderNotificationRetryWorker();
   const server = await registerRoutes(app);

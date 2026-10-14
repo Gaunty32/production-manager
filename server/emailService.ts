@@ -167,7 +167,7 @@ export async function sendProductionStartedEmail(
 
 // ─── Branded email wrapper ────────────────────────────────────────────────────
 // All emails share this shell so branding updates happen in one place.
-function brandedEmail(bodyHtml: string, opts?: { customerLogoUrl?: string | null; customerName?: string | null; noReply?: boolean }): string {
+export function brandedEmail(bodyHtml: string, opts?: { customerLogoUrl?: string | null; customerName?: string | null; noReply?: boolean }): string {
   const sbLogoUrl = `${getBaseUrl()}/logo.png`;
   const customerLogo = opts?.customerLogoUrl;
   const customerName = opts?.customerName ?? 'Customer';
@@ -1090,6 +1090,33 @@ export async function sendWebsiteLeadNotification(params: WebsiteLeadNotificatio
   }, params.kind === 'callback' ? { idempotencyKey: `website-callback-${params.requestId}` } : undefined);
   if (result.error || !result.data?.id) {
     throw new Error('Failed to send website enquiry notification to info@selectbranding.co.uk');
+  }
+}
+
+export async function sendAwaitingGarmentsReminderEmail(
+  to: string[], idempotencyKey: string,
+  message: { subject: string; html: string; text: string },
+): Promise<string> {
+  const { client, fromEmail } = await getUncachableResendClient();
+  try {
+    const result = await sendEmail(client, {
+      from: fromEmail || 'info@selectbranding.co.uk', to,
+      replyTo: 'info@selectbranding.co.uk', ...message,
+    }, { idempotencyKey });
+    if (result.error) {
+      throw new EmailDeliveryError(
+        `Awaiting-garments reminder rejected: ${result.error.message}`,
+        isPermanentResendRecipientError(result.error),
+      );
+    }
+    if (!result.data?.id) throw new Error('Email provider did not return a delivery ID.');
+    return result.data.id;
+  } catch (error: any) {
+    if (error instanceof EmailDeliveryError) throw error;
+    throw new EmailDeliveryError(
+      `Awaiting-garments reminder failed: ${error?.message || 'email provider request failed'}`,
+      isPermanentResendRecipientError(error),
+    );
   }
 }
 
