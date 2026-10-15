@@ -714,15 +714,26 @@ export default function CustomerDashboard() {
           ) : knowledgeArticles.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">New advice will appear here soon.</p>
           ) : (
-            <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5" aria-label="Latest Knowledge Centre articles">
+            <ul className="mt-2 grid min-w-0 grid-cols-1 gap-2 md:grid-cols-3" aria-label="Latest Knowledge Centre articles">
               {knowledgeArticles.map((article) => (
-                <li key={article.slug} className="min-w-0 max-w-full">
+                <li key={article.slug} className="min-w-0">
                   <Link
                     href={`/customer/knowledge-centre/${article.slug}`}
-                    className="block max-w-full break-words text-sm text-foreground underline decoration-border underline-offset-4 hover:text-primary hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="flex min-w-0 items-center gap-2 text-sm text-foreground underline decoration-border underline-offset-4 hover:text-primary hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     data-testid={`link-customer-article-${article.slug}`}
                   >
-                    {article.title}
+                    {article.imageUrl && (
+                      <img
+                        src={article.imageUrl}
+                        alt=""
+                        width={48}
+                        height={48}
+                        className="h-12 w-12 shrink-0 rounded object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    )}
+                    <span className="min-w-0 line-clamp-2 break-words">{article.title}</span>
                   </Link>
                 </li>
               ))}

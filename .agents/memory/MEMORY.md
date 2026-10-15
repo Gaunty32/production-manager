@@ -74,3 +74,4 @@
 - [Customer print artwork](customer-print-artwork.md) — print-only customers supply artwork at the correct colour and size; embroidery preparation requirements do not apply.
 - [Overdue reminder policy](overdue-reminder-policy.md) — user chose existing app timers with delayed catch-up, not a project migration; reminders must not automatically change credit terms.
 - [Awaiting garments reminders](awaiting-garments-reminder-policy.md) — weekly follow-up after seven days in Awaiting Line Items; missing garments are likely, not certain.
+- [Knowledge Centre presentation](customer-knowledge-centre-presentation.md) — keep small thumbnails; reduced prominence in the planner must not mean removing imagery.
