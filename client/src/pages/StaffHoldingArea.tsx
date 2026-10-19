@@ -28,6 +28,7 @@ import {
 import { StaffJobFileUpload } from "@/components/StaffJobFileUpload";
 import { JobFormDialog } from "@/components/JobFormDialog";
 import { JobEditDialog } from "@/components/JobEditDialog";
+import { getRequestedJobTypeLabel } from "@shared/requested-job-type";
 import { getCustomerShippingOptionLabel } from "@shared/shipping-options";
 
 type Job = {
@@ -38,6 +39,7 @@ type Job = {
   customerName: string;
   customerStripePaymentLink?: string | null;
   customerCreditAccount?: boolean;
+  requestedJobType?: string | null;
   poNumber: string | null;
   quantity: number;
   requiredDispatchDate: string | null;
@@ -284,6 +286,7 @@ export default function StaffHoldingArea() {
     const submitted = job.submittedAt
       ? format(new Date(job.submittedAt), "d MMM yyyy 'at' HH:mm")
       : "";
+    const jobType = getRequestedJobTypeLabel(job.requestedJobType);
 
     const row = (label: string, value: string) =>
       value
@@ -324,6 +327,7 @@ export default function StaffHoldingArea() {
     ${row("Required Date", esc(requiredDate))}
     ${row("Submitted", esc(submitted))}
     ${row("Files", esc(job.files?.length || 0))}
+    ${row("Job Type", esc(jobType))}
     ${row("Customer Shipment Option", esc(getCustomerShippingOptionLabel(job.requestedShippingMethod)))}
   </div>
   ${block("Delivery Address", job.deliveryAddress ? esc(job.deliveryAddress) : "")}
@@ -499,6 +503,22 @@ export default function StaffHoldingArea() {
                     <CardTitle className="text-lg mb-1 truncate" data-testid={`text-jobname-${job.id}`}>
                       {job.jobName}
                     </CardTitle>
+                    <Badge
+                      variant="outline"
+                      data-testid={`badge-job-type-${job.id}`}
+                      aria-label={`Job type: ${getRequestedJobTypeLabel(job.requestedJobType)}`}
+                      className={`mt-1 max-w-full whitespace-normal break-words ${
+                        job.requestedJobType === "Embroidery"
+                          ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200"
+                          : job.requestedJobType === "Print"
+                            ? "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200"
+                            : job.requestedJobType === "Mix"
+                              ? "border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200"
+                              : "border-muted-foreground/30 bg-muted/50 text-muted-foreground"
+                      }`}
+                    >
+                      {getRequestedJobTypeLabel(job.requestedJobType)}
+                    </Badge>
                     {job.poNumber && (
                       <p className="text-sm text-muted-foreground">PO: {job.poNumber}</p>
                     )}
