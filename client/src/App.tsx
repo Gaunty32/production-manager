@@ -44,6 +44,7 @@ const CustomerSubmitJob = lazy(() => import("@/pages/CustomerSubmitJob"));
 const CustomerPendingJobs = lazy(() => import("@/pages/CustomerPendingJobs"));
 const CustomerJobDetail = lazy(() => import("@/pages/CustomerJobDetail"));
 const CustomerDocuments = lazy(() => import("@/pages/CustomerDocuments"));
+const CustomerThreadLibrary = lazy(() => import("@/pages/CustomerThreadLibrary"));
 const CustomerPasswordReset = lazy(() => import("@/pages/CustomerPasswordReset"));
 const CustomerInbox = lazy(() => import("@/pages/CustomerInbox"));
 const CustomerTeam = lazy(() => import("@/pages/CustomerTeam"));
@@ -260,7 +261,7 @@ function CustomerPortalApp() {
       <Route path="/customer/delivery-address" component={CustomerDeliveryAddress} />
       <Route path="/customer/knowledge-centre/:slug" component={CustomerKnowledgeCentre} />
       <Route path="/customer/knowledge-centre" component={CustomerKnowledgeCentre} />
-      <Route path="/customer/thread-library">{() => <ThreadColourChart customerView />}</Route>
+      <Route path="/customer/thread-library" component={CustomerThreadLibrary} />
       <Route path="/customer/dashboard" component={CustomerDashboard} />
       <Route path="/customer" component={CustomerDashboard} />
       <Route component={NotFound} />

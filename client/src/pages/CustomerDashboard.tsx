@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart, Phone, Mail, MessageCircle, Headphones, Lightbulb, MapPin, BookOpen, ArrowRight } from "lucide-react";
+import { LogOut, Package, Clock, CheckCircle2, AlertCircle, Plus, FileText, Search, ArrowUpDown, ArrowUp, ArrowDown, Key, MessageSquare, Users, Receipt, Menu, PoundSterling, CreditCard, ShoppingCart, Phone, Mail, MessageCircle, Headphones, Lightbulb, MapPin, BookOpen, ArrowRight, Palette } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import sbsLogo from "@assets/logo_transparent.png";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -631,9 +631,9 @@ export default function CustomerDashboard() {
                       <FileText className="h-4 w-4" />
                       Pending Submissions
                     </Button>
-                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/documents")} data-testid="menu-documents">
-                      <FileText className="h-4 w-4" />
-                      Documents
+                    <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/thread-library")} data-testid="menu-thread-library">
+                      <Palette className="h-4 w-4" />
+                      Thread Library
                     </Button>
                     <Button variant="ghost" className="justify-start gap-3 h-11" onClick={() => setLocation("/customer/invoices")} data-testid="menu-invoices">
                       <Receipt className="h-4 w-4" />
@@ -899,11 +899,11 @@ export default function CustomerDashboard() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => setLocation("/customer/documents")}
-              data-testid="button-view-documents"
+              onClick={() => setLocation("/customer/thread-library")}
+              data-testid="button-thread-library"
             >
-              <FileText className="h-4 w-4 mr-2" />
-              Documents
+              <Palette className="h-4 w-4 mr-2" />
+              Thread Library
             </Button>
             <Button
               variant="outline"

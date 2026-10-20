@@ -1,7 +1,24 @@
-import { threadColourKey } from "./thread-colours";
+import type { ThreadColour } from "./schema";
+import { compareThreadCodes, indexThreadColours, threadColourKey } from "./thread-colours";
 
 export const THREAD_SHEET_TABS = ["Classic 40", "Classic 60", "Poly Neon 60"] as const;
 export type ThreadSheetColours = Record<string, string[]>;
+export type ListedThreadColour = { code: string; chart: string; colour: ThreadColour | null };
+
+/** Every listed thread remains visible, even before shade reference data is supplied. */
+export function buildListedThreadColours(
+  colours: ThreadColour[], sheet: ThreadSheetColours,
+): ListedThreadColour[] {
+  const byKey = indexThreadColours(colours);
+  const listed = new Map<string, ListedThreadColour>();
+  for (const [chart, codes] of Object.entries(sheet)) {
+    for (const code of codes) {
+      const key = threadColourKey(chart, code);
+      listed.set(key, { code: code.trim(), chart, colour: byKey.get(key) ?? null });
+    }
+  }
+  return Array.from(listed.values()).sort(compareThreadCodes);
+}
 
 /** The most recent daily 08:00 UK checkpoint, including GMT/BST changes. */
 export function threadSheetPeriod(now = new Date()): string {

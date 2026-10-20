@@ -7,7 +7,7 @@ import path from "path";
 import { storage } from "./storage";
 import { withSuppliedThreadColours } from "./threadColourCatalog";
 import { getThreadSheetSnapshot } from "./threadSheetSync";
-import { filterListedThreadColours } from "@shared/thread-sheet";
+import { buildListedThreadColours, filterListedThreadColours } from "@shared/thread-sheet";
 import { isOverdueInvoice, parseXeroInvoiceDate } from "./overdueInvoiceRules";
 import { sendWebsiteLeadNotification } from "./emailService";
 import { buildDashboardTvData, TOKEN_KEY, SLUG_KEY, DAILY_TARGET_KEY, DEFAULT_DAILY_TARGET, generateTvSlug } from "./dashboardTv";
@@ -12719,6 +12719,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(filterListedThreadColours(withSuppliedThreadColours(colours), snapshot.colours));
     } catch {
       res.status(503).json({ error: "Could not load the Google Sheet thread list. Please try again shortly." });
+    }
+  });
+
+  // Customer shade card: include listed codes without a known shade, never invent colours.
+  app.get("/api/thread-library/listed-colours", async (_req, res) => {
+    try {
+      const [colours, snapshot] = await Promise.all([
+        storage.getThreadColours(), getThreadSheetSnapshot(),
+      ]);
+      res.setHeader("X-Thread-Sheet-Synced-At", snapshot.syncedAt!);
+      res.json(buildListedThreadColours(withSuppliedThreadColours(colours), snapshot.colours));
+    } catch {
+      res.status(503).json({ error: "Could not load the thread library. Please try again shortly." });
     }
   });
 

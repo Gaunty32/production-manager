@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  filterListedThreadColours, parseThreadSheetResponse, threadSheetPeriod, threadSheetSyncDue,
+  buildListedThreadColours, filterListedThreadColours, parseThreadSheetResponse, threadSheetPeriod, threadSheetSyncDue,
 } from "./thread-sheet";
+import { compareThreadCodes, getThreadRangeLabel } from "./thread-colours";
+import type { ThreadColour } from "./schema";
 
 test("8am UK cutoff follows summer and winter time, including clock changes", () => {
   assert.equal(threadSheetPeriod(new Date("2026-07-10T06:59:59Z")), "2026-07-09");
@@ -52,4 +54,29 @@ test("only listed chart/code pairs are shown, including removals and empty lists
     "Classic 40": ["1010"], "Classic 60": [], "Poly Neon 60": ["1557"],
   }), [colours[0], colours[3]]);
   assert.deepEqual(filterListedThreadColours(colours, { "Classic 40": [] }), []);
+});
+
+test("customer catalogue includes every listed code but never invents missing shades", () => {
+  const known: ThreadColour = {
+    id: 1, code: "1010", chart: "Madeira Classic 40", name: "Gray Haze", flag: "A",
+    r: 192, g: 199, b: 193, createdAt: new Date(),
+  };
+  const result = buildListedThreadColours([known, { ...known, code: "9999" }], {
+    "Classic 40": ["1010", "1010"], "Classic 60": ["1010"], "Poly Neon 60": ["1557"],
+  });
+  assert.equal(result.length, 3);
+  assert.equal(result.find(c => c.chart === "Classic 40")?.colour?.name, "Gray Haze");
+  assert.equal(result.find(c => c.chart === "Classic 60")?.colour, null);
+  assert.equal(result.find(c => c.chart === "Poly Neon 60")?.colour, null);
+  assert.equal(result.some(c => c.code === "9999"), false);
+});
+
+test("range labels and numerical ordering are customer friendly", () => {
+  assert.equal(getThreadRangeLabel("Madeira Classic 40"), "Classic 40");
+  assert.equal(getThreadRangeLabel("Classic 60"), "Classic 60");
+  assert.equal(getThreadRangeLabel("Poly Neon 60"), "PolyNeon60");
+  assert.equal(getThreadRangeLabel("Madeira PolyNeon 60"), "PolyNeon60");
+  const sorted = ["100", "20", "3"].map(code => ({ chart: "Classic 40", code })).sort(compareThreadCodes);
+  assert.deepEqual(sorted.map(c => c.code), ["3", "20", "100"]);
+  assert.deepEqual([...sorted].reverse().map(c => c.code), ["100", "20", "3"]);
 });
