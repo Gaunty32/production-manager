@@ -120,7 +120,10 @@ export default function CustomerThreadLibrary() {
   }, [listedColours, rangeFilter, search, sortDirection]);
 
   return (
-    <div className="min-h-[100dvh] bg-background">
+    <div
+      className="h-screen h-dvh overflow-y-auto overscroll-y-contain bg-background"
+      data-testid="customer-thread-library-scroll-area"
+    >
       {isImpersonating && <ImpersonationBanner customerEmail={customerUser?.email ?? ""} />}
 
       <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur">

@@ -194,7 +194,10 @@ export default function ThreadColourChart({ customerView = false }: { customerVi
   const activeCharts = activeTab === "sheet" ? myCharts : charts;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      className={`${customerView ? "h-screen h-dvh" : "h-full min-h-0"} overflow-y-auto overscroll-y-contain bg-background`}
+      data-testid="thread-library-scroll-area"
+    >
       {isImpersonating && <ImpersonationBanner customerEmail="" />}
 
       {/* Header */}
