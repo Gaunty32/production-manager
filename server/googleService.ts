@@ -25,7 +25,7 @@ function throttle(): Promise<void> {
 const isRateLimitError = (status: number, err: any): boolean =>
   status === 429 || err?.code === 429 || /rate limit/i.test(String(err?.message || ""));
 
-async function googleApiJson(connector: string, path: string, init: { method: string; headers?: Record<string, string>; body?: string }): Promise<any> {
+export async function googleApiJson(connector: string, path: string, init: { method: string; headers?: Record<string, string>; body?: string }): Promise<any> {
   const MAX_ATTEMPTS = 4;
   for (let attempt = 1; ; attempt++) {
     await throttle();

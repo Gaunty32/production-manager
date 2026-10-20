@@ -20,6 +20,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ThreadColour } from "@shared/schema";
+import { indexThreadColours, threadColourKey } from "@shared/thread-colours";
 
 function luminance(r: number, g: number, b: number) {
   return 0.299 * r + 0.587 * g + 0.114 * b;
@@ -82,15 +83,37 @@ export default function ThreadColourChart({ customerView = false }: { customerVi
 
   const isStaff = user?.role !== undefined;
 
-  const { data: colours = [], isLoading } = useQuery<ThreadColour[]>({
+  const { data: colours = [], isLoading, isError: libraryError, refetch: refetchLibrary } = useQuery<ThreadColour[]>({
     queryKey: ["/api/thread-library"],
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
 
-  const { data: sheetColours, isLoading: sheetLoading, refetch: refetchSheet } = useQuery<Record<string, string[]>>({
+  const { data: sheetColours, isLoading: sheetLoading } = useQuery<Record<string, string[]>>({
     queryKey: ["/api/thread-library/sheet-colours"],
     enabled: isStaff && !customerView,
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
+  const [refreshingSheet, setRefreshingSheet] = useState(false);
+
+  async function refreshSheet() {
+    setRefreshingSheet(true);
+    try {
+      await apiRequest("POST", "/api/thread-library/sync-sheet");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/thread-library"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/thread-library/sheet-colours"] }),
+      ]);
+      toast({ title: "All three thread tabs refreshed" });
+    } catch (error: any) {
+      toast({ title: "Refresh failed", description: error.message, variant: "destructive" });
+    } finally {
+      setRefreshingSheet(false);
+    }
+  }
 
   const charts = useMemo(() => {
     const set = new Set(colours.map(c => c.chart));
@@ -112,11 +135,11 @@ export default function ThreadColourChart({ customerView = false }: { customerVi
   // Build "My Colours" list — sheet codes cross-referenced with TCH library
   const myColours = useMemo(() => {
     if (!sheetColours) return [];
-    const byCode = new Map(colours.map(c => [c.code, c]));
+    const byRangeAndCode = indexThreadColours(colours);
     const result: Array<{ code: string; chart: string; tchColour: ThreadColour | null }> = [];
     for (const [chart, codes] of Object.entries(sheetColours)) {
       for (const code of codes) {
-        result.push({ code, chart, tchColour: byCode.get(code) ?? null });
+        result.push({ code, chart, tchColour: byRangeAndCode.get(threadColourKey(chart, code)) ?? null });
       }
     }
     return result;
@@ -228,7 +251,7 @@ export default function ThreadColourChart({ customerView = false }: { customerVi
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Thread Colour Library</h1>
               <p className="text-muted-foreground mt-0.5">
-                Madeira Classic 40 &amp; PolyNeon 40 — select your thread colour by code or name
+                Shades are shown only for codes on our Google Sheet. The list is checked daily at 8am UK time.
               </p>
             </div>
           </div>
@@ -241,7 +264,7 @@ export default function ThreadColourChart({ customerView = false }: { customerVi
           <div className="flex flex-wrap items-center gap-3 mb-5">
             <TabsList data-testid="tabs-thread-library">
               <TabsTrigger value="library" data-testid="tab-full-library">
-                Full Library
+                Shade Card
                 {colours.length > 0 && (
                   <Badge variant="secondary" className="ml-1.5 text-xs no-default-active-elevate">
                     {colours.length}
@@ -294,16 +317,26 @@ export default function ThreadColourChart({ customerView = false }: { customerVi
                 <div className="h-10 w-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
                 <p className="text-sm">Loading thread library…</p>
               </div>
+            ) : libraryError ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <p className="font-medium">Unable to load the shade card.</p>
+                  <p className="text-sm text-muted-foreground mt-1">The Google Sheet list could not be loaded. Please try again.</p>
+                  <Button variant="outline" size="sm" className="mt-4" onClick={() => refetchLibrary()}>
+                    Retry
+                  </Button>
+                </CardContent>
+              </Card>
             ) : colours.length === 0 ? (
               <Card>
                 <CardContent className="py-16 text-center">
                   <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                     <Palette className="h-7 w-7 text-muted-foreground/50" />
                   </div>
-                  <p className="font-medium text-muted-foreground">No thread colours loaded yet.</p>
+                  <p className="font-medium text-muted-foreground">No listed thread codes have matching shades yet.</p>
                   {isStaff && (
                     <p className="text-sm text-muted-foreground/70 mt-1">
-                      Use the "Sync .TCH file" button above to load your Wilcom thread library.
+                      Add codes to the Google Sheet, or use "Sync .TCH file" to supply shades for the listed thread ranges.
                     </p>
                   )}
                 </CardContent>
@@ -339,7 +372,7 @@ export default function ThreadColourChart({ customerView = false }: { customerVi
                     <p className="text-sm text-muted-foreground/70 mt-1">
                       Make sure the sheet has colour codes in column A across the Classic 40, Classic 60, and Poly Neon 60 tabs.
                     </p>
-                    <Button variant="outline" size="sm" className="mt-4" onClick={() => refetchSheet()}>
+                    <Button variant="outline" size="sm" className="mt-4" onClick={refreshSheet} disabled={refreshingSheet}>
                       <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                       Retry
                     </Button>
@@ -356,8 +389,8 @@ export default function ThreadColourChart({ customerView = false }: { customerVi
                           <> — <span className="text-amber-600 dark:text-amber-400">{sheetTotal - matchedCount} not yet in library</span> (sync your .TCH file to add them)</>
                         )}
                       </span>
-                      <Button variant="ghost" size="sm" className="ml-auto" onClick={() => refetchSheet()} data-testid="button-refresh-sheet">
-                        <RefreshCw className="h-3.5 w-3.5" />
+                      <Button variant="ghost" size="sm" className="ml-auto" onClick={refreshSheet} disabled={refreshingSheet} aria-label="Refresh all three Google Sheet tabs" data-testid="button-refresh-sheet">
+                        <RefreshCw className={`h-3.5 w-3.5 ${refreshingSheet ? "animate-spin" : ""}`} />
                       </Button>
                     </div>
                   )}

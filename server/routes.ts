@@ -5,6 +5,9 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { storage } from "./storage";
+import { withSuppliedThreadColours } from "./threadColourCatalog";
+import { getThreadSheetSnapshot } from "./threadSheetSync";
+import { filterListedThreadColours } from "@shared/thread-sheet";
 import { isOverdueInvoice, parseXeroInvoiceDate } from "./overdueInvoiceRules";
 import { sendWebsiteLeadNotification } from "./emailService";
 import { buildDashboardTvData, TOKEN_KEY, SLUG_KEY, DAILY_TARGET_KEY, DEFAULT_DAILY_TARGET, generateTvSlug } from "./dashboardTv";
@@ -12709,10 +12712,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Public endpoint — accessible to staff and customers without auth
   app.get("/api/thread-library", async (_req, res) => {
     try {
-      const colours = await storage.getThreadColours();
-      res.json(colours);
+      const [colours, snapshot] = await Promise.all([
+        storage.getThreadColours(), getThreadSheetSnapshot(),
+      ]);
+      res.setHeader("X-Thread-Sheet-Synced-At", snapshot.syncedAt!);
+      res.json(filterListedThreadColours(withSuppliedThreadColours(colours), snapshot.colours));
     } catch {
-      res.status(500).json({ error: "Failed to fetch thread colours" });
+      res.status(503).json({ error: "Could not load the Google Sheet thread list. Please try again shortly." });
     }
   });
 
@@ -12760,34 +12766,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Staff only — fetch colour codes from the Google Sheet (3 tabs: Classic 40, Classic 60, Poly Neon 60)
+  // Staff only — use the same durable daily snapshot as the public shade card.
   app.get("/api/thread-library/sheet-colours", isStaffAuthenticated, async (_req, res) => {
     try {
-      const { ReplitConnectors } = await import("@replit/connectors-sdk");
-      const connectors = new ReplitConnectors();
-      const SHEET_ID = "1mxsnnNoe-DwJGwlGh980x19euie-c-Ek0ug3pGBw3vs";
-      const TABS = ["Classic 40", "Classic 60", "Poly Neon 60"];
-
-      const results: Record<string, string[]> = {};
-      await Promise.all(
-        TABS.map(async (tab) => {
-          const r = await connectors.proxy(
-            "google-sheet",
-            `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(tab)}!A1:A1000`,
-            { method: "GET" }
-          );
-          const data = await r.json();
-          const codes: string[] = (data.values || [])
-            .map((row: string[]) => (row[0] || "").trim())
-            .filter(Boolean);
-          if (codes.length > 0) results[tab] = codes;
-        })
-      );
-
-      res.json(results);
+      res.json((await getThreadSheetSnapshot()).colours);
     } catch (error) {
       console.error("Sheet colours fetch error:", error);
       res.status(500).json({ error: "Failed to fetch sheet colours" });
+    }
+  });
+
+  app.post("/api/thread-library/sync-sheet", isStaffAuthenticated, async (_req, res) => {
+    try {
+      const snapshot = await getThreadSheetSnapshot(true);
+      res.json({ syncedAt: snapshot.syncedAt });
+    } catch (error) {
+      console.error("Thread sheet manual sync error:", error);
+      res.status(503).json({ error: "Could not refresh all three thread tabs. The previous list has been kept." });
     }
   });
 

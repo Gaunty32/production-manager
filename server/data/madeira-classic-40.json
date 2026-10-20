@@ -1,0 +1,3485 @@
+[
+  {
+    "code": "1123",
+    "chart": "Madeira Classic 40",
+    "name": "Parchment",
+    "flag": "A",
+    "r": 253,
+    "g": 243,
+    "b": 191
+  },
+  {
+    "code": "1067",
+    "chart": "Madeira Classic 40",
+    "name": "Lemon Chiffon",
+    "flag": "A",
+    "r": 251,
+    "g": 232,
+    "b": 160
+  },
+  {
+    "code": "1349",
+    "chart": "Madeira Classic 40",
+    "name": "Palomino",
+    "flag": "A",
+    "r": 247,
+    "g": 221,
+    "b": 135
+  },
+  {
+    "code": "1083",
+    "chart": "Madeira Classic 40",
+    "name": "Daisy",
+    "flag": "A",
+    "r": 255,
+    "g": 212,
+    "b": 65
+  },
+  {
+    "code": "1124",
+    "chart": "Madeira Classic 40",
+    "name": "Buttercup",
+    "flag": "A",
+    "r": 255,
+    "g": 210,
+    "b": 45
+  },
+  {
+    "code": "1125",
+    "chart": "Madeira Classic 40",
+    "name": "Saffron",
+    "flag": "A",
+    "r": 250,
+    "g": 192,
+    "b": 48
+  },
+  {
+    "code": "1066",
+    "chart": "Madeira Classic 40",
+    "name": "Cornmeal",
+    "flag": "A",
+    "r": 255,
+    "g": 228,
+    "b": 160
+  },
+  {
+    "code": "1061",
+    "chart": "Madeira Classic 40",
+    "name": "Vanilla Pudding",
+    "flag": "A",
+    "r": 255,
+    "g": 228,
+    "b": 166
+  },
+  {
+    "code": "1171",
+    "chart": "Madeira Classic 40",
+    "name": "Lemon Drop",
+    "flag": "A",
+    "r": 248,
+    "g": 189,
+    "b": 65
+  },
+  {
+    "code": "1172",
+    "chart": "Madeira Classic 40",
+    "name": "Egg Yolk",
+    "flag": "A",
+    "r": 226,
+    "g": 153,
+    "b": 19
+  },
+  {
+    "code": "1025",
+    "chart": "Madeira Classic 40",
+    "name": "Military Gold",
+    "flag": "A",
+    "r": 196,
+    "g": 128,
+    "b": 5
+  },
+  {
+    "code": "1065",
+    "chart": "Madeira Classic 40",
+    "name": "Copper",
+    "flag": "A",
+    "r": 216,
+    "g": 117,
+    "b": 3
+  },
+  {
+    "code": "1137",
+    "chart": "Madeira Classic 40",
+    "name": "Citrus Burst",
+    "flag": "A",
+    "r": 255,
+    "g": 162,
+    "b": 0
+  },
+  {
+    "code": "1437",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 255,
+    "g": 167,
+    "b": 16
+  },
+  {
+    "code": "1024",
+    "chart": "Madeira Classic 40",
+    "name": "Gold Rush",
+    "flag": "A",
+    "r": 255,
+    "g": 179,
+    "b": 0
+  },
+  {
+    "code": "1069",
+    "chart": "Madeira Classic 40",
+    "name": "Sunshine Yellow",
+    "flag": "A",
+    "r": 255,
+    "g": 192,
+    "b": 0
+  },
+  {
+    "code": "1068",
+    "chart": "Madeira Classic 40",
+    "name": "Canary",
+    "flag": "A",
+    "r": 255,
+    "g": 201,
+    "b": 0
+  },
+  {
+    "code": "1064",
+    "chart": "Madeira Classic 40",
+    "name": "Goldenrod",
+    "flag": "A",
+    "r": 255,
+    "g": 208,
+    "b": 0
+  },
+  {
+    "code": "1223",
+    "chart": "Madeira Classic 40",
+    "name": "Lemon Tart",
+    "flag": "A",
+    "r": 237,
+    "g": 208,
+    "b": 13
+  },
+  {
+    "code": "1180",
+    "chart": "Madeira Classic 40",
+    "name": "Daffodil",
+    "flag": "A",
+    "r": 249,
+    "g": 214,
+    "b": 44
+  },
+  {
+    "code": "1135",
+    "chart": "Madeira Classic 40",
+    "name": "Baby Chick",
+    "flag": "A",
+    "r": 253,
+    "g": 232,
+    "b": 122
+  },
+  {
+    "code": "1022",
+    "chart": "Madeira Classic 40",
+    "name": "Corn Silk",
+    "flag": "A",
+    "r": 254,
+    "g": 251,
+    "b": 191
+  },
+  {
+    "code": "1023",
+    "chart": "Madeira Classic 40",
+    "name": "Lemon",
+    "flag": "A",
+    "r": 255,
+    "g": 237,
+    "b": 90
+  },
+  {
+    "code": "1224",
+    "chart": "Madeira Classic 40",
+    "name": "Lemonade",
+    "flag": "A",
+    "r": 241,
+    "g": 201,
+    "b": 51
+  },
+  {
+    "code": "1359",
+    "chart": "Madeira Classic 40",
+    "name": "Golden Nugget",
+    "flag": "A",
+    "r": 220,
+    "g": 169,
+    "b": 35
+  },
+  {
+    "code": "1159",
+    "chart": "Madeira Classic 40",
+    "name": "Mustard",
+    "flag": "A",
+    "r": 205,
+    "g": 164,
+    "b": 60
+  },
+  {
+    "code": "1192",
+    "chart": "Madeira Classic 40",
+    "name": "Honey Mustard",
+    "flag": "A",
+    "r": 154,
+    "g": 111,
+    "b": 15
+  },
+  {
+    "code": "1026",
+    "chart": "Madeira Classic 40",
+    "name": "Orange Sorbet",
+    "flag": "A",
+    "r": 252,
+    "g": 198,
+    "b": 141
+  },
+  {
+    "code": "1253",
+    "chart": "Madeira Classic 40",
+    "name": "Penny",
+    "flag": "A",
+    "r": 205,
+    "g": 128,
+    "b": 72
+  },
+  {
+    "code": "1421",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 165,
+    "g": 69,
+    "b": 32
+  },
+  {
+    "code": "1021",
+    "chart": "Madeira Classic 40",
+    "name": "Rust",
+    "flag": "A",
+    "r": 179,
+    "g": 79,
+    "b": 22
+  },
+  {
+    "code": "1155",
+    "chart": "Madeira Classic 40",
+    "name": "Marmalade",
+    "flag": "A",
+    "r": 243,
+    "g": 157,
+    "b": 89
+  },
+  {
+    "code": "1478",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 243,
+    "g": 108,
+    "b": 0
+  },
+  {
+    "code": "1278",
+    "chart": "Madeira Classic 40",
+    "name": "Orange Peel",
+    "flag": "A",
+    "r": 255,
+    "g": 113,
+    "b": 0
+  },
+  {
+    "code": "1078",
+    "chart": "Madeira Classic 40",
+    "name": "Pumpkin",
+    "flag": "A",
+    "r": 236,
+    "g": 86,
+    "b": 19
+  },
+  {
+    "code": "1178",
+    "chart": "Madeira Classic 40",
+    "name": "Carrot",
+    "flag": "A",
+    "r": 243,
+    "g": 99,
+    "b": 44
+  },
+  {
+    "code": "1378",
+    "chart": "Madeira Classic 40",
+    "name": "Paprika",
+    "flag": "A",
+    "r": 214,
+    "g": 46,
+    "b": 2
+  },
+  {
+    "code": "1379",
+    "chart": "Madeira Classic 40",
+    "name": "Mandarin",
+    "flag": "A",
+    "r": 216,
+    "g": 78,
+    "b": 54
+  },
+  {
+    "code": "1152",
+    "chart": "Madeira Classic 40",
+    "name": "Peach Tea",
+    "flag": "A",
+    "r": 252,
+    "g": 137,
+    "b": 106
+  },
+  {
+    "code": "1017",
+    "chart": "Madeira Classic 40",
+    "name": "Orange Wisp",
+    "flag": "A",
+    "r": 252,
+    "g": 199,
+    "b": 178
+  },
+  {
+    "code": "1018",
+    "chart": "Madeira Classic 40",
+    "name": "Light Salmon",
+    "flag": "A",
+    "r": 243,
+    "g": 180,
+    "b": 166
+  },
+  {
+    "code": "1254",
+    "chart": "Madeira Classic 40",
+    "name": "Dark Salmon",
+    "flag": "A",
+    "r": 226,
+    "g": 138,
+    "b": 119
+  },
+  {
+    "code": "1221",
+    "chart": "Madeira Classic 40",
+    "name": "Terra Cotta",
+    "flag": "A",
+    "r": 155,
+    "g": 59,
+    "b": 35
+  },
+  {
+    "code": "1020",
+    "chart": "Madeira Classic 40",
+    "name": "Bright Peach",
+    "flag": "A",
+    "r": 254,
+    "g": 146,
+    "b": 131
+  },
+  {
+    "code": "1179",
+    "chart": "Madeira Classic 40",
+    "name": "Sweet Potato",
+    "flag": "A",
+    "r": 193,
+    "g": 77,
+    "b": 60
+  },
+  {
+    "code": "1477",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 188,
+    "g": 51,
+    "b": 36
+  },
+  {
+    "code": "1146",
+    "chart": "Madeira Classic 40",
+    "name": "Tomato Red",
+    "flag": "A",
+    "r": 198,
+    "g": 36,
+    "b": 10
+  },
+  {
+    "code": "1037",
+    "chart": "Madeira Classic 40",
+    "name": "Cinnamon Candy",
+    "flag": "A",
+    "r": 181,
+    "g": 32,
+    "b": 16
+  },
+  {
+    "code": "1447",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 176,
+    "g": 31,
+    "b": 29
+  },
+  {
+    "code": "1147",
+    "chart": "Madeira Classic 40",
+    "name": "Christmas Red",
+    "flag": "A",
+    "r": 173,
+    "g": 23,
+    "b": 30
+  },
+  {
+    "code": "1484",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 182,
+    "g": 32,
+    "b": 49
+  },
+  {
+    "code": "1481",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 156,
+    "g": 15,
+    "b": 33
+  },
+  {
+    "code": "1181",
+    "chart": "Madeira Classic 40",
+    "name": "Candy Apple Red",
+    "flag": "A",
+    "r": 124,
+    "g": 24,
+    "b": 30
+  },
+  {
+    "code": "1238",
+    "chart": "Madeira Classic 40",
+    "name": "Sangria",
+    "flag": "A",
+    "r": 116,
+    "g": 29,
+    "b": 33
+  },
+  {
+    "code": "1013",
+    "chart": "Madeira Classic 40",
+    "name": "Peach Blush",
+    "flag": "A",
+    "r": 251,
+    "g": 220,
+    "b": 211
+  },
+  {
+    "code": "1015",
+    "chart": "Madeira Classic 40",
+    "name": "Desert Bloom",
+    "flag": "A",
+    "r": 246,
+    "g": 189,
+    "b": 183
+  },
+  {
+    "code": "1317",
+    "chart": "Madeira Classic 40",
+    "name": "Blush Pink",
+    "flag": "A",
+    "r": 235,
+    "g": 159,
+    "b": 151
+  },
+  {
+    "code": "1220",
+    "chart": "Madeira Classic 40",
+    "name": "Conch Shell",
+    "flag": "A",
+    "r": 219,
+    "g": 109,
+    "b": 109
+  },
+  {
+    "code": "1307",
+    "chart": "Madeira Classic 40",
+    "name": "Raspberry Punch",
+    "flag": "A",
+    "r": 214,
+    "g": 72,
+    "b": 70
+  },
+  {
+    "code": "1485",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 200,
+    "g": 37,
+    "b": 44
+  },
+  {
+    "code": "1039",
+    "chart": "Madeira Classic 40",
+    "name": "Brick Red",
+    "flag": "A",
+    "r": 145,
+    "g": 33,
+    "b": 31
+  },
+  {
+    "code": "1038",
+    "chart": "Madeira Classic 40",
+    "name": "Barn Red",
+    "flag": "A",
+    "r": 124,
+    "g": 33,
+    "b": 32
+  },
+  {
+    "code": "1114",
+    "chart": "Madeira Classic 40",
+    "name": "Pink Petal",
+    "flag": "A",
+    "r": 240,
+    "g": 195,
+    "b": 192
+  },
+  {
+    "code": "1115",
+    "chart": "Madeira Classic 40",
+    "name": "Powder Puff",
+    "flag": "A",
+    "r": 242,
+    "g": 187,
+    "b": 192
+  },
+  {
+    "code": "1315",
+    "chart": "Madeira Classic 40",
+    "name": "Pink Grapefruit",
+    "flag": "A",
+    "r": 233,
+    "g": 157,
+    "b": 166
+  },
+  {
+    "code": "1148",
+    "chart": "Madeira Classic 40",
+    "name": "Rustic Pink",
+    "flag": "A",
+    "r": 219,
+    "g": 140,
+    "b": 151
+  },
+  {
+    "code": "1384",
+    "chart": "Madeira Classic 40",
+    "name": "Merlot",
+    "flag": "A",
+    "r": 89,
+    "g": 28,
+    "b": 37
+  },
+  {
+    "code": "1385",
+    "chart": "Madeira Classic 40",
+    "name": "Garnet",
+    "flag": "A",
+    "r": 81,
+    "g": 28,
+    "b": 36
+  },
+  {
+    "code": "1182",
+    "chart": "Madeira Classic 40",
+    "name": "Mulberry",
+    "flag": "A",
+    "r": 107,
+    "g": 33,
+    "b": 44
+  },
+  {
+    "code": "1281",
+    "chart": "Madeira Classic 40",
+    "name": "Radish",
+    "flag": "A",
+    "r": 156,
+    "g": 30,
+    "b": 52
+  },
+  {
+    "code": "1184",
+    "chart": "Madeira Classic 40",
+    "name": "Scarlet Rose",
+    "flag": "A",
+    "r": 182,
+    "g": 32,
+    "b": 56
+  },
+  {
+    "code": "1154",
+    "chart": "Madeira Classic 40",
+    "name": "Lipstick Rose",
+    "flag": "A",
+    "r": 215,
+    "g": 69,
+    "b": 90
+  },
+  {
+    "code": "1107",
+    "chart": "Madeira Classic 40",
+    "name": "Honeysuckle",
+    "flag": "A",
+    "r": 229,
+    "g": 97,
+    "b": 115
+  },
+  {
+    "code": "1014",
+    "chart": "Madeira Classic 40",
+    "name": "Bermuda Sand",
+    "flag": "A",
+    "r": 240,
+    "g": 173,
+    "b": 182
+  },
+  {
+    "code": "1120",
+    "chart": "Madeira Classic 40",
+    "name": "Baby Pink",
+    "flag": "A",
+    "r": 236,
+    "g": 186,
+    "b": 198
+  },
+  {
+    "code": "1116",
+    "chart": "Madeira Classic 40",
+    "name": "Cotton Candy",
+    "flag": "A",
+    "r": 241,
+    "g": 176,
+    "b": 196
+  },
+  {
+    "code": "1108",
+    "chart": "Madeira Classic 40",
+    "name": "Pink Carnation",
+    "flag": "A",
+    "r": 232,
+    "g": 137,
+    "b": 165
+  },
+  {
+    "code": "1354",
+    "chart": "Madeira Classic 40",
+    "name": "Watermelon",
+    "flag": "A",
+    "r": 198,
+    "g": 65,
+    "b": 95
+  },
+  {
+    "code": "1081",
+    "chart": "Madeira Classic 40",
+    "name": "Azalea",
+    "flag": "A",
+    "r": 175,
+    "g": 37,
+    "b": 64
+  },
+  {
+    "code": "1186",
+    "chart": "Madeira Classic 40",
+    "name": "Ruby Slipper",
+    "flag": "A",
+    "r": 157,
+    "g": 17,
+    "b": 50
+  },
+  {
+    "code": "1381",
+    "chart": "Madeira Classic 40",
+    "name": "Ripe Raspberry",
+    "flag": "A",
+    "r": 124,
+    "g": 29,
+    "b": 49
+  },
+  {
+    "code": "1111",
+    "chart": "Madeira Classic 40",
+    "name": "Evening Mist",
+    "flag": "A",
+    "r": 192,
+    "g": 171,
+    "b": 202
+  },
+  {
+    "code": "1031",
+    "chart": "Madeira Classic 40",
+    "name": "Frosted Lavender",
+    "flag": "A",
+    "r": 203,
+    "g": 168,
+    "b": 201
+  },
+  {
+    "code": "1235",
+    "chart": "Madeira Classic 40",
+    "name": "Crocus",
+    "flag": "A",
+    "r": 144,
+    "g": 101,
+    "b": 143
+  },
+  {
+    "code": "1320",
+    "chart": "Madeira Classic 40",
+    "name": "Purple Heart",
+    "flag": "A",
+    "r": 68,
+    "g": 48,
+    "b": 78
+  },
+  {
+    "code": "1388",
+    "chart": "Madeira Classic 40",
+    "name": "Plum",
+    "flag": "A",
+    "r": 77,
+    "g": 43,
+    "b": 71
+  },
+  {
+    "code": "1319",
+    "chart": "Madeira Classic 40",
+    "name": "Iris",
+    "flag": "A",
+    "r": 148,
+    "g": 92,
+    "b": 133
+  },
+  {
+    "code": "1488",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 96,
+    "g": 39,
+    "b": 79
+  },
+  {
+    "code": "1310",
+    "chart": "Madeira Classic 40",
+    "name": "Magenta",
+    "flag": "A",
+    "r": 140,
+    "g": 56,
+    "b": 115
+  },
+  {
+    "code": "1321",
+    "chart": "Madeira Classic 40",
+    "name": "Bubble Gum Pink",
+    "flag": "A",
+    "r": 227,
+    "g": 152,
+    "b": 196
+  },
+  {
+    "code": "1121",
+    "chart": "Madeira Classic 40",
+    "name": "Candy Heart",
+    "flag": "A",
+    "r": 232,
+    "g": 171,
+    "b": 202
+  },
+  {
+    "code": "1309",
+    "chart": "Madeira Classic 40",
+    "name": "Dahlia",
+    "flag": "A",
+    "r": 213,
+    "g": 100,
+    "b": 155
+  },
+  {
+    "code": "1109",
+    "chart": "Madeira Classic 40",
+    "name": "Pink Rose",
+    "flag": "A",
+    "r": 203,
+    "g": 72,
+    "b": 128
+  },
+  {
+    "code": "1110",
+    "chart": "Madeira Classic 40",
+    "name": "Fuchsia",
+    "flag": "A",
+    "r": 187,
+    "g": 47,
+    "b": 106
+  },
+  {
+    "code": "1383",
+    "chart": "Madeira Classic 40",
+    "name": "Pink Pansy",
+    "flag": "A",
+    "r": 142,
+    "g": 26,
+    "b": 73
+  },
+  {
+    "code": "1187",
+    "chart": "Madeira Classic 40",
+    "name": "Orchid",
+    "flag": "A",
+    "r": 178,
+    "g": 28,
+    "b": 79
+  },
+  {
+    "code": "1234",
+    "chart": "Madeira Classic 40",
+    "name": "Hibiscus",
+    "flag": "A",
+    "r": 186,
+    "g": 52,
+    "b": 92
+  },
+  {
+    "code": "1117",
+    "chart": "Madeira Classic 40",
+    "name": "Flamingo Pink",
+    "flag": "A",
+    "r": 220,
+    "g": 94,
+    "b": 134
+  },
+  {
+    "code": "1183",
+    "chart": "Madeira Classic 40",
+    "name": "Cranberry",
+    "flag": "A",
+    "r": 137,
+    "g": 43,
+    "b": 77
+  },
+  {
+    "code": "1389",
+    "chart": "Madeira Classic 40",
+    "name": "Bordeaux",
+    "flag": "A",
+    "r": 98,
+    "g": 34,
+    "b": 59
+  },
+  {
+    "code": "1034",
+    "chart": "Madeira Classic 40",
+    "name": "Vintage Rose",
+    "flag": "A",
+    "r": 132,
+    "g": 52,
+    "b": 79
+  },
+  {
+    "code": "1119",
+    "chart": "Madeira Classic 40",
+    "name": "English Rose",
+    "flag": "A",
+    "r": 142,
+    "g": 71,
+    "b": 90
+  },
+  {
+    "code": "1035",
+    "chart": "Madeira Classic 40",
+    "name": "Burgundy",
+    "flag": "A",
+    "r": 87,
+    "g": 40,
+    "b": 54
+  },
+  {
+    "code": "1386",
+    "chart": "Madeira Classic 40",
+    "name": "Eggplant",
+    "flag": "A",
+    "r": 65,
+    "g": 39,
+    "b": 52
+  },
+  {
+    "code": "1356",
+    "chart": "Madeira Classic 40",
+    "name": "Pink Pearl",
+    "flag": "A",
+    "r": 170,
+    "g": 144,
+    "b": 155
+  },
+  {
+    "code": "1141",
+    "chart": "Madeira Classic 40",
+    "name": "Mauve",
+    "flag": "A",
+    "r": 146,
+    "g": 109,
+    "b": 113
+  },
+  {
+    "code": "1382",
+    "chart": "Madeira Classic 40",
+    "name": "Colonial Rose",
+    "flag": "A",
+    "r": 88,
+    "g": 50,
+    "b": 59
+  },
+  {
+    "code": "1236",
+    "chart": "Madeira Classic 40",
+    "name": "Plum Brandy",
+    "flag": "A",
+    "r": 66,
+    "g": 34,
+    "b": 43
+  },
+  {
+    "code": "1261",
+    "chart": "Madeira Classic 40",
+    "name": "Lavendula",
+    "flag": "A",
+    "r": 153,
+    "g": 169,
+    "b": 210
+  },
+  {
+    "code": "1266",
+    "chart": "Madeira Classic 40",
+    "name": "Regal Blue",
+    "flag": "A",
+    "r": 49,
+    "g": 86,
+    "b": 157
+  },
+  {
+    "code": "1166",
+    "chart": "Madeira Classic 40",
+    "name": "Hanukkah Blue",
+    "flag": "A",
+    "r": 22,
+    "g": 55,
+    "b": 122
+  },
+  {
+    "code": "1466",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 20,
+    "g": 41,
+    "b": 106
+  },
+  {
+    "code": "1335",
+    "chart": "Madeira Classic 40",
+    "name": "Dark Periwinkle",
+    "flag": "A",
+    "r": 69,
+    "g": 96,
+    "b": 166
+  },
+  {
+    "code": "1330",
+    "chart": "Madeira Classic 40",
+    "name": "Bahamas Blue",
+    "flag": "A",
+    "r": 84,
+    "g": 98,
+    "b": 163
+  },
+  {
+    "code": "1343",
+    "chart": "Madeira Classic 40",
+    "name": "Grape Juice",
+    "flag": "A",
+    "r": 39,
+    "g": 46,
+    "b": 95
+  },
+  {
+    "code": "1366",
+    "chart": "Madeira Classic 40",
+    "name": "Sailor Blue",
+    "flag": "A",
+    "r": 32,
+    "g": 38,
+    "b": 93
+  },
+  {
+    "code": "1322",
+    "chart": "Madeira Classic 40",
+    "name": "Royal Purple",
+    "flag": "A",
+    "r": 57,
+    "g": 59,
+    "b": 125
+  },
+  {
+    "code": "1112",
+    "chart": "Madeira Classic 40",
+    "name": "Majestic Purple",
+    "flag": "A",
+    "r": 65,
+    "g": 58,
+    "b": 122
+  },
+  {
+    "code": "1412",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 59,
+    "g": 46,
+    "b": 97
+  },
+  {
+    "code": "1422",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 74,
+    "g": 52,
+    "b": 120
+  },
+  {
+    "code": "1122",
+    "chart": "Madeira Classic 40",
+    "name": "Deep Lilac",
+    "flag": "A",
+    "r": 70,
+    "g": 45,
+    "b": 100
+  },
+  {
+    "code": "1311",
+    "chart": "Madeira Classic 40",
+    "name": "Mystic Lavender",
+    "flag": "A",
+    "r": 141,
+    "g": 139,
+    "b": 192
+  },
+  {
+    "code": "1032",
+    "chart": "Madeira Classic 40",
+    "name": "Velvet Violet",
+    "flag": "A",
+    "r": 128,
+    "g": 109,
+    "b": 160
+  },
+  {
+    "code": "1033",
+    "chart": "Madeira Classic 40",
+    "name": "Purple Pansy",
+    "flag": "A",
+    "r": 100,
+    "g": 67,
+    "b": 127
+  },
+  {
+    "code": "1334",
+    "chart": "Madeira Classic 40",
+    "name": "Purple Passion",
+    "flag": "A",
+    "r": 89,
+    "g": 41,
+    "b": 99
+  },
+  {
+    "code": "1188",
+    "chart": "Madeira Classic 40",
+    "name": "Chokecherry",
+    "flag": "A",
+    "r": 104,
+    "g": 48,
+    "b": 101
+  },
+  {
+    "code": "1080",
+    "chart": "Madeira Classic 40",
+    "name": "Lilac",
+    "flag": "A",
+    "r": 175,
+    "g": 138,
+    "b": 189
+  },
+  {
+    "code": "1232",
+    "chart": "Madeira Classic 40",
+    "name": "Lavender",
+    "flag": "A",
+    "r": 165,
+    "g": 153,
+    "b": 192
+  },
+  {
+    "code": "1312",
+    "chart": "Madeira Classic 40",
+    "name": "Purple Grape",
+    "flag": "A",
+    "r": 81,
+    "g": 68,
+    "b": 109
+  },
+  {
+    "code": "1313",
+    "chart": "Madeira Classic 40",
+    "name": "Berry Blast",
+    "flag": "A",
+    "r": 48,
+    "g": 38,
+    "b": 72
+  },
+  {
+    "code": "1233",
+    "chart": "Madeira Classic 40",
+    "name": "Blackberry Purple",
+    "flag": "A",
+    "r": 67,
+    "g": 63,
+    "b": 98
+  },
+  {
+    "code": "1263",
+    "chart": "Madeira Classic 40",
+    "name": "Dusty Lilac",
+    "flag": "A",
+    "r": 129,
+    "g": 127,
+    "b": 157
+  },
+  {
+    "code": "1264",
+    "chart": "Madeira Classic 40",
+    "name": "Lavender Ice",
+    "flag": "A",
+    "r": 144,
+    "g": 141,
+    "b": 159
+  },
+  {
+    "code": "1387",
+    "chart": "Madeira Classic 40",
+    "name": "Berry Frost",
+    "flag": "A",
+    "r": 101,
+    "g": 93,
+    "b": 116
+  },
+  {
+    "code": "1362",
+    "chart": "Madeira Classic 40",
+    "name": "Slate Purple",
+    "flag": "A",
+    "r": 70,
+    "g": 70,
+    "b": 85
+  },
+  {
+    "code": "1198",
+    "chart": "Madeira Classic 40",
+    "name": "Moonstone",
+    "flag": "A",
+    "r": 190,
+    "g": 209,
+    "b": 232
+  },
+  {
+    "code": "1030",
+    "chart": "Madeira Classic 40",
+    "name": "Light Periwinkle",
+    "flag": "A",
+    "r": 151,
+    "g": 174,
+    "b": 202
+  },
+  {
+    "code": "1364",
+    "chart": "Madeira Classic 40",
+    "name": "Storm Sky Blue",
+    "flag": "A",
+    "r": 64,
+    "g": 87,
+    "b": 113
+  },
+  {
+    "code": "1365",
+    "chart": "Madeira Classic 40",
+    "name": "Dusty Plum",
+    "flag": "A",
+    "r": 55,
+    "g": 71,
+    "b": 95
+  },
+  {
+    "code": "1175",
+    "chart": "Madeira Classic 40",
+    "name": "Dark Federal Blue",
+    "flag": "A",
+    "r": 64,
+    "g": 106,
+    "b": 146
+  },
+  {
+    "code": "1242",
+    "chart": "Madeira Classic 40",
+    "name": "Dark Denim",
+    "flag": "A",
+    "r": 23,
+    "g": 52,
+    "b": 85
+  },
+  {
+    "code": "1042",
+    "chart": "Madeira Classic 40",
+    "name": "Lapis",
+    "flag": "A",
+    "r": 28,
+    "g": 75,
+    "b": 120
+  },
+  {
+    "code": "1029",
+    "chart": "Madeira Classic 40",
+    "name": "Blue Jay",
+    "flag": "A",
+    "r": 63,
+    "g": 128,
+    "b": 182
+  },
+  {
+    "code": "1176",
+    "chart": "Madeira Classic 40",
+    "name": "Navajo Blue",
+    "flag": "A",
+    "r": 49,
+    "g": 130,
+    "b": 188
+  },
+  {
+    "code": "1177",
+    "chart": "Madeira Classic 40",
+    "name": "Blue Bird",
+    "flag": "A",
+    "r": 0,
+    "g": 109,
+    "b": 172
+  },
+  {
+    "code": "1434",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 10,
+    "g": 91,
+    "b": 153
+  },
+  {
+    "code": "1134",
+    "chart": "Madeira Classic 40",
+    "name": "Royal Blue",
+    "flag": "A",
+    "r": 18,
+    "g": 81,
+    "b": 149
+  },
+  {
+    "code": "1133",
+    "chart": "Madeira Classic 40",
+    "name": "Forget-Me-Not",
+    "flag": "A",
+    "r": 46,
+    "g": 115,
+    "b": 178
+  },
+  {
+    "code": "1432",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 116,
+    "g": 165,
+    "b": 222
+  },
+  {
+    "code": "1074",
+    "chart": "Madeira Classic 40",
+    "name": "Powder Blue",
+    "flag": "A",
+    "r": 162,
+    "g": 193,
+    "b": 224
+  },
+  {
+    "code": "1075",
+    "chart": "Madeira Classic 40",
+    "name": "Baby Blue",
+    "flag": "A",
+    "r": 147,
+    "g": 181,
+    "b": 219
+  },
+  {
+    "code": "1076",
+    "chart": "Madeira Classic 40",
+    "name": "True Blue",
+    "flag": "A",
+    "r": 26,
+    "g": 85,
+    "b": 159
+  },
+  {
+    "code": "1167",
+    "chart": "Madeira Classic 40",
+    "name": "Blue Ink",
+    "flag": "A",
+    "r": 29,
+    "g": 61,
+    "b": 112
+  },
+  {
+    "code": "1143",
+    "chart": "Madeira Classic 40",
+    "name": "China Blue",
+    "flag": "A",
+    "r": 71,
+    "g": 105,
+    "b": 159
+  },
+  {
+    "code": "1275",
+    "chart": "Madeira Classic 40",
+    "name": "Periwinkle",
+    "flag": "A",
+    "r": 133,
+    "g": 154,
+    "b": 190
+  },
+  {
+    "code": "1467",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 27,
+    "g": 43,
+    "b": 82
+  },
+  {
+    "code": "1243",
+    "chart": "Madeira Classic 40",
+    "name": "Pea Coat",
+    "flag": "A",
+    "r": 33,
+    "g": 47,
+    "b": 72
+  },
+  {
+    "code": "1368",
+    "chart": "Madeira Classic 40",
+    "name": "Night Sky",
+    "flag": "A",
+    "r": 27,
+    "g": 44,
+    "b": 62
+  },
+  {
+    "code": "1043",
+    "chart": "Madeira Classic 40",
+    "name": "Navy",
+    "flag": "A",
+    "r": 28,
+    "g": 39,
+    "b": 53
+  },
+  {
+    "code": "1044",
+    "chart": "Madeira Classic 40",
+    "name": "Indigo",
+    "flag": "A",
+    "r": 28,
+    "g": 35,
+    "b": 46
+  },
+  {
+    "code": "1367",
+    "chart": "Madeira Classic 40",
+    "name": "Black Pearl",
+    "flag": "A",
+    "r": 29,
+    "g": 38,
+    "b": 46
+  },
+  {
+    "code": "1244",
+    "chart": "Madeira Classic 40",
+    "name": "Darkest Night",
+    "flag": "A",
+    "r": 27,
+    "g": 33,
+    "b": 38
+  },
+  {
+    "code": "1153",
+    "chart": "Madeira Classic 40",
+    "name": "Frosted Glass",
+    "flag": "A",
+    "r": 179,
+    "g": 200,
+    "b": 214
+  },
+  {
+    "code": "1360",
+    "chart": "Madeira Classic 40",
+    "name": "Dusty Blue",
+    "flag": "A",
+    "r": 116,
+    "g": 144,
+    "b": 161
+  },
+  {
+    "code": "1353",
+    "chart": "Madeira Classic 40",
+    "name": "Blue Spruce",
+    "flag": "A",
+    "r": 76,
+    "g": 105,
+    "b": 130
+  },
+  {
+    "code": "1277",
+    "chart": "Madeira Classic 40",
+    "name": "Blueberry Smash",
+    "flag": "A",
+    "r": 27,
+    "g": 54,
+    "b": 78
+  },
+  {
+    "code": "1028",
+    "chart": "Madeira Classic 40",
+    "name": "Country Kitchen Blue",
+    "flag": "A",
+    "r": 104,
+    "g": 145,
+    "b": 180
+  },
+  {
+    "code": "1276",
+    "chart": "Madeira Classic 40",
+    "name": "Light Denim",
+    "flag": "A",
+    "r": 72,
+    "g": 118,
+    "b": 153
+  },
+  {
+    "code": "1375",
+    "chart": "Madeira Classic 40",
+    "name": "Work Shirt",
+    "flag": "A",
+    "r": 85,
+    "g": 148,
+    "b": 186
+  },
+  {
+    "code": "1376",
+    "chart": "Madeira Classic 40",
+    "name": "Independence Blue",
+    "flag": "A",
+    "r": 34,
+    "g": 78,
+    "b": 107
+  },
+  {
+    "code": "1274",
+    "chart": "Madeira Classic 40",
+    "name": "Porcelain Blue",
+    "flag": "A",
+    "r": 135,
+    "g": 185,
+    "b": 216
+  },
+  {
+    "code": "1132",
+    "chart": "Madeira Classic 40",
+    "name": "Clear Blue",
+    "flag": "A",
+    "r": 152,
+    "g": 198,
+    "b": 224
+  },
+  {
+    "code": "1027",
+    "chart": "Madeira Classic 40",
+    "name": "Dolphin",
+    "flag": "A",
+    "r": 157,
+    "g": 193,
+    "b": 214
+  },
+  {
+    "code": "1373",
+    "chart": "Madeira Classic 40",
+    "name": "Cerulean Frost",
+    "flag": "A",
+    "r": 113,
+    "g": 173,
+    "b": 200
+  },
+  {
+    "code": "1497",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 3,
+    "g": 128,
+    "b": 174
+  },
+  {
+    "code": "1297",
+    "chart": "Madeira Classic 40",
+    "name": "Peacock Blue",
+    "flag": "A",
+    "r": 0,
+    "g": 122,
+    "b": 173
+  },
+  {
+    "code": "1476",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 0,
+    "g": 67,
+    "b": 101
+  },
+  {
+    "code": "1296",
+    "chart": "Madeira Classic 40",
+    "name": "Deep Ocean",
+    "flag": "A",
+    "r": 5,
+    "g": 98,
+    "b": 129
+  },
+  {
+    "code": "1096",
+    "chart": "Madeira Classic 40",
+    "name": "Cobalt",
+    "flag": "A",
+    "r": 43,
+    "g": 128,
+    "b": 163
+  },
+  {
+    "code": "1092",
+    "chart": "Madeira Classic 40",
+    "name": "Summer Sky",
+    "flag": "A",
+    "r": 145,
+    "g": 189,
+    "b": 208
+  },
+  {
+    "code": "1294",
+    "chart": "Madeira Classic 40",
+    "name": "Liberty",
+    "flag": "A",
+    "r": 32,
+    "g": 143,
+    "b": 174
+  },
+  {
+    "code": "1295",
+    "chart": "Madeira Classic 40",
+    "name": "Cyan",
+    "flag": "A",
+    "r": 0,
+    "g": 153,
+    "b": 188
+  },
+  {
+    "code": "1095",
+    "chart": "Madeira Classic 40",
+    "name": "Larimar",
+    "flag": "A",
+    "r": 0,
+    "g": 176,
+    "b": 212
+  },
+  {
+    "code": "1094",
+    "chart": "Madeira Classic 40",
+    "name": "Caribbean Blue",
+    "flag": "A",
+    "r": 58,
+    "g": 190,
+    "b": 221
+  },
+  {
+    "code": "1093",
+    "chart": "Madeira Classic 40",
+    "name": "Azure Sea",
+    "flag": "A",
+    "r": 99,
+    "g": 199,
+    "b": 222
+  },
+  {
+    "code": "1089",
+    "chart": "Madeira Classic 40",
+    "name": "Sea Frost",
+    "flag": "A",
+    "r": 115,
+    "g": 175,
+    "b": 184
+  },
+  {
+    "code": "1289",
+    "chart": "Madeira Classic 40",
+    "name": "Silver Mound",
+    "flag": "A",
+    "r": 80,
+    "g": 157,
+    "b": 170
+  },
+  {
+    "code": "1291",
+    "chart": "Madeira Classic 40",
+    "name": "Marlin",
+    "flag": "A",
+    "r": 28,
+    "g": 108,
+    "b": 123
+  },
+  {
+    "code": "1091",
+    "chart": "Madeira Classic 40",
+    "name": "Teal Blue",
+    "flag": "A",
+    "r": 10,
+    "g": 117,
+    "b": 134
+  },
+  {
+    "code": "1163",
+    "chart": "Madeira Classic 40",
+    "name": "Steel Green",
+    "flag": "A",
+    "r": 130,
+    "g": 154,
+    "b": 160
+  },
+  {
+    "code": "1160",
+    "chart": "Madeira Classic 40",
+    "name": "Antique Blue",
+    "flag": "A",
+    "r": 72,
+    "g": 111,
+    "b": 127
+  },
+  {
+    "code": "1161",
+    "chart": "Madeira Classic 40",
+    "name": "Twilight",
+    "flag": "A",
+    "r": 36,
+    "g": 70,
+    "b": 79
+  },
+  {
+    "code": "1162",
+    "chart": "Madeira Classic 40",
+    "name": "Admiral Blue",
+    "flag": "A",
+    "r": 27,
+    "g": 65,
+    "b": 77
+  },
+  {
+    "code": "1252",
+    "chart": "Madeira Classic 40",
+    "name": "Neptune",
+    "flag": "A",
+    "r": 46,
+    "g": 88,
+    "b": 92
+  },
+  {
+    "code": "1290",
+    "chart": "Madeira Classic 40",
+    "name": "Mallard Teal",
+    "flag": "A",
+    "r": 14,
+    "g": 77,
+    "b": 78
+  },
+  {
+    "code": "1052",
+    "chart": "Madeira Classic 40",
+    "name": "Mermaid",
+    "flag": "A",
+    "r": 57,
+    "g": 113,
+    "b": 112
+  },
+  {
+    "code": "1293",
+    "chart": "Madeira Classic 40",
+    "name": "Malachite",
+    "flag": "A",
+    "r": 0,
+    "g": 112,
+    "b": 112
+  },
+  {
+    "code": "1090",
+    "chart": "Madeira Classic 40",
+    "name": "Deep Sky Blue",
+    "flag": "A",
+    "r": 28,
+    "g": 126,
+    "b": 130
+  },
+  {
+    "code": "1088",
+    "chart": "Madeira Classic 40",
+    "name": "Robin’s Egg",
+    "flag": "A",
+    "r": 102,
+    "g": 173,
+    "b": 176
+  },
+  {
+    "code": "1292",
+    "chart": "Madeira Classic 40",
+    "name": "Limestone",
+    "flag": "A",
+    "r": 154,
+    "g": 208,
+    "b": 207
+  },
+  {
+    "code": "1246",
+    "chart": "Madeira Classic 40",
+    "name": "Teal Green",
+    "flag": "A",
+    "r": 41,
+    "g": 144,
+    "b": 138
+  },
+  {
+    "code": "1185",
+    "chart": "Madeira Classic 40",
+    "name": "Dark Teal",
+    "flag": "A",
+    "r": 0,
+    "g": 102,
+    "b": 94
+  },
+  {
+    "code": "1298",
+    "chart": "Madeira Classic 40",
+    "name": "Tree Frog",
+    "flag": "A",
+    "r": 0,
+    "g": 166,
+    "b": 151
+  },
+  {
+    "code": "1380",
+    "chart": "Madeira Classic 40",
+    "name": "Oasis",
+    "flag": "A",
+    "r": 0,
+    "g": 168,
+    "b": 145
+  },
+  {
+    "code": "1299",
+    "chart": "Madeira Classic 40",
+    "name": "Green Turquoise",
+    "flag": "A",
+    "r": 64,
+    "g": 192,
+    "b": 178
+  },
+  {
+    "code": "1045",
+    "chart": "Madeira Classic 40",
+    "name": "Light Mint",
+    "flag": "A",
+    "r": 142,
+    "g": 215,
+    "b": 201
+  },
+  {
+    "code": "1279",
+    "chart": "Madeira Classic 40",
+    "name": "Tropical Teal",
+    "flag": "A",
+    "r": 37,
+    "g": 142,
+    "b": 126
+  },
+  {
+    "code": "1371",
+    "chart": "Madeira Classic 40",
+    "name": "Deep Sea",
+    "flag": "A",
+    "r": 28,
+    "g": 88,
+    "b": 79
+  },
+  {
+    "code": "1046",
+    "chart": "Madeira Classic 40",
+    "name": "Eucalyptus",
+    "flag": "A",
+    "r": 101,
+    "g": 176,
+    "b": 157
+  },
+  {
+    "code": "1245",
+    "chart": "Madeira Classic 40",
+    "name": "Sea Foam Green",
+    "flag": "A",
+    "r": 73,
+    "g": 163,
+    "b": 136
+  },
+  {
+    "code": "1280",
+    "chart": "Madeira Classic 40",
+    "name": "Oregon Green",
+    "flag": "A",
+    "r": 0,
+    "g": 129,
+    "b": 103
+  },
+  {
+    "code": "1284",
+    "chart": "Madeira Classic 40",
+    "name": "Rainforest",
+    "flag": "A",
+    "r": 28,
+    "g": 115,
+    "b": 96
+  },
+  {
+    "code": "1301",
+    "chart": "Madeira Classic 40",
+    "name": "Jade",
+    "flag": "A",
+    "r": 82,
+    "g": 184,
+    "b": 134
+  },
+  {
+    "code": "1247",
+    "chart": "Madeira Classic 40",
+    "name": "Bottle Green",
+    "flag": "A",
+    "r": 25,
+    "g": 159,
+    "b": 113
+  },
+  {
+    "code": "1480",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 0,
+    "g": 105,
+    "b": 71
+  },
+  {
+    "code": "1304",
+    "chart": "Madeira Classic 40",
+    "name": "Ivy",
+    "flag": "A",
+    "r": 12,
+    "g": 76,
+    "b": 55
+  },
+  {
+    "code": "1219",
+    "chart": "Madeira Classic 40",
+    "name": "Hint of Mint",
+    "flag": "A",
+    "r": 168,
+    "g": 195,
+    "b": 188
+  },
+  {
+    "code": "1227",
+    "chart": "Madeira Classic 40",
+    "name": "Mint Jubilee",
+    "flag": "A",
+    "r": 126,
+    "g": 165,
+    "b": 158
+  },
+  {
+    "code": "1391",
+    "chart": "Madeira Classic 40",
+    "name": "Spruce Green",
+    "flag": "A",
+    "r": 69,
+    "g": 101,
+    "b": 88
+  },
+  {
+    "code": "1390",
+    "chart": "Madeira Classic 40",
+    "name": "Forest Green",
+    "flag": "A",
+    "r": 34,
+    "g": 63,
+    "b": 53
+  },
+  {
+    "code": "1397",
+    "chart": "Madeira Classic 40",
+    "name": "Evergreen",
+    "flag": "A",
+    "r": 20,
+    "g": 57,
+    "b": 45
+  },
+  {
+    "code": "1195",
+    "chart": "Madeira Classic 40",
+    "name": "Menthol",
+    "flag": "A",
+    "r": 150,
+    "g": 202,
+    "b": 184
+  },
+  {
+    "code": "1097",
+    "chart": "Madeira Classic 40",
+    "name": "Honeydew Melon",
+    "flag": "A",
+    "r": 197,
+    "g": 235,
+    "b": 214
+  },
+  {
+    "code": "1098",
+    "chart": "Madeira Classic 40",
+    "name": "Blue Grass",
+    "flag": "A",
+    "r": 87,
+    "g": 134,
+    "b": 111
+  },
+  {
+    "code": "1351",
+    "chart": "Madeira Classic 40",
+    "name": "Alligator",
+    "flag": "A",
+    "r": 21,
+    "g": 90,
+    "b": 66
+  },
+  {
+    "code": "1370",
+    "chart": "Madeira Classic 40",
+    "name": "Fir",
+    "flag": "A",
+    "r": 27,
+    "g": 72,
+    "b": 48
+  },
+  {
+    "code": "1103",
+    "chart": "Madeira Classic 40",
+    "name": "Hunter Green",
+    "flag": "A",
+    "r": 41,
+    "g": 70,
+    "b": 48
+  },
+  {
+    "code": "1479",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 30,
+    "g": 105,
+    "b": 60
+  },
+  {
+    "code": "1302",
+    "chart": "Madeira Classic 40",
+    "name": "Spearmint",
+    "flag": "A",
+    "r": 129,
+    "g": 219,
+    "b": 146
+  },
+  {
+    "code": "1079",
+    "chart": "Madeira Classic 40",
+    "name": "Celtic Green",
+    "flag": "A",
+    "r": 0,
+    "g": 138,
+    "b": 73
+  },
+  {
+    "code": "1250",
+    "chart": "Madeira Classic 40",
+    "name": "Christmas Green",
+    "flag": "A",
+    "r": 0,
+    "g": 117,
+    "b": 73
+  },
+  {
+    "code": "1251",
+    "chart": "Madeira Classic 40",
+    "name": "Kelly Green",
+    "flag": "A",
+    "r": 11,
+    "g": 158,
+    "b": 74
+  },
+  {
+    "code": "1051",
+    "chart": "Madeira Classic 40",
+    "name": "Bell Pepper",
+    "flag": "A",
+    "r": 9,
+    "g": 140,
+    "b": 58
+  },
+  {
+    "code": "1249",
+    "chart": "Madeira Classic 40",
+    "name": "Shamrock",
+    "flag": "A",
+    "r": 56,
+    "g": 169,
+    "b": 65
+  },
+  {
+    "code": "1377",
+    "chart": "Madeira Classic 40",
+    "name": "Kiwi",
+    "flag": "A",
+    "r": 120,
+    "g": 183,
+    "b": 106
+  },
+  {
+    "code": "1050",
+    "chart": "Madeira Classic 40",
+    "name": "Green Thumb",
+    "flag": "A",
+    "r": 78,
+    "g": 155,
+    "b": 58
+  },
+  {
+    "code": "1369",
+    "chart": "Madeira Classic 40",
+    "name": "Fresh Pine",
+    "flag": "A",
+    "r": 53,
+    "g": 119,
+    "b": 44
+  },
+  {
+    "code": "1101",
+    "chart": "Madeira Classic 40",
+    "name": "Light Emerald Green",
+    "flag": "A",
+    "r": 59,
+    "g": 139,
+    "b": 68
+  },
+  {
+    "code": "1047",
+    "chart": "Madeira Classic 40",
+    "name": "Celadon",
+    "flag": "A",
+    "r": 151,
+    "g": 186,
+    "b": 156
+  },
+  {
+    "code": "1392",
+    "chart": "Madeira Classic 40",
+    "name": "Silver Sage",
+    "flag": "A",
+    "r": 106,
+    "g": 123,
+    "b": 104
+  },
+  {
+    "code": "1396",
+    "chart": "Madeira Classic 40",
+    "name": "Dark Sage",
+    "flag": "A",
+    "r": 67,
+    "g": 84,
+    "b": 63
+  },
+  {
+    "code": "1303",
+    "chart": "Madeira Classic 40",
+    "name": "Fresh Oregano",
+    "flag": "A",
+    "r": 43,
+    "g": 57,
+    "b": 41
+  },
+  {
+    "code": "1395",
+    "chart": "Madeira Classic 40",
+    "name": "Rosemary",
+    "flag": "A",
+    "r": 41,
+    "g": 55,
+    "b": 43
+  },
+  {
+    "code": "1100",
+    "chart": "Madeira Classic 40",
+    "name": "Cucumber",
+    "flag": "A",
+    "r": 200,
+    "g": 224,
+    "b": 179
+  },
+  {
+    "code": "1099",
+    "chart": "Madeira Classic 40",
+    "name": "Leek",
+    "flag": "A",
+    "r": 176,
+    "g": 190,
+    "b": 148
+  },
+  {
+    "code": "1495",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 76,
+    "g": 83,
+    "b": 44
+  },
+  {
+    "code": "1451",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 139,
+    "g": 160,
+    "b": 94
+  },
+  {
+    "code": "1048",
+    "chart": "Madeira Classic 40",
+    "name": "Celery",
+    "flag": "A",
+    "r": 116,
+    "g": 142,
+    "b": 61
+  },
+  {
+    "code": "1170",
+    "chart": "Madeira Classic 40",
+    "name": "Clover",
+    "flag": "A",
+    "r": 77,
+    "g": 103,
+    "b": 24
+  },
+  {
+    "code": "1049",
+    "chart": "Madeira Classic 40",
+    "name": "Lime Green",
+    "flag": "A",
+    "r": 120,
+    "g": 172,
+    "b": 63
+  },
+  {
+    "code": "1248",
+    "chart": "Madeira Classic 40",
+    "name": "Margarita Lime",
+    "flag": "A",
+    "r": 161,
+    "g": 218,
+    "b": 97
+  },
+  {
+    "code": "1469",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 122,
+    "g": 159,
+    "b": 37
+  },
+  {
+    "code": "1489",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 82,
+    "g": 101,
+    "b": 42
+  },
+  {
+    "code": "1189",
+    "chart": "Madeira Classic 40",
+    "name": "Moss Green",
+    "flag": "A",
+    "r": 59,
+    "g": 82,
+    "b": 38
+  },
+  {
+    "code": "1169",
+    "chart": "Madeira Classic 40",
+    "name": "Split Pea",
+    "flag": "A",
+    "r": 131,
+    "g": 146,
+    "b": 55
+  },
+  {
+    "code": "1448",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 201,
+    "g": 217,
+    "b": 135
+  },
+  {
+    "code": "1104",
+    "chart": "Madeira Classic 40",
+    "name": "Scallion",
+    "flag": "A",
+    "r": 198,
+    "g": 203,
+    "b": 148
+  },
+  {
+    "code": "1102",
+    "chart": "Madeira Classic 40",
+    "name": "Light Moss Green",
+    "flag": "A",
+    "r": 179,
+    "g": 178,
+    "b": 117
+  },
+  {
+    "code": "1106",
+    "chart": "Madeira Classic 40",
+    "name": "Guacamole",
+    "flag": "A",
+    "r": 140,
+    "g": 135,
+    "b": 69
+  },
+  {
+    "code": "1156",
+    "chart": "Madeira Classic 40",
+    "name": "Olive Green",
+    "flag": "A",
+    "r": 112,
+    "g": 112,
+    "b": 60
+  },
+  {
+    "code": "1140",
+    "chart": "Madeira Classic 40",
+    "name": "Avocado Green",
+    "flag": "A",
+    "r": 133,
+    "g": 136,
+    "b": 34
+  },
+  {
+    "code": "1449",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 208,
+    "g": 213,
+    "b": 72
+  },
+  {
+    "code": "1450",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 205,
+    "g": 202,
+    "b": 0
+  },
+  {
+    "code": "1150",
+    "chart": "Madeira Classic 40",
+    "name": "Chartreuse",
+    "flag": "A",
+    "r": 234,
+    "g": 247,
+    "b": 143
+  },
+  {
+    "code": "1323",
+    "chart": "Madeira Classic 40",
+    "name": "Golden Wheat",
+    "flag": "A",
+    "r": 205,
+    "g": 181,
+    "b": 60
+  },
+  {
+    "code": "1193",
+    "chart": "Madeira Classic 40",
+    "name": "Peridot",
+    "flag": "A",
+    "r": 176,
+    "g": 160,
+    "b": 76
+  },
+  {
+    "code": "1350",
+    "chart": "Madeira Classic 40",
+    "name": "Citrus Green",
+    "flag": "A",
+    "r": 180,
+    "g": 166,
+    "b": 57
+  },
+  {
+    "code": "1190",
+    "chart": "Madeira Classic 40",
+    "name": "Sea Weed",
+    "flag": "A",
+    "r": 140,
+    "g": 121,
+    "b": 40
+  },
+  {
+    "code": "1196",
+    "chart": "Madeira Classic 40",
+    "name": "Medium Camo Green",
+    "flag": "A",
+    "r": 155,
+    "g": 128,
+    "b": 21
+  },
+  {
+    "code": "1352",
+    "chart": "Madeira Classic 40",
+    "name": "Old Gold",
+    "flag": "A",
+    "r": 174,
+    "g": 137,
+    "b": 28
+  },
+  {
+    "code": "1270",
+    "chart": "Madeira Classic 40",
+    "name": "Sawdust",
+    "flag": "A",
+    "r": 228,
+    "g": 196,
+    "b": 128
+  },
+  {
+    "code": "1070",
+    "chart": "Madeira Classic 40",
+    "name": "Vegas Gold",
+    "flag": "A",
+    "r": 202,
+    "g": 170,
+    "b": 104
+  },
+  {
+    "code": "1225",
+    "chart": "Madeira Classic 40",
+    "name": "Liquid Gold",
+    "flag": "A",
+    "r": 195,
+    "g": 143,
+    "b": 53
+  },
+  {
+    "code": "1372",
+    "chart": "Madeira Classic 40",
+    "name": "Pumpkin Spice",
+    "flag": "A",
+    "r": 228,
+    "g": 162,
+    "b": 61
+  },
+  {
+    "code": "1425",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 203,
+    "g": 124,
+    "b": 3
+  },
+  {
+    "code": "1470",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 213,
+    "g": 173,
+    "b": 105
+  },
+  {
+    "code": "1491",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 167,
+    "g": 120,
+    "b": 51
+  },
+  {
+    "code": "1255",
+    "chart": "Madeira Classic 40",
+    "name": "Khaki",
+    "flag": "A",
+    "r": 186,
+    "g": 150,
+    "b": 102
+  },
+  {
+    "code": "1344",
+    "chart": "Madeira Classic 40",
+    "name": "Camel",
+    "flag": "A",
+    "r": 137,
+    "g": 109,
+    "b": 70
+  },
+  {
+    "code": "1338",
+    "chart": "Madeira Classic 40",
+    "name": "Nutmeg",
+    "flag": "A",
+    "r": 153,
+    "g": 132,
+    "b": 93
+  },
+  {
+    "code": "1348",
+    "chart": "Madeira Classic 40",
+    "name": "Antique Bronze",
+    "flag": "A",
+    "r": 105,
+    "g": 84,
+    "b": 46
+  },
+  {
+    "code": "1273",
+    "chart": "Madeira Classic 40",
+    "name": "Peanut Brittle",
+    "flag": "A",
+    "r": 162,
+    "g": 137,
+    "b": 87
+  },
+  {
+    "code": "1191",
+    "chart": "Madeira Classic 40",
+    "name": "Pea Soup",
+    "flag": "A",
+    "r": 141,
+    "g": 111,
+    "b": 42
+  },
+  {
+    "code": "1194",
+    "chart": "Madeira Classic 40",
+    "name": "Dark Olive",
+    "flag": "A",
+    "r": 99,
+    "g": 81,
+    "b": 28
+  },
+  {
+    "code": "1494",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 124,
+    "g": 111,
+    "b": 54
+  },
+  {
+    "code": "1260",
+    "chart": "Madeira Classic 40",
+    "name": "Canvas",
+    "flag": "A",
+    "r": 207,
+    "g": 198,
+    "b": 148
+  },
+  {
+    "code": "1105",
+    "chart": "Madeira Classic 40",
+    "name": "Weeping Willow",
+    "flag": "A",
+    "r": 157,
+    "g": 155,
+    "b": 112
+  },
+  {
+    "code": "1157",
+    "chart": "Madeira Classic 40",
+    "name": "Marsh",
+    "flag": "A",
+    "r": 101,
+    "g": 92,
+    "b": 54
+  },
+  {
+    "code": "1357",
+    "chart": "Madeira Classic 40",
+    "name": "Dark Camo Green",
+    "flag": "A",
+    "r": 51,
+    "g": 54,
+    "b": 34
+  },
+  {
+    "code": "1406",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 78,
+    "g": 78,
+    "b": 54
+  },
+  {
+    "code": "1306",
+    "chart": "Madeira Classic 40",
+    "name": "Army Green",
+    "flag": "A",
+    "r": 107,
+    "g": 108,
+    "b": 85
+  },
+  {
+    "code": "1305",
+    "chart": "Madeira Classic 40",
+    "name": "Chamois",
+    "flag": "A",
+    "r": 192,
+    "g": 185,
+    "b": 153
+  },
+  {
+    "code": "1339",
+    "chart": "Madeira Classic 40",
+    "name": "Spanish Moss",
+    "flag": "A",
+    "r": 173,
+    "g": 172,
+    "b": 151
+  },
+  {
+    "code": "1337",
+    "chart": "Madeira Classic 40",
+    "name": "Gray Mist",
+    "flag": "A",
+    "r": 152,
+    "g": 156,
+    "b": 133
+  },
+  {
+    "code": "1308",
+    "chart": "Madeira Classic 40",
+    "name": "Army Fatigues",
+    "flag": "A",
+    "r": 91,
+    "g": 96,
+    "b": 74
+  },
+  {
+    "code": "1394",
+    "chart": "Madeira Classic 40",
+    "name": "Kale",
+    "flag": "A",
+    "r": 67,
+    "g": 75,
+    "b": 56
+  },
+  {
+    "code": "1393",
+    "chart": "Madeira Classic 40",
+    "name": "Bass Green",
+    "flag": "A",
+    "r": 49,
+    "g": 55,
+    "b": 40
+  },
+  {
+    "code": "1055",
+    "chart": "Madeira Classic 40",
+    "name": "Latte",
+    "flag": "A",
+    "r": 209,
+    "g": 182,
+    "b": 139
+  },
+  {
+    "code": "1256",
+    "chart": "Madeira Classic 40",
+    "name": "Teddy Bear",
+    "flag": "A",
+    "r": 167,
+    "g": 124,
+    "b": 73
+  },
+  {
+    "code": "1173",
+    "chart": "Madeira Classic 40",
+    "name": "Autumn Gold",
+    "flag": "A",
+    "r": 190,
+    "g": 121,
+    "b": 50
+  },
+  {
+    "code": "1272",
+    "chart": "Madeira Classic 40",
+    "name": "Golden Retriever",
+    "flag": "A",
+    "r": 222,
+    "g": 167,
+    "b": 107
+  },
+  {
+    "code": "1056",
+    "chart": "Madeira Classic 40",
+    "name": "Golden Oak",
+    "flag": "A",
+    "r": 158,
+    "g": 114,
+    "b": 70
+  },
+  {
+    "code": "1057",
+    "chart": "Madeira Classic 40",
+    "name": "Caramel",
+    "flag": "A",
+    "r": 151,
+    "g": 109,
+    "b": 72
+  },
+  {
+    "code": "1126",
+    "chart": "Madeira Classic 40",
+    "name": "Light Brown Sugar",
+    "flag": "A",
+    "r": 161,
+    "g": 115,
+    "b": 75
+  },
+  {
+    "code": "1226",
+    "chart": "Madeira Classic 40",
+    "name": "Amber",
+    "flag": "A",
+    "r": 200,
+    "g": 134,
+    "b": 82
+  },
+  {
+    "code": "1257",
+    "chart": "Madeira Classic 40",
+    "name": "Bronze",
+    "flag": "A",
+    "r": 145,
+    "g": 79,
+    "b": 25
+  },
+  {
+    "code": "1258",
+    "chart": "Madeira Classic 40",
+    "name": "Grizzly Bear",
+    "flag": "A",
+    "r": 122,
+    "g": 69,
+    "b": 39
+  },
+  {
+    "code": "1158",
+    "chart": "Madeira Classic 40",
+    "name": "Chestnut",
+    "flag": "A",
+    "r": 108,
+    "g": 57,
+    "b": 37
+  },
+  {
+    "code": "1058",
+    "chart": "Madeira Classic 40",
+    "name": "Sienna",
+    "flag": "A",
+    "r": 100,
+    "g": 60,
+    "b": 43
+  },
+  {
+    "code": "1145",
+    "chart": "Madeira Classic 40",
+    "name": "Coffee Bean",
+    "flag": "A",
+    "r": 80,
+    "g": 51,
+    "b": 35
+  },
+  {
+    "code": "1059",
+    "chart": "Madeira Classic 40",
+    "name": "Dark Chocolate",
+    "flag": "A",
+    "r": 52,
+    "g": 41,
+    "b": 36
+  },
+  {
+    "code": "1127",
+    "chart": "Madeira Classic 40",
+    "name": "Loofah",
+    "flag": "A",
+    "r": 219,
+    "g": 189,
+    "b": 163
+  },
+  {
+    "code": "1342",
+    "chart": "Madeira Classic 40",
+    "name": "Fawn",
+    "flag": "A",
+    "r": 187,
+    "g": 151,
+    "b": 128
+  },
+  {
+    "code": "1142",
+    "chart": "Madeira Classic 40",
+    "name": "Peach Puff",
+    "flag": "A",
+    "r": 176,
+    "g": 148,
+    "b": 134
+  },
+  {
+    "code": "1054",
+    "chart": "Madeira Classic 40",
+    "name": "Tawny",
+    "flag": "A",
+    "r": 158,
+    "g": 122,
+    "b": 107
+  },
+  {
+    "code": "1259",
+    "chart": "Madeira Classic 40",
+    "name": "Cocoa",
+    "flag": "A",
+    "r": 102,
+    "g": 72,
+    "b": 64
+  },
+  {
+    "code": "1053",
+    "chart": "Madeira Classic 40",
+    "name": "Light Coral",
+    "flag": "A",
+    "r": 229,
+    "g": 182,
+    "b": 162
+  },
+  {
+    "code": "1174",
+    "chart": "Madeira Classic 40",
+    "name": "Cinnamon Stick",
+    "flag": "A",
+    "r": 117,
+    "g": 47,
+    "b": 39
+  },
+  {
+    "code": "1374",
+    "chart": "Madeira Classic 40",
+    "name": "Maroon",
+    "flag": "A",
+    "r": 81,
+    "g": 34,
+    "b": 34
+  },
+  {
+    "code": "1358",
+    "chart": "Madeira Classic 40",
+    "name": "Cedar Bark",
+    "flag": "A",
+    "r": 98,
+    "g": 63,
+    "b": 60
+  },
+  {
+    "code": "1036",
+    "chart": "Madeira Classic 40",
+    "name": "Raisin",
+    "flag": "A",
+    "r": 74,
+    "g": 36,
+    "b": 34
+  },
+  {
+    "code": "1445",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 66,
+    "g": 46,
+    "b": 41
+  },
+  {
+    "code": "1430",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 65,
+    "g": 58,
+    "b": 57
+  },
+  {
+    "code": "1431",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 43,
+    "g": 44,
+    "b": 44
+  },
+  {
+    "code": "1149",
+    "chart": "Madeira Classic 40",
+    "name": "Tusk",
+    "flag": "A",
+    "r": 220,
+    "g": 207,
+    "b": 185
+  },
+  {
+    "code": "1138",
+    "chart": "Madeira Classic 40",
+    "name": "Doe Skin",
+    "flag": "A",
+    "r": 203,
+    "g": 191,
+    "b": 168
+  },
+  {
+    "code": "1428",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 145,
+    "g": 133,
+    "b": 111
+  },
+  {
+    "code": "1128",
+    "chart": "Madeira Classic 40",
+    "name": "Taupe",
+    "flag": "A",
+    "r": 158,
+    "g": 143,
+    "b": 124
+  },
+  {
+    "code": "1230",
+    "chart": "Madeira Classic 40",
+    "name": "Root Beer",
+    "flag": "A",
+    "r": 88,
+    "g": 71,
+    "b": 48
+  },
+  {
+    "code": "1144",
+    "chart": "Madeira Classic 40",
+    "name": "Bark",
+    "flag": "A",
+    "r": 121,
+    "g": 101,
+    "b": 77
+  },
+  {
+    "code": "1336",
+    "chart": "Madeira Classic 40",
+    "name": "Saddle Brown",
+    "flag": "A",
+    "r": 88,
+    "g": 71,
+    "b": 57
+  },
+  {
+    "code": "1129",
+    "chart": "Madeira Classic 40",
+    "name": "Mud Pie",
+    "flag": "A",
+    "r": 50,
+    "g": 43,
+    "b": 35
+  },
+  {
+    "code": "1329",
+    "chart": "Madeira Classic 40",
+    "name": "Toasted Marshmallow",
+    "flag": "A",
+    "r": 119,
+    "g": 93,
+    "b": 77
+  },
+  {
+    "code": "1328",
+    "chart": "Madeira Classic 40",
+    "name": "Buckskin",
+    "flag": "A",
+    "r": 148,
+    "g": 126,
+    "b": 110
+  },
+  {
+    "code": "1130",
+    "chart": "Madeira Classic 40",
+    "name": "Chocolate Chip",
+    "flag": "A",
+    "r": 55,
+    "g": 45,
+    "b": 40
+  },
+  {
+    "code": "1131",
+    "chart": "Madeira Classic 40",
+    "name": "Espresso",
+    "flag": "A",
+    "r": 36,
+    "g": 36,
+    "b": 30
+  },
+  {
+    "code": "1229",
+    "chart": "Madeira Classic 40",
+    "name": "Clove",
+    "flag": "A",
+    "r": 71,
+    "g": 65,
+    "b": 54
+  },
+  {
+    "code": "1228",
+    "chart": "Madeira Classic 40",
+    "name": "Mink",
+    "flag": "A",
+    "r": 102,
+    "g": 95,
+    "b": 83
+  },
+  {
+    "code": "1136",
+    "chart": "Madeira Classic 40",
+    "name": "Dark Taupe",
+    "flag": "A",
+    "r": 134,
+    "g": 119,
+    "b": 104
+  },
+  {
+    "code": "1082",
+    "chart": "Madeira Classic 40",
+    "name": "Ivory",
+    "flag": "A",
+    "r": 199,
+    "g": 185,
+    "b": 162
+  },
+  {
+    "code": "1084",
+    "chart": "Madeira Classic 40",
+    "name": "Sandy Shores",
+    "flag": "A",
+    "r": 214,
+    "g": 199,
+    "b": 169
+  },
+  {
+    "code": "1072",
+    "chart": "Madeira Classic 40",
+    "name": "Coconut Cream",
+    "flag": "A",
+    "r": 243,
+    "g": 228,
+    "b": 205
+  },
+  {
+    "code": "1060",
+    "chart": "Madeira Classic 40",
+    "name": "Pussywillow",
+    "flag": "A",
+    "r": 185,
+    "g": 179,
+    "b": 161
+  },
+  {
+    "code": "1063",
+    "chart": "Madeira Classic 40",
+    "name": "Elephant",
+    "flag": "A",
+    "r": 111,
+    "g": 107,
+    "b": 92
+  },
+  {
+    "code": "1062",
+    "chart": "Madeira Classic 40",
+    "name": "Rhino",
+    "flag": "A",
+    "r": 137,
+    "g": 132,
+    "b": 117
+  },
+  {
+    "code": "1460",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 206,
+    "g": 202,
+    "b": 193
+  },
+  {
+    "code": "1071",
+    "chart": "Madeira Classic 40",
+    "name": "Baby’s Breath",
+    "flag": "A",
+    "r": 252,
+    "g": 254,
+    "b": 247
+  },
+  {
+    "code": "1410",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 217,
+    "g": 219,
+    "b": 213
+  },
+  {
+    "code": "1405",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 176,
+    "g": 179,
+    "b": 166
+  },
+  {
+    "code": "1463",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 135,
+    "g": 139,
+    "b": 128
+  },
+  {
+    "code": "1361",
+    "chart": "Madeira Classic 40",
+    "name": "Battleship",
+    "flag": "A",
+    "r": 85,
+    "g": 90,
+    "b": 83
+  },
+  {
+    "code": "1286",
+    "chart": "Madeira Classic 40",
+    "name": "Mist",
+    "flag": "A",
+    "r": 221,
+    "g": 223,
+    "b": 221
+  },
+  {
+    "code": "1040",
+    "chart": "Madeira Classic 40",
+    "name": "Weimaraner",
+    "flag": "A",
+    "r": 124,
+    "g": 119,
+    "b": 118
+  },
+  {
+    "code": "1287",
+    "chart": "Madeira Classic 40",
+    "name": "Gun Metal",
+    "flag": "A",
+    "r": 109,
+    "g": 107,
+    "b": 106
+  },
+  {
+    "code": "1318",
+    "chart": "Madeira Classic 40",
+    "name": "Graphite",
+    "flag": "A",
+    "r": 56,
+    "g": 57,
+    "b": 64
+  },
+  {
+    "code": "1439",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 66,
+    "g": 67,
+    "b": 66
+  },
+  {
+    "code": "1239",
+    "chart": "Madeira Classic 40",
+    "name": "Charcoal",
+    "flag": "A",
+    "r": 82,
+    "g": 79,
+    "b": 75
+  },
+  {
+    "code": "1240",
+    "chart": "Madeira Classic 40",
+    "name": "Stone",
+    "flag": "A",
+    "r": 101,
+    "g": 96,
+    "b": 91
+  },
+  {
+    "code": "1288",
+    "chart": "Madeira Classic 40",
+    "name": "Shark",
+    "flag": "A",
+    "r": 109,
+    "g": 111,
+    "b": 105
+  },
+  {
+    "code": "1085",
+    "chart": "Madeira Classic 40",
+    "name": "Cement",
+    "flag": "A",
+    "r": 182,
+    "g": 184,
+    "b": 177
+  },
+  {
+    "code": "1086",
+    "chart": "Madeira Classic 40",
+    "name": "Sterling Silver",
+    "flag": "A",
+    "r": 200,
+    "g": 207,
+    "b": 203
+  },
+  {
+    "code": "1087",
+    "chart": "Madeira Classic 40",
+    "name": "Silver Birch",
+    "flag": "A",
+    "r": 190,
+    "g": 192,
+    "b": 187
+  },
+  {
+    "code": "1010",
+    "chart": "Madeira Classic 40",
+    "name": "Gray Haze",
+    "flag": "A",
+    "r": 192,
+    "g": 199,
+    "b": 193
+  },
+  {
+    "code": "1012",
+    "chart": "Madeira Classic 40",
+    "name": "Smoke",
+    "flag": "A",
+    "r": 165,
+    "g": 178,
+    "b": 181
+  },
+  {
+    "code": "1118",
+    "chart": "Madeira Classic 40",
+    "name": "Overcast Gray",
+    "flag": "A",
+    "r": 139,
+    "g": 150,
+    "b": 152
+  },
+  {
+    "code": "1212",
+    "chart": "Madeira Classic 40",
+    "name": "Stainless Steel",
+    "flag": "A",
+    "r": 150,
+    "g": 163,
+    "b": 170
+  },
+  {
+    "code": "1415",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 104,
+    "g": 112,
+    "b": 112
+  },
+  {
+    "code": "1461",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 98,
+    "g": 111,
+    "b": 111
+  },
+  {
+    "code": "1440",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 71,
+    "g": 77,
+    "b": 75
+  },
+  {
+    "code": "1411",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 184,
+    "g": 192,
+    "b": 195
+  },
+  {
+    "code": "1151",
+    "chart": "Madeira Classic 40",
+    "name": "Silver Sand",
+    "flag": "A",
+    "r": 186,
+    "g": 199,
+    "b": 216
+  },
+  {
+    "code": "1363",
+    "chart": "Madeira Classic 40",
+    "name": "Steel Lavender",
+    "flag": "A",
+    "r": 111,
+    "g": 124,
+    "b": 140
+  },
+  {
+    "code": "1164",
+    "chart": "Madeira Classic 40",
+    "name": "Twister",
+    "flag": "A",
+    "r": 61,
+    "g": 71,
+    "b": 77
+  },
+  {
+    "code": "1011",
+    "chart": "Madeira Classic 40",
+    "name": "Chrome",
+    "flag": "A",
+    "r": 178,
+    "g": 187,
+    "b": 194
+  },
+  {
+    "code": "1041",
+    "chart": "Madeira Classic 40",
+    "name": "Polished Pewter",
+    "flag": "A",
+    "r": 107,
+    "g": 115,
+    "b": 120
+  },
+  {
+    "code": "1241",
+    "chart": "Madeira Classic 40",
+    "name": "Obsidian",
+    "flag": "A",
+    "r": 47,
+    "g": 58,
+    "b": 61
+  },
+  {
+    "code": "1199",
+    "chart": "Madeira Classic 40",
+    "name": "Onyx",
+    "flag": "A",
+    "r": 23,
+    "g": 34,
+    "b": 39
+  },
+  {
+    "code": "1001",
+    "chart": "Madeira Classic 40",
+    "name": "Super White",
+    "flag": "A",
+    "r": 234,
+    "g": 240,
+    "b": 255
+  },
+  {
+    "code": "1002",
+    "chart": "Madeira Classic 40",
+    "name": "Snow White",
+    "flag": "A",
+    "r": 244,
+    "g": 249,
+    "b": 255
+  },
+  {
+    "code": "1003",
+    "chart": "Madeira Classic 40",
+    "name": "Cream White",
+    "flag": "A",
+    "r": 252,
+    "g": 255,
+    "b": 255
+  },
+  {
+    "code": "1004",
+    "chart": "Madeira Classic 40",
+    "name": "Natural White",
+    "flag": "A",
+    "r": 247,
+    "g": 251,
+    "b": 255
+  },
+  {
+    "code": "1005",
+    "chart": "Madeira Classic 40",
+    "name": "Fluorescent White",
+    "flag": "A",
+    "r": 227,
+    "g": 232,
+    "b": 255
+  },
+  {
+    "code": "1000",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 25,
+    "g": 31,
+    "b": 29
+  },
+  {
+    "code": "1006",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 26,
+    "g": 32,
+    "b": 31
+  },
+  {
+    "code": "1007",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 27,
+    "g": 32,
+    "b": 30
+  },
+  {
+    "code": "1008",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 27,
+    "g": 34,
+    "b": 35
+  },
+  {
+    "code": "1009",
+    "chart": "Madeira Classic 40",
+    "name": "",
+    "flag": "A",
+    "r": 27,
+    "g": 33,
+    "b": 36
+  }
+]
