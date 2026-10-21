@@ -22,7 +22,7 @@ type Job = {
   notes: string | null;
   status: string;
   deliveryAddress: string | null;
-  submittedAt: string;
+  submittedAt: string | null;
   approvedAt: string | null;
   rejectedAt: string | null;
   rejectionReason: string | null;
@@ -34,7 +34,7 @@ type JobFile = {
   id: string;
   fileName: string;
   fileSize: number;
-  uploadedAt: string;
+  createdAt: string | null;
 };
 
 type JobMessage = {
@@ -50,6 +50,12 @@ type CustomerUser = {
   customerName: string | null;
   customerLogoUrl: string | null;
 };
+
+function formatDate(value: string | null | undefined, pattern: string, fallback = "Not available") {
+  if (!value) return fallback;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? fallback : format(date, pattern);
+}
 
 export default function CustomerJobDetail() {
   const [, params] = useRoute("/customer/job/:id");
@@ -276,21 +282,21 @@ export default function CustomerJobDetail() {
                     <p className="text-sm text-muted-foreground">Required Date</p>
                     <p className="font-medium">
                       {job.requiredDispatchDate
-                        ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
+                        ? formatDate(job.requiredDispatchDate, "MMM d, yyyy")
                         : "Not set"}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Submitted</p>
                     <p className="font-medium">
-                      {format(new Date(job.submittedAt), "MMM d, yyyy")}
+                      {formatDate(job.submittedAt, "MMM d, yyyy")}
                     </p>
                   </div>
                   {job.approvedAt && (
                     <div>
                       <p className="text-sm text-muted-foreground">Approved</p>
                       <p className="font-medium text-green-600">
-                        {format(new Date(job.approvedAt), "MMM d, yyyy")}
+                        {formatDate(job.approvedAt, "MMM d, yyyy")}
                       </p>
                     </div>
                   )}
@@ -298,7 +304,7 @@ export default function CustomerJobDetail() {
                     <div>
                       <p className="text-sm text-muted-foreground">Rejected</p>
                       <p className="font-medium text-red-600">
-                        {format(new Date(job.rejectedAt), "MMM d, yyyy")}
+                        {formatDate(job.rejectedAt, "MMM d, yyyy")}
                       </p>
                     </div>
                   )}
@@ -357,7 +363,7 @@ export default function CustomerJobDetail() {
                           <div>
                             <p className="text-sm font-medium">{file.fileName}</p>
                             <p className="text-xs text-muted-foreground">
-                              Uploaded {format(new Date(file.uploadedAt), "MMM d, yyyy")}
+                              Uploaded {formatDate(file.createdAt, "MMM d, yyyy")}
                             </p>
                           </div>
                         </div>
@@ -454,7 +460,7 @@ export default function CustomerJobDetail() {
                           }`}
                         >
                           {message.senderType === "staff" ? "Staff • " : "You • "}
-                          {format(new Date(message.createdAt), "MMM d, h:mm a")}
+                          {formatDate(message.createdAt, "MMM d, h:mm a", "")}
                         </p>
                       </div>
                     </div>

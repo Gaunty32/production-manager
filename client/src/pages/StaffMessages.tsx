@@ -71,6 +71,7 @@ import { ImageCropDialog } from "@/components/ImageCropDialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useConversationFlags } from "@/hooks/useConversationFlags";
+import { generalChatSnapshot, newGeneralChatAlerts } from "@shared/staff-chat-notifications";
 
 type JobConversation = {
   jobId: string;
@@ -318,7 +319,7 @@ export default function StaffMessages() {
   const jobConversations = allJobConversations.filter(c => !c.isArchivedByStaff);
   const archivedConversations = allJobConversations.filter(c => c.isArchivedByStaff);
 
-  const { data: directConversations = [], isLoading: isLoadingDirectConvos } = useQuery<DirectConversation[]>({
+  const { data: directConversations = [], isLoading: isLoadingDirectConvos, isSuccess: hasDirectConversations } = useQuery<DirectConversation[]>({
     queryKey: ["/api/staff/direct-conversations"],
     refetchInterval: 10000,
   });
@@ -479,6 +480,38 @@ export default function StaffMessages() {
     }
     prevCustomerMsgCount.current = custMsgs.length;
   }, [messages, isLoadingMessages, selected, toast]);
+
+  // The sidebar suppresses generic alerts on /messages. Watch the other general
+  // chats here as well as the active thread, including arrivals read by a colleague.
+  const previousGeneralChats = useRef<Map<string, string | null> | null>(null);
+  useEffect(() => {
+    if (!hasDirectConversations) return;
+    const alerts = newGeneralChatAlerts(previousGeneralChats.current, directConversations, directId);
+    previousGeneralChats.current = generalChatSnapshot(directConversations);
+    for (const conversation of alerts) {
+      const sender = conversation.customerName || conversation.recipientName || "Customer";
+      const preview = conversation.latestMessage?.message?.replace(/\[FILE:[^:]+:[^\]]+\]/g, "").trim().slice(0, 120) || "New attachment";
+      toast({
+        title: `New General Chat message — ${sender}`,
+        description: `${conversation.subject}: ${preview}`,
+        action: (
+          <button className="text-sm font-medium underline" onClick={() => {
+            setTab("direct");
+            setSelected({ type: "direct", conversationId: conversation.id });
+          }}>View</button>
+        ),
+        duration: 8000,
+      });
+      if (typeof Notification !== "undefined" && Notification.permission === "granted" && !document.hasFocus()) {
+        // Some mobile browsers expose Notification but disallow its constructor.
+        try {
+          new Notification(`General Chat — ${sender}`, { body: preview, icon: "/logo.png" });
+        } catch {
+          // The in-app alert above remains available.
+        }
+      }
+    }
+  }, [directConversations, hasDirectConversations, directId, toast]);
 
   // Request browser notification permission on first visit
   useEffect(() => {
