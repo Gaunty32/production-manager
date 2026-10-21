@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff, GripVertical, CheckCircle2, Circle, Printer, X, RefreshCw } from "lucide-react";
 import { CustomerPickingSlip } from "@/components/CustomerPickingSlip";
 import type { JobLineItem } from "@shared/schema";
+import { applyInvoiceQuantities, invoiceQuantitySchema } from "@shared/invoice-quantities";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantityForMatchingLine } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -784,6 +785,48 @@ export default function InvoicingQueue() {
   const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
   const [connectingXero, setConnectingXero] = useState(false);
   const [manualPrices, setManualPrices] = useState<Record<string, string>>({});
+  const [quantityEdits, setQuantityEdits] = useState<Record<string, string>>({});
+  const [savingQuantities, setSavingQuantities] = useState<Record<string, boolean>>({});
+  const savingQuantityIds = useRef(new Set<string>());
+  const {
+    data: invoiceQuantities = {},
+    isSuccess: quantitiesLoaded,
+    isError: quantitiesLoadFailed,
+    refetch: reloadQuantities,
+  } = useQuery<Record<string, number>>({
+    queryKey: ["/api/xero/invoice-quantities"],
+    refetchOnWindowFocus: true,
+    staleTime: 0,
+  });
+
+  const saveQuantity = async (lineItemId: string, quantity: number | null) => {
+    if (savingQuantityIds.current.has(lineItemId)) return;
+    savingQuantityIds.current.add(lineItemId);
+    setSavingQuantities(previous => ({ ...previous, [lineItemId]: true }));
+    try {
+      await apiRequest("PATCH", `/api/xero/invoice-quantities/${lineItemId}`, { quantity });
+      queryClient.setQueryData<Record<string, number>>(["/api/xero/invoice-quantities"], previous => {
+        const next = { ...previous };
+        if (quantity === null) delete next[lineItemId];
+        else next[lineItemId] = quantity;
+        return next;
+      });
+      setQuantityEdits(previous => {
+        const next = { ...previous };
+        delete next[lineItemId];
+        return next;
+      });
+    } catch (error) {
+      toast({
+        title: "Quantity not saved",
+        description: error instanceof Error ? error.message : "Please try again before generating the invoice.",
+        variant: "destructive",
+      });
+    } finally {
+      savingQuantityIds.current.delete(lineItemId);
+      setSavingQuantities(previous => ({ ...previous, [lineItemId]: false }));
+    }
+  };
   const [expandedLineItems, setExpandedLineItems] = useState<Set<string>>(new Set());
 
   function toggleLineItems(jobId: string) {
@@ -1021,14 +1064,14 @@ export default function InvoicingQueue() {
     return lineItem.quantity >= 2501 || lineItem.stitchCount >= 50000;
   };
 
-  const buildInvoicePreviewLines = (customerJobs: Job[], customerId: string) => {
+  const buildInvoicePreviewLines = (customerJobs: Job[], customerId: string, includeUnselected = false) => {
     const customer = customers.find(c => c.id === customerId);
     if (!customer) return [];
     
     const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
     const previewLines: Array<{ description: string; quantity: number; unitPrice: number | string; itemCode: string; lineItemId?: string }> = [];
     
-    const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
+    const selectedCustomerJobs = includeUnselected ? customerJobs : customerJobs.filter(job => selectedJobs.has(job.id));
     
     const sortedJobs = [...selectedCustomerJobs].sort((a, b) => {
       const dateA = a.goodsReceived ? new Date(a.goodsReceived).getTime() : 0;
@@ -1140,7 +1183,14 @@ export default function InvoicingQueue() {
           jobPreviewLines[existingIndex].quantity += quantity;
         }
       });
-      previewLines.push(...jobPreviewLines);
+      const previewQuantities = { ...invoiceQuantities };
+      for (const line of jobPreviewLines) {
+        if (line.lineItemId && quantityEdits[line.lineItemId] !== undefined) {
+          const parsed = invoiceQuantitySchema.safeParse(Number(quantityEdits[line.lineItemId]));
+          if (parsed.success) previewQuantities[line.lineItemId] = parsed.data;
+        }
+      }
+      previewLines.push(...applyInvoiceQuantities(jobPreviewLines, previewQuantities));
       
       if (shipmentLastIndex.get(shipmentKey) === i) {
         const shipmentJobs = shipmentJobsMap.get(shipmentKey)!;
@@ -1259,10 +1309,9 @@ export default function InvoicingQueue() {
     }
     
     try {
-      console.log(`Calling calculateJobPrice with:`, { lineItems, pricingTable });
-      const result = calculateJobPrice(lineItems, pricingTable);
-      console.log(`Price calculation result for ${job.jobName}:`, result);
-      return result?.totalPrice || null;
+      const lines = buildInvoicePreviewLines([job], job.customerId, true).filter(line => line.lineItemId);
+      if (lines.some(line => typeof line.unitPrice !== "number")) return "POA";
+      return lines.reduce((total, line) => total + line.quantity * (line.unitPrice as number), 0);
     } catch (error) {
       console.error(`Failed to calculate job price for ${job.jobName}:`, error);
       console.error(`Error details:`, {
@@ -1379,6 +1428,10 @@ export default function InvoicingQueue() {
   };
 
   const handleCreateInvoice = async (customerId: string) => {
+    if (!quantitiesLoaded || Object.keys(quantityEdits).length || Object.values(savingQuantities).some(Boolean)) {
+      toast({ title: "Save quantities first", description: "Finish editing and save all quantities before generating the invoice.", variant: "destructive" });
+      return;
+    }
     const customerJobs = jobsByCustomer[customerId] || [];
     const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
     const customerLogoSetups = getCustomerApprovedLogos(customerId);
@@ -1493,6 +1546,7 @@ export default function InvoicingQueue() {
         logoSetupsOnly: invoicingLogoSetupsOnly,
         manualPrices: Object.keys(manualPricesForAPI).length > 0 ? manualPricesForAPI : undefined,
         manualShippingCosts: Object.keys(manualShippingForAPI).length > 0 ? manualShippingForAPI : undefined,
+        invoiceQuantities,
       }) as unknown as { success: boolean; invoiceId: string; invoiceNumber: string | null; jobsInvoiced: number; logoSetupsInvoiced?: number; stripeCharge?: { success: boolean; amountCharged?: number; paymentIntentId?: string; error?: string } | null };
 
       const invoiceDescription = invoicingLogoSetupsOnly 
@@ -1556,6 +1610,7 @@ export default function InvoicingQueue() {
       // Refresh jobs list and logo setups
       await queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/logo-setups"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/xero/invoice-quantities"] });
     } catch (error) {
       console.error("Error creating invoice:", error);
       toast({
@@ -1747,7 +1802,7 @@ export default function InvoicingQueue() {
                         )}
                         <Button
                           onClick={() => handleCreateInvoice(customerId)}
-                          disabled={(selectedCount === 0 && !canInvoiceLogoSetupsOnly) || creatingInvoice === customerId}
+                          disabled={(selectedCount === 0 && !canInvoiceLogoSetupsOnly) || creatingInvoice === customerId || !quantitiesLoaded || Object.keys(quantityEdits).length > 0 || Object.values(savingQuantities).some(Boolean)}
                           data-testid={`button-create-invoice-${customerId}`}
                         >
                           <FileText className="h-4 w-4 mr-2" />
@@ -2215,6 +2270,20 @@ export default function InvoicingQueue() {
                               )}
                             </div>
                             <div className="rounded-lg border overflow-x-auto">
+                              <p className="mb-3 text-xs text-muted-foreground">
+                                Quantity changes save when you leave the field and are kept until the invoice is generated. Production quantities are unchanged.
+                              </p>
+                              {quantitiesLoadFailed && (
+                                <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-destructive" role="alert">
+                                  Saved quantities could not be loaded. Invoice creation is blocked to avoid billing the wrong quantities.
+                                  <Button variant="outline" size="sm" onClick={() => reloadQuantities()}>Retry</Button>
+                                </div>
+                              )}
+                              {Object.keys(quantityEdits).length > 0 && (
+                                <p className="mb-3 text-xs text-amber-700 dark:text-amber-400" role="status">
+                                  Finish and save quantity edits before creating an invoice. Use a whole number of at least 1.
+                                </p>
+                              )}
                               <table className="w-full min-w-[560px] text-sm" data-testid={`table-invoice-preview-${customerId}`}>
                                 <thead>
                                   <tr className="bg-muted/50">
@@ -2235,7 +2304,58 @@ export default function InvoicingQueue() {
                                           <Badge variant="outline" className="text-xs">{line.itemCode}</Badge>
                                         </td>
                                         <td className="p-2 text-foreground">{line.description}</td>
-                                        <td className="p-2 text-right text-muted-foreground">{line.quantity}</td>
+                                        <td className="p-2 text-right">
+                                          {editable ? (
+                                            <div className="flex flex-col items-end gap-1">
+                                              <Input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                inputMode="numeric"
+                                                aria-label={`Invoice quantity for ${line.description}`}
+                                                value={quantityEdits[line.lineItemId!] ?? line.quantity}
+                                                disabled={!quantitiesLoaded || !!savingQuantities[line.lineItemId!] || creatingInvoice !== null}
+                                                aria-invalid={quantityEdits[line.lineItemId!] !== undefined && !invoiceQuantitySchema.safeParse(Number(quantityEdits[line.lineItemId!])).success}
+                                                onChange={event => setQuantityEdits(previous => ({ ...previous, [line.lineItemId!]: event.target.value }))}
+                                                onBlur={() => {
+                                                  const edit = quantityEdits[line.lineItemId!];
+                                                  if (edit === undefined) return;
+                                                  const parsed = invoiceQuantitySchema.safeParse(Number(edit));
+                                                  if (parsed.success) void saveQuantity(line.lineItemId!, parsed.data);
+                                                }}
+                                                onKeyDown={event => {
+                                                  if (event.key === "Enter") event.currentTarget.blur();
+                                                }}
+                                                className={`h-8 w-20 text-right text-sm ${invoiceQuantities[line.lineItemId!] !== undefined ? "border-primary" : ""}`}
+                                                data-testid={`input-invoice-quantity-${line.lineItemId}`}
+                                              />
+                                              <div className="flex items-center gap-1">
+                                                {savingQuantities[line.lineItemId!] ? (
+                                                  <span className="text-[10px] text-muted-foreground" role="status">Saving…</span>
+                                                ) : quantityEdits[line.lineItemId!] !== undefined ? (
+                                                  <Button
+                                                    variant="outline" size="sm" className="h-7 px-2 text-xs"
+                                                    disabled={!invoiceQuantitySchema.safeParse(Number(quantityEdits[line.lineItemId!])).success}
+                                                    onClick={() => void saveQuantity(line.lineItemId!, Number(quantityEdits[line.lineItemId!]))}
+                                                    data-testid={`button-save-invoice-quantity-${line.lineItemId}`}
+                                                  >Save</Button>
+                                                ) : invoiceQuantities[line.lineItemId!] !== undefined ? (
+                                                  <>
+                                                    <span className="text-[10px] text-muted-foreground">Saved</span>
+                                                    <Button
+                                                      variant="ghost" size="icon" className="h-7 w-7"
+                                                      disabled={creatingInvoice !== null}
+                                                      onClick={() => void saveQuantity(line.lineItemId!, null)}
+                                                      title="Reset to calculated quantity"
+                                                      aria-label={`Reset invoice quantity for ${line.description}`}
+                                                      data-testid={`button-reset-invoice-quantity-${line.lineItemId}`}
+                                                    ><X className="h-3 w-3" /></Button>
+                                                  </>
+                                                ) : null}
+                                              </div>
+                                            </div>
+                                          ) : <span className="text-muted-foreground">{line.quantity}</span>}
+                                        </td>
                                         <td className="p-2 text-right">
                                           {isDemoMode ? (
                                             <span className="text-muted-foreground">£**.00</span>

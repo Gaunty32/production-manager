@@ -5,6 +5,8 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { storage } from "./storage";
+import { getInvoiceQuantities, saveInvoiceQuantity, clearInvoiceQuantities } from "./invoiceQuantities";
+import { applyInvoiceQuantities, invoiceQuantitySchema, invoiceQuantitiesSchema } from "@shared/invoice-quantities";
 import { withSuppliedThreadColours } from "./threadColourCatalog";
 import { getThreadSheetSnapshot } from "./threadSheetSync";
 import { buildListedThreadColours, filterListedThreadColours } from "@shared/thread-sheet";
@@ -10599,9 +10601,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/xero/invoice-quantities", isStaffAuthenticated, async (_req, res) => {
+    try {
+      res.json(await getInvoiceQuantities());
+    } catch (error) {
+      console.error("Failed to load invoice quantities:", error);
+      res.status(500).json({ error: "Failed to load saved invoice quantities" });
+    }
+  });
+
+  app.patch("/api/xero/invoice-quantities/:lineItemId", isStaffAuthenticated, async (req, res) => {
+    const parsed = z.object({ quantity: invoiceQuantitySchema.nullable() }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Quantity must be a whole number of at least 1" });
+    try {
+      const result = await saveInvoiceQuantity(req.params.lineItemId, parsed.data.quantity);
+      res.status(result.status).json(result.error ? { error: result.error } : { quantity: parsed.data.quantity });
+    } catch (error) {
+      console.error("Failed to save invoice quantity:", error);
+      res.status(500).json({ error: "Failed to save invoice quantity" });
+    }
+  });
+
   app.post("/api/xero/consolidated-invoice", isStaffAuthenticated, async (req, res) => {
     try {
       const { jobIds, customerId, manualPrices, manualShippingCosts, logoSetupsOnly } = req.body; // Optional manual prices: { lineItemId: unitPrice }, optional manual shipping: { jobId: shippingCost }
+      const invoiceQuantities = await getInvoiceQuantities();
+      if (req.body.invoiceQuantities !== undefined) {
+        const expected = invoiceQuantitiesSchema.safeParse(req.body.invoiceQuantities);
+        if (!expected.success) return res.status(400).json({ error: "Invalid invoice quantities" });
+        const relevantIds: string[] = [];
+        for (const id of Array.isArray(jobIds) ? jobIds : []) {
+          relevantIds.push(...(await storage.getJobLineItems(id)).map(item => item.id));
+        }
+        const expectedForJobs = Object.fromEntries(Object.entries(expected.data).filter(([id]) => relevantIds.includes(id)));
+        const savedForJobs = Object.fromEntries(Object.entries(invoiceQuantities).filter(([id]) => relevantIds.includes(id)));
+        if (Array.from(new Set([...Object.keys(expectedForJobs), ...Object.keys(savedForJobs)]))
+          .some(id => expectedForJobs[id] !== savedForJobs[id])) {
+          return res.status(409).json({ error: "Saved invoice quantities have changed. Refresh the preview before generating the invoice." });
+        }
+      }
 
       // For logo-setups-only invoices, jobIds can be empty
       if (!logoSetupsOnly && (!Array.isArray(jobIds) || jobIds.length === 0)) {
@@ -10625,6 +10663,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!logoSetupsOnly && selectedJobs.length !== (jobIds || []).length) {
         return res.status(404).json({ error: "One or more jobs not found" });
       }
+
+      const customer = await storage.getCustomer(customerId);
+      if (!customer) return res.status(404).json({ error: "Customer not found" });
 
       // Sort jobs to match Google Drive Calculations sheet order (so Xero invoice lines
       // align with the Drive verification panel). Falls back to completion date order
@@ -10674,22 +10715,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const customer = await storage.getCustomers().then(customers => 
-        customers.find(c => c.id === customerId)
-      );
-
-      if (!customer) {
-        return res.status(404).json({ error: "Customer not found" });
-      }
-
       // Determine pricing table (use null for zero pricing if none configured)
       const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
 
       // Get line items and calculate pricing for each job
       // Build line items in order: job items, then carriage for that job, repeat
-      const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number; itemCode: string }> = [];
+      const lineItemsWithPricing: Array<{ jobName: string; poNumber: string | null; description: string; quantity: number; unitPrice: number; stitchCount: number; itemCode: string; lineItemId?: string }> = [];
+      const invoicedLineItemIds: string[] = [];
       // Track per-job invoice subtotals so we can save them to the DB
-      const jobInvoiceTotals: Record<number, number> = {};
+      const jobInvoiceTotals: Record<string, number> = {};
       let hasPOA = false;
       let hasTBA = false;
 
@@ -10730,6 +10764,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Add this job's line items
         const jobLineItems = await storage.getJobLineItems(job.id);
+        invoicedLineItemIds.push(...jobLineItems.map(item => item.id));
         
         let priceResult;
         try {
@@ -10759,9 +10794,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Minimum order quantity (from 1st Sept): bill small runs at 6 items
           const billedQty = billedQuantityForMatchingLine(jobLineItems, index);
 
-          // Accumulate per-job invoice total
-          jobInvoiceTotals[job.id] = (jobInvoiceTotals[job.id] || 0) + (billedQty || 0) * unitPrice;
-
           const jobTypeLower = lineItem.jobType?.toLowerCase() || '';
           let itemCode = "Emb";
           let description = lineItem.description || '';
@@ -10779,13 +10811,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             itemCode = "OTHER";
           }
 
-          if (billedQty !== lineItem.quantity) {
+          if (billedQty !== lineItem.quantity && invoiceQuantities[lineItem.id] === undefined) {
             description = description
               ? `${description} (minimum order ${MIN_ORDER_QTY})`
               : `Minimum order ${MIN_ORDER_QTY}`;
           }
 
           jobInvoiceLines.push({
+            lineItemId: lineItem.id,
             jobName: job.jobName,
             poNumber: job.poNumber,
             description,
@@ -10795,7 +10828,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             itemCode,
           });
         });
-        lineItemsWithPricing.push(...mergeMatchingInvoiceLines(jobInvoiceLines));
+        const billedLines = applyInvoiceQuantities(mergeMatchingInvoiceLines(jobInvoiceLines), invoiceQuantities);
+        jobInvoiceTotals[job.id] = billedLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+        lineItemsWithPricing.push(...billedLines);
 
         if (job.shippingCost === "TBA") {
           // A TBA job is covered if ANY job in the same tracking-number group
@@ -10995,6 +11030,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           invoiceTotal: jobInvoiceTotals[job.id] || 0,
         });
       }
+
+      // Only clear saved drafts after Xero verification and marking jobs invoiced.
+      await clearInvoiceQuantities(invoicedLineItemIds).catch(error => {
+        console.error("Invoice generated but quantity draft cleanup failed:", error);
+      });
 
       // Calculate overall invoice total for Stripe charge
       const consolidatedTotal = lineItemsWithPricing.reduce(
