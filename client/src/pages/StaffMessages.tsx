@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { updateMentionSelections, type MentionSelection } from "@shared/staff-mentions";
 import { DemoText } from "@/components/DemoText";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -302,6 +303,7 @@ export default function StaffMessages() {
   const [mentionSearch, setMentionSearch] = useState("");
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [mentionHighlightIdx, setMentionHighlightIdx] = useState(0);
+  const [selectedMentions, setSelectedMentions] = useState<MentionSelection[]>([]);
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: currentUser, refetch: refetchMe } = useQuery<CurrentUser>({
@@ -349,6 +351,10 @@ export default function StaffMessages() {
   const selectedDirectConvo = directConversations.find(c => c.id === directId) ?? null;
   const currentCustomerId = selected?.type === "job" ? selectedJobConvo?.customerId : selectedDirectConvo?.customerId;
   const convKey = jobId ? `job:${jobId}` : directId ? `direct:${directId}` : null;
+  useEffect(() => {
+    setSelectedMentions([]);
+    setShowMentionDropdown(false);
+  }, [convKey]);
 
   const handleMarkUnread = () => {
     if (!convKey) return;
@@ -534,9 +540,10 @@ export default function StaffMessages() {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const sendJobMessageMutation = useMutation({
-    mutationFn: async ({ message, imageUrl, isInternal }: { message: string; imageUrl?: string; isInternal?: boolean }) => {
+    mutationFn: async ({ message, imageUrl, isInternal, mentions }: { message: string; imageUrl?: string; isInternal?: boolean; mentions?: MentionSelection[] }) => {
       const res = await apiRequest("POST", `/api/staff/jobs/${jobId}/messages`, {
         message,
+        mentions,
         ...(imageUrl ? { imageUrl } : {}),
         ...(isInternal ? { isInternal: true } : {}),
       });
@@ -553,8 +560,8 @@ export default function StaffMessages() {
   });
 
   const sendDirectMessageMutation = useMutation({
-    mutationFn: async ({ message, imageUrl }: { message: string; imageUrl?: string }) => {
-      const res = await apiRequest("POST", `/api/staff/direct-conversations/${directId}/messages`, { message, ...(imageUrl ? { imageUrl } : {}) });
+    mutationFn: async ({ message, imageUrl, mentions }: { message: string; imageUrl?: string; mentions?: MentionSelection[] }) => {
+      const res = await apiRequest("POST", `/api/staff/direct-conversations/${directId}/messages`, { message, mentions, ...(imageUrl ? { imageUrl } : {}) });
       return res.json();
     },
     onSuccess: () => {
@@ -798,7 +805,12 @@ export default function StaffMessages() {
     const allAttachments = [...chatImages];
     const text = newMessage.trim();
     if ((!text && allAttachments.length === 0) || !selected) return;
+    const leadingSpace = newMessage.length - newMessage.trimStart().length;
+    const mentions = selectedMentions
+      .map(mention => ({ ...mention, start: mention.start - leadingSpace, end: mention.end - leadingSpace }))
+      .filter(mention => mention.start >= 0 && text.slice(mention.start, mention.end) === mention.text);
     setNewMessage("");
+    setSelectedMentions([]);
     setChatImages([]);
     setShowMentionDropdown(false);
     setMentionSearch("");
@@ -812,13 +824,13 @@ export default function StaffMessages() {
     const baseText = [text, fileMarkers].filter(Boolean).join("\n");
 
     if (imageAttachments.length === 0) {
-      const payload = { message: baseText || " ", isInternal };
+      const payload = { message: baseText || " ", isInternal, mentions };
       if (selected.type === "job") sendJobMessageMutation.mutate(payload);
       else sendDirectMessageMutation.mutate(payload);
     } else {
       for (let i = 0; i < imageAttachments.length; i++) {
         const msgText = i === 0 ? (baseText || " ") : " ";
-        const payload = { message: msgText, imageUrl: imageAttachments[i].key, isInternal };
+        const payload = { message: msgText, imageUrl: imageAttachments[i].key, isInternal, mentions: i === 0 ? mentions : [] };
         try {
           if (selected.type === "job") await sendJobMessageMutation.mutateAsync(payload);
           else await sendDirectMessageMutation.mutateAsync(payload);
@@ -985,8 +997,8 @@ export default function StaffMessages() {
     .filter(s => !mentionSearch || s.name.toLowerCase().includes(mentionSearch))
     .slice(0, 8);
 
-  const insertMention = (name: string) => {
-    const handle = name.split(" ")[0]; // first word as the @handle
+  const insertMention = (person: { id: string; name: string; isCustomer: boolean }) => {
+    const handle = person.name.split(" ")[0];
     const textarea = textareaRef.current;
     if (!textarea) return;
     const cursorPos = textarea.selectionStart ?? newMessage.length;
@@ -996,6 +1008,12 @@ export default function StaffMessages() {
     const beforeMention = textBeforeCursor.slice(0, textBeforeCursor.length - match[0].length);
     const afterCursor = newMessage.slice(cursorPos);
     const newText = `${beforeMention}@${handle} ${afterCursor}`;
+    setSelectedMentions(previous => [
+      ...updateMentionSelections(newMessage, newText, previous.filter(mention =>
+        mention.end <= beforeMention.length || mention.start >= cursorPos
+      )),
+      { id: person.id, isCustomer: person.isCustomer, start: beforeMention.length, end: beforeMention.length + handle.length + 1, text: `@${handle}` },
+    ]);
     setNewMessage(newText);
     setShowMentionDropdown(false);
     setMentionSearch("");
@@ -1008,6 +1026,7 @@ export default function StaffMessages() {
 
   const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
+    setSelectedMentions(previous => updateMentionSelections(newMessage, val, previous));
     setNewMessage(val);
     const cursorPos = e.target.selectionStart ?? val.length;
     const textBeforeCursor = val.slice(0, cursorPos);
@@ -1026,7 +1045,7 @@ export default function StaffMessages() {
     if (showMentionDropdown && filteredMentions.length > 0) {
       if (e.key === "ArrowDown") { e.preventDefault(); setMentionHighlightIdx(i => Math.min(i + 1, filteredMentions.length - 1)); return; }
       if (e.key === "ArrowUp") { e.preventDefault(); setMentionHighlightIdx(i => Math.max(i - 1, 0)); return; }
-      if (e.key === "Enter") { e.preventDefault(); insertMention(filteredMentions[mentionHighlightIdx].name); return; }
+      if (e.key === "Enter") { e.preventDefault(); insertMention(filteredMentions[mentionHighlightIdx] ?? filteredMentions[0]); return; }
       if (e.key === "Escape") { e.preventDefault(); setShowMentionDropdown(false); return; }
     }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -1957,7 +1976,7 @@ export default function StaffMessages() {
                       <button
                         key={s.id}
                         type="button"
-                        onMouseDown={(e) => { e.preventDefault(); insertMention(s.name); }}
+                        onMouseDown={(e) => { e.preventDefault(); insertMention(s); }}
                         className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${idx === mentionHighlightIdx ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"}`}
                         data-testid={`mention-option-${s.id}`}
                       >

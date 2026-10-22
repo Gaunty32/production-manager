@@ -5,6 +5,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { storage } from "./storage";
+import { resolveSelectedStaffMentions } from "@shared/staff-mentions";
 import { getInvoiceQuantities, saveInvoiceQuantity, clearInvoiceQuantities } from "./invoiceQuantities";
 import { applyInvoiceQuantities, invoiceQuantitySchema, invoiceQuantitiesSchema } from "@shared/invoice-quantities";
 import { withSuppliedThreadColours } from "./threadColourCatalog";
@@ -167,57 +168,25 @@ function getRequestBaseUrl(req: express.Request) {
 }
 
 // ─── @Mention detection & notification ───────────────────────────────────────
-// Extracts @FirstName handles from a message and fires notification emails to
-// matched staff members (excluding the sender themselves).
+// Only notify staff explicitly selected in the composer; typed names are not identities.
 async function notifyMentionedStaff(
   messageText: string,
   senderName: string,
   senderUserId: string,
   contextLabel: string,
   contextUrl: string,
+  selectedMentions: unknown,
 ): Promise<void> {
   try {
-    const handles = [...messageText.matchAll(/@(\w+)/g)].map(m => m[1].toLowerCase());
-    if (!handles.length) return;
+    if (!Array.isArray(selectedMentions) || !selectedMentions.length) return;
 
     const allStaff = await storage.getStaff();
     const allUsers = await storage.getAllUsers();
 
-    // Build a set of userIds already linked to a staff record
-    const linkedUserIds = new Set(allStaff.map(s => s.userId).filter(Boolean));
-
-    for (const handle of [...new Set(handles)]) {
-      // First try to match against a staff record by first name
-      const staffMatch = allStaff.find(s => s.active !== false && s.name.split(' ')[0].toLowerCase() === handle);
-
-      let mentionedName: string;
-      let userRecord: typeof allUsers[number] | undefined;
-
-      if (staffMatch) {
-        mentionedName = staffMatch.name;
-        userRecord = staffMatch.userId
-          ? allUsers.find(u => u.id === staffMatch.userId)
-          : allUsers.find(u => [u.firstName, u.lastName].filter(Boolean).join(' ').toLowerCase().startsWith(handle));
-      } else {
-        // Fall back to matching users who have no staff record (e.g. admin/super_admin without a staff entry)
-        userRecord = allUsers.find(u =>
-          !linkedUserIds.has(u.id) &&
-          u.active &&
-          u.role !== 'demo' &&
-          (u.firstName || '').toLowerCase() === handle
-        );
-        mentionedName = userRecord
-          ? [userRecord.firstName, userRecord.lastName].filter(Boolean).join(' ') || userRecord.email
-          : handle;
-      }
-
-      if (!userRecord?.active || !userRecord.email) continue;
-      // Don't notify the sender themselves
-      if (userRecord.id === senderUserId) continue;
-
+    for (const recipient of resolveSelectedStaffMentions(messageText, selectedMentions, allStaff, allUsers, senderUserId)) {
       sendMentionNotificationEmail({
-        mentionedName,
-        mentionedEmail: userRecord.email,
+        mentionedName: recipient.name,
+        mentionedEmail: recipient.email,
         senderName,
         messageText,
         contextLabel,
@@ -6143,6 +6112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sessionUserId,
           `${job.jobName}`,
           `${baseUrl}/messages?jobId=${job.id}`,
+          req.body.mentions,
         );
       }
 
@@ -11431,6 +11401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sessionUserId,
           convo.subject || 'Direct Message',
           `${baseUrl}/messages?conversationId=${req.params.id}`,
+          req.body.mentions,
         );
       }
 

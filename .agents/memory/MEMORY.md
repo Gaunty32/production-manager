@@ -10,7 +10,7 @@
 
 - [Client auto-refresh on republish](client-auto-refresh.md) — open clients poll /api/version & reload on new build; version MUST be deterministic (hash built index.html, not Date.now) or Cloud Run instances cause reload loops.
 - [Direct conversation archiving](direct-conversation-archive.md) — direct channels share ONE status field; customer archive/delete hides them from staff, and staff inbox shows only status==open with no archived view ("disappearing channels").
-- [General Chat notifications](staff-chat-notifications.md) — shared read flags can hide new arrivals from other staff; detect latest-message changes and preserve email preferences.
+- [Chat notifications](staff-chat-notifications.md) — detect new arrivals independently of shared read flags; staff mention emails require explicit person selection, never first-name guessing.
 
 - [Job pricing parity](job-pricing-parity.md) — pricing_table_2025/2026 are BOOLEAN flags; staff amounts now come server-side from /api/jobs (amountDue/amountDuePoa) so they can't drift from the portal.
 - [Customer minimum-order acknowledgement](customer-minimum-order-acknowledgement.md) — warn on every 1–5 unit customer submission; staff handles the initials exemption later.
