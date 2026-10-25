@@ -2415,7 +2415,7 @@ export default function Dashboard() {
               jobId={dpdBookingJob.id}
               jobReference={dpdBookingJob.poNumber || dpdBookingJob.jobName}
               prefillName={customer?.name}
-              prefillAddress={customer?.address ?? undefined}
+              prefillAddress={dpdBookingJob.deliveryAddress || customer?.address || undefined}
               prefillPhone={customer?.telephone ?? undefined}
               prefillEmail={customer?.email ?? undefined}
               otherJobs={combinedOtherJobs}

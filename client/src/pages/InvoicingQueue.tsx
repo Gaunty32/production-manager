@@ -10,6 +10,7 @@ import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Pale
 import { CustomerPickingSlip } from "@/components/CustomerPickingSlip";
 import type { JobLineItem } from "@shared/schema";
 import { applyInvoiceQuantities, invoiceQuantitySchema } from "@shared/invoice-quantities";
+import { getShippingIssues, type ShippingIssue } from "@shared/shipping-details";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantityForMatchingLine } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,6 +59,7 @@ interface EditShippingState {
   packageCount: number | undefined;
   packageType: "boxes" | "bags" | undefined;
   consolidateWithJobIds: string[];
+  shippingMethod?: string;
 }
 
 interface MergeShippingState {
@@ -840,6 +842,7 @@ export default function InvoicingQueue() {
   const [manualShippingCosts, setManualShippingCosts] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [editingShipping, setEditingShipping] = useState<EditShippingState | null>(null);
+  const [shippingWarning, setShippingWarning] = useState<{ customerId: string; issues: ShippingIssue[] } | null>(null);
   const [editingLineItems, setEditingLineItems] = useState<EditLineItemsState | null>(null);
   const [editedLineItems, setEditedLineItems] = useState<Record<string, { stitchCount: number }>>({});
   const [mergingShipping, setMergingShipping] = useState<MergeShippingState | null>(null);
@@ -877,7 +880,7 @@ export default function InvoicingQueue() {
   };
 
   const updateShippingMutation = useMutation({
-    mutationFn: async (data: { jobId: string; dhlTrackingNumber?: string; packageCount?: number; packageType?: string; shippingMethod?: string; consolidatedJobIds?: string[] }) => {
+    mutationFn: async (data: { jobId: string; dhlTrackingNumber?: string | null; packageCount?: number | null; packageType?: string | null; shippingMethod?: string; shippingCost?: string | null; consolidatedShipmentId?: string | null; consolidatedJobIds?: string[] }) => {
       const { jobId, consolidatedJobIds, ...updates } = data;
       if (consolidatedJobIds && consolidatedJobIds.length > 0) {
         return apiRequest("PATCH", `/api/jobs/${jobId}`, { ...updates, consolidatedJobIds });
@@ -887,7 +890,7 @@ export default function InvoicingQueue() {
         : undefined;
       const shippingCost = shippingCostResult?.cost !== undefined 
         ? (typeof shippingCostResult.cost === 'number' ? shippingCostResult.cost.toString() : shippingCostResult.cost)
-        : undefined;
+        : updates.shippingCost;
       return apiRequest("PATCH", `/api/jobs/${jobId}`, { ...updates, shippingCost });
     },
     onSuccess: () => {
@@ -1427,7 +1430,7 @@ export default function InvoicingQueue() {
     }
   };
 
-  const handleCreateInvoice = async (customerId: string) => {
+  const handleCreateInvoice = async (customerId: string, acknowledgeIncompleteShipping = false) => {
     if (!quantitiesLoaded || Object.keys(quantityEdits).length || Object.values(savingQuantities).some(Boolean)) {
       toast({ title: "Save quantities first", description: "Finish editing and save all quantities before generating the invoice.", variant: "destructive" });
       return;
@@ -1439,6 +1442,11 @@ export default function InvoicingQueue() {
     const invoicingLogoSetupsOnly = selectedCustomerJobs.length === 0 && customerLogoSetups.length > 0;
     
     if (selectedCustomerJobs.length === 0 && customerLogoSetups.length === 0) {
+      return;
+    }
+    const shippingIssues = getShippingIssues(selectedCustomerJobs, jobs, manualShippingCosts);
+    if (!invoicingLogoSetupsOnly && shippingIssues.length && !acknowledgeIncompleteShipping) {
+      setShippingWarning({ customerId, issues: shippingIssues });
       return;
     }
 
@@ -1547,6 +1555,7 @@ export default function InvoicingQueue() {
         manualPrices: Object.keys(manualPricesForAPI).length > 0 ? manualPricesForAPI : undefined,
         manualShippingCosts: Object.keys(manualShippingForAPI).length > 0 ? manualShippingForAPI : undefined,
         invoiceQuantities,
+        acknowledgeIncompleteShipping,
       }) as unknown as { success: boolean; invoiceId: string; invoiceNumber: string | null; jobsInvoiced: number; logoSetupsInvoiced?: number; stripeCharge?: { success: boolean; amountCharged?: number; paymentIntentId?: string; error?: string } | null };
 
       const invoiceDescription = invoicingLogoSetupsOnly 
@@ -1982,6 +1991,32 @@ export default function InvoicingQueue() {
                                           </tbody>
                                         </table>
                                       </div>
+                                    );
+                                  })()}
+                                  {(() => {
+                                    const issue = getShippingIssues(customerJobs, jobs, manualShippingCosts).find(issue => issue.jobId === job.id);
+                                    if (!issue) return null;
+                                    return (
+                                      <Alert className="mt-3 border-amber-300 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100" data-testid={`alert-missing-shipping-${job.id}`}>
+                                        <AlertCircle className="h-4 w-4" />
+                                        <AlertDescription>
+                                          <p className="font-semibold">Shipping information incomplete</p>
+                                          <p className="text-xs mt-1">{issue.reasons.join(" ")}</p>
+                                          {job.dhlTrackingNumber && <p className="mt-1 break-all text-xs">Tracking: {job.dhlTrackingNumber}</p>}
+                                          <Button
+                                            variant="outline" size="sm" className="mt-2"
+                                            onClick={() => setEditingShipping({
+                                              jobId: job.id, customerId: job.customerId,
+                                              shippingMethod: job.shippingMethod || "",
+                                              dhlTrackingNumber: job.dhlTrackingNumber || "",
+                                              packageCount: job.packageCount || undefined,
+                                              packageType: job.packageType as "boxes" | "bags" | undefined,
+                                              consolidateWithJobIds: consolidatedJobs.map(other => other.id),
+                                            })}
+                                            data-testid={`button-add-shipping-${job.id}`}
+                                          >Review shipping</Button>
+                                        </AlertDescription>
+                                      </Alert>
                                     );
                                   })()}
                                   {job.shippingMethod && (
@@ -2498,7 +2533,7 @@ export default function InvoicingQueue() {
 
       {/* Merge Shipping Dialog */}
       <Dialog open={!!mergingShipping} onOpenChange={(open) => !open && setMergingShipping(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Merge Shipping Charges</DialogTitle>
             <DialogDescription>
@@ -2587,7 +2622,7 @@ export default function InvoicingQueue() {
 
       {/* Edit Shipping Dialog */}
       <Dialog open={!!editingShipping} onOpenChange={(open) => !open && setEditingShipping(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Shipping Information</DialogTitle>
             <DialogDescription>
@@ -2595,6 +2630,8 @@ export default function InvoicingQueue() {
             </DialogDescription>
           </DialogHeader>
           {editingShipping && (() => {
+            const shippingMethod = editingShipping.shippingMethod ?? jobs.find(job => job.id === editingShipping.jobId)?.shippingMethod ?? "";
+            const needsParcels = !["customer_collection", "free_local"].includes(shippingMethod);
             const otherCustomerJobs = jobs.filter(j =>
               j.customerId === editingShipping.customerId &&
               j.id !== editingShipping.jobId &&
@@ -2602,6 +2639,22 @@ export default function InvoicingQueue() {
             );
             return (
               <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Dispatch method</Label>
+                  <Select value={shippingMethod} onValueChange={value => setEditingShipping({
+                    ...editingShipping, shippingMethod: value,
+                    consolidateWithJobIds: ["customer_collection", "free_local"].includes(value) ? [] : editingShipping.consolidateWithJobIds,
+                  })}>
+                    <SelectTrigger data-testid="select-edit-shipping-method"><SelectValue placeholder="Select dispatch method" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="direct_delivery">Direct delivery</SelectItem>
+                      <SelectItem value="consolidated">Consolidated back to customer</SelectItem>
+                      <SelectItem value="customer_collection">Customer collection</SelectItem>
+                      <SelectItem value="free_local">Free local delivery</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {needsParcels && <>
                 <div className="space-y-2">
                   <Label htmlFor="tracking">DPD Local Tracking Number</Label>
                   <Input
@@ -2688,6 +2741,7 @@ export default function InvoicingQueue() {
                     )}
                   </div>
                 )}
+                </>}
               </div>
             );
           })()}
@@ -2698,11 +2752,20 @@ export default function InvoicingQueue() {
             <Button
               onClick={() => {
                 if (editingShipping) {
+                  const shippingMethod = editingShipping.shippingMethod ?? jobs.find(job => job.id === editingShipping.jobId)?.shippingMethod;
+                  if (!shippingMethod) return;
+                  if (["customer_collection", "free_local"].includes(shippingMethod)) {
+                    updateShippingMutation.mutate({
+                      jobId: editingShipping.jobId, shippingMethod, shippingCost: "0",
+                      dhlTrackingNumber: null, packageCount: null, packageType: null, consolidatedShipmentId: null,
+                    });
+                    return;
+                  }
                   if (editingShipping.consolidateWithJobIds.length > 0) {
                     updateShippingMutation.mutate({
                       jobId: editingShipping.jobId,
                       shippingMethod: "consolidated",
-                      dhlTrackingNumber: editingShipping.dhlTrackingNumber || undefined,
+                      dhlTrackingNumber: editingShipping.dhlTrackingNumber.trim() || null,
                       packageCount: editingShipping.packageCount,
                       packageType: editingShipping.packageType,
                       consolidatedJobIds: editingShipping.consolidateWithJobIds,
@@ -2710,18 +2773,51 @@ export default function InvoicingQueue() {
                   } else {
                     updateShippingMutation.mutate({
                       jobId: editingShipping.jobId,
-                      dhlTrackingNumber: editingShipping.dhlTrackingNumber || undefined,
+                      shippingMethod,
+                      dhlTrackingNumber: editingShipping.dhlTrackingNumber.trim() || null,
                       packageCount: editingShipping.packageCount,
                       packageType: editingShipping.packageType,
                     });
                   }
                 }
               }}
-              disabled={updateShippingMutation.isPending}
+              disabled={updateShippingMutation.isPending || !(
+                editingShipping?.shippingMethod || jobs.find(job => job.id === editingShipping?.jobId)?.shippingMethod
+              ) || (!!editingShipping && !["customer_collection", "free_local"].includes(
+                editingShipping.shippingMethod ?? jobs.find(job => job.id === editingShipping.jobId)?.shippingMethod ?? ""
+              ) && (!Number.isInteger(editingShipping.packageCount) || (editingShipping.packageCount ?? 0) < 1 || !editingShipping.packageType))}
               data-testid="button-save-shipping"
             >
               {updateShippingMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!shippingWarning} onOpenChange={open => !open && setShippingWarning(null)}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Review incomplete shipping</DialogTitle>
+            <DialogDescription>
+              These orders have incomplete dispatch information. Carriage may be missing from the invoice.
+              Cancel to review the shipping details, or explicitly confirm that the invoice should proceed as shown.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            {shippingWarning?.issues.map(issue => (
+              <div key={issue.jobId} className="rounded-md border border-amber-300 p-3">
+                <p className="font-semibold">{issue.jobName}</p>
+                <p className="text-muted-foreground mt-1">{issue.reasons.join(" ")}</p>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShippingWarning(null)} data-testid="button-cancel-incomplete-shipping">Review shipping first</Button>
+            <Button data-testid="button-confirm-incomplete-shipping" onClick={() => {
+              const customerId = shippingWarning?.customerId;
+              setShippingWarning(null);
+              if (customerId) void handleCreateInvoice(customerId, true);
+            }}>Create invoice as shown</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

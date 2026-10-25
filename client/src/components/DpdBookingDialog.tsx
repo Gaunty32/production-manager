@@ -29,6 +29,7 @@ import { Truck, CheckCircle2, Download, AlertCircle, Loader2 } from "lucide-reac
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
+import type { BookedDpdDetails } from "@shared/shipping-details";
 
 const bookingSchema = z.object({
   recipientName: z.string().min(1, "Recipient name is required"),
@@ -69,7 +70,8 @@ interface DpdBookingDialogProps {
   prefillPhone?: string;
   prefillEmail?: string;
   otherJobs?: OtherJob[];
-  onSuccess?: (trackingNumber: string) => void;
+  shippingMethod?: "direct_delivery" | "consolidated";
+  onSuccess?: (trackingNumber: string, details?: BookedDpdDetails) => void;
 }
 
 function sanitizeLabelHtml(html: string): string {
@@ -136,9 +138,10 @@ export function DpdBookingDialog({
   prefillEmail,
   otherJobs = [],
   onSuccess,
+  shippingMethod,
 }: DpdBookingDialogProps) {
   const { toast } = useToast();
-  const [result, setResult] = useState<{ trackingNumber: string; labelHtml: string | null } | null>(null);
+  const [result, setResult] = useState<{ trackingNumber: string; labelHtml: string | null; warning?: string } | null>(null);
   const [isBooking, setIsBooking] = useState(false);
   const [selectedOtherIds, setSelectedOtherIds] = useState<Set<string>>(new Set());
 
@@ -180,6 +183,7 @@ export function DpdBookingDialog({
         ...data,
         jobId,
         jobIds: allJobIds,
+        shippingMethod,
       });
 
       if (!response.ok) {
@@ -194,11 +198,12 @@ export function DpdBookingDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
 
       toast({
-        title: "Shipment booked",
-        description: `Tracking: ${bookingResult.trackingNumber}`,
+        title: bookingResult.warning ? "Shipment booked — review details" : "Shipment booked",
+        description: bookingResult.warning || `Tracking: ${bookingResult.trackingNumber}`,
+        ...(bookingResult.warning ? { variant: "destructive" as const } : {}),
       });
 
-      onSuccess?.(bookingResult.trackingNumber);
+      if (!bookingResult.warning) onSuccess?.(bookingResult.trackingNumber, bookingResult.shippingDetails);
     } catch (e: any) {
       toast({
         title: "DPD booking failed",
@@ -246,6 +251,12 @@ export function DpdBookingDialog({
                 </div>
               </AlertDescription>
             </Alert>
+            {result.warning && (
+              <Alert variant="destructive" data-testid="alert-dpd-save-warning">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{result.warning}</AlertDescription>
+              </Alert>
+            )}
 
             {result.labelHtml && (
               <Button

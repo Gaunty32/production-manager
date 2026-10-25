@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { applyInvoiceQuantities, invoiceQuantitiesSchema } from "../shared/invoice-quantities";
 import { billedQuantityForMatchingLine, calculateJobPrice, CODE_TO_PRINT_SIZE, MIN_ORDER_QTY } from "../shared/pricing";
+import { getShippingIssues } from "../shared/shipping-details";
 
 // Exercise the real route handler with isolated storage/Xero dependencies:
 // no real invoices, payments, customer emails or database writes.
@@ -22,7 +23,7 @@ function visit(node: ts.Node) {
 visit(source);
 assert.ok(handlerText && mergeText);
 
-async function run(options: { failXero?: boolean; expected?: Record<string, number>; reset?: boolean } = {}) {
+async function run(options: { failXero?: boolean; expected?: Record<string, number>; reset?: boolean; acknowledgeShipping?: boolean } = {}) {
   const quantities: Record<string, number> = options.reset ? {} : { first: 9 };
   const items = [
     { id: "first", jobId: "job", jobType: "Embroidery", quantity: 6, stitchCount: 4000 },
@@ -48,6 +49,7 @@ async function run(options: { failXero?: boolean; expected?: Record<string, numb
     getInvoiceQuantities: async () => ({ ...quantities }),
     clearInvoiceQuantities: async (ids: string[]) => { cleanup.push(ids); },
     applyInvoiceQuantities, invoiceQuantitiesSchema,
+    getShippingIssues,
     billedQuantityForMatchingLine, calculateJobPrice, CODE_TO_PRINT_SIZE, MIN_ORDER_QTY,
     xeroService: { createConsolidatedInvoice: async (_jobs: any, _customer: any, lines: any[]) => {
       sentLines = lines;
@@ -61,6 +63,7 @@ async function run(options: { failXero?: boolean; expected?: Record<string, numb
   const handler = vm.runInContext(compiled, context);
   await handler({ body: {
     jobIds: ["job"], customerId: "customer", manualPrices: { first: 2.3, second: 2.3 },
+    acknowledgeIncompleteShipping: options.acknowledgeShipping !== false,
     ...(options.expected === undefined ? {} : { invoiceQuantities: options.expected }),
   } }, {
     status(code: number) { status = code; return this; },
@@ -99,4 +102,13 @@ test("reset quantities fall back to the normal merged billed quantity", async ()
   assert.equal(result.status, 200);
   assert.equal(result.sentLines[0].quantity, 12);
   assert.ok(Math.abs(result.updates[0].invoiceTotal - 27.6) < 0.001);
+});
+
+test("incomplete shipping cannot silently create an invoice or change job billing", async () => {
+  const result = await run({ acknowledgeShipping: false });
+  assert.equal(result.status, 409);
+  assert.equal(result.sentLines.length, 0);
+  assert.equal(result.updates.length, 0);
+  assert.equal(result.cleanup.length, 0);
+  assert.equal(result.body.shippingIssues[0].jobId, "job");
 });

@@ -561,8 +561,14 @@ export function ShippingInfoDialog({
       prefillAddress={customerAddress}
       prefillPhone={customerPhone}
       prefillEmail={customerEmail}
-      onSuccess={(trackingNumber) => {
+      shippingMethod={selectedMethod === "consolidated" ? "consolidated" : "direct_delivery"}
+      onSuccess={(trackingNumber, details) => {
         form.setValue("dhlTrackingNumber", trackingNumber);
+        if (details) {
+          form.setValue("shippingMethod", details.shippingMethod);
+          form.setValue("packageCount", details.packageCount);
+          form.setValue("packageType", details.packageType);
+        }
         setShowDpdDialog(false);
       }}
     />

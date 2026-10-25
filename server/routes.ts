@@ -5,6 +5,8 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { storage } from "./storage";
+import { dpdParcelSchema, getShippingIssues } from "@shared/shipping-details";
+import { buildBookedDpdDetails, saveBookedDpdDetails } from "./dpdShipmentDetails";
 import { resolveSelectedStaffMentions } from "@shared/staff-mentions";
 import { getInvoiceQuantities, saveInvoiceQuantity, clearInvoiceQuantities } from "./invoiceQuantities";
 import { applyInvoiceQuantities, invoiceQuantitySchema, invoiceQuantitiesSchema } from "@shared/invoice-quantities";
@@ -7178,6 +7180,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = updateJobSchema.parse(req.body);
       const existingJob = await storage.getJob(id);
       if (!existingJob) return res.status(404).json({ error: "Job not found" });
+      const billingFields = ["shippingMethod", "packageCount", "packageType", "shippingCost", "consolidatedShipmentId"] as const;
+      if (!["pending", "ready", "draft"].includes(existingJob.invoiceStatus)
+        && billingFields.some(key => data[key] !== undefined && data[key] !== existingJob[key])) {
+        return res.status(409).json({ error: "Shipping charges on an already-issued invoice cannot be changed here" });
+      }
+      if (data.consolidatedJobIds?.length) {
+        const others = await Promise.all(data.consolidatedJobIds.map(jobId => storage.getJob(jobId)));
+        if (others.some(job => !job || job.customerId !== existingJob.customerId)) {
+          return res.status(400).json({ error: "Consolidated orders must exist and belong to the same customer" });
+        }
+        if (others.some(job => !["pending", "ready", "draft"].includes(job!.invoiceStatus))) {
+          return res.status(409).json({ error: "Already-invoiced orders cannot be added to a new shipping charge" });
+        }
+      }
       if (data.machineId !== undefined) {
         return res.status(400).json({
           error: "Assign the responsible operator and machine together from Job Allocation",
@@ -10683,6 +10699,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             error: "All selected jobs must be in 'ready' status for invoicing" 
           });
         }
+        const shippingIssues = getShippingIssues(selectedJobs, allJobs, manualShippingCosts || {});
+        if (shippingIssues.length && req.body.acknowledgeIncompleteShipping !== true) {
+          return res.status(409).json({
+            error: "Shipping information is incomplete. Review the shipping warning before creating this invoice.",
+            shippingIssues,
+          });
+        }
       }
 
       // Determine pricing table (use null for zero pricing if none configured)
@@ -12295,6 +12318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         recipientPhone,
         recipientEmail,
         packageCount,
+        packageType,
         packageWeightGrams,
         reference,
       } = req.body;
@@ -12303,20 +12327,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Recipient name, street, city and postcode are required" });
       }
 
-      const allJobIds: string[] = jobIds?.length ? jobIds : [jobId].filter(Boolean);
-      if (!allJobIds.length) {
-        return res.status(400).json({ error: "At least one job ID is required" });
+      const parsedIds = z.array(z.string().min(1)).min(1).max(50).safeParse(jobIds?.length ? jobIds : [jobId].filter(Boolean));
+      const parsedParcels = dpdParcelSchema.safeParse({ packageCount, packageType, shippingMethod: req.body.shippingMethod });
+      if (!parsedIds.success || !parsedParcels.success) {
+        return res.status(400).json({ error: "Valid order IDs, parcel count (1–50) and parcel type are required" });
       }
+      const allJobIds = Array.from(new Set(parsedIds.data));
 
       // Verify all jobs exist
       const jobs = await Promise.all(allJobIds.map(id => storage.getJob(id)));
       const validJobs = jobs.filter(Boolean);
-      if (!validJobs.length) {
+      if (validJobs.length !== allJobIds.length) {
         return res.status(404).json({ error: "Jobs not found" });
+      }
+      if (new Set(validJobs.map(job => job!.customerId)).size !== 1) {
+        return res.status(400).json({ error: "A shipment can only combine orders for the same customer" });
+      }
+      const issued = validJobs.filter(job => !["pending", "ready", "draft"].includes(job!.invoiceStatus));
+      if (issued.length && issued.length !== validJobs.length) {
+        return res.status(409).json({ error: "Book already-invoiced orders separately from orders awaiting invoicing" });
       }
 
       // Build parcel list
-      const count = Math.max(1, parseInt(packageCount) || 1);
+      const count = parsedParcels.data.packageCount;
       const weightGrams = Math.max(100, parseInt(packageWeightGrams) || 1000);
       const parcels = Array.from({ length: count }, (_, i) => ({
         weight: weightGrams,
@@ -12339,25 +12372,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         notifyEmail: recipientEmail || undefined,
       });
 
-      // Save the tracking number to all jobs
-      await Promise.all(
-        allJobIds.map(async (id) => {
-          const job = validJobs.find((candidate) => candidate?.id === id);
-          await storage.updateJob(id, {
-            dhlTrackingNumber: result.trackingNumber.trim(),
-            ...(job?.completed && !job.dispatchEmailSentAt && !job.dispatchEmailQueuedAt
-              ? { dispatchEmailQueuedAt: new Date() }
-              : {}),
-          });
-        })
+      const method = allJobIds.length > 1 || parsedParcels.data.shippingMethod === "consolidated"
+        || validJobs[0]?.shippingMethod === "consolidated" ? "consolidated" : "direct_delivery";
+      const details = buildBookedDpdDetails(
+        count, parsedParcels.data.packageType, method, method === "consolidated" ? crypto.randomUUID() : null,
       );
-      await Promise.all(allJobIds.map((id) => maybeSendDispatchNotification(id)));
+      let warning: string | undefined;
+      try {
+        const saved = await saveBookedDpdDetails(allJobIds, result.trackingNumber, details);
+        if (!saved.billingSaved) warning = "Tracking saved. Existing issued-invoice carriage details were left unchanged.";
+      } catch (saveError) {
+        console.error("[DPD] Shipment booked but order details could not be saved:", saveError);
+        // The courier booking already exists. Return its label and tracking so
+        // the user can recover it, rather than suggesting a second paid booking.
+        return res.json({
+          trackingNumber: result.trackingNumber, labelHtml: result.labelHtml,
+          parcelNumbers: result.parcelNumbers, trackingUrl: result.trackingUrl,
+          warning: "DPD booked this shipment, but the order details could not be saved. Keep this tracking number and label; do not book again. Update the order's shipping details manually.",
+        });
+      }
+      await Promise.all(allJobIds.map((id) => maybeSendDispatchNotification(id).catch(error => {
+        console.error("[DPD] Dispatch email deferred after successful booking:", error);
+      })));
 
       res.json({
         trackingNumber: result.trackingNumber,
         labelHtml: result.labelHtml,
         parcelNumbers: result.parcelNumbers,
         trackingUrl: result.trackingUrl,
+        shippingDetails: warning ? undefined : details,
+        warning,
       });
     } catch (e: any) {
       console.error("[DPD] Book shipment error:", e);

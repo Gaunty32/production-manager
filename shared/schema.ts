@@ -629,7 +629,8 @@ export const updateJobSchema = z.object({
   ),
   packageCount: z.preprocess(
     (val) => {
-      if (val === "" || val === null || val === undefined) return null;
+      if (val === undefined) return undefined;
+      if (val === "" || val === null) return null;
       if (typeof val === "string") return parseInt(val, 10);
       return val;
     },
