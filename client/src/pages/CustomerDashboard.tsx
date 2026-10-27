@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { getDpdTrackingUrl } from "@shared/dpd-tracking";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -173,6 +174,8 @@ type Job = {
   invoiceTotal?: number | null;
   invoicedAt?: string | null;
   dhlTrackingNumber: string | null;
+  deliveryAddressType?: string | null;
+  deliveryAddress?: string | null;
   lineItems: LineItem[];
   paymentReceived?: boolean;
   customerRequiresAdvancePayment?: boolean;
@@ -189,17 +192,6 @@ type CustomerUser = {
   customerAddress: string | null;
   lastLoginAt: string | null;
 };
-
-function extractUkPostcode(address: string | null | undefined): string | null {
-  if (!address) return null;
-  const match = address.match(/\b([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})\b/i);
-  return match ? match[1].replace(/\s+/, " ").toUpperCase() : null;
-}
-
-function dpdLocalUrl(trackingNumber: string, postcode: string | null): string {
-  const base = `https://track.dpdlocal.co.uk/search?reference=${encodeURIComponent(trackingNumber.trim())}`;
-  return postcode ? `${base}&postcode=${encodeURIComponent(postcode.trim())}` : base;
-}
 
 export default function CustomerDashboard() {
   const [, setLocation] = useLocation();
@@ -305,7 +297,6 @@ export default function CustomerDashboard() {
   });
   const knowledgeArticles = (knowledgeData?.articles || []).slice(0, 3);
 
-  const customerPostcode = extractUkPostcode(customerUser?.customerAddress);
 
   // Filter by status and search term, then sort
   const filteredJobs = jobs
@@ -1171,7 +1162,7 @@ export default function CustomerDashboard() {
                           <p className="text-xs text-muted-foreground mb-1">DPD Local Tracking Number</p>
                           <div className="flex items-center justify-between gap-2">
                             <a
-                              href={dpdLocalUrl(job.dhlTrackingNumber, customerPostcode)}
+                              href={getDpdTrackingUrl(job, customerUser?.customerAddress)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm font-mono font-semibold text-primary hover:underline"
@@ -1368,7 +1359,7 @@ export default function CustomerDashboard() {
                           <TableCell>
                             {job.completed && job.dhlTrackingNumber ? (
                               <a
-                                href={dpdLocalUrl(job.dhlTrackingNumber, customerPostcode)}
+                                href={getDpdTrackingUrl(job, customerUser?.customerAddress)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-xs font-mono text-primary hover:underline"
@@ -1445,7 +1436,7 @@ export default function CustomerDashboard() {
                         <TableCell>
                           {index === 0 && job.completed && job.dhlTrackingNumber ? (
                             <a
-                              href={dpdLocalUrl(job.dhlTrackingNumber, customerPostcode)}
+                              href={getDpdTrackingUrl(job, customerUser?.customerAddress)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs font-mono text-primary hover:underline"

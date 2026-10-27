@@ -20,3 +20,9 @@ Shipping repairs must leave issued invoices unchanged. Do not guess historical p
 **Why:** When approving the shipping-save fix and incomplete-shipping warning, the user explicitly chose to leave issued invoices unchanged.
 
 **How to apply:** Save actual booking details for uninvoiced orders, warn before incomplete shipments are invoiced, and require a separate explicit decision for any historical billing correction.
+
+Customer accounts can ship orders directly to end customers at a different postcode. Tracking must use the actual recipient's postcode, not the account address.
+
+**Why:** DPD validates the tracking reference against the delivery postcode; an account postcode can produce an unhelpful blank error despite a valid stored tracking number.
+
+**How to apply:** Preserve per-order delivery addresses when generating tracking links. If a custom address has no postcode, omit the postcode rather than guessing the account postcode.
