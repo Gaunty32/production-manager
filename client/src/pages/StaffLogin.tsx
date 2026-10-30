@@ -1,3 +1,4 @@
+import { staffJobSignInDestination } from "@shared/staff-job-links";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -87,7 +88,7 @@ export default function StaffLogin() {
         // ignore
       }
       toast({ title: "Welcome back", description: "You have been logged in successfully" });
-       window.location.href = "/";
+      window.location.href = staffJobSignInDestination(window.location.pathname, window.location.search, window.location.hash);
     },
     onError: (error: any) => {
       toast({
@@ -118,7 +119,7 @@ export default function StaffLogin() {
         title: "Welcome back",
         description: "You have been logged in successfully",
       });
-       window.location.href = "/";
+      window.location.href = staffJobSignInDestination(window.location.pathname, window.location.search, window.location.hash);
     },
     onError: (error: any) => {
       toast({

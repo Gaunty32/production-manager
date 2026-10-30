@@ -1,4 +1,5 @@
 import { Switch, Route, useLocation, Router, Redirect } from "wouter";
+import { staffJobPath } from "@shared/staff-job-links";
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -113,6 +114,7 @@ function StaffRouter() {
       <Route path="/messages"><StaffMessages /></Route>
       <Route path="/samples"><StaffSamples /></Route>
       <Route path="/staff/job/:id"><StaffJobDetail /></Route>
+      <Route path="/jobs/:id">{params => <Redirect to={staffJobPath(params.id)} />}</Route>
       <Route path="/machines"><MachineManagement /></Route>
       <Route path="/machine/:id"><Dashboard /></Route>
       <Route path="/feature-requests"><FeatureRequests /></Route>

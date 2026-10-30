@@ -66,7 +66,7 @@
 - [HighLevel callback integration](highlevel-callback-integration.md) — callback automation uses direct LeadConnector contact+workflow calls; token, location, and workflow must belong to one sub-account.
 - [Broadcast permanent failures](broadcast-permanent-failures.md) — persist recipient-specific permanent failures and exclude them from weekly and one-off broadcast audiences; retry transient provider errors.
 - [Public homepage performance](public-home-performance.md) — keep marketing routes on a lightweight entry; never pull the staff/customer shell into the public startup bundle.
-- [Customer email deep links](customer-email-deep-links.md) — authenticate before mounting protected portal pages and preserve the exact destination through sign-in.
+- [Email deep links](customer-email-deep-links.md) — preserve customer/staff destinations through sign-in and keep already-emailed URLs working.
 - [Secret status checks](secret-status-checks.md) — secret metadata can falsely report missing keys; confirm presence in the running shell without printing values.
 - [Xero invoice line verification](xero-invoice-line-verification.md) — never mark selected jobs invoiced until Xero returns every previewed line with matching quantity and unit amount.
 - [Customer order email touchpoints](customer-order-email-touchpoints.md) — allocation and dispatch emails use durable queues plus provider idempotency; historical jobs must never be swept.

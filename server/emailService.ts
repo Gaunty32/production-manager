@@ -1,3 +1,4 @@
+import { staffJobPath } from "@shared/staff-job-links";
 import { Resend } from 'resend';
 import { generateOrderAcknowledgementPdf, type OrderAcknowledgementData } from './orderAcknowledgementPdf';
 import { recordEmailSent } from './emailBudget';
@@ -323,7 +324,7 @@ export async function sendNewPrintJobEmail(params: {
   const { client, fromEmail } = await getUncachableResendClient();
   const safeCustomerName = sanitizeHtml(params.customerName);
   const safeJobName = sanitizeHtml(params.jobName);
-  const viewUrl = `${getBaseUrl()}/jobs/${params.jobId}`;
+  const viewUrl = `${getBaseUrl()}${staffJobPath(params.jobId)}`;
 
   const body = `
     <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#18181b;">New Print Job Added</h2>
