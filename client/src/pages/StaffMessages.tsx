@@ -1177,7 +1177,7 @@ export default function StaffMessages() {
   const showChatPanel = !!selected;
 
   return (
-    <div className="h-full flex overflow-hidden">
+    <div className="h-full w-full min-w-0 flex overflow-hidden">
       {/* ── Left panel ──────────────────────────────────────────────────────── */}
       <div className={`w-full sm:w-80 flex-shrink-0 border-r flex flex-col overflow-hidden ${selected ? "hidden sm:flex" : "flex"}`}>
 
@@ -1487,7 +1487,7 @@ export default function StaffMessages() {
 
       {/* ── Chat panel ──────────────────────────────────────────────────────── */}
       {selected ? (
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 flex flex-col min-h-0 min-w-0 max-w-full" data-testid="staff-chat-panel">
           {/* Chat header */}
           <div className="px-3 sm:px-4 py-3 border-b bg-card/40 flex items-center gap-1.5 sm:gap-3">
             <Button variant="ghost" size="icon" className="sm:hidden shrink-0" onClick={() => setSelected(null)}>
@@ -1503,7 +1503,7 @@ export default function StaffMessages() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{selectedJobConvo?.jobName}</p>
-                  <p className="text-xs text-muted-foreground">{selectedJobConvo?.customerName ? <DemoText>{selectedJobConvo.customerName}</DemoText> : null}</p>
+                  <p className="text-xs text-muted-foreground truncate">{selectedJobConvo?.customerName ? <DemoText>{selectedJobConvo.customerName}</DemoText> : null}</p>
                 </div>
                 <Button variant="outline" size="sm" className="shrink-0 px-2 sm:px-3" onClick={() => setLocation(`/staff/job/${selectedJobConvo?.jobId}`)} data-testid="button-view-job">
                   <Briefcase className="h-3.5 w-3.5 sm:mr-1.5" />
@@ -1555,7 +1555,7 @@ export default function StaffMessages() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{selectedDirectConvo?.subject}</p>
-                  <p className="text-xs text-muted-foreground">{selectedDirectConvo?.customerName ? <DemoText>{selectedDirectConvo.customerName}</DemoText> : null}</p>
+                  <p className="text-xs text-muted-foreground truncate">{selectedDirectConvo?.customerName ? <DemoText>{selectedDirectConvo.customerName}</DemoText> : null}</p>
                 </div>
                 <Button
                   variant="outline"
@@ -1608,7 +1608,7 @@ export default function StaffMessages() {
           )}
 
           {/* Messages area */}
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 pt-4 pb-6 space-y-3">
+          <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pt-4 pb-6 space-y-3">
             {isLoadingMessages ? (
               <LoadingSpinner />
             ) : messages.length === 0 ? (
@@ -1757,7 +1757,7 @@ export default function StaffMessages() {
                       )}
                     </div>
                     {/* Bubble */}
-                    <div className={`max-w-[72%] min-w-0 ${editingMsgId === msg.id ? "min-w-[300px]" : ""} ${isStaff ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
+                    <div className={`max-w-[72%] min-w-0 ${editingMsgId === msg.id ? "w-full" : ""} ${isStaff ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
                       {msg.isInternal && showAvatar && (
                         <p className={`text-[10px] font-semibold px-1 ${isStaff ? "text-right text-muted-foreground" : "text-muted-foreground"}`}>
                           <span className="ml-1.5 inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
@@ -1765,7 +1765,7 @@ export default function StaffMessages() {
                           </span>
                         </p>
                       )}
-                      <div className={`rounded-2xl px-4 py-2.5 ${
+                      <div className={`min-w-0 max-w-full [overflow-wrap:anywhere] rounded-2xl px-4 py-2.5 ${
                         (msg as any).deleted
                           ? "bg-muted border border-border rounded-br-sm"
                           : msg.isInternal
@@ -1777,7 +1777,7 @@ export default function StaffMessages() {
                         {(msg as any).deleted ? (
                           <p className="text-xs text-muted-foreground italic">Message deleted</p>
                         ) : editingMsgId === msg.id ? (
-                          <div className="flex flex-col gap-2 w-full min-w-[260px]">
+                          <div className="flex flex-col gap-2 w-full min-w-0">
                             <textarea
                               autoFocus
                               value={editingText}
@@ -1842,7 +1842,7 @@ export default function StaffMessages() {
                                   }`}
                                 >
                                   <FileText className="h-4 w-4 shrink-0" />
-                                  <span className="truncate max-w-[180px]">{f.name}</span>
+                                  <span className="min-w-0 truncate max-w-[180px]">{f.name}</span>
                                 </a>
                               ))}
                             </>
@@ -1968,7 +1968,7 @@ export default function StaffMessages() {
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
-              <div className="relative flex-1">
+              <div className="relative flex-1 min-w-0">
                 {/* @mention dropdown */}
                 {showMentionDropdown && filteredMentions.length > 0 && (
                   <div className="absolute bottom-full mb-1 left-0 right-0 z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden" data-testid="mention-dropdown">
