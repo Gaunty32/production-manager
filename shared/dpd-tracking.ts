@@ -1,4 +1,5 @@
 type TrackingJob = {
+  shippingCarrier?: string | null;
   dhlTrackingNumber?: string | null;
   deliveryAddressType?: string | null;
   deliveryAddress?: string | null;
@@ -11,6 +12,9 @@ function extractUkPostcode(address: string | null | undefined): string | null {
 
 /** DPD validates the recipient's postcode, not the customer's account postcode. */
 export function getDpdTrackingUrl(job: TrackingJob, customerAddress?: string | null): string {
+  if (job.shippingCarrier === "royal_mail") {
+    return `https://www.royalmail.com/track-your-item#/tracking-results/${encodeURIComponent(job.dhlTrackingNumber?.trim() || "")}`;
+  }
   const customDelivery = job.deliveryAddressType === "custom"
     || (!job.deliveryAddressType && !!job.deliveryAddress?.trim());
   const postcode = extractUkPostcode(customDelivery ? job.deliveryAddress : customerAddress);

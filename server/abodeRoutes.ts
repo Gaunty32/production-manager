@@ -1,0 +1,234 @@
+import type { Express, RequestHandler } from "express";
+import { randomBytes } from "node:crypto";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
+import { db } from "./db";
+import { storage } from "./storage";
+import { customers, jobs, jobLineItems, stockingOrders, stockingProduction } from "@shared/schema";
+import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate, stockingBagNetworkCode } from "@shared/abode";
+import { parseStockingRows } from "./abodeImport";
+import { completeStockingOrder } from "./abodeProduction";
+import { renderStockingDeliveryNote, renderStockingLabel } from "./abodeDocuments";
+import { dpdService } from "./dpd";
+import { maybeSendDispatchNotification } from "./customerOrderNotifications";
+
+type CompletionGuard = (req: any, jobId: string, item?: any) => Promise<string | null>;
+const editable = (status: string) => ["pending", "ready", "draft"].includes(status);
+export function registerAbodeRoutes(app: Express, deps: {
+  staffAuth: RequestHandler; customerAuth: RequestHandler; completionGuard: CompletionGuard;
+}) {
+  for (const customerMode of [false, true]) {
+    const base = customerMode ? "/api/customer-portal/abode" : "/api/abode";
+    const auth = customerMode ? deps.customerAuth : deps.staffAuth;
+    const wrap = (handler: (req: any, res: any, customer: any) => Promise<any>): RequestHandler => async (req: any, res) => {
+      res.set("Cache-Control", "no-store");
+      try {
+        let customer;
+        if (customerMode) {
+          const user = await storage.getCustomerUserById(req.session.impersonationCustomerUserId || req.session.customerUserId);
+          customer = user ? await storage.getCustomer(user.customerId) : null;
+          if (!isAbodeCustomer(customer)) {
+            if (req.method === "GET" && req.path === base) return void res.json({ enabled: false });
+            return void res.status(403).json({ error: "This workflow is only available to Abode Home & Gifts" });
+          }
+        } else {
+          customer = (await storage.getCustomers()).find(isAbodeCustomer);
+        }
+        await handler(req, res, customer);
+      } catch (error) {
+        const message = error instanceof z.ZodError ? "Check the spreadsheet or form values" : error instanceof Error ? error.message : "Could not process the stocking order";
+        console.error("[Abode] Request failed:", message);
+        if (!res.headersSent) res.status(400).json({ error: message });
+      }
+    };
+    const owned = async (jobId: string, customer: any) => {
+      if (!customer) throw new Error("Abode customer has not been created yet");
+      const [order] = await db.select().from(stockingOrders).where(and(eq(stockingOrders.jobId, jobId), eq(stockingOrders.customerId, customer.id)));
+      const job = order ? await storage.getJob(jobId) : null;
+      if (!order || !job || job.customerId !== customer.id) throw new Error("Order not found");
+      return { order, job };
+    };
+    app.get(base, auth, wrap(async (_req, res, customer) => {
+      if (!customer) return res.json({ enabled: true, customer: { id: "", name: ABODE_CUSTOMER_NAME, logoUrl: null }, completedCount: 0, currentRate: 7, orders: [] });
+      const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(stockingProduction).where(eq(stockingProduction.customerId, customer.id));
+      const orders = await db.select({ order: stockingOrders, job: jobs }).from(stockingOrders)
+        .innerJoin(jobs, eq(jobs.id, stockingOrders.jobId)).where(eq(stockingOrders.customerId, customer.id)).orderBy(desc(jobs.jobNumber));
+      const items = orders.length ? await db.select().from(jobLineItems).where(inArray(jobLineItems.jobId, orders.map(({ job }) => job.id))) : [];
+      res.json({
+        enabled: true, customer: { id: customer.id, name: customer.name, logoUrl: customer.logoUrl },
+        completedCount: count.count, currentRate: stockingRate(count.count),
+        orders: orders.map(({ order, job }) => ({
+          ...job, recipient: order.recipient, shippingRoute: order.shippingRoute,
+          shipmentState: order.shipmentState, labelAvailable: Boolean(order.labelHtml || order.shipmentId),
+          items: items.filter(item => item.jobId === job.id),
+        })),
+      });
+    }));
+    for (const preview of [true, false]) {
+      app.post(`${base}/imports${preview ? "/preview" : ""}`, auth, wrap(async (req, res, customer) => {
+        const parsed = parseStockingRows(req.body.rows);
+        const existing = customer ? await db.select().from(stockingOrders).where(eq(stockingOrders.customerId, customer.id)) : [];
+        for (const order of parsed) {
+          const prior = existing.find(row => row.orderNumber === order.orderNumber);
+          if (prior && prior.importHash !== order.importHash) throw new Error(`Order ${order.orderNumber} already exists with different details. Review the existing job; it has not been overwritten.`);
+        }
+        if (preview) return res.json({
+          orders: parsed.map(({ importHash, ...order }) => ({ ...order, existing: existing.some(row => row.orderNumber === order.orderNumber) })),
+          stockingCount: parsed.reduce((n, order) => n + order.items.length, 0), orderCount: parsed.length,
+        });
+        const result = await db.transaction(async tx => {
+          // Same number allocator as ordinary customer submissions. The whole
+          // workbook commits together; retries and parallel uploads are safe.
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(71024001)`);
+          let target = customer;
+          if (!target) {
+            const [priorCustomer] = await tx.select().from(customers).where(eq(customers.name, ABODE_CUSTOMER_NAME));
+            target = priorCustomer || (await tx.insert(customers).values({ name: ABODE_CUSTOMER_NAME }).returning())[0];
+          }
+          const [maximum] = await tx.select({ number: sql<number>`coalesce(max(job_number),0)::int` }).from(jobs);
+          let nextNumber = maximum.number;
+          let created = 0, skipped = 0;
+          for (const order of parsed) {
+            const [prior] = await tx.select().from(stockingOrders).where(and(eq(stockingOrders.customerId, target.id), eq(stockingOrders.orderNumber, order.orderNumber)));
+            if (prior) {
+              if (prior.importHash !== order.importHash) throw new Error(`Order ${order.orderNumber} already exists with different details`);
+              skipped++;
+              continue;
+            }
+            const r = order.recipient;
+            const [job] = await tx.insert(jobs).values({
+              jobNumber: ++nextNumber, customerId: target.id, jobName: `Stockings — ${order.orderNumber}`,
+              poNumber: order.orderNumber, requestedJobType: "Embroidery Initials/Name",
+              quantity: order.items.length, status: "production", submittedAt: new Date(),
+              submittedById: customerMode ? req.session.impersonationCustomerUserId || req.session.customerUserId : null,
+              shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
+              shippingCost: String(ABODE_CARRIAGE), deliveryAddressType: "custom",
+              shippingCarrier: order.shippingRoute === "dpd" ? "dpd" : "royal_mail",
+              deliveryAddress: [r.name, r.line1, r.line2, r.town, r.county, r.postcode].filter(Boolean).join("\n"),
+              notes: "Abode stocking order. Preserve all names exactly as supplied, including capitalisation. See each stocking's colour, font and thread. Confirm stock and font samples before production.",
+            }).returning();
+            await tx.insert(stockingOrders).values({
+              jobId: job.id, customerId: target.id, orderNumber: order.orderNumber, importHash: order.importHash,
+              recipient: order.recipient, shippingRoute: order.shippingRoute,
+            });
+            await tx.insert(jobLineItems).values(order.items.map(item => ({
+              jobId: job.id, jobType: "Embroidery Initials/Name", quantity: 1, stitchCount: 0,
+              description: `Stocking: ${item.colour} | ${item.font} | Thread: ${item.thread} | Name: ${item.name}`,
+              stockingDetails: item, logoApproved: false, awaitingStock: true,
+            })));
+            created++;
+          }
+          return { created, skipped };
+        });
+        res.json(result);
+      }));
+    }
+    app.get(`${base}/orders/:id/delivery-note`, auth, wrap(async (req, res, customer) => {
+      const { order, job } = await owned(req.params.id, customer);
+      if (!job.completed) return res.status(409).json({ error: "Complete production before printing the delivery note" });
+      if (!customer.logoUrl) return res.status(409).json({ error: "Add Abode's logo on the Customers page before printing a branded delivery note" });
+      const items = await storage.getJobLineItems(job.id);
+      res.set({
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+        "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex",
+      }).type("html").send(renderStockingDeliveryNote({
+        brand: customer.name, logoUrl: customer.logoUrl, orderNumber: order.orderNumber,
+        recipient: order.recipient, items: items.flatMap(item => item.stockingDetails ? [item.stockingDetails] : []),
+      }));
+    }));
+    if (customerMode) continue;
+    app.post(`${base}/logo`, auth, wrap(async (req, res, customer) => {
+      if (!customer) throw new Error("Import Abode's first order before adding a logo");
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !["super_admin", "admin", "manager"].includes(user.role)) return res.status(403).json({ error: "Manager access required" });
+      const { logoUrl } = z.object({ logoUrl: z.string().max(2000).refine(value => /^https:\/\/[^\s]+$/.test(value) || /^\/objects\/[^\s]+$/.test(value)) }).parse(req.body);
+      await storage.updateCustomer(customer.id, { logoUrl });
+      res.json({ success: true });
+    }));
+    app.post(`${base}/orders/:id/complete`, auth, wrap(async (req, res, customer) => {
+      const { job } = await owned(req.params.id, customer);
+      const denied = await deps.completionGuard(req, job.id);
+      if (denied) return res.status(403).json({ error: denied });
+      const person = (await storage.getStaff()).find(person => person.userId === req.session.userId && person.active !== false);
+      await completeStockingOrder(job.id, person?.id || null);
+      res.json({ success: true });
+    }));
+    app.post(`${base}/orders/:id/book`, auth, wrap(async (req, res, customer) => {
+      const { order, job } = await owned(req.params.id, customer);
+      if (order.shippingRoute !== "dpd") return res.status(409).json({ error: "Book this address through Parcel2Go using Royal Mail" });
+      if (!job.completed) return res.status(409).json({ error: "Complete production before booking dispatch" });
+      if (!editable(job.invoiceStatus)) return res.status(409).json({ error: "This order has already been invoiced" });
+      if (job.dhlTrackingNumber) return res.status(409).json({ error: "This order already has tracking. Use its existing label; do not book twice." });
+      const { weightGrams } = z.object({ weightGrams: z.coerce.number().int().min(100).max(5000) }).parse(req.body);
+      if (!dpdService.isConfigured()) return res.status(503).json({ error: "DPD is not configured" });
+      const claimed = await db.update(stockingOrders).set({ shipmentState: "booking" }).where(and(
+        eq(stockingOrders.jobId, job.id), eq(stockingOrders.shipmentState, "unbooked"),
+      )).returning();
+      if (!claimed.length) return res.status(409).json({ error: "Booking has already been attempted. Check DPD and recover its tracking number; do not book again." });
+      try {
+        const r = order.recipient;
+        const result = await dpdService.createShipment({
+          recipient: { name: r.name, street: [r.line1, r.line2].filter(Boolean).join(", "), city: r.town, zipCode: r.postcode, country: "GB" },
+          parcels: [{ weight: weightGrams, customerReference: order.orderNumber }], reference: order.orderNumber,
+          networkCode: stockingBagNetworkCode(weightGrams),
+        });
+        try {
+          await db.transaction(async tx => {
+            await tx.update(stockingOrders).set({ shipmentState: "booked", labelHtml: result.labelHtml, shipmentId: result.shipmentJobId }).where(eq(stockingOrders.jobId, job.id));
+            await tx.update(jobs).set({
+              dhlTrackingNumber: result.trackingNumber, shippingCost: String(ABODE_CARRIAGE),
+              shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
+              dispatchEmailQueuedAt: new Date(),
+            }).where(eq(jobs.id, job.id));
+          });
+        } catch {
+          // A courier purchase cannot be rolled back. Return recovery material
+          // without suggesting another paid booking.
+          return res.json({ trackingNumber: result.trackingNumber, labelHtml: result.labelHtml, warning: "DPD booked the parcel but saving failed. Keep this tracking number and label, then recover the booking. Do not book again." });
+        }
+        await maybeSendDispatchNotification(job.id).catch(() => console.error("[Abode] Dispatch email deferred"));
+        res.json({ trackingNumber: result.trackingNumber, labelAvailable: Boolean(result.labelHtml) });
+      } catch (error) {
+        await db.update(stockingOrders).set({ shipmentState: "review" }).where(eq(stockingOrders.jobId, job.id));
+        throw new Error(`DPD booking needs review. Check your DPD account before doing anything else; do not rebook. ${error instanceof Error ? error.message : ""}`);
+      }
+    }));
+    for (const recovery of [false, true]) {
+      app.post(`${base}/orders/:id/${recovery ? "recover" : "royal-mail"}`, auth, wrap(async (req, res, customer) => {
+        const { order, job } = await owned(req.params.id, customer);
+        if (!job.completed) return res.status(409).json({ error: "Complete production first" });
+        if (!editable(job.invoiceStatus)) return res.status(409).json({ error: "Invoiced dispatch details cannot be changed here" });
+        if (recovery ? order.shippingRoute !== "dpd" || !["booking", "review"].includes(order.shipmentState) : order.shippingRoute !== "royal_mail") {
+          return res.status(409).json({ error: "This action does not match this order's shipping route" });
+        }
+        const { trackingNumber } = z.object({ trackingNumber: z.string().trim().min(5).max(80).regex(/^[A-Za-z0-9 -]+$/) }).parse(req.body);
+        await db.transaction(async tx => {
+          const [locked] = await tx.select().from(jobs).where(eq(jobs.id, job.id)).for("update");
+          if (!editable(locked.invoiceStatus)) throw new Error("This order has already been invoiced");
+          if (locked.dhlTrackingNumber && locked.dhlTrackingNumber !== trackingNumber) throw new Error("Tracking already recorded; review the existing shipment");
+          await tx.update(jobs).set({
+            dhlTrackingNumber: trackingNumber, shippingCost: String(ABODE_CARRIAGE),
+            shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1, dispatchEmailQueuedAt: new Date(),
+          }).where(eq(jobs.id, job.id));
+          await tx.update(stockingOrders).set({ shipmentState: "booked" }).where(eq(stockingOrders.jobId, job.id));
+        });
+        await maybeSendDispatchNotification(job.id).catch(() => {});
+        res.json({ success: true });
+      }));
+    }
+    app.get(`${base}/orders/:id/label`, auth, wrap(async (req, res, customer) => {
+      const { order } = await owned(req.params.id, customer);
+      let label = order.labelHtml;
+      if (!label && order.shipmentId) {
+        label = await dpdService.fetchLabel(order.shipmentId);
+        if (label) await db.update(stockingOrders).set({ labelHtml: label }).where(eq(stockingOrders.jobId, order.jobId));
+      }
+      if (!label) return res.status(404).json({ error: "No saved DPD label. Retrieve the existing label from DPD; do not book again." });
+      const nonce = randomBytes(16).toString("base64");
+      res.set({
+        "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src 'self' https: data:; frame-src 'self' about:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'`,
+        "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex",
+      }).type("html").send(renderStockingLabel(label, nonce));
+    }));
+  }
+}

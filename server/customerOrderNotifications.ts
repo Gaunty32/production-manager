@@ -106,6 +106,7 @@ export async function maybeSendDispatchNotification(jobId: string): Promise<void
         customerFirstName: recipient.firstName || customer.contactFirstName || customer.name,
         jobNames: groupedJobs.map((groupedJob) => groupedJob.jobName),
         trackingNumber,
+        carrier: job.shippingCarrier === "royal_mail" ? "Royal Mail" : "DPD",
         portalUrl,
         completedByName: operator?.name,
         operatorProfileImageUrl: operator?.profileImageUrl,

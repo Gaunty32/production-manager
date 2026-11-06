@@ -40,6 +40,7 @@ const StaffLogin = lazy(() => import("@/pages/StaffLogin"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const CustomerDashboard = lazy(() => import("@/pages/CustomerDashboard"));
+const AbodeStockings = lazy(() => import("@/pages/AbodeStockings"));
 const CustomerKnowledgeCentre = lazy(() => import("@/pages/CustomerKnowledgeCentre"));
 const CustomerSubmitJob = lazy(() => import("@/pages/CustomerSubmitJob"));
 const CustomerPendingJobs = lazy(() => import("@/pages/CustomerPendingJobs"));
@@ -97,6 +98,7 @@ function StaffRouter() {
       {/* Staff Portal Routes */}
       <Route path="/"><Dashboard /></Route>
       <Route path="/dashboard"><Dashboard /></Route>
+      <Route path="/abode-stockings"><AbodeStockings /></Route>
       <Route path="/orders"><Dashboard /></Route>
       <Route path="/customers"><Customers /></Route>
       <Route path="/team"><TeamPage /></Route>
@@ -265,6 +267,7 @@ function CustomerPortalApp() {
       <Route path="/customer/knowledge-centre" component={CustomerKnowledgeCentre} />
       <Route path="/customer/thread-library" component={CustomerThreadLibrary} />
       <Route path="/customer/dashboard" component={CustomerDashboard} />
+      <Route path="/customer/stockings" component={AbodeStockings} />
       <Route path="/customer" component={CustomerDashboard} />
       <Route component={NotFound} />
     </Switch>

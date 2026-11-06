@@ -8,6 +8,7 @@
  */
 
 export interface DpdShipmentRequest {
+  networkCode?: string;
   recipient: {
     name: string;
     street: string;
@@ -186,7 +187,7 @@ class DpdService {
               mobile: request.recipient.phone || "",
             },
           },
-          networkCode: this.networkCode,
+          networkCode: request.networkCode || this.networkCode,
           numberOfParcels,
           totalWeight: totalWeightKg,
           shippingRef1: reference,

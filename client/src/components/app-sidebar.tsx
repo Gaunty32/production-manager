@@ -1,4 +1,4 @@
-import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun, Tv, ShoppingCart, Mail, UsersRound, ListTodo } from "lucide-react";
+import { Home, ClipboardList, Cog, Users, UserCog, Calendar, ShieldCheck, Trophy, FileText, Inbox, BarChart3, CalendarClock, MessageSquare, Package, Settings, Sparkles, MonitorSmartphone, Lightbulb, CheckSquare, Palette, Sun, Tv, ShoppingCart, Mail, UsersRound, ListTodo, Gift } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -30,6 +30,7 @@ const menuItems = [
   { title: "All Orders", url: "/orders", icon: ClipboardList },
   { title: "Allocation", url: "/allocation", icon: UsersRound },
   { title: "My Queue", url: "/my-queue", icon: ListTodo },
+  { title: "Abode stockings", url: "/abode-stockings", icon: Gift },
   { title: "Holding Area", url: "/holding-area", icon: Inbox },
   { title: "Messages", url: "/messages", icon: MessageSquare },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },

@@ -273,6 +273,12 @@ export default function CustomerDashboard() {
     queryKey: ["/api/customer-auth/user"],
   });
 
+  const { data: abodeStockings } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/customer-portal/abode"],
+    enabled: !!customerUser,
+    staleTime: 60_000,
+  });
+
   // Redirect to customer login if no valid customer session
   useEffect(() => {
     if (!isLoadingUser && !customerUser) {
@@ -568,6 +574,16 @@ export default function CustomerDashboard() {
                 <span className="font-bold text-base truncate">Customer Portal</span>
               )}
             </div>
+            {abodeStockings?.enabled && (
+              <Link
+                href="/customer/stockings"
+                className="inline-flex shrink-0 items-center gap-2 rounded-md border border-[#d8c7b6] bg-[#f7f2eb] px-2.5 py-2 text-xs font-medium text-[#574234] transition hover:bg-[#eee4d8] sm:px-3 sm:text-sm"
+                data-testid="link-abode-stockings"
+              >
+                <Package className="h-4 w-4" />
+                Stocking orders
+              </Link>
+            )}
 
             {/* Desktop nav buttons — hidden on mobile */}
             <div className="hidden md:flex items-center gap-2">

@@ -478,14 +478,16 @@ const MOQ_EXEMPT_JOB_TYPES = ["Bagging", "Print Initials/Name", "Embroidery Init
  * initials/name add-ons. Keep in sync with calculateJobPrice.
  */
 export function billedQuantity(
-  item: { quantity: number; jobType?: string | null },
+  item: { quantity: number; jobType?: string | null; stockingDetails?: unknown },
   now: Date = new Date()
 ): number {
+  if (item.stockingDetails) return item.quantity;
   if (item.jobType && MOQ_EXEMPT_JOB_TYPES.includes(item.jobType)) return item.quantity;
   return chargedQuantity(item.quantity, now);
 }
 
-function matchingPriceGroupKey(item: { stitchCount: number; jobType?: string | null }): string | null {
+function matchingPriceGroupKey(item: { stitchCount: number; jobType?: string | null; stockingDetails?: unknown }): string | null {
+  if (item.stockingDetails) return null;
   const jobType = (item.jobType || "Embroidery").trim().toLowerCase();
   if (MOQ_EXEMPT_JOB_TYPES.some(type => type.toLowerCase() === jobType)) return null;
   return `${jobType}|${item.stitchCount}`;
@@ -497,7 +499,7 @@ function matchingPriceGroupKey(item: { stitchCount: number; jobType?: string | n
  * merged invoice lines add up to the correct billed quantity.
  */
 export function billedQuantityForMatchingLine(
-  lineItems: Array<{ quantity: number; stitchCount: number; jobType?: string | null }>,
+  lineItems: Array<{ quantity: number; stitchCount: number; jobType?: string | null; stockingDetails?: unknown }>,
   index: number,
   now: Date = new Date(),
 ): number {
@@ -516,7 +518,7 @@ export function billedQuantityForMatchingLine(
 }
 
 export function calculateJobPrice(
-  lineItems: Array<{ quantity: number; stitchCount: number; jobType?: string }>,
+  lineItems: Array<{ quantity: number; stitchCount: number; jobType?: string; stockingDetails?: unknown; agreedUnitPrice?: number | null }>,
   pricingTable: PricingTable = "2026",
   now: Date = new Date()
 ): {
@@ -528,6 +530,16 @@ export function calculateJobPrice(
   const groupTotals: Array<number | "POA"> = [];
 
   lineItems.forEach((item, index) => {
+    if (item.stockingDetails) {
+      const price = item.agreedUnitPrice;
+      const result = {
+        unitPrice: price ?? 0, totalPrice: price == null ? "POA" as const : price * item.quantity,
+        tier: "Abode stocking", jobType: "Personalised stocking",
+      };
+      lineItemPrices[index] = result as FlatRatePriceLookupResult;
+      groupTotals.push(result.totalPrice);
+      return;
+    }
     const groupKey = matchingPriceGroupKey(item);
 
     // Bagging and flat-rate initials/name lines are intentionally independent.

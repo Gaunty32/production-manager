@@ -51,6 +51,7 @@ import {
   contractPartnerEnquiries,
   callbackRequests,
   jobs,
+  stockingOrders,
 } from "@shared/schema";
 import { z } from "zod";
 import { db } from "./db";
@@ -59,6 +60,7 @@ import { sql as drizzleSql, and, eq, lte, gte, ne } from "drizzle-orm";
 import { xeroService } from "./xero";
 import { dpdService } from "./dpd";
 import { registerDispatchConfirmationRoutes } from "./dispatchConfirmationRoutes";
+import { registerAbodeRoutes } from "./abodeRoutes";
 import { canShareDispatchConfirmation } from "../shared/dispatch-confirmation";
 import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantity, billedQuantityForMatchingLine, isMinOrderQtyActive, MIN_ORDER_QTY } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
@@ -494,6 +496,10 @@ function computeBuildVersion(): string {
 const SERVER_START_VERSION = computeBuildVersion();
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerAbodeRoutes(app, {
+    staffAuth: isStaffAuthenticated, customerAuth: isCustomerAuthenticated,
+    completionGuard: checkOwnJobCompletion,
+  });
   registerDispatchConfirmationRoutes(app, {
     storage,
     authenticateCustomer: isCustomerAuthenticated,
@@ -4965,11 +4971,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Calculate estimated price per line item (based on submitted qty/stitch count)
           let lineItemPrices: (number | "POA")[] = lineItems.map(() => "POA");
-          if (pricingTable) {
+          if (pricingTable || lineItems.some(li => li.stockingDetails)) {
             try {
               const priceResult = calculateJobPrice(
-                lineItems.map(li => ({ quantity: li.quantity, stitchCount: li.stitchCount || 0, jobType: li.jobType || undefined })),
-                pricingTable
+                lineItems.map(li => ({ ...li, stitchCount: li.stitchCount || 0, jobType: li.jobType || undefined })),
+                pricingTable || "2026"
               );
               lineItemPrices = priceResult.lineItemPrices.map(p => p.totalPrice);
             } catch {}
@@ -6975,8 +6981,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const pricingTable = customer?.pricingTable2026 ? "2026" : customer?.pricingTable2025 ? "2025" : null;
           let amountDue = 0;
           let amountDuePoa = !pricingTable && lineItems.length > 0;
-          if (pricingTable && lineItems.length > 0) {
+          if ((pricingTable || lineItems.some(li => li.stockingDetails)) && lineItems.length > 0) {
+            amountDuePoa = false;
             const needsStitchCount = (li: typeof lineItems[number]) =>
+              !li.stockingDetails &&
               li.jobType !== "Bagging" &&
               li.jobType !== "Print Initials/Name" &&
               li.jobType !== "Embroidery Initials/Name";
@@ -6985,8 +6993,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (priceable.length > 0) {
               try {
                 const { lineItemPrices } = calculateJobPrice(
-                  priceable.map(li => ({ quantity: li.quantity, stitchCount: li.stitchCount || 0, jobType: li.jobType || undefined })),
-                  pricingTable
+                  priceable.map(li => ({ ...li, stitchCount: li.stitchCount || 0, jobType: li.jobType || undefined })),
+                  pricingTable || "2026"
                 );
                 for (const p of lineItemPrices) {
                   if (typeof p.totalPrice === "number") amountDue += p.totalPrice;
@@ -7188,6 +7196,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = updateJobSchema.parse(req.body);
       const existingJob = await storage.getJob(id);
       if (!existingJob) return res.status(404).json({ error: "Job not found" });
+      const [stockingOrder] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, id));
+      if (stockingOrder) {
+        if (data.completed === true) {
+          const denied = await checkOwnJobCompletion(req, id);
+          if (denied) return res.status(403).json({ error: denied });
+        }
+        if (["shippingMethod", "packageCount", "packageType", "shippingCost", "consolidatedShipmentId", "dhlTrackingNumber"].some(key => (data as any)[key] !== undefined)
+          || data.consolidatedJobIds?.length) {
+          return res.status(409).json({ error: "Use Abode stockings for dispatch and carriage. Each order must ship separately at £5.50." });
+        }
+      }
       const billingFields = ["shippingMethod", "packageCount", "packageType", "shippingCost", "consolidatedShipmentId"] as const;
       if (!["pending", "ready", "draft"].includes(existingJob.invoiceStatus)
         && billingFields.some(key => data[key] !== undefined && data[key] !== existingJob[key])) {
@@ -7399,6 +7418,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = insertJobLineItemSchema.parse({ ...req.body, jobId });
       const parentJob = await storage.getJob(jobId);
       if (!parentJob) return res.status(404).json({ error: "Job not found" });
+      const [stockingOrder] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, jobId));
+      if (stockingOrder) return res.status(409).json({ error: "Imported stocking items must match Abode's spreadsheet. Manage this order from Abode stockings." });
 
       // Print jobs always run on the dedicated Print machine. Ownership comes
       // from the job's selected responsible operator.
@@ -7752,6 +7773,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lineItem = await storage.getJobLineItem(req.params.id);
       if (!lineItem) {
         return res.status(404).json({ error: "Line item not found" });
+      }
+      if (lineItem.stockingDetails) {
+        return res.status(409).json({ error: "Imported stockings cannot be removed individually. Review the original Abode order rather than changing its spreadsheet contents." });
       }
       
       await storage.deleteJobLineItem(req.params.id);
@@ -10438,7 +10462,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get line items and calculate pricing
       const jobLineItems = await storage.getJobLineItems(job.id);
-      const priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
+      const priceResult = pricingTable || jobLineItems.some(item => item.stockingDetails)
+        ? calculateJobPrice(jobLineItems, pricingTable || "2026")
+        : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
 
       const isPOA = priceResult.totalPrice === "POA";
       
@@ -10496,6 +10522,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
       const lineItemsWithPricing = mergeMatchingInvoiceLines(rawLineItemsWithPricing);
+      if (jobLineItems.some(item => item.stockingDetails)) {
+        lineItemsWithPricing.push({
+          jobName: job.jobName, poNumber: job.poNumber,
+          description: `Carriage — order ${job.poNumber || job.jobNumber}`,
+          quantity: 1, unitPrice: 5.5, stitchCount: 0, itemCode: "CARRIAGE",
+        });
+      }
 
       // Add approved logo setups for this customer
       const approvedLogoSetups = await storage.getLogoSetups();
@@ -10769,7 +10802,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         let priceResult;
         try {
-          priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
+          priceResult = pricingTable || jobLineItems.some(item => item.stockingDetails)
+            ? calculateJobPrice(jobLineItems, pricingTable || "2026")
+            : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
           if (priceResult.totalPrice === "POA") {
             hasPOA = true;
           }
@@ -12347,6 +12382,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validJobs = jobs.filter(Boolean);
       if (validJobs.length !== allJobIds.length) {
         return res.status(404).json({ error: "Jobs not found" });
+      }
+      for (const job of validJobs) {
+        const [stockingOrder] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, job!.id));
+        if (stockingOrder) return res.status(409).json({ error: "Book this order from Abode stockings to preserve its bag service, postcode checks and £5.50 carriage." });
       }
       if (new Set(validJobs.map(job => job!.customerId)).size !== 1) {
         return res.status(400).json({ error: "A shipment can only combine orders for the same customer" });

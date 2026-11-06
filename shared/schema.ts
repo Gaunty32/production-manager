@@ -151,6 +151,7 @@ export const jobs = pgTable("jobs", {
   shippingMethod: text("shipping_method"),
   requestedShippingMethod: text("requested_shipping_method"),
   dhlTrackingNumber: text("dhl_tracking_number"),
+  shippingCarrier: text("shipping_carrier"),
   packageCount: integer("package_count"),
   packageType: text("package_type"),
   shippingCost: text("shipping_cost"),
@@ -240,6 +241,30 @@ export const jobLineItems = pgTable("job_line_items", {
   machineId: integer("machine_id"),
   operatorId: varchar("operator_id").references(() => staff.id),
   actualProductionTimeMinutes: integer("actual_production_time_minutes"),
+  stockingDetails: jsonb("stocking_details").$type<{ colour: string; font: string; thread: string; name: string }>(),
+  agreedUnitPrice: real("agreed_unit_price"),
+});
+
+// Abode imports remain ordinary jobs/line items throughout production/invoicing.
+export const stockingOrders = pgTable("stocking_orders", {
+  jobId: varchar("job_id").primaryKey().references(() => jobs.id, { onDelete: "cascade" }),
+  customerId: varchar("customer_id").notNull().references(() => customers.id),
+  orderNumber: text("order_number").notNull(),
+  importHash: text("import_hash").notNull(),
+  recipient: jsonb("recipient").notNull().$type<{ name: string; line1: string; line2: string; town: string; county: string; postcode: string }>(),
+  shippingRoute: text("shipping_route").notNull(),
+  shipmentState: text("shipment_state").notNull().default("unbooked"),
+  labelHtml: text("label_html"),
+  shipmentId: integer("shipment_id"),
+}, table => [uniqueIndex("stocking_customer_order_unique").on(table.customerId, table.orderNumber)]);
+
+// A permanent production ledger: reopening/deleting a job must not reset the
+// commercial lifetime threshold or count the same stocking twice.
+export const stockingProduction = pgTable("stocking_production", {
+  lineItemId: varchar("line_item_id").primaryKey(),
+  customerId: varchar("customer_id").notNull(),
+  unitPrice: real("unit_price").notNull(),
+  completedAt: timestamp("completed_at").notNull().defaultNow(),
 });
 
 // Production entries for tracking partial daily work on line items
@@ -833,6 +858,8 @@ export type JobSchedule = typeof jobSchedule.$inferSelect;
 
 export const insertJobLineItemSchema = createInsertSchema(jobLineItems).omit({
   id: true,
+  stockingDetails: true,
+  agreedUnitPrice: true,
 }).extend({
   quantity: z.coerce.number().int().min(0),
   stitchCount: z.coerce.number().int().min(0),

@@ -1,3 +1,4 @@
+import { completeStockingOrder, updateStockingLine } from "./abodeProduction";
 import { 
   customers, 
   jobs, 
@@ -7,6 +8,7 @@ import {
   machineScheduleBlocks,
   jobSchedule,
   jobLineItems,
+  stockingOrders,
   productionEntries,
   staffMachineAllocations,
   staffHolidays,
@@ -679,6 +681,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateJob(id: string, updates: Partial<Job>): Promise<Job> {
+    if (updates.completed === true) {
+      const [stockingOrder] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, id));
+      if (stockingOrder) {
+        const [existing] = await db.select().from(jobs).where(eq(jobs.id, id));
+        if (existing && !existing.completed) await completeStockingOrder(id, updates.completedById || null);
+      }
+    }
     const [job] = await db
       .update(jobs)
       .set(updates)
@@ -960,6 +969,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateJobLineItem(id: string, updates: Partial<JobLineItem>): Promise<JobLineItem> {
+    const stockingLine = await updateStockingLine(id, updates);
+    if (stockingLine) return stockingLine;
     // Handle date conversion for completedAt if it's a string
     const processedUpdates: Partial<JobLineItem> = {
       ...updates,

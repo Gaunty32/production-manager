@@ -1554,6 +1554,7 @@ export async function sendDispatchNotificationEmail(
     customerFirstName?: string;
     jobNames: string[];
     trackingNumber: string;
+    carrier?: "DPD" | "Royal Mail";
     portalUrl: string;
     completedByName?: string | null;
     operatorProfileImageUrl?: string | null;
@@ -1586,7 +1587,7 @@ export async function sendDispatchNotificationEmail(
     ${operatorBlock}
     <p style="margin:16px 0 8px;font-size:14px;font-weight:600;color:#18181b;">Order(s) included:</p>
     <ul style="margin:0 0 20px;padding-left:20px;">${jobList}</ul>
-    <p style="margin:0 0 20px;font-size:14px;color:#71717a;">Your DPD tracking number (${safeTracking}) and tracking link are available in your customer planner.</p>
+    <p style="margin:0 0 20px;font-size:14px;color:#71717a;">Your ${details.carrier || "DPD"} tracking number (${safeTracking}) and tracking link are available in your customer planner.</p>
     ${ctaButton(details.portalUrl, 'View Tracking in Your Planner')}
     ${muted('If you have any questions about your delivery, please don\'t hesitate to get in touch.')}
   `;
@@ -1594,7 +1595,7 @@ export async function sendDispatchNotificationEmail(
   const { error } = await sendEmail(client, {
     from: fromEmail || 'info@selectbranding.co.uk',
     to: customerEmails,
-    subject: `Your order has been dispatched — DPD tracking: ${safeTracking}`,
+    subject: `Your order has been dispatched — ${details.carrier || "DPD"} tracking: ${safeTracking}`,
     html: brandedEmail(body, { customerLogoUrl: details.customerLogoUrl, customerName: details.customerName }),
   }, details.idempotencyKey ? { idempotencyKey: details.idempotencyKey } : undefined);
 

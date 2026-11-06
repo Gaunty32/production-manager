@@ -50,6 +50,8 @@ interface LineItem {
   stitchCount: number;
   logoApproved: boolean;
   completed: boolean;
+  stockingDetails?: { colour: string; font: string; thread: string; name: string } | null;
+  agreedUnitPrice?: number | null;
 }
 
 interface EditShippingState {
@@ -1120,7 +1122,9 @@ export default function InvoicingQueue() {
       
       let priceResult: any = null;
       try {
-        priceResult = pricingTable ? calculateJobPrice(jobLineItems, pricingTable) : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
+        priceResult = pricingTable || jobLineItems.some(item => item.stockingDetails)
+          ? calculateJobPrice(jobLineItems, pricingTable || "2026")
+          : { totalPrice: 0, lineItemPrices: jobLineItems.map(() => ({ unitPrice: 0, totalPrice: 0 })) };
       } catch {
         priceResult = null;
       }
@@ -1298,7 +1302,7 @@ export default function InvoicingQueue() {
     }
 
     const pricingTable = customer.pricingTable2026 ? "2026" : customer.pricingTable2025 ? "2025" : null;
-    if (!pricingTable) {
+    if (!pricingTable && !getJobLineItems(job.id).some(item => item.stockingDetails)) {
       console.log(`No pricing table for customer ${customer.name}`);
       return null;
     }
@@ -1935,7 +1939,7 @@ export default function InvoicingQueue() {
                                             {lineItems.map((item, idx) => {
                                               let itemUnit: number | "POA" | null = null;
                                               let itemTotal: number | "POA" | null = null;
-                                              if (pricingTable) {
+                                              if (pricingTable || item.stockingDetails) {
                                                 if (needsManualPrice(item)) {
                                                   if (manualPrices[item.id]) {
                                                     itemUnit = parseFloat(manualPrices[item.id]);
@@ -1943,7 +1947,7 @@ export default function InvoicingQueue() {
                                                   }
                                                 } else {
                                                   try {
-                                                    const r = calculateJobPrice([item], pricingTable);
+                                                    const r = calculateJobPrice([item], pricingTable || "2026");
                                                     itemUnit = r.lineItemPrices[0]?.unitPrice ?? null;
                                                     itemTotal = r.totalPrice;
                                                   } catch {}

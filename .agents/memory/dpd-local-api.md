@@ -17,3 +17,11 @@ DPD's documented customer tracking API uses a separate API key/client ID and sec
 **Why:** A read-only integration check confirmed the existing booking login succeeds while the documented tracking authentication rejects those same credentials with HTTP 401. Do not replace working booking credentials or assume a GeoSession grants tracking access.
 
 **How to apply:** Use the official developer portal's live tracking credentials for `GET https://api.customers.dpd.co.uk/v1/customer/auth/access` (Basic auth); tracking uses a bearer access token plus `client-id` at `POST /v1/customer/parcel/tracking`. Sender Actions accepts parcel numbers or customer-reference searches; existing stored consignment numbers are not necessarily parcel numbers. Retrieve current schemas from `https://developers.api.dpd.co.uk/docs/apigee-customer-tracking-apis/1.0.0/schema.json` and the corresponding `apigee-customer-shipping-apis` auth schema before implementing. Never substitute sandbox example scans for genuine delivery progress.
+
+## Bag products and the service catalogue
+
+A bag selection must choose an actual Expresspak courier product; changing only the app's package/billing type leaves the default Parcel service unchanged.
+
+**Why:** The existing generic booking path records a bag locally but otherwise uses its default network code. Abode specifically requires bag shipments. A read-only authenticated catalogue check verified distinct Expresspak 1 and Expresspak 5 Next Day products.
+
+**How to apply:** Validate the measured packed weight against the selected bag product's limit. For future service changes, query the live catalogue rather than guessing network codes. The working catalogue endpoint is `GET /shipping/network/`, with collection/delivery address country codes and postcodes as query parameters. Missing required fields return HTTP 200 with an error object, not an HTTP failure; `/shipping/product/` is not the catalogue endpoint.

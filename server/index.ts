@@ -37,6 +37,7 @@ app.use("/api/callback", (req, res, next) => {
 
 app.set("trust proxy", 1);
 app.use(compression());
+app.use(["/api/abode/imports", "/api/customer-portal/abode/imports"], express.json({ limit: "5mb" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(getSession());
@@ -56,7 +57,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse && !path.endsWith("/dispatch-confirmation")) {
+      if (capturedJsonResponse && !path.endsWith("/dispatch-confirmation") && !path.includes("/abode")) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 

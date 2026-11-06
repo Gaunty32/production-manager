@@ -82,7 +82,7 @@ function visitRoutes(node: ts.Node) {
 visitRoutes(routes);
 assert.ok(bookingHandler);
 
-async function book(options: { jobs?: any[]; ids?: string[]; count?: number; type?: string; failProvider?: boolean; failSave?: boolean } = {}) {
+async function book(options: { jobs?: any[]; ids?: string[]; count?: number; type?: string; failProvider?: boolean; failSave?: boolean; stocking?: boolean } = {}) {
   const members: any[] = options.jobs || [{ ...base }];
   const changes: { id: string; patch: any }[] = [];
   let providerCalls = 0;
@@ -103,9 +103,11 @@ async function book(options: { jobs?: any[]; ids?: string[]; count?: number; typ
       },
     },
     maybeSendDispatchNotification: async () => {},
-    jobs: { id: "id" }, inArray: (_field: string, ids: string[]) => ids,
+    jobs: { id: "id" }, stockingOrders: { jobId: "jobId" }, inArray: (_field: string, ids: string[]) => ids,
     eq: (_field: string, id: string) => id, asc: (field: string) => field,
-    db: { transaction: async (fn: any) => {
+    db: {
+      select: () => ({ from: () => ({ where: async () => options.stocking ? [{ jobId: base.id }] : [] }) }),
+      transaction: async (fn: any) => {
       const pending: typeof changes = [];
       const tx = {
         select: () => ({ from: () => ({ where: (ids: string[]) => ({ orderBy: () => ({ for: async () => members.filter(member => ids.includes(member.id)) }) }) }) }),
@@ -145,6 +147,13 @@ test("single DPD booking persists tracking, dispatch method, normalized parcels 
   assert.equal(result.changes[0].patch.packageType, "boxes");
   assert.equal(result.changes[0].patch.shippingCost, "10");
   assert.equal(result.changes[0].patch.invoiceStatus, undefined);
+});
+
+test("Abode bookings cannot bypass the customer-specific bag and carriage workflow", async () => {
+  const result = await book({ stocking: true });
+  assert.equal(result.status, 409);
+  assert.equal(result.providerCalls, 0);
+  assert.equal(result.changes.length, 0);
 });
 
 test("multiple booked jobs share one shipment and only one carriage charge", async () => {
