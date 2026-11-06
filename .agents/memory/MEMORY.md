@@ -77,3 +77,4 @@
 - [Awaiting garments reminders](awaiting-garments-reminder-policy.md) — weekly follow-up after seven days in Awaiting Line Items; missing garments are likely, not certain.
 - [Knowledge Centre presentation](customer-knowledge-centre-presentation.md) — keep small thumbnails; reduced prominence in the planner must not mean removing imagery.
 - [Thread colour catalogues](thread-colour-catalogue.md) — ship supplied reference shades on publish; keep thread ranges distinct rather than matching codes alone.
+- [Branded dispatch confirmations](branded-dispatch-confirmations.md) — Merox interim scope excludes live tracking, courier links and origin identity; never infer collection or delivery.

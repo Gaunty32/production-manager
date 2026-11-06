@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getDpdTrackingUrl } from "@shared/dpd-tracking";
+import { ShareDispatchConfirmation } from "@/components/ShareDispatchConfirmation";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -179,6 +180,7 @@ type Job = {
   lineItems: LineItem[];
   paymentReceived?: boolean;
   customerRequiresAdvancePayment?: boolean;
+  canShareDispatchConfirmation?: boolean;
 };
 
 type CustomerUser = {
@@ -1188,6 +1190,8 @@ export default function CustomerDashboard() {
                         </div>
                       )}
 
+                      {job.canShareDispatchConfirmation && <ShareDispatchConfirmation jobId={job.id} />}
+
                       {/* Line Items */}
                       {lineItems.length > 0 ? (
                         <div className="space-y-3">
@@ -1370,6 +1374,7 @@ export default function CustomerDashboard() {
                             ) : (
                               <span className="text-muted-foreground text-sm">—</span>
                             )}
+                            {job.canShareDispatchConfirmation && <div><ShareDispatchConfirmation jobId={job.id} /></div>}
                           </TableCell>
                         </TableRow>
                       );
@@ -1447,6 +1452,7 @@ export default function CustomerDashboard() {
                           ) : (
                             index === 0 && <span className="text-muted-foreground text-sm">—</span>
                           )}
+                          {index === 0 && job.canShareDispatchConfirmation && <div><ShareDispatchConfirmation jobId={job.id} /></div>}
                         </TableCell>
                       </TableRow>
                     ));
