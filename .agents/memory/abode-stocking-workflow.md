@@ -26,3 +26,9 @@ Identify repeat uploads by order number and flag them for checking, including re
 **Why:** The user requested: “To identify a repear upload use the order number and flag it to be checked.”
 
 **How to apply:** Do not create a duplicate or overwrite the existing job. Flag repeat order numbers visibly for review while allowing new orders from the same sheet to be imported.
+
+Staff should be able to attach finished-item photos to an Abode order for the customer to refer back to.
+
+**Why:** The user requested a picture of the finished item on the order card for customer reference.
+
+**How to apply:** Keep photos visible against the matching order in both staff and customer views; customer access is read-only. Photos are optional reference material, not a production-completion or dispatch requirement.

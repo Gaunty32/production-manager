@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AbodeFinishedPhotos, type AbodeFinishedPhoto } from "@/components/AbodeFinishedPhotos";
 
 type StockingItem = {
   id: string;
@@ -34,6 +35,7 @@ type StockingOrder = {
   shipmentState: "unbooked" | "booking" | "booked" | "review";
   labelAvailable: boolean;
   items: StockingItem[];
+  finishedPhotos?: AbodeFinishedPhoto[];
 };
 type StockingsData = {
   enabled: boolean;
@@ -364,6 +366,12 @@ export default function AbodeStockings() {
                       {isStaff && order.shippingCost != null && <p className="mt-3 border-t border-stone-100 pt-2 text-xs text-stone-500">Carriage recorded: {MONEY(Number(order.shippingCost))} ex. VAT</p>}
                     </div>
                   </div>
+                  <AbodeFinishedPhotos
+                    jobId={order.id}
+                    photos={order.finishedPhotos}
+                    isStaff={isStaff}
+                    onChanged={refresh}
+                  />
                   {isStaff && order.completed && <div className="flex flex-wrap gap-2 border-t border-stone-100 px-4 py-3 md:px-5"><Button variant="ghost" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Customer delivery note</Button><span className="self-center text-xs text-stone-500">Server-rendered with Abode branding</span></div>}
                 </CardContent>
               </Card>;

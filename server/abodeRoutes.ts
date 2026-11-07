@@ -1,16 +1,19 @@
 import type { Express, RequestHandler } from "express";
 import { randomBytes } from "node:crypto";
+import { pipeline } from "node:stream/promises";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "./db";
 import { storage } from "./storage";
-import { customers, jobs, jobLineItems, stockingOrders, stockingProduction } from "@shared/schema";
+import { customers, jobs, jobLineItems, jobFiles, stockingOrders, stockingProduction } from "@shared/schema";
 import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate, stockingBagNetworkCode } from "@shared/abode";
 import { parseStockingRows } from "./abodeImport";
 import { completeStockingOrder } from "./abodeProduction";
 import { renderStockingDeliveryNote, renderStockingLabel } from "./abodeDocuments";
 import { dpdService } from "./dpd";
 import { maybeSendDispatchNotification } from "./customerOrderNotifications";
+import { ObjectStorageService } from "./objectStorage";
+import { FINISHED_PHOTO_PREFIX, FINISHED_PHOTO_TYPES, MAX_FINISHED_PHOTO_BYTES, isFinishedPhoto, photoBytesMatchType } from "./abodePhotos";
 
 type CompletionGuard = (req: any, jobId: string, item?: any) => Promise<string | null>;
 const editable = (status: string) => ["pending", "ready", "draft"].includes(status);
@@ -54,6 +57,7 @@ export function registerAbodeRoutes(app: Express, deps: {
       const orders = await db.select({ order: stockingOrders, job: jobs }).from(stockingOrders)
         .innerJoin(jobs, eq(jobs.id, stockingOrders.jobId)).where(eq(stockingOrders.customerId, customer.id)).orderBy(desc(jobs.jobNumber));
       const items = orders.length ? await db.select().from(jobLineItems).where(inArray(jobLineItems.jobId, orders.map(({ job }) => job.id))) : [];
+      const photos = orders.length ? (await db.select().from(jobFiles).where(inArray(jobFiles.jobId, orders.map(({ job }) => job.id)))).filter(isFinishedPhoto) : [];
       res.json({
         enabled: true, customer: { id: customer.id, name: customer.name, logoUrl: customer.logoUrl },
         completedCount: count.count, currentRate: stockingRate(count.count),
@@ -61,6 +65,11 @@ export function registerAbodeRoutes(app: Express, deps: {
           ...job, recipient: order.recipient, shippingRoute: order.shippingRoute,
           shipmentState: order.shipmentState, labelAvailable: Boolean(order.labelHtml || order.shipmentId),
           items: items.filter(item => item.jobId === job.id),
+          finishedPhotos: photos.filter(photo => photo.jobId === job.id).map(photo => ({
+            id: photo.id, fileName: photo.fileName.slice(FINISHED_PHOTO_PREFIX.length),
+            fileUrl: `${base}/orders/${encodeURIComponent(job.id)}/photos/${encodeURIComponent(photo.id)}`,
+            createdAt: photo.createdAt,
+          })),
         })),
       });
     }));
@@ -136,7 +145,43 @@ export function registerAbodeRoutes(app: Express, deps: {
         recipient: order.recipient, items: items.flatMap(item => item.stockingDetails ? [item.stockingDetails] : []),
       }));
     }));
+    app.get(`${base}/orders/:id/photos/:photoId`, auth, wrap(async (req, res, customer) => {
+      const { job } = await owned(req.params.id, customer);
+      const photo = (await storage.getJobFiles(job.id)).find(file => file.id === req.params.photoId && isFinishedPhoto(file));
+      if (!photo) return res.status(404).json({ error: "Finished-item photo not found" });
+      const svc = new ObjectStorageService();
+      const file = await svc.getObjectEntityFile(photo.fileUrl);
+      const [metadata] = await file.getMetadata();
+      res.set({
+        "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox",
+        "Cache-Control": "private, no-store", "Content-Type": photo.fileType,
+        "Content-Length": String(metadata.size),
+      });
+      await pipeline(file.createReadStream(), res);
+    }));
     if (customerMode) continue;
+    app.post(`${base}/orders/:id/photos`, auth, wrap(async (req, res, customer) => {
+      const { job } = await owned(req.params.id, customer);
+      const { objectKey, fileName } = z.object({
+        objectKey: z.string().regex(/^\/objects\/uploads\/[0-9a-f-]{36}$/i),
+        fileName: z.string().trim().min(1).max(200),
+      }).parse(req.body);
+      const svc = new ObjectStorageService();
+      const file = await svc.getObjectEntityFile(objectKey);
+      const [metadata] = await file.getMetadata();
+      const type = metadata.contentType || "";
+      const size = Number(metadata.size);
+      if (!FINISHED_PHOTO_TYPES.some(allowed => allowed === type) || !Number.isFinite(size) || size <= 0 || size > MAX_FINISHED_PHOTO_BYTES) {
+        return res.status(400).json({ error: "Choose a JPEG, PNG or WebP photo up to 10 MB" });
+      }
+      const [signature] = await file.download({ start: 0, end: 11 });
+      if (!photoBytesMatchType(signature, type)) return res.status(400).json({ error: "This file is not a supported photo" });
+      const photo = await storage.createJobFile({
+        jobId: job.id, fileName: `${FINISHED_PHOTO_PREFIX}${fileName}`, fileUrl: objectKey,
+        fileSize: size, fileType: type, uploadedBy: "staff", uploaderId: req.session.userId,
+      });
+      res.json({ id: photo.id, success: true });
+    }));
     app.post(`${base}/logo`, auth, wrap(async (req, res, customer) => {
       if (!customer) throw new Error("Import Abode's first order before adding a logo");
       const user = await storage.getUser(req.session.userId);
