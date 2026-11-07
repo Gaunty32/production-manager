@@ -63,6 +63,8 @@ export default function AbodeStockings() {
   const queryKey = [baseUrl];
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const dragDepth = useRef(0);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [selectedFile, setSelectedFile] = useState("");
   const [rows, setRows] = useState<RowRecord[] | null>(null);
   const [preview, setPreview] = useState<PreviewData | null>(null);
@@ -157,8 +159,13 @@ export default function AbodeStockings() {
   }), [orders, filter, search]);
 
   async function onFileChange(file?: File) {
-    setPreview(null); setRows(null);
+    setPreview(null); setRows(null); setSelectedFile("");
     if (!file) return;
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
+      toast({ title: "Choose an Excel or CSV file", description: "Supported formats: .xlsx, .xls and .csv.", variant: "destructive" });
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     if (file.size > 5 * 1024 * 1024) {
       toast({ title: "File is too large", description: "Choose a file under 5 MB.", variant: "destructive" });
       if (fileRef.current) fileRef.current.value = "";
@@ -240,11 +247,39 @@ export default function AbodeStockings() {
                     <p className="mt-1 text-sm text-stone-600">Preview everything before any orders are added. No minimum order.</p>
                   </div>
                 </div>
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium transition hover:bg-stone-50">
-                  <Upload className="h-4 w-4" /> Choose a file
-                  <input ref={fileRef} className="sr-only" type="file" accept=".xlsx,.xls,.csv" onChange={(event) => onFileChange(event.target.files?.[0])} />
-                </label>
               </div>
+              <label
+                className={`mt-4 flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-center transition focus-within:ring-2 focus-within:ring-[#344e43] focus-within:ring-offset-2 ${isDraggingFile ? "border-[#344e43] bg-emerald-50" : "border-stone-300 bg-stone-50 hover:border-[#344e43] hover:bg-stone-100"}`}
+                onDragEnter={(event) => {
+                  event.preventDefault(); event.stopPropagation();
+                  if (!event.dataTransfer.types.includes("Files")) return;
+                  dragDepth.current += 1; setIsDraggingFile(true);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault(); event.stopPropagation();
+                  event.dataTransfer.dropEffect = "copy";
+                }}
+                onDragLeave={(event) => {
+                  event.preventDefault(); event.stopPropagation();
+                  dragDepth.current = Math.max(0, dragDepth.current - 1);
+                  if (!dragDepth.current) setIsDraggingFile(false);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault(); event.stopPropagation();
+                  dragDepth.current = 0; setIsDraggingFile(false);
+                  if (event.dataTransfer.files.length !== 1) {
+                    toast({ title: "Drop one file at a time", description: "Choose one Excel or CSV order sheet.", variant: "destructive" });
+                    return;
+                  }
+                  if (fileRef.current) fileRef.current.value = "";
+                  void onFileChange(event.dataTransfer.files[0]);
+                }}
+              >
+                <Upload aria-hidden="true" className="h-6 w-6 text-[#344e43]" />
+                <span className="text-sm font-semibold">{isDraggingFile ? "Drop your order sheet here" : "Drag and drop your order sheet here"}</span>
+                <span className="text-sm text-stone-600">or <span className="font-medium underline underline-offset-2">choose a file</span></span>
+                <input ref={fileRef} aria-label="Choose an Excel or CSV order sheet" className="sr-only" type="file" accept=".xlsx,.xls,.csv" onChange={(event) => onFileChange(event.target.files?.[0])} />
+              </label>
               <p className="mt-4 text-xs text-stone-500">Excel or CSV · first worksheet · maximum 5,000 rows / 5 MB</p>
               {selectedFile && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-stone-50 p-3 text-sm"><span className="min-w-0 truncate font-medium">{selectedFile} <span className="font-normal text-stone-500">({rows?.length ?? 0} rows)</span></span><Button size="sm" onClick={() => rows && previewMutation.mutate(rows)} disabled={previewMutation.isPending || !rows}>{previewMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Preview sheet</Button></div>}
               {preview && <div className="mt-4 rounded-xl border border-[#d6c3ae] bg-[#fbf8f3] p-4">
