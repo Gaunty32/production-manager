@@ -20,3 +20,9 @@ VAT was not expressly clarified. The implementation follows the existing app's V
 **Why:** The user answered the production threshold and delivery-exception questions but not the VAT question; preserving existing invoicing behaviour avoids introducing a separate tax convention.
 
 **How to apply:** Keep this assumption visible when discussing prices; revise it if the user supplies different VAT terms.
+
+Identify repeat uploads by order number and flag them for checking, including repeats whose details differ.
+
+**Why:** The user requested: “To identify a repear upload use the order number and flag it to be checked.”
+
+**How to apply:** Do not create a duplicate or overwrite the existing job. Flag repeat order numbers visibly for review while allowing new orders from the same sheet to be imported.

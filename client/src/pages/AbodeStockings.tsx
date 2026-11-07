@@ -43,7 +43,7 @@ type StockingsData = {
   orders: StockingOrder[];
 };
 type PreviewData = {
-  orders: { orderNumber: string; recipient: StockingOrder["recipient"]; shippingRoute: string; items: { colour: string; font: string; thread: string; name: string }[]; existing: boolean }[];
+  orders: { orderNumber: string; recipient: StockingOrder["recipient"]; shippingRoute: string; items: { colour: string; font: string; thread: string; name: string }[]; existing: boolean; detailsChanged: boolean }[];
   stockingCount: number;
   orderCount: number;
 };
@@ -68,6 +68,7 @@ export default function AbodeStockings() {
   const [selectedFile, setSelectedFile] = useState("");
   const [rows, setRows] = useState<RowRecord[] | null>(null);
   const [preview, setPreview] = useState<PreviewData | null>(null);
+  const [flaggedOrders, setFlaggedOrders] = useState<{ orderNumber: string; detailsChanged: boolean }[]>([]);
   const [filter, setFilter] = useState<"all" | "in-work" | "ready" | "dispatched">("all");
   const [search, setSearch] = useState("");
   const [activeOrder, setActiveOrder] = useState<StockingOrder | null>(null);
@@ -101,10 +102,11 @@ export default function AbodeStockings() {
   const importMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", `${baseUrl}/imports`, { rows });
-      return response.json() as Promise<{ created: number; skipped: number }>;
+      return response.json() as Promise<{ created: number; skipped: number; flaggedOrders: { orderNumber: string; detailsChanged: boolean }[] }>;
     },
     onSuccess: (result) => {
-      toast({ title: "Stocking orders imported", description: `${result.created} created · ${result.skipped} already on file` });
+      toast({ title: "Order sheet processed", description: `${result.created} created · ${result.skipped} repeat orders flagged for checking` });
+      setFlaggedOrders(result.flaggedOrders);
       setRows(null); setPreview(null); setSelectedFile("");
       if (fileRef.current) fileRef.current.value = "";
       refresh();
@@ -284,12 +286,23 @@ export default function AbodeStockings() {
               {selectedFile && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-stone-50 p-3 text-sm"><span className="min-w-0 truncate font-medium">{selectedFile} <span className="font-normal text-stone-500">({rows?.length ?? 0} rows)</span></span><Button size="sm" onClick={() => rows && previewMutation.mutate(rows)} disabled={previewMutation.isPending || !rows}>{previewMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Preview sheet</Button></div>}
               {preview && <div className="mt-4 rounded-xl border border-[#d6c3ae] bg-[#fbf8f3] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div><p className="font-semibold">{preview.orderCount} orders · {preview.stockingCount} stockings</p><p className="mt-1 text-xs text-stone-600">Check names and routes before confirming. Existing orders will be skipped.</p></div>
+                  <div><p className="font-semibold">{preview.orderCount} orders · {preview.stockingCount} stockings</p><p className="mt-1 text-xs text-stone-600">Repeat order numbers are flagged for checking and will not be imported again. Existing jobs stay unchanged.</p></div>
                   <div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setPreview(null)}>Cancel</Button><Button size="sm" onClick={() => importMutation.mutate()} disabled={importMutation.isPending}>{importMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm import</Button></div>
                 </div>
                 <div className="mt-4 max-h-56 space-y-2 overflow-y-auto">
-                  {preview.orders.map((order, index) => <div key={`${order.orderNumber}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs"><span className="font-semibold">{order.orderNumber}</span><span className="text-stone-600">{order.items.length} personalisation lines · {order.shippingRoute.replace("_", " ")}</span><span className="max-w-full truncate text-stone-500">{order.recipient.name} · {order.recipient.postcode}</span>{order.existing && <Badge variant="secondary">Already on file</Badge>}</div>)}
+                  {preview.orders.map((order, index) => <div key={`${order.orderNumber}-${index}`} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${order.existing ? "border-amber-300 bg-amber-50" : "border-stone-200 bg-white"}`}><span className="font-semibold">{order.orderNumber}</span><span className="text-stone-600">{order.items.length} personalisation lines · {order.shippingRoute.replace("_", " ")}</span><span className="max-w-full truncate text-stone-500">{order.recipient.name} · {order.recipient.postcode}</span>{order.existing && <span className="font-semibold text-amber-900">Already uploaded — check existing order{order.detailsChanged ? " · Details differ" : ""}</span>}</div>)}
                 </div>
+              </div>}
+              {flaggedOrders.length > 0 && <div role="status" className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                <p className="font-semibold">{flaggedOrders.length} repeat order{flaggedOrders.length === 1 ? "" : "s"} — check existing jobs</p>
+                <p className="mt-1">These order numbers were not imported again. No existing details were changed.</p>
+                <ul className="mt-3 max-h-56 space-y-2 overflow-y-auto">
+                  {flaggedOrders.map(order => <li key={order.orderNumber} className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{order.orderNumber}</span>
+                    {order.detailsChanged && <span>Details differ from the existing order.</span>}
+                    <button type="button" className="font-medium underline underline-offset-2" onClick={() => { setFilter("all"); setSearch(order.orderNumber); }}>Find existing order</button>
+                  </li>)}
+                </ul>
               </div>}
             </CardContent>
           </Card>

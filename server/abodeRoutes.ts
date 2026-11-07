@@ -68,12 +68,11 @@ export function registerAbodeRoutes(app: Express, deps: {
       app.post(`${base}/imports${preview ? "/preview" : ""}`, auth, wrap(async (req, res, customer) => {
         const parsed = parseStockingRows(req.body.rows);
         const existing = customer ? await db.select().from(stockingOrders).where(eq(stockingOrders.customerId, customer.id)) : [];
-        for (const order of parsed) {
-          const prior = existing.find(row => row.orderNumber === order.orderNumber);
-          if (prior && prior.importHash !== order.importHash) throw new Error(`Order ${order.orderNumber} already exists with different details. Review the existing job; it has not been overwritten.`);
-        }
         if (preview) return res.json({
-          orders: parsed.map(({ importHash, ...order }) => ({ ...order, existing: existing.some(row => row.orderNumber === order.orderNumber) })),
+          orders: parsed.map(({ importHash, ...order }) => {
+            const prior = existing.find(row => row.orderNumber === order.orderNumber);
+            return { ...order, existing: Boolean(prior), detailsChanged: Boolean(prior && prior.importHash !== importHash) };
+          }),
           stockingCount: parsed.reduce((n, order) => n + order.items.length, 0), orderCount: parsed.length,
         });
         const result = await db.transaction(async tx => {
@@ -88,11 +87,12 @@ export function registerAbodeRoutes(app: Express, deps: {
           const [maximum] = await tx.select({ number: sql<number>`coalesce(max(job_number),0)::int` }).from(jobs);
           let nextNumber = maximum.number;
           let created = 0, skipped = 0;
+          const flaggedOrders: { orderNumber: string; detailsChanged: boolean }[] = [];
           for (const order of parsed) {
             const [prior] = await tx.select().from(stockingOrders).where(and(eq(stockingOrders.customerId, target.id), eq(stockingOrders.orderNumber, order.orderNumber)));
             if (prior) {
-              if (prior.importHash !== order.importHash) throw new Error(`Order ${order.orderNumber} already exists with different details`);
               skipped++;
+              flaggedOrders.push({ orderNumber: order.orderNumber, detailsChanged: prior.importHash !== order.importHash });
               continue;
             }
             const r = order.recipient;
@@ -118,7 +118,7 @@ export function registerAbodeRoutes(app: Express, deps: {
             })));
             created++;
           }
-          return { created, skipped };
+          return { created, skipped, flaggedOrders };
         });
         res.json(result);
       }));
