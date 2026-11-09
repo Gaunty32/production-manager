@@ -32,3 +32,9 @@ Staff should be able to attach finished-item photos to an Abode order for the cu
 **Why:** The user requested a picture of the finished item on the order card for customer reference.
 
 **How to apply:** Keep photos visible against the matching order in both staff and customer views; customer access is read-only. Photos are optional reference material, not a production-completion or dispatch requirement.
+
+Abode supplies its own delivery-note PDFs for staff to print and enclose; either staff or the customer may upload them, and the filename identifies the order.
+
+**Why:** The user supplied dispatch-note examples and explicitly requested uploads by either side, with printing against the matching order.
+
+**How to apply:** Match the whole order number from the filename, flag unmatched files rather than guessing, and preserve the original PDF and all pages. Prefer the supplied PDF over the generated Abode-branded fallback. These notes may include Abode's retail prices; do not substitute our production prices.

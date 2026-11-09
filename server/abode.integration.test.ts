@@ -27,10 +27,11 @@ test("import → completion threshold → dispatch → draft billing with safe r
   const originalCustomer = storage.getCustomer;
   const photoBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8R8AAAAASUVORK5CYII=", "base64");
   let photoType = "image/png";
+  let objectBytes = photoBytes;
   ObjectStorageService.prototype.getObjectEntityFile = async () => ({
-    getMetadata: async () => [{ contentType: photoType, size: photoBytes.length }],
-    download: async () => [photoBytes.subarray(0, 12)],
-    createReadStream: () => Readable.from(photoBytes),
+    getMetadata: async () => [{ contentType: photoType, size: objectBytes.length }],
+    download: async () => [objectBytes.subarray(0, 12)],
+    createReadStream: () => Readable.from(objectBytes),
   } as any);
   storage.getCustomerUserById = async () => ({ customerId: customer.id } as any);
   storage.getCustomer = async customerId => customerId === customer.id
@@ -123,6 +124,48 @@ test("import → completion threshold → dispatch → draft billing with safe r
     assert.equal((await fetch(`${base}/api/customer-portal/abode/orders/${dpd.id}/photos`, {
       method: "POST", headers: { "content-type": "application/json", "x-test-customer": "yes" }, body: JSON.stringify(photoPayload),
     })).status, 404, "Customers must not upload finished-work photos");
+    const customerRequest = (path: string, body?: unknown) => fetch(`${base}/api/customer-portal/abode${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers: { "content-type": "application/json", "x-test-customer": "yes" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const notesPreview = await (await customerRequest("/delivery-notes/preview", {
+      fileNames: ["dispatch-note-TEST-1.pdf", "dispatch-note-TEST-2.pdf", "dispatch-note-UNKNOWN.pdf", "unmatched.pdf"],
+    })).json();
+    assert.deepEqual(notesPreview.files.map((file: any) => file.status), ["matched", "matched", "not_found", "invalid"]);
+    assert.equal(notesPreview.files[0].jobId, dpd.id);
+    const notePayload = { objectKey: `/objects/uploads/${randomUUID()}`, fileName: "dispatch-note-TEST-1.pdf", jobId: dpd.id };
+    assert.equal((await request("/delivery-notes", notePayload, false)).status, 401);
+    assert.equal((await customerRequest("/delivery-notes", { ...notePayload, jobId: royal.id })).status, 400, "Filename must not attach to a different order");
+    assert.equal((await customerRequest("/delivery-notes", notePayload)).status, 400, "Images must not be saved as delivery notes");
+    photoType = "application/pdf";
+    assert.equal((await request("/delivery-notes", notePayload)).status, 400, "PDF metadata without a PDF header must be rejected");
+    objectBytes = Buffer.from("%PDF-1.7\nOriginal first page\nOriginal second page\n%%EOF");
+    const staffNote = await (await request("/delivery-notes", notePayload)).json();
+    assert.ok(staffNote.id);
+    assert.equal((await (await request("/delivery-notes", notePayload)).json()).id, staffNote.id);
+    const customerNote = await (await customerRequest("/delivery-notes", { ...notePayload, objectKey: `/objects/uploads/${randomUUID()}` })).json();
+    assert.ok(customerNote.id);
+    const notesContext = await (await customerRequest("")).json();
+    const orderNotes = notesContext.orders.find((o: any) => o.id === dpd.id).deliveryNotes;
+    assert.equal(orderNotes.length, 2, "New versions keep earlier delivery notes");
+    assert.ok(orderNotes.some((note: any) => note.uploadedBy === "staff"));
+    assert.ok(orderNotes.some((note: any) => note.uploadedBy === "customer"));
+    const pdf = await customerRequest(`/orders/${dpd.id}/delivery-notes/${customerNote.id}`);
+    assert.equal(pdf.status, 200);
+    assert.equal(pdf.headers.get("content-type"), "application/pdf");
+    assert.equal(pdf.headers.get("cache-control"), "private, no-store");
+    assert.deepEqual(Buffer.from(await pdf.arrayBuffer()), objectBytes, "Print source must preserve the original PDF bytes and pages");
+    assert.equal((await customerRequest(`/orders/${royal.id}/delivery-notes/${staffNote.id}`)).status, 404);
+    assert.equal((await request(`/orders/${dpd.id}/delivery-notes/${staffNote.id}`, undefined, false)).status, 401);
+    const preferredNote = await customerRequest(`/orders/${dpd.id}/delivery-note`);
+    assert.equal(preferredNote.status, 200, "Supplied notes can print before production completes");
+    assert.equal(preferredNote.headers.get("content-type"), "application/pdf");
+    assert.deepEqual(Buffer.from(await preferredNote.arrayBuffer()), objectBytes);
+    const afterNotesPreview = await (await request("/delivery-notes/preview", { fileNames: ["dispatch-note-TEST-1.pdf"] })).json();
+    assert.equal(afterNotesPreview.files[0].existingCount, 2);
+    objectBytes = photoBytes;
+    photoType = "image/png";
     assert.equal(royal.shippingRoute, "royal_mail");
     assert.equal(dpd.shippingCost, "5.5");
     assert.equal((await request(`/orders/${dpd.id}/book`, { weightGrams: 500 })).status, 409);
@@ -145,7 +188,7 @@ test("import → completion threshold → dispatch → draft billing with safe r
     assert.equal((await request(`/orders/${dpd.id}/book`, { weightGrams: 500 })).status, 409);
     const note = await request(`/orders/${dpd.id}/delivery-note`);
     assert.equal(note.status, 200);
-    assert.ok((await note.text()).includes("Exact CAPS"));
+    assert.equal(note.headers.get("content-type"), "application/pdf", "Uploaded customer note takes precedence over the generated template");
     const label = await request(`/orders/${dpd.id}/label`);
     assert.equal(label.status, 200);
     assert.ok((await label.text()).includes('sandbox="allow-same-origin allow-modals"'));

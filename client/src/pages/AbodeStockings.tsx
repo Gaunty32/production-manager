@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AbodeFinishedPhotos, type AbodeFinishedPhoto } from "@/components/AbodeFinishedPhotos";
+import { AbodeDeliveryNotes, AbodeOrderDeliveryNotes, type AbodeDeliveryNote } from "@/components/AbodeDeliveryNotes";
 
 type StockingItem = {
   id: string;
@@ -36,6 +37,7 @@ type StockingOrder = {
   labelAvailable: boolean;
   items: StockingItem[];
   finishedPhotos?: AbodeFinishedPhoto[];
+  deliveryNotes?: AbodeDeliveryNote[];
 };
 type StockingsData = {
   enabled: boolean;
@@ -318,6 +320,8 @@ export default function AbodeStockings() {
           </Card>
         </div>
 
+        <AbodeDeliveryNotes baseUrl={baseUrl} isStaff={isStaff} onChanged={refresh} />
+
         <section>
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">Order register</p><h2 className="mt-1 text-xl font-semibold">Stockings in motion</h2></div>
@@ -345,7 +349,7 @@ export default function AbodeStockings() {
                       {(order.shipmentState === "review" || order.shipmentState === "booking") && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setTrackingNumber(""); setDialog("recover"); }}><ShieldAlert className="mr-1.5 h-4 w-4" />Recover booking</Button>}
                       {order.labelAvailable && <Button variant="outline" size="sm" onClick={() => openDocument(order, "label")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Label</Button>}
                     </div>}
-                    {!isStaff && order.completed && <Button variant="outline" size="sm" disabled={!data.customer.logoUrl} title={!data.customer.logoUrl ? "A customer logo is needed to create the delivery note." : undefined} onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />{data.customer.logoUrl ? "Delivery note" : "Delivery note · logo required"}</Button>}
+                    {!isStaff && (order.completed || Boolean(order.deliveryNotes?.length)) && <Button variant="outline" size="sm" disabled={!data.customer.logoUrl && !order.deliveryNotes?.length} title={!data.customer.logoUrl && !order.deliveryNotes?.length ? "A customer logo or supplied delivery note is needed." : undefined} onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />{order.deliveryNotes?.length ? "Delivery note" : data.customer.logoUrl ? "Delivery note" : "Delivery note · logo required"}</Button>}
                   </div>
                   <div className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_240px] md:px-5">
                     <div className="space-y-2">
@@ -372,7 +376,8 @@ export default function AbodeStockings() {
                     isStaff={isStaff}
                     onChanged={refresh}
                   />
-                  {isStaff && order.completed && <div className="flex flex-wrap gap-2 border-t border-stone-100 px-4 py-3 md:px-5"><Button variant="ghost" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Customer delivery note</Button><span className="self-center text-xs text-stone-500">Server-rendered with Abode branding</span></div>}
+                  <AbodeOrderDeliveryNotes notes={order.deliveryNotes} />
+                  {isStaff && (order.completed || Boolean(order.deliveryNotes?.length)) && <div className="flex flex-wrap gap-2 border-t border-stone-100 px-4 py-3 md:px-5"><Button variant="ghost" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Customer delivery note</Button><span className="self-center text-xs text-stone-500">{order.deliveryNotes?.length ? "Uses the latest customer-supplied PDF" : "Server-rendered with Abode branding"}</span></div>}
                 </CardContent>
               </Card>;
             })}

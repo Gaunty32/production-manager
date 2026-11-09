@@ -14,6 +14,7 @@ import { dpdService } from "./dpd";
 import { maybeSendDispatchNotification } from "./customerOrderNotifications";
 import { ObjectStorageService } from "./objectStorage";
 import { FINISHED_PHOTO_PREFIX, FINISHED_PHOTO_TYPES, MAX_FINISHED_PHOTO_BYTES, isFinishedPhoto, photoBytesMatchType } from "./abodePhotos";
+import { DELIVERY_NOTE_PREFIX, MAX_DELIVERY_NOTE_BYTES, deliveryNoteOrderNumber, isSuppliedDeliveryNote, hasPdfSignature } from "./abodeDeliveryNotes";
 
 type CompletionGuard = (req: any, jobId: string, item?: any) => Promise<string | null>;
 const editable = (status: string) => ["pending", "ready", "draft"].includes(status);
@@ -57,7 +58,9 @@ export function registerAbodeRoutes(app: Express, deps: {
       const orders = await db.select({ order: stockingOrders, job: jobs }).from(stockingOrders)
         .innerJoin(jobs, eq(jobs.id, stockingOrders.jobId)).where(eq(stockingOrders.customerId, customer.id)).orderBy(desc(jobs.jobNumber));
       const items = orders.length ? await db.select().from(jobLineItems).where(inArray(jobLineItems.jobId, orders.map(({ job }) => job.id))) : [];
-      const photos = orders.length ? (await db.select().from(jobFiles).where(inArray(jobFiles.jobId, orders.map(({ job }) => job.id)))).filter(isFinishedPhoto) : [];
+      const files = orders.length ? await db.select().from(jobFiles).where(inArray(jobFiles.jobId, orders.map(({ job }) => job.id))).orderBy(desc(jobFiles.createdAt)) : [];
+      const photos = files.filter(isFinishedPhoto);
+      const deliveryNotes = files.filter(isSuppliedDeliveryNote);
       res.json({
         enabled: true, customer: { id: customer.id, name: customer.name, logoUrl: customer.logoUrl },
         completedCount: count.count, currentRate: stockingRate(count.count),
@@ -69,6 +72,11 @@ export function registerAbodeRoutes(app: Express, deps: {
             id: photo.id, fileName: photo.fileName.slice(FINISHED_PHOTO_PREFIX.length),
             fileUrl: `${base}/orders/${encodeURIComponent(job.id)}/photos/${encodeURIComponent(photo.id)}`,
             createdAt: photo.createdAt,
+          })),
+          deliveryNotes: deliveryNotes.filter(note => note.jobId === job.id).map(note => ({
+            id: note.id, fileName: note.fileName.slice(DELIVERY_NOTE_PREFIX.length),
+            fileUrl: `${base}/orders/${encodeURIComponent(job.id)}/delivery-notes/${encodeURIComponent(note.id)}`,
+            createdAt: note.createdAt, uploadedBy: note.uploadedBy,
           })),
         })),
       });
@@ -134,6 +142,9 @@ export function registerAbodeRoutes(app: Express, deps: {
     }
     app.get(`${base}/orders/:id/delivery-note`, auth, wrap(async (req, res, customer) => {
       const { order, job } = await owned(req.params.id, customer);
+      const [suppliedNote] = (await storage.getJobFiles(job.id)).filter(isSuppliedDeliveryNote)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      if (suppliedNote) return res.redirect(`${base}/orders/${encodeURIComponent(job.id)}/delivery-notes/${encodeURIComponent(suppliedNote.id)}`);
       if (!job.completed) return res.status(409).json({ error: "Complete production before printing the delivery note" });
       if (!customer.logoUrl) return res.status(409).json({ error: "Add Abode's logo on the Customers page before printing a branded delivery note" });
       const items = await storage.getJobLineItems(job.id);
@@ -144,6 +155,59 @@ export function registerAbodeRoutes(app: Express, deps: {
         brand: customer.name, logoUrl: customer.logoUrl, orderNumber: order.orderNumber,
         recipient: order.recipient, items: items.flatMap(item => item.stockingDetails ? [item.stockingDetails] : []),
       }));
+    }));
+    app.post(`${base}/delivery-notes/preview`, auth, wrap(async (req, res, customer) => {
+      const { fileNames } = z.object({ fileNames: z.array(z.string().trim().min(1).max(200)).min(1).max(50) }).parse(req.body);
+      const orders = customer ? await db.select().from(stockingOrders).where(eq(stockingOrders.customerId, customer.id)) : [];
+      const files = orders.length ? (await db.select().from(jobFiles).where(inArray(jobFiles.jobId, orders.map(order => order.jobId)))).filter(isSuppliedDeliveryNote) : [];
+      res.json({ files: fileNames.map(fileName => {
+        const orderNumber = deliveryNoteOrderNumber(fileName);
+        const order = orders.find(order => order.orderNumber === orderNumber);
+        return {
+          fileName, orderNumber, jobId: order?.jobId || null,
+          status: !orderNumber ? "invalid" : order ? "matched" : "not_found",
+          existingCount: order ? files.filter(file => file.jobId === order.jobId).length : 0,
+        };
+      }) });
+    }));
+    app.post(`${base}/delivery-notes`, auth, wrap(async (req, res, customer) => {
+      const { objectKey, fileName, jobId } = z.object({
+        objectKey: z.string().regex(/^\/objects\/uploads\/[0-9a-f-]{36}$/i),
+        fileName: z.string().trim().min(1).max(200), jobId: z.string().min(1).max(100),
+      }).parse(req.body);
+      const { order, job } = await owned(jobId, customer);
+      if (deliveryNoteOrderNumber(fileName) !== order.orderNumber) {
+        return res.status(400).json({ error: "The PDF filename does not match this order number. Nothing has been attached." });
+      }
+      const svc = new ObjectStorageService();
+      const file = await svc.getObjectEntityFile(objectKey);
+      const [metadata] = await file.getMetadata();
+      const size = Number(metadata.size);
+      if (metadata.contentType !== "application/pdf" || !Number.isFinite(size) || size <= 0 || size > MAX_DELIVERY_NOTE_BYTES) {
+        return res.status(400).json({ error: "Choose a PDF delivery note up to 10 MB" });
+      }
+      const [signature] = await file.download({ start: 0, end: 7 });
+      if (!hasPdfSignature(signature)) return res.status(400).json({ error: "This file is not a PDF delivery note" });
+      const note = await storage.createJobFile({
+        jobId: job.id, fileName: `${DELIVERY_NOTE_PREFIX}${fileName}`, fileUrl: objectKey,
+        fileSize: size, fileType: "application/pdf", uploadedBy: customerMode ? "customer" : "staff",
+        uploaderId: customerMode ? req.session.impersonationCustomerUserId || req.session.customerUserId : req.session.userId,
+      });
+      res.json({ id: note.id, success: true, orderNumber: order.orderNumber });
+    }));
+    app.get(`${base}/orders/:id/delivery-notes/:noteId`, auth, wrap(async (req, res, customer) => {
+      const { job } = await owned(req.params.id, customer);
+      const note = (await storage.getJobFiles(job.id)).find(file => file.id === req.params.noteId && isSuppliedDeliveryNote(file));
+      if (!note) return res.status(404).json({ error: "Delivery note not found" });
+      const svc = new ObjectStorageService();
+      const file = await svc.getObjectEntityFile(note.fileUrl);
+      const [metadata] = await file.getMetadata();
+      res.set({
+        "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "frame-ancestors 'self'; base-uri 'none'; form-action 'none'",
+        "Cache-Control": "private, no-store", "Content-Type": "application/pdf", "Content-Length": String(metadata.size),
+        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(note.fileName.slice(DELIVERY_NOTE_PREFIX.length)).replace(/'/g, "%27")}`,
+      });
+      await pipeline(file.createReadStream(), res);
     }));
     app.get(`${base}/orders/:id/photos/:photoId`, auth, wrap(async (req, res, customer) => {
       const { job } = await owned(req.params.id, customer);
