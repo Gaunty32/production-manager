@@ -22,9 +22,9 @@ your code. Symptoms differ by client: an old `fetch` with no error path **hangs*
 shows a generic **"Failed to upload" toast** (staff chat).
 
 ## The fix / the pattern to always use
-**Never proxy file bytes through the server. Upload the browser → object storage
-directly via a presigned PUT URL.** This bypasses Cloud Run entirely and supports
-large files. This pattern is the norm across this codebase (profile pics,
+**Default to browser → object storage directly via a presigned PUT URL;
+never proxy unbounded or large uploads through the server.** This bypasses Cloud Run entirely and supports
+large files. The bounded Abode PDF exception is described below. Direct upload is the norm across this codebase (profile pics,
 `StaffJobFileUpload.tsx`, samples):
 
 1. `POST /api/customer-portal/objects/upload` → `{ url, key }`
@@ -35,9 +35,27 @@ large files. This pattern is the norm across this codebase (profile pics,
 3. Persist/normalize the returned `key` (`/objects/...`). For inline display it's
    converted to `/api/img/...` (strip `/objects` prefix).
 
-**Why:** direct-to-GCS has no ~32MB ceiling and CORS works fine on Replit buckets
-(this pattern is already live in production here). Old code comments claiming
-"upload through server to avoid CORS issues" are misleading — direct PUT works.
+**Why:** direct-to-GCS has no ~32MB ceiling and is already used in production.
+Do not assume every “Failed to fetch” is a bucket CORS problem: a browser or its
+network can fail to reach storage even when signed URL creation, a separate
+preflight, and a separate storage PUT all succeed.
+
+## Bounded Abode delivery-note exception
+
+For Abode's PDF delivery notes only, a same-origin backup after direct-upload
+failure is acceptable, with a hard **10 MB per request** ceiling enforced on
+both client and server. Never increase this fallback to the platform ceiling or
+reuse it for the app's general large-file uploads.
+
+**Why:** A live batch failed in the browser after every signed upload URL was
+issued successfully, before any note was saved. Separate storage connectivity
+checks passed; the precise browser/network cause was not established. These
+small PDFs need an upload path that does not require the browser to reach the
+external storage host, and 10 MB stays safely below Cloud Run's request ceiling.
+
+**How to apply:** Retain direct upload as the first choice and use the bounded
+backup only for these PDFs. Preserve filename-to-order ownership checks and
+reuse the saved object key when retrying attachment persistence.
 
 ## Gotchas
 - `apiRequest` throws on non-2xx, so it can't surface a 401 for session-expiry.

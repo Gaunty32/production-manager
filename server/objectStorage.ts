@@ -183,6 +183,20 @@ export class ObjectStorageService {
     return { url, key };
   }
 
+  // A strictly bounded alternative for small documents when the browser cannot
+  // reach the storage host. Never use this for large-file uploads.
+  async saveSmallObject(bytes: Buffer, contentType: string): Promise<string> {
+    if (!bytes.length || bytes.length > 10 * 1024 * 1024) {
+      throw new Error("Small-file uploads must be between 1 byte and 10 MB");
+    }
+    const objectId = randomUUID();
+    const { bucketName, objectName } = parseObjectPath(`${this.getPrivateObjectDir().replace(/\/$/, "")}/uploads/${objectId}`);
+    await objectStorageClient.bucket(bucketName).file(objectName).save(bytes, {
+      contentType, resumable: false,
+    });
+    return `/objects/uploads/${objectId}`;
+  }
+
   // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {

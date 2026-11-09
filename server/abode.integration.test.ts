@@ -23,6 +23,14 @@ test("import → completion threshold → dispatch → draft billing with safe r
   const originalConfigured = dpdService.isConfigured;
   const originalBook = dpdService.createShipment;
   const originalObjectFile = ObjectStorageService.prototype.getObjectEntityFile;
+  const originalSmallObject = ObjectStorageService.prototype.saveSmallObject;
+  let backupUploads = 0;
+  ObjectStorageService.prototype.saveSmallObject = async (bytes, contentType) => {
+    assert.ok(bytes.subarray(0, 5).equals(Buffer.from("%PDF-")));
+    assert.equal(contentType, "application/pdf");
+    backupUploads++;
+    return `/objects/uploads/${randomUUID()}`;
+  };
   const originalCustomerUser = storage.getCustomerUserById;
   const originalCustomer = storage.getCustomer;
   const photoBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8R8AAAAASUVORK5CYII=", "base64");
@@ -143,6 +151,24 @@ test("import → completion threshold → dispatch → draft billing with safe r
     photoType = "application/pdf";
     assert.equal((await request("/delivery-notes", notePayload)).status, 400, "PDF metadata without a PDF header must be rejected");
     objectBytes = Buffer.from("%PDF-1.7\nOriginal first page\nOriginal second page\n%%EOF");
+    const backupUpload = (staff: boolean, overrides: Record<string, string> = {}, body: Buffer = objectBytes) => fetch(
+      `${base}${staff ? "/api/abode" : "/api/customer-portal/abode"}/delivery-notes/upload`, {
+        method: "POST", body, headers: {
+          "content-type": "application/pdf", [staff ? "x-test-staff" : "x-test-customer"]: "yes",
+          "x-file-name": encodeURIComponent(notePayload.fileName), "x-job-id": dpd.id, ...overrides,
+        },
+      },
+    );
+    assert.equal((await backupUpload(true, { "x-job-id": royal.id })).status, 400);
+    assert.equal((await backupUpload(false, {}, Buffer.from("<html>not a PDF"))).status, 400);
+    assert.equal(backupUploads, 0, "Invalid/mismatched uploads must not write storage");
+    assert.equal((await backupUpload(true)).status, 200);
+    const customerBackup = await backupUpload(false);
+    assert.equal(customerBackup.status, 200);
+    assert.match((await customerBackup.json()).key, /^\/objects\/uploads\//);
+    assert.equal(backupUploads, 2, "Both roles can upload using the bounded backup");
+    assert.equal((await backupUpload(true, {}, Buffer.alloc(10 * 1024 * 1024 + 1))).status, 413);
+    assert.equal(backupUploads, 2, "Oversized uploads must not write storage");
     const staffNote = await (await request("/delivery-notes", notePayload)).json();
     assert.ok(staffNote.id);
     assert.equal((await (await request("/delivery-notes", notePayload)).json()).id, staffNote.id);
@@ -216,6 +242,7 @@ test("import → completion threshold → dispatch → draft billing with safe r
     dpdService.isConfigured = originalConfigured;
     dpdService.createShipment = originalBook;
     ObjectStorageService.prototype.getObjectEntityFile = originalObjectFile;
+    ObjectStorageService.prototype.saveSmallObject = originalSmallObject;
     storage.getCustomerUserById = originalCustomerUser;
     storage.getCustomer = originalCustomer;
     await new Promise<void>(resolve => server.close(() => resolve()));

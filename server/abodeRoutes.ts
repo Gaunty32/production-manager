@@ -1,4 +1,4 @@
-import type { Express, RequestHandler } from "express";
+import { raw, type Express, type RequestHandler } from "express";
 import { randomBytes } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -18,6 +18,16 @@ import { DELIVERY_NOTE_PREFIX, MAX_DELIVERY_NOTE_BYTES, deliveryNoteOrderNumber,
 
 type CompletionGuard = (req: any, jobId: string, item?: any) => Promise<string | null>;
 const editable = (status: string) => ["pending", "ready", "draft"].includes(status);
+const pdfBodyParser = raw({ type: "application/pdf", limit: MAX_DELIVERY_NOTE_BYTES });
+const readDeliveryNotePdf: RequestHandler = (req, res, next) => {
+  pdfBodyParser(req, res, error => {
+    if (error) {
+      res.status(error.status === 413 ? 413 : 400).json({ error: "Choose a valid PDF delivery note up to 10 MB" });
+      return;
+    }
+    next();
+  });
+};
 export function registerAbodeRoutes(app: Express, deps: {
   staffAuth: RequestHandler; customerAuth: RequestHandler; completionGuard: CompletionGuard;
 }) {
@@ -160,6 +170,20 @@ export function registerAbodeRoutes(app: Express, deps: {
           existingCount: order ? files.filter(file => file.jobId === order.jobId).length : 0,
         };
       }) });
+    }));
+    app.post(`${base}/delivery-notes/upload`, auth, readDeliveryNotePdf, wrap(async (req, res, customer) => {
+      const { fileName, jobId } = z.object({
+        fileName: z.string().trim().min(1).max(200), jobId: z.string().min(1).max(100),
+      }).parse({ fileName: decodeURIComponent(req.get("x-file-name") || ""), jobId: req.get("x-job-id") });
+      const { order } = await owned(jobId, customer);
+      if (deliveryNoteOrderNumber(fileName) !== order.orderNumber) {
+        return res.status(400).json({ error: "The PDF filename does not match this order number. Nothing has been attached." });
+      }
+      if (!Buffer.isBuffer(req.body) || !req.body.length || req.body.length > MAX_DELIVERY_NOTE_BYTES || !hasPdfSignature(req.body)) {
+        return res.status(400).json({ error: "Choose a valid PDF delivery note up to 10 MB" });
+      }
+      const key = await new ObjectStorageService().saveSmallObject(req.body, "application/pdf");
+      res.json({ key });
     }));
     app.post(`${base}/delivery-notes`, auth, wrap(async (req, res, customer) => {
       const { objectKey, fileName, jobId } = z.object({

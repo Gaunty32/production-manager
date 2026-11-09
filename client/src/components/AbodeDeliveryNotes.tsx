@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, ExternalLink, FileText, Loader2, Printer, Up
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { uploadAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
 
 export type AbodeDeliveryNote = {
   id: string;
@@ -135,16 +136,7 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
       try {
         let objectKey = row.objectKey;
         if (!objectKey) {
-          const uploadBase = isStaff ? "/api/staff/objects/upload" : "/api/customer-portal/objects/upload";
-          const signedResponse = await apiRequest("POST", uploadBase, {});
-          const { url, key } = await signedResponse.json() as { url: string; key: string };
-          if (!url || !key) throw new Error("Upload could not be prepared.");
-          const putResponse = await fetch(url, {
-            method: "PUT",
-            body: row.file,
-            headers: { "Content-Type": "application/pdf" },
-          });
-          if (!putResponse.ok) throw new Error("The PDF could not be uploaded. Please try again.");
+          const key = await uploadAbodeDeliveryNote(row.file, { baseUrl, isStaff, jobId: row.jobId! });
           objectKey = key;
           setRows((current) => current.map((item) => item.file === row.file ? { ...item, objectKey: key } : item));
         }
