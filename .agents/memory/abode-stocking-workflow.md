@@ -31,7 +31,13 @@ Staff should be able to attach finished-item photos to an Abode order for the cu
 
 **Why:** The user requested a picture of the finished item on the order card for customer reference.
 
-**How to apply:** Keep photos visible against the matching order in both staff and customer views; customer access is read-only. Photos are optional reference material, not a production-completion or dispatch requirement.
+**How to apply:** Keep final photos separate from digital samples, linked to the matching individual stocking in both staff and customer views; customer access is read-only. Keep older order-level photos visible. Photos are optional reference material, not a production-completion or dispatch requirement.
+
+Digital samples need customer approval for each individual stocking before production, not a single approval for the whole order. A customer can request changes; a revised sample needs fresh approval.
+
+**Why:** The user requested: “upload our digital sample for each of these for the customer to approve, once approved we will process and despatch and upload a picture of the final produced stocking”, then chose “Each stocking”.
+
+**How to apply:** Preserve version/decision history and customer notes. Only the customer using their own login can approve; staff impersonation is read-only for decisions. Gate generic production/completion paths as well as the Abode screen, and never reuse an old revision's approval. Already completed historical stockings without samples are not retroactively put on hold, since they were produced before this requirement.
 
 Abode supplies its own delivery-note PDFs for staff to print and enclose; either staff or the customer may upload them, and the filename identifies the order.
 

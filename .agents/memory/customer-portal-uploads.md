@@ -40,9 +40,9 @@ Do not assume every “Failed to fetch” is a bucket CORS problem: a browser or
 network can fail to reach storage even when signed URL creation, a separate
 preflight, and a separate storage PUT all succeed.
 
-## Bounded Abode delivery-note exception
+## Bounded Abode reference-file exception
 
-For Abode's PDF delivery notes only, a same-origin backup after direct-upload
+For Abode's small reference files (PDF delivery notes, digital samples and finished photos), a same-origin backup after direct-upload
 failure is acceptable, with a hard **10 MB per request** ceiling enforced on
 both client and server. Never increase this fallback to the platform ceiling or
 reuse it for the app's general large-file uploads.
@@ -54,7 +54,7 @@ small PDFs need an upload path that does not require the browser to reach the
 external storage host, and 10 MB stays safely below Cloud Run's request ceiling.
 
 **How to apply:** Retain direct upload as the first choice and use the bounded
-backup only for these PDFs. Preserve filename-to-order ownership checks and
+backup only for these small Abode reference files. Preserve order/stocking ownership checks and
 reuse the saved object key when retrying attachment persistence.
 
 ## Gotchas

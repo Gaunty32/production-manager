@@ -1,12 +1,14 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "./db";
-import { jobs, jobLineItems, stockingOrders, stockingProduction, type JobLineItem } from "@shared/schema";
+import { jobs, jobLineItems, stockingOrders, stockingProduction, productionEntries, type JobLineItem, type InsertProductionEntry } from "@shared/schema";
 import { stockingRate } from "@shared/abode";
+import { latestStockingSample, requireStockingSampleApproval } from "./abodeSamples";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export async function priceCompletedStocking(tx: Tx, item: JobLineItem, customerId: string): Promise<number> {
   // Every completion path shares this database lock, including normal queues.
   await tx.execute(sql`SELECT pg_advisory_xact_lock(71024002)`);
+  if (!item.completed) await requireStockingSampleApproval(tx, item.id);
   const [prior] = await tx.select().from(stockingProduction).where(eq(stockingProduction.lineItemId, item.id));
   if (prior) return prior.unitPrice;
   const [total] = await tx.select({ count: sql<number>`count(*)::int` }).from(stockingProduction)
@@ -28,17 +30,31 @@ export async function updateStockingLine(id: string, updates: Partial<JobLineIte
     const [job] = await tx.select().from(jobs).where(eq(jobs.id, item.jobId));
     if (!["pending", "ready", "draft"].includes(job.invoiceStatus)) throw new Error("Invoiced stocking production cannot be changed");
     const agreedUnitPrice = updates.completed === true ? await priceCompletedStocking(tx, item, order.customerId) : item.agreedUnitPrice;
+    const sample = await latestStockingSample(tx, item.id);
+    const approved = sample ? sample.status === "approved" : item.completed ? item.logoApproved : false;
     // Imported personalisation and agreed prices cannot be overwritten by the
     // generic job editor. The production instructions remain the sheet's text.
     const [saved] = await tx.update(jobLineItems).set({
       ...updates, stockingDetails: item.stockingDetails, description: item.description,
-      agreedUnitPrice,
+      agreedUnitPrice, logoApproved: approved, logoApprovedAt: sample ? (approved ? sample.decidedAt : null) : item.logoApprovedAt,
       ...(updates.completed === true ? {
         completedAt: updates.completedAt ? new Date(updates.completedAt) : item.completedAt || new Date(),
       } : updates.completed === false ? { completedAt: null } : {}),
-      ...(updates.logoApproved === true ? { logoApprovedAt: item.logoApprovedAt || new Date() } : {}),
-      ...(updates.logoApproved === false ? { logoApprovedAt: null } : {}),
     }).where(eq(jobLineItems.id, id)).returning();
+    return saved;
+  });
+}
+
+export async function recordStockingProductionEntry(entry: InsertProductionEntry) {
+  const [existing] = await db.select().from(jobLineItems).where(eq(jobLineItems.id, entry.lineItemId));
+  if (!existing?.stockingDetails) return null;
+  return db.transaction(async tx => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(71024002)`);
+    const [item] = await tx.select().from(jobLineItems).where(eq(jobLineItems.id, entry.lineItemId)).for("update");
+    await requireStockingSampleApproval(tx, item.id);
+    const [recorded] = await tx.select({ total: sql<number>`coalesce(sum(quantity_completed),0)::int` }).from(productionEntries).where(eq(productionEntries.lineItemId, item.id));
+    if (item.completed || recorded.total + entry.quantityCompleted > item.quantity) throw new Error("This stocking's production has already been recorded");
+    const [saved] = await tx.insert(productionEntries).values({ ...entry, workDate: new Date(entry.workDate) }).returning();
     return saved;
   });
 }

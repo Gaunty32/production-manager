@@ -1,4 +1,4 @@
-import { completeStockingOrder, updateStockingLine } from "./abodeProduction";
+import { completeStockingOrder, updateStockingLine, recordStockingProductionEntry } from "./abodeProduction";
 import { 
   customers, 
   jobs, 
@@ -1036,6 +1036,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProductionEntry(entry: InsertProductionEntry): Promise<ProductionEntry> {
+    const stockingEntry = await recordStockingProductionEntry(entry);
+    if (stockingEntry) return stockingEntry;
     const [created] = await db.insert(productionEntries).values({
       ...entry,
       workDate: new Date(entry.workDate),

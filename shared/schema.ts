@@ -267,6 +267,24 @@ export const stockingProduction = pgTable("stocking_production", {
   completedAt: timestamp("completed_at").notNull().defaultNow(),
 });
 
+// Each revision is immutable; approval applies only to the latest version of
+// one personalised stocking, never to another stocking in the same order.
+export const stockingSamples = pgTable("stocking_samples", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  lineItemId: varchar("line_item_id").notNull().references(() => jobLineItems.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  fileName: text("file_name").notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileType: varchar("file_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  status: varchar("status").notNull().default("pending_approval"),
+  customerNotes: text("customer_notes"),
+  uploadedById: varchar("uploaded_by_id").notNull(),
+  decidedByCustomerUserId: varchar("decided_by_customer_user_id"),
+  decidedAt: timestamp("decided_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, table => [uniqueIndex("stocking_sample_version_unique").on(table.lineItemId, table.version)]);
+
 // Production entries for tracking partial daily work on line items
 export const productionEntries = pgTable("production_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -433,6 +451,7 @@ export const jobMessages = pgTable("job_messages", {
 export const jobFiles = pgTable("job_files", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  lineItemId: varchar("line_item_id").references(() => jobLineItems.id, { onDelete: "set null" }),
   fileName: varchar("file_name").notNull(),
   fileUrl: varchar("file_url").notNull(),
   fileSize: integer("file_size").notNull(),

@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AbodeFinishedPhotos, type AbodeFinishedPhoto } from "@/components/AbodeFinishedPhotos";
+import { AbodeStockingSample, type AbodeDigitalSample } from "@/components/AbodeStockingSample";
 import { AbodeDeliveryNotes, AbodeOrderDeliveryNotes, type AbodeDeliveryNote } from "@/components/AbodeDeliveryNotes";
 
 type StockingItem = {
@@ -20,6 +21,7 @@ type StockingItem = {
   description: string;
   stockingDetails: { colour: string; font: string; thread: string; name: string };
   agreedUnitPrice: number | null;
+  digitalSamples?: AbodeDigitalSample[];
 };
 type StockingOrder = {
   id: string;
@@ -28,6 +30,7 @@ type StockingOrder = {
   jobName: string;
   completed: boolean;
   invoiceStatus: string;
+  sampleApprovalReady: boolean;
   dhlTrackingNumber: string | null;
   shippingCost: string | null;
   dispatchEmailQueuedAt: string | null;
@@ -44,6 +47,7 @@ type StockingsData = {
   customer: { id: string; name: string; logoUrl: string | null };
   completedCount: number;
   currentRate: number;
+  canApproveSamples: boolean;
   orders: StockingOrder[];
 };
 type PreviewData = {
@@ -85,6 +89,7 @@ export default function AbodeStockings() {
     queryKey,
     enabled: true,
     staleTime: 0,
+    refetchInterval: 30_000,
   });
 
   const refresh = () => {
@@ -218,7 +223,7 @@ export default function AbodeStockings() {
 
         <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric label="Open orders" value={String(orders.length)} note={`${totalStockings} stockings`} />
-          <Metric label="In work" value={String(inWorkCount)} note="Personalisation underway" />
+          <Metric label="Outstanding" value={String(inWorkCount)} note={`${orders.filter(order => !order.completed && !order.sampleApprovalReady).length} awaiting sample approval`} />
           <Metric label="Ready to dispatch" value={String(readyCount)} note="Production complete" />
           <Metric label="Dispatched" value={String(dispatchedCount)} note={`${data.completedCount} stockings completed`} />
         </section>
@@ -313,7 +318,7 @@ export default function AbodeStockings() {
           </div>
           {shownOrders.length === 0 ? <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center"><PackageCheck className="mx-auto h-8 w-8 text-stone-400" /><h3 className="mt-3 font-semibold">{orders.length ? "No orders match this view" : "Your order register is clear"}</h3><p className="mt-1 text-sm text-stone-500">{orders.length ? "Try another filter or search term." : "Import an order sheet above to start tracking fulfilment."}</p></div> : <div className="space-y-3">
             {shownOrders.map((order) => {
-              const state = order.dhlTrackingNumber ? "dispatched" : order.completed ? "ready" : "in-work";
+              const state = order.dhlTrackingNumber ? "dispatched" : order.completed ? "ready" : !order.sampleApprovalReady ? "approval" : "in-work";
               const count = order.items.reduce((sum, item) => sum + item.quantity, 0);
               const estimated = order.items.reduce((sum, item) => sum + item.quantity * (item.agreedUnitPrice ?? data.currentRate), 0);
               return <Card key={order.id} className="overflow-hidden border-stone-200 bg-white shadow-sm">
@@ -324,7 +329,7 @@ export default function AbodeStockings() {
                       <p className="mt-1 text-sm text-stone-600">{count} personalised stocking{count === 1 ? "" : "s"} <span className="px-1 text-stone-300">/</span> estimated {MONEY(estimated)} + {MONEY(5.5)} carriage excl. VAT</p>
                     </div>
                     {isStaff && <div className="flex flex-wrap gap-2">
-                      {!order.completed && <Button size="sm" onClick={() => { setActiveOrder(order); setDialog("complete"); }}><Check className="mr-1.5 h-4 w-4" />Complete work</Button>}
+                      {!order.completed && <Button size="sm" disabled={!order.sampleApprovalReady} title={!order.sampleApprovalReady ? "Every stocking awaiting approval needs its latest digital sample approved first." : undefined} onClick={() => { setActiveOrder(order); setDialog("complete"); }}><Check className="mr-1.5 h-4 w-4" />Complete work</Button>}
                       {order.completed && !order.dhlTrackingNumber && order.shippingRoute === "dpd" && order.shipmentState !== "booking" && order.shipmentState !== "review" && <Button size="sm" onClick={() => { setActiveOrder(order); setWeight(""); setDialog("book"); }}><Truck className="mr-1.5 h-4 w-4" />Book DPD</Button>}
                       {order.completed && !order.dhlTrackingNumber && order.shippingRoute === "royal_mail" && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setDialog("royal-mail"); }}><Send className="mr-1.5 h-4 w-4" />Add tracking</Button>}
                       {(order.shipmentState === "review" || order.shipmentState === "booking") && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setTrackingNumber(""); setDialog("recover"); }}><ShieldAlert className="mr-1.5 h-4 w-4" />Recover booking</Button>}
@@ -332,14 +337,41 @@ export default function AbodeStockings() {
                     </div>}
                     {!isStaff && Boolean(order.deliveryNotes?.length) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Delivery note PDF</Button>}
                   </div>
+                  {isStaff && !order.completed && !order.sampleApprovalReady && <div role="status" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-950 md:px-5">
+                    <p className="font-semibold">Production completion is waiting on individual sample approvals.</p>
+                    <p className="mt-0.5">Each stocking that needs approval must have its latest digital sample approved by the customer before this order can be completed. Staff cannot approve on their behalf.</p>
+                  </div>}
                   <div className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_240px] md:px-5">
                     <div className="space-y-2">
-                      {order.items.map((item) => <div key={item.id} className="grid grid-cols-[1fr_auto] gap-3 rounded-lg bg-[#f8f6f2] p-3 sm:grid-cols-[minmax(120px,1fr)_repeat(3,minmax(90px,0.8fr))_auto]">
+                      {order.items.map((item) => <div key={item.id}>
+                        <div className="grid grid-cols-[1fr_auto] gap-3 rounded-lg bg-[#f8f6f2] p-3 sm:grid-cols-[minmax(120px,1fr)_repeat(3,minmax(90px,0.8fr))_auto]">
                         <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Name on stocking</p><p className="mt-1 whitespace-pre-wrap break-words text-lg font-semibold leading-tight">{item.stockingDetails.name || "Name not provided"}</p><p className="mt-1 text-xs text-stone-500">{item.quantity} piece{item.quantity === 1 ? "" : "s"}</p></div>
                         <Spec label="Colour" value={item.stockingDetails.colour} />
                         <Spec label="Font" value={item.stockingDetails.font} />
                         <Spec label="Thread" value={item.stockingDetails.thread} />
                         <div className="col-span-2 self-start text-right sm:col-span-1"><span className={`inline-flex items-center gap-1 text-xs font-medium ${item.completed ? "text-emerald-800" : "text-stone-500"}`}>{item.completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}{item.completed ? "Done" : "In work"}</span></div>
+                        </div>
+                        <AbodeStockingSample
+                          jobId={order.id}
+                          itemId={item.id}
+                          name={item.stockingDetails.name}
+                          font={item.stockingDetails.font}
+                          colour={item.stockingDetails.colour}
+                          thread={item.stockingDetails.thread}
+                          samples={item.digitalSamples}
+                          isStaff={isStaff}
+                          canApprove={!isStaff && data.canApproveSamples === true}
+                          canUpload={isStaff && !item.completed && !order.completed && !order.dhlTrackingNumber && !/^(invoiced|invoice[_ -]?sent|sent|paid|issued)$/i.test(order.invoiceStatus || "")}
+                          onChanged={refresh}
+                        />
+                        <AbodeFinishedPhotos
+                          jobId={order.id}
+                          photos={order.finishedPhotos}
+                          isStaff={isStaff}
+                          lineItemId={item.id}
+                          canUpload={isStaff && item.completed}
+                          onChanged={refresh}
+                        />
                       </div>)}
                     </div>
                     <div className="rounded-lg border border-stone-200 p-3">
@@ -355,6 +387,8 @@ export default function AbodeStockings() {
                     jobId={order.id}
                     photos={order.finishedPhotos}
                     isStaff={isStaff}
+                    lineItemId={null}
+                    canUpload={false}
                     onChanged={refresh}
                   />
                   <AbodeOrderDeliveryNotes notes={order.deliveryNotes} />
@@ -367,7 +401,7 @@ export default function AbodeStockings() {
       </div>
 
       <Dialog open={dialog === "complete"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Confirm production is complete</DialogTitle><DialogDescription>This will mark every remaining stocking on <strong>{activeOrder?.jobName}</strong> as complete. Confirm the pieces have been checked and finished before proceeding.</DialogDescription></DialogHeader><div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><AlertCircle className="mr-2 inline h-4 w-4" />This is a production confirmation, not a dispatch action.</div><DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Go back</Button><Button disabled={operationMutation.isPending} onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "complete", payload: {} })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm completion</Button></DialogFooter></DialogContent>
+        <DialogContent><DialogHeader><DialogTitle>Confirm production is complete</DialogTitle><DialogDescription>This will mark every remaining stocking on <strong>{activeOrder?.jobName}</strong> as complete. Confirm the pieces have been checked and finished before proceeding.</DialogDescription></DialogHeader><div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><AlertCircle className="mr-2 inline h-4 w-4" />This is a production confirmation, not a dispatch action.</div>{activeOrder && !activeOrder.sampleApprovalReady && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Every stocking awaiting approval needs its latest digital sample approved by the customer first.</p>}<DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Go back</Button><Button disabled={operationMutation.isPending || !activeOrder?.sampleApprovalReady} onClick={() => activeOrder?.sampleApprovalReady && operationMutation.mutate({ order: activeOrder, action: "complete", payload: {} })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm completion</Button></DialogFooter></DialogContent>
       </Dialog>
       <Dialog open={dialog === "book"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
@@ -405,7 +439,7 @@ function Metric({ label, value, note }: { label: string; value: string; note: st
 function Spec({ label, value }: { label: string; value: string }) {
   return <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p><p className="mt-1 break-words text-sm font-medium leading-5 text-stone-800">{value || "—"}</p></div>;
 }
-function StatusPill({ status }: { status: "in-work" | "ready" | "dispatched" }) {
-  const config = status === "dispatched" ? ["bg-emerald-100 text-emerald-900", "Dispatched"] : status === "ready" ? ["bg-[#f5e8d6] text-[#71482e]", "Ready for dispatch"] : ["bg-stone-100 text-stone-700", "In work"];
+function StatusPill({ status }: { status: "in-work" | "ready" | "dispatched" | "approval" }) {
+  const config = status === "dispatched" ? ["bg-emerald-100 text-emerald-900", "Dispatched"] : status === "ready" ? ["bg-[#f5e8d6] text-[#71482e]", "Ready for dispatch"] : status === "approval" ? ["bg-amber-100 text-amber-950", "Awaiting sample approval"] : ["bg-stone-100 text-stone-700", "In work"];
   return <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${config[0]}`}>{config[1]}</span>;
 }

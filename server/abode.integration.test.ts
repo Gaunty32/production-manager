@@ -8,7 +8,7 @@ import type { AddressInfo } from "node:net";
 import express from "express";
 import { eq, sql } from "drizzle-orm";
 import { db, pool } from "./db";
-import { customers, jobs, stockingOrders, stockingProduction } from "@shared/schema";
+import { customers, jobs, stockingOrders, stockingProduction, stockingSamples } from "@shared/schema";
 import { storage } from "./storage";
 import { registerAbodeRoutes } from "./abodeRoutes";
 import { dpdService } from "./dpd";
@@ -26,8 +26,8 @@ test("import → completion threshold → dispatch → draft billing with safe r
   const originalSmallObject = ObjectStorageService.prototype.saveSmallObject;
   let backupUploads = 0;
   ObjectStorageService.prototype.saveSmallObject = async (bytes, contentType) => {
-    assert.ok(bytes.subarray(0, 5).equals(Buffer.from("%PDF-")));
-    assert.equal(contentType, "application/pdf");
+    assert.ok(contentType === "image/png" || contentType === "application/pdf");
+    if (contentType === "application/pdf") assert.ok(bytes.subarray(0, 5).equals(Buffer.from("%PDF-")));
     backupUploads++;
     return `/objects/uploads/${randomUUID()}`;
   };
@@ -194,6 +194,58 @@ test("import → completion threshold → dispatch → draft billing with safe r
     assert.equal(afterNotesPreview.files[0].existingCount, 2);
     objectBytes = photoBytes;
     photoType = "image/png";
+    // Every personalised stocking needs its own current-version sign-off.
+    assert.equal((await request(`/orders/${dpd.id}/complete`, {})).status, 400);
+    await assert.rejects(() => storage.updateJob(dpd.id, { completed: true }), /customer must approve/);
+    await assert.rejects(() => storage.updateJobLineItem(dpd.items[0].id, { completed: true, logoApproved: true }), /customer must approve/);
+    const manualApproval = await storage.updateJobLineItem(dpd.items[0].id, { logoApproved: true });
+    assert.equal(manualApproval.logoApproved, false, "Staff cannot bypass customer approval with the generic logo checkbox");
+    await assert.rejects(() => storage.createProductionEntry({
+      lineItemId: dpd.items[0].id, staffId: randomUUID(), quantityCompleted: 1,
+      productionTimeMinutes: 1, workDate: new Date(),
+    }), /customer must approve/);
+    const samplePath = (item: any) => `/orders/${item.jobId}/items/${item.id}/samples`;
+    const saveSample = async (item: any) => {
+      const response = await request(samplePath(item), { objectKey: `/objects/uploads/${randomUUID()}`, fileName: "digital-proof.png" });
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    const firstProof = await saveSample(dpd.items[0]);
+    const firstReview = `${samplePath(dpd.items[0])}/${firstProof.id}/decision`;
+    assert.equal((await request(firstReview, { decision: "approved" })).status, 404, "Staff cannot approve on the customer's behalf");
+    assert.equal((await customerRequest(samplePath(dpd.items[0]), {})).status, 404, "Customers cannot create staff digital samples");
+    assert.equal((await customerRequest(`/orders/${royal.id}/items/${dpd.items[0].id}/samples/${firstProof.id}/decision`, { decision: "approved" })).status, 400);
+    const proofImage = await customerRequest(`${samplePath(dpd.items[0])}/${firstProof.id}/file`);
+    assert.equal(proofImage.status, 200);
+    assert.deepEqual(Buffer.from(await proofImage.arrayBuffer()), photoBytes);
+    assert.equal((await customerRequest(firstReview, { decision: "approved" })).status, 200);
+    assert.equal((await customerRequest(firstReview, { decision: "approved" })).status, 200, "Approval retry is idempotent");
+    assert.equal((await request(`/orders/${dpd.id}/complete`, {})).status, 400, "Approving one stocking must not approve the whole order");
+    const newProof = await saveSample(dpd.items[0]);
+    assert.equal(newProof.version, 2);
+    assert.equal((await customerRequest(firstReview, { decision: "approved" })).status, 400, "An old sample cannot approve a revised design");
+    assert.equal((await storage.getJobLineItem(dpd.items[0].id))?.logoApproved, false);
+    const newReview = `${samplePath(dpd.items[0])}/${newProof.id}/decision`;
+    assert.equal((await customerRequest(newReview, { decision: "amends_required", notes: "" })).status, 400);
+    assert.equal((await customerRequest(newReview, { decision: "amends_required", notes: "Please use gold thread" })).status, 200);
+    assert.equal((await customerRequest(newReview, { decision: "approved" })).status, 400, "A requested amendment needs a revised sample, not a changed historical decision");
+    const revision = await saveSample(dpd.items[0]);
+    assert.equal(revision.version, 3);
+    assert.equal((await customerRequest(`${samplePath(dpd.items[0])}/${revision.id}/decision`, { decision: "approved" })).status, 200);
+    for (const item of [...dpd.items.slice(1), ...royal.items]) {
+      const proof = await saveSample(item);
+      assert.equal((await customerRequest(`${samplePath(item)}/${proof.id}/decision`, { decision: "approved" })).status, 200);
+    }
+    const approvedContext = await (await customerRequest("")).json();
+    assert.equal(approvedContext.canApproveSamples, true);
+    assert.equal(approvedContext.orders.find((order: any) => order.id === dpd.id).sampleApprovalReady, true);
+    const revisionHistory = approvedContext.orders.find((order: any) => order.id === dpd.id).items.find((item: any) => item.id === dpd.items[0].id).digitalSamples;
+    assert.deepEqual(revisionHistory.map((sample: any) => sample.status), ["approved", "amends_required", "approved"]);
+    assert.equal(revisionHistory[1].customerNotes, "Please use gold thread");
+    const [approvedRecord] = await db.select().from(stockingSamples).where(eq(stockingSamples.id, revision.id));
+    assert.equal(approvedRecord.decidedByCustomerUserId, id);
+    assert.ok(approvedRecord.decidedAt);
+    assert.equal((await request(`/orders/${dpd.id}/photos`, { ...photoPayload, objectKey: `/objects/uploads/${randomUUID()}`, lineItemId: dpd.items[0].id })).status, 400, "A finished-photo upload must wait for production");
     assert.equal(royal.shippingRoute, "royal_mail");
     assert.equal(dpd.shippingCost, "5.5");
     assert.equal((await request(`/orders/${dpd.id}/book`, { weightGrams: 500 })).status, 409);
@@ -208,6 +260,11 @@ test("import → completion threshold → dispatch → draft billing with safe r
     const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(stockingProduction).where(eq(stockingProduction.customerId, customer.id));
     assert.equal(count.count, 102, "Repeat completion must not count twice");
     assert.equal((await storage.getJob(dpd.id))?.invoiceStatus, "ready");
+    assert.equal((await request(samplePath(dpd.items[0]), { objectKey: `/objects/uploads/${randomUUID()}`, fileName: "late-revision.png" })).status, 400, "Produced stockings cannot silently replace their approved sample");
+    const finalPhoto = await request(`/orders/${dpd.id}/photos`, { ...photoPayload, objectKey: `/objects/uploads/${randomUUID()}`, lineItemId: dpd.items[0].id });
+    assert.equal(finalPhoto.status, 200);
+    const finalPhotoContext = await (await customerRequest("")).json();
+    assert.ok(finalPhotoContext.orders.find((order: any) => order.id === dpd.id).finishedPhotos.some((photo: any) => photo.lineItemId === dpd.items[0].id), "Final photo stays linked to the exact stocking");
     const responses = await Promise.all([request(`/orders/${dpd.id}/book`, { weightGrams: 500 }), request(`/orders/${dpd.id}/book`, { weightGrams: 500 })]);
     assert.deepEqual(responses.map(r => r.status).sort(), [200, 409]);
     assert.equal(bookings, 1);

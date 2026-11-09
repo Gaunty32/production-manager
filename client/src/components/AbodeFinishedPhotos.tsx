@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { uploadAbodeReferenceFile } from "@/lib/abodeReferenceUpload";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -10,12 +11,15 @@ export type AbodeFinishedPhoto = {
   fileName: string;
   fileUrl: string;
   createdAt: string;
+  lineItemId?: string | null;
 };
 
 interface AbodeFinishedPhotosProps {
   jobId: string;
   photos?: AbodeFinishedPhoto[];
   isStaff: boolean;
+  lineItemId?: string | null;
+  canUpload?: boolean;
   onChanged: () => void;
 }
 
@@ -26,14 +30,16 @@ function friendlyError(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
 }
 
-export function AbodeFinishedPhotos({ jobId, photos = [], isStaff, onChanged }: AbodeFinishedPhotosProps) {
+export function AbodeFinishedPhotos({ jobId, photos = [], isStaff, lineItemId, canUpload = true, onChanged }: AbodeFinishedPhotosProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const uploadLock = useRef(false);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<AbodeFinishedPhoto | null>(null);
   const { toast } = useToast();
 
-  if (!isStaff && photos.length === 0) return null;
+  const scopedPhotos = photos.filter((photo) => (photo.lineItemId ?? null) === (lineItemId ?? null));
+  const canAddPhoto = isStaff && canUpload && Boolean(lineItemId);
+  if (!canAddPhoto && scopedPhotos.length === 0) return null;
 
   const uploadPhoto = async (file?: File) => {
     if (!file || uploadLock.current) return;
@@ -50,20 +56,15 @@ export function AbodeFinishedPhotos({ jobId, photos = [], isStaff, onChanged }: 
     setIsUploading(true);
     toast({ title: "Uploading finished photo", description: "Keep this page open while the photo is saved." });
     try {
-      const signedResponse = await apiRequest("POST", "/api/staff/objects/upload", {});
-      const { url, key } = await signedResponse.json() as { url: string; key: string };
-      if (!url || !key) throw new Error("The upload could not be prepared. Please try again.");
-
-      const putResponse = await fetch(url, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
+      const key = await uploadAbodeReferenceFile(file, {
+        fallbackUrl: `/api/abode/orders/${encodeURIComponent(jobId)}/photos/upload`,
+        ...(lineItemId ? { headers: { "x-line-item-id": lineItemId } } : {}),
       });
-      if (!putResponse.ok) throw new Error("The photo could not be uploaded. Please try again.");
 
       await apiRequest("POST", `/api/abode/orders/${encodeURIComponent(jobId)}/photos`, {
         objectKey: key,
         fileName: file.name,
+        ...(lineItemId ? { lineItemId } : {}),
       });
       toast({ title: "Finished photo saved", description: "It is now available on this order for the customer." });
       onChanged();
@@ -85,7 +86,7 @@ export function AbodeFinishedPhotos({ jobId, photos = [], isStaff, onChanged }: 
             {isStaff ? "Keep a visual record of the completed personalisation." : "A look at the finished personalisation for your order."}
           </p>
         </div>
-        {isStaff && (
+        {canAddPhoto && (
           <>
             <input
               ref={inputRef}
@@ -118,9 +119,9 @@ export function AbodeFinishedPhotos({ jobId, photos = [], isStaff, onChanged }: 
         </div>
       )}
 
-      {photos.length > 0 ? (
+      {scopedPhotos.length > 0 ? (
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-          {photos.map((photo) => (
+          {scopedPhotos.map((photo) => (
             <button
               key={photo.id}
               type="button"
@@ -135,7 +136,7 @@ export function AbodeFinishedPhotos({ jobId, photos = [], isStaff, onChanged }: 
             </button>
           ))}
         </div>
-      ) : isStaff ? (
+      ) : canAddPhoto ? (
         <div className="mt-3 flex min-h-20 items-center gap-3 rounded-lg border border-dashed border-stone-300 bg-stone-50/70 px-3 py-3 text-sm text-stone-600">
           <ImagePlus className="h-5 w-5 shrink-0 text-stone-400" />
           <span>No finished photos yet. Add one whenever a piece is ready.</span>

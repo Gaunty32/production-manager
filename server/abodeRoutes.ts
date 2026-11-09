@@ -5,7 +5,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "./db";
 import { storage } from "./storage";
-import { customers, jobs, jobLineItems, jobFiles, stockingOrders, stockingProduction } from "@shared/schema";
+import { customers, jobs, jobLineItems, jobFiles, stockingOrders, stockingProduction, stockingSamples } from "@shared/schema";
 import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate, stockingBagNetworkCode } from "@shared/abode";
 import { parseStockingRows } from "./abodeImport";
 import { completeStockingOrder } from "./abodeProduction";
@@ -15,6 +15,7 @@ import { maybeSendDispatchNotification } from "./customerOrderNotifications";
 import { ObjectStorageService } from "./objectStorage";
 import { FINISHED_PHOTO_PREFIX, FINISHED_PHOTO_TYPES, MAX_FINISHED_PHOTO_BYTES, isFinishedPhoto, photoBytesMatchType } from "./abodePhotos";
 import { DELIVERY_NOTE_PREFIX, MAX_DELIVERY_NOTE_BYTES, deliveryNoteOrderNumber, isSuppliedDeliveryNote, hasPdfSignature } from "./abodeDeliveryNotes";
+import { registerAbodeSampleRoutes, sampleUploadBody, requireStockingDispatchApproval } from "./abodeSamples";
 
 type CompletionGuard = (req: any, jobId: string, item?: any) => Promise<string | null>;
 const editable = (status: string) => ["pending", "ready", "draft"].includes(status);
@@ -62,26 +63,36 @@ export function registerAbodeRoutes(app: Express, deps: {
       if (!order || !job || job.customerId !== customer.id) throw new Error("Order not found");
       return { order, job };
     };
-    app.get(base, auth, wrap(async (_req, res, customer) => {
+    registerAbodeSampleRoutes(app, { base, auth, wrap, owned, customerMode });
+    app.get(base, auth, wrap(async (req, res, customer) => {
       if (!customer) return res.json({ enabled: true, customer: { id: "", name: ABODE_CUSTOMER_NAME, logoUrl: null }, completedCount: 0, currentRate: 7, orders: [] });
       const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(stockingProduction).where(eq(stockingProduction.customerId, customer.id));
       const orders = await db.select({ order: stockingOrders, job: jobs }).from(stockingOrders)
         .innerJoin(jobs, eq(jobs.id, stockingOrders.jobId)).where(eq(stockingOrders.customerId, customer.id)).orderBy(desc(jobs.jobNumber));
       const items = orders.length ? await db.select().from(jobLineItems).where(inArray(jobLineItems.jobId, orders.map(({ job }) => job.id))) : [];
+      const samples = items.length ? await db.select().from(stockingSamples).where(inArray(stockingSamples.lineItemId, items.map(item => item.id))).orderBy(desc(stockingSamples.version)) : [];
       const files = orders.length ? await db.select().from(jobFiles).where(inArray(jobFiles.jobId, orders.map(({ job }) => job.id))).orderBy(desc(jobFiles.createdAt)) : [];
       const photos = files.filter(isFinishedPhoto);
       const deliveryNotes = files.filter(isSuppliedDeliveryNote);
       res.json({
         enabled: true, customer: { id: customer.id, name: customer.name, logoUrl: customer.logoUrl },
+        canApproveSamples: customerMode && !req.session.impersonationStaffUserId && !req.session.impersonationCustomerUserId,
         completedCount: count.count, currentRate: stockingRate(count.count),
         orders: orders.map(({ order, job }) => ({
           ...job, recipient: order.recipient, shippingRoute: order.shippingRoute,
           shipmentState: order.shipmentState, labelAvailable: Boolean(order.labelHtml || order.shipmentId),
-          items: items.filter(item => item.jobId === job.id),
+          sampleApprovalReady: items.filter(item => item.jobId === job.id).every(item => item.completed || samples.find(sample => sample.lineItemId === item.id)?.status === "approved"),
+          items: items.filter(item => item.jobId === job.id).map(item => ({
+            ...item, digitalSamples: samples.filter(sample => sample.lineItemId === item.id).map(sample => ({
+              id: sample.id, version: sample.version, fileName: sample.fileName, fileType: sample.fileType,
+              fileUrl: `${base}/orders/${encodeURIComponent(job.id)}/items/${encodeURIComponent(item.id)}/samples/${encodeURIComponent(sample.id)}/file`,
+              status: sample.status, customerNotes: sample.customerNotes, decidedAt: sample.decidedAt, createdAt: sample.createdAt,
+            })),
+          })),
           finishedPhotos: photos.filter(photo => photo.jobId === job.id).map(photo => ({
             id: photo.id, fileName: photo.fileName.slice(FINISHED_PHOTO_PREFIX.length),
             fileUrl: `${base}/orders/${encodeURIComponent(job.id)}/photos/${encodeURIComponent(photo.id)}`,
-            createdAt: photo.createdAt,
+            createdAt: photo.createdAt, lineItemId: photo.lineItemId,
           })),
           deliveryNotes: deliveryNotes.filter(note => note.jobId === job.id).map(note => ({
             id: note.id, fileName: note.fileName.slice(DELIVERY_NOTE_PREFIX.length),
@@ -239,12 +250,28 @@ export function registerAbodeRoutes(app: Express, deps: {
       await pipeline(file.createReadStream(), res);
     }));
     if (customerMode) continue;
+    const validatePhotoItem = async (jobId: string, lineItemId?: string | null) => {
+      if (!lineItemId) return;
+      const [item] = await db.select().from(jobLineItems).where(and(eq(jobLineItems.id, lineItemId), eq(jobLineItems.jobId, jobId)));
+      if (!item?.stockingDetails) throw new Error("Stocking not found on this order");
+      if (!item.completed) throw new Error("Complete this stocking before uploading its finished-item photo.");
+    };
+    app.post(`${base}/orders/:id/photos/upload`, auth, sampleUploadBody, wrap(async (req, res, customer) => {
+      const { job } = await owned(req.params.id, customer);
+      await validatePhotoItem(job.id, req.get("x-line-item-id"));
+      const type = req.get("content-type")?.split(";")[0] || "";
+      if (!Buffer.isBuffer(req.body) || !req.body.length || req.body.length > MAX_FINISHED_PHOTO_BYTES || !photoBytesMatchType(req.body, type)) {
+        return res.status(400).json({ error: "Choose a valid JPEG, PNG or WebP photo up to 10 MB" });
+      }
+      res.json({ key: await new ObjectStorageService().saveSmallObject(req.body, type) });
+    }));
     app.post(`${base}/orders/:id/photos`, auth, wrap(async (req, res, customer) => {
       const { job } = await owned(req.params.id, customer);
-      const { objectKey, fileName } = z.object({
+      const { objectKey, fileName, lineItemId } = z.object({
         objectKey: z.string().regex(/^\/objects\/uploads\/[0-9a-f-]{36}$/i),
-        fileName: z.string().trim().min(1).max(200),
+        fileName: z.string().trim().min(1).max(200), lineItemId: z.string().min(1).max(100).optional(),
       }).parse(req.body);
+      await validatePhotoItem(job.id, lineItemId);
       const svc = new ObjectStorageService();
       const file = await svc.getObjectEntityFile(objectKey);
       const [metadata] = await file.getMetadata();
@@ -256,7 +283,7 @@ export function registerAbodeRoutes(app: Express, deps: {
       const [signature] = await file.download({ start: 0, end: 11 });
       if (!photoBytesMatchType(signature, type)) return res.status(400).json({ error: "This file is not a supported photo" });
       const photo = await storage.createJobFile({
-        jobId: job.id, fileName: `${FINISHED_PHOTO_PREFIX}${fileName}`, fileUrl: objectKey,
+        jobId: job.id, lineItemId: lineItemId || null, fileName: `${FINISHED_PHOTO_PREFIX}${fileName}`, fileUrl: objectKey,
         fileSize: size, fileType: type, uploadedBy: "staff", uploaderId: req.session.userId,
       });
       res.json({ id: photo.id, success: true });
@@ -281,6 +308,7 @@ export function registerAbodeRoutes(app: Express, deps: {
       const { order, job } = await owned(req.params.id, customer);
       if (order.shippingRoute !== "dpd") return res.status(409).json({ error: "Book this address through Parcel2Go using Royal Mail" });
       if (!job.completed) return res.status(409).json({ error: "Complete production before booking dispatch" });
+      await requireStockingDispatchApproval(job.id);
       if (!editable(job.invoiceStatus)) return res.status(409).json({ error: "This order has already been invoiced" });
       if (job.dhlTrackingNumber) return res.status(409).json({ error: "This order already has tracking. Use its existing label; do not book twice." });
       const { weightGrams } = z.object({ weightGrams: z.coerce.number().int().min(100).max(5000) }).parse(req.body);
@@ -321,6 +349,7 @@ export function registerAbodeRoutes(app: Express, deps: {
       app.post(`${base}/orders/:id/${recovery ? "recover" : "royal-mail"}`, auth, wrap(async (req, res, customer) => {
         const { order, job } = await owned(req.params.id, customer);
         if (!job.completed) return res.status(409).json({ error: "Complete production first" });
+        await requireStockingDispatchApproval(job.id);
         if (!editable(job.invoiceStatus)) return res.status(409).json({ error: "Invoiced dispatch details cannot be changed here" });
         if (recovery ? order.shippingRoute !== "dpd" || !["booking", "review"].includes(order.shipmentState) : order.shippingRoute !== "royal_mail") {
           return res.status(409).json({ error: "This action does not match this order's shipping route" });
