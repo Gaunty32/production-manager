@@ -58,6 +58,9 @@ backup only for these small Abode reference files. Preserve order/stocking owner
 reuse the saved object key when retrying attachment persistence.
 
 ## Gotchas
+- Keep the PDF preview renderer compatible with the project's Node toolchain; review its engine requirement before updating, including minor releases.
+  **Why:** PDF.js 5.7 and 6 require Node 22+, but 5.6 supports this project's Node 20. The proof-preview change must not silently force a runtime migration.
+  **How to apply:** Use the compatible pinned release unless the runtime is deliberately upgraded, and verify the browser worker together with the renderer.
 - Verify Abode proofs with a real PDF through the successful direct-upload path as well as the backup path; include absent/generic browser and storage MIME labels.
   **Why:** PNG-only testing with forced backup uploads passed while a user subsequently reported a valid embroidery-printout PDF being rejected. That incident's exact browser cause was not established.
   **How to apply:** Validate known file signatures, retain the original bytes, and never accept EMB source files as customer-readable proofs merely because a filename or MIME label claims they are PDFs.

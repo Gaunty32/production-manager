@@ -39,6 +39,12 @@ Digital samples need customer approval for each individual stocking before produ
 
 **How to apply:** Preserve version/decision history and customer notes. Only the customer using their own login can approve; staff impersonation is read-only for decisions. Gate generic production/completion paths as well as the Abode screen, and never reuse an old revision's approval. Already completed historical stockings without samples are not retroactively put on hold, since they were produced before this requirement.
 
+Customers review digital samples as on-screen previews, with hover enlargement and a mobile tap-to-enlarge alternative, then approve or reject with notes. Do not make them open or download the source PDF to review it.
+
+**Why:** The user said: “from the customers screen, they need to see a preview of the sample for approval only, as long as when they hover they can view it on screen. Then either approve or reject and add notes.”
+
+**How to apply:** Keep customer review within the portal, including PDFs and earlier versions. Rejection requires notes and requests a revision rather than cancelling the stocking order.
+
 Abode supplies its own delivery-note PDFs for staff to print and enclose; either staff or the customer may upload them, and the filename identifies the order.
 
 **Why:** The user supplied dispatch-note examples and explicitly requested uploads by either side, with printing against the matching order. They then confirmed: “we can abandon our delivery notes and use these instead.”

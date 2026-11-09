@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Clock3, ExternalLink, FileText, ImagePlus, Loader2, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, FileText, ImagePlus, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { inspectAbodeReferenceFile, uploadAbodeReferenceFile } from "@/lib/abodeReferenceUpload";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AbodeSamplePreview } from "@/components/AbodeSamplePreview";
 
 export type AbodeDigitalSample = {
   id: string;
@@ -59,8 +60,7 @@ export function AbodeStockingSample({ jobId, itemId, name, font, colour, thread,
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [notes, setNotes] = useState("");
-  const [changeNotes, setChangeNotes] = useState("");
-  const [viewer, setViewer] = useState<AbodeDigitalSample | null>(null);
+  const [decisionIntent, setDecisionIntent] = useState<"approved" | "amends_required">("approved");
   const [uploadError, setUploadError] = useState("");
 
   const uploadPath = `/api/abode/orders/${encodeURIComponent(jobId)}/items/${encodeURIComponent(itemId)}/samples/upload`;
@@ -132,20 +132,19 @@ export function AbodeStockingSample({ jobId, itemId, name, font, colour, thread,
   };
 
   const submitDecision = async (decision: "approved" | "amends_required") => {
-    if (!reviewSample || !latest || latest.id !== reviewSample.id || latest.status !== "pending_approval" || !canApprove || decisionPending) return;
-    const trimmedNotes = changeNotes.trim();
+    if (!reviewSample || !latest || latest.id !== reviewSample.id || latest.status !== "pending_approval" || !canApprove || isStaff || decisionPending || (decision === "approved" && !confirmed)) return;
+    const trimmedNotes = notes.trim();
     if (decision === "amends_required" && !trimmedNotes) return;
     setDecisionPending(true);
     try {
       await apiRequest("POST", `/api/customer-portal/abode/orders/${encodeURIComponent(jobId)}/items/${encodeURIComponent(itemId)}/samples/${encodeURIComponent(reviewSample.id)}/decision`, {
         decision,
-        ...(decision === "amends_required" ? { notes: trimmedNotes } : notes.trim() ? { notes: notes.trim() } : {}),
+        ...(trimmedNotes ? { notes: trimmedNotes } : {}),
       });
       toast({ title: decision === "approved" ? "Sample approved" : "Changes sent", description: decision === "approved" ? "This stocking is approved for production." : "Your notes have been sent to the production team." });
       setReviewOpen(false);
       setConfirmed(false);
       setNotes("");
-      setChangeNotes("");
       onChanged();
     } catch (error) {
       toast({ title: "Could not save your decision", description: friendlyError(error), variant: "destructive" });
@@ -157,6 +156,13 @@ export function AbodeStockingSample({ jobId, itemId, name, font, colour, thread,
   const statusClass = (status: AbodeDigitalSample["status"]) => status === "approved"
     ? "border-emerald-200 bg-emerald-50 text-emerald-900"
     : status === "amends_required" ? "border-amber-200 bg-amber-50 text-amber-950" : "border-[#d6c3ae] bg-[#fbf8f3] text-[#71482e]";
+  const openReview = (sample: AbodeDigitalSample, intent: "approved" | "amends_required") => {
+    setConfirmed(false);
+    setReviewSample(sample);
+    setDecisionIntent(intent);
+    setNotes("");
+    setReviewOpen(true);
+  };
 
   return (
     <section className="mt-3 rounded-xl border border-stone-200 bg-white p-3 sm:p-4" aria-label={`Digital sample approval for ${name || "stocking"}`}>
@@ -199,18 +205,20 @@ export function AbodeStockingSample({ jobId, itemId, name, font, colour, thread,
                 <p className="mt-1 text-xs text-stone-500">{latest.status === "pending_approval" ? "Uploaded" : latest.status === "approved" ? "Approved" : "Decision recorded"} {readableDate(latest.decidedAt || latest.createdAt)}</p>
               </div>
             </div>
-            {latest.fileType.toLowerCase().includes("pdf") || /\.pdf$/i.test(latest.fileName)
-              ? <a href={latest.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1 text-sm font-medium text-[#344e43] underline underline-offset-2"><ExternalLink className="h-3.5 w-3.5" />Open PDF</a>
-              : <Button type="button" variant="outline" size="sm" onClick={() => setViewer(latest)}>Inspect image</Button>}
+          </div>
+          <div className="mt-3">
+            <AbodeSamplePreview sample={latest} name={name} />
+            <p className="mt-2 text-xs text-stone-500">Hover to enlarge, or select the preview to inspect it on screen.</p>
           </div>
           {latest.customerNotes && <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-950"><span className="font-semibold">Customer notes: </span>{latest.customerNotes}</p>}
-          {canApprove && latest.status === "pending_approval" && (
-            <div className="mt-3 flex flex-wrap gap-2 border-t border-stone-200 pt-3">
-              <Button type="button" size="sm" onClick={() => { setConfirmed(false); setReviewSample(latest); setNotes(""); setChangeNotes(""); setReviewOpen(true); }}><ShieldCheck className="mr-1.5 h-4 w-4" />Review and decide</Button>
+          {canApprove && !isStaff && latest.status === "pending_approval" && (
+            <div className="mt-3 grid grid-cols-1 gap-2 border-t border-stone-200 pt-3 sm:flex">
+              <Button type="button" className="min-h-11" onClick={() => openReview(latest, "approved")}><CheckCircle2 className="mr-1.5 h-4 w-4" />Approve sample</Button>
+              <Button type="button" variant="outline" className="min-h-11 border-amber-300 text-amber-950 hover:bg-amber-50" onClick={() => openReview(latest, "amends_required")}><AlertCircle className="mr-1.5 h-4 w-4" />Reject sample</Button>
             </div>
           )}
           {isStaff && latest.status === "pending_approval" && <p className="mt-3 text-xs font-medium text-[#71482e]">Waiting for the customer to review this version. Staff cannot approve on their behalf.</p>}
-          {!isStaff && !canApprove && latest.status === "pending_approval" && <p className="mt-3 text-xs text-stone-500">Sample approval is not available in this view.</p>}
+          {!isStaff && !canApprove && latest.status === "pending_approval" && <p className="mt-3 rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs leading-5 text-stone-600">This is a staff preview only. To approve or request changes, sign in through your customer account.</p>}
         </div>
       ) : <div className="mt-3 rounded-lg border border-dashed border-stone-300 bg-stone-50 px-3 py-3 text-sm text-stone-600">{canUpload ? "No digital sample has been uploaded for this stocking yet." : "The sample for this stocking will appear here when it is ready."}</div>}
 
@@ -223,16 +231,18 @@ export function AbodeStockingSample({ jobId, itemId, name, font, colour, thread,
               <p className="mt-0.5 text-xs text-stone-500">{statusLabel(sample.status)} · {readableDate(sample.decidedAt || sample.createdAt)}</p>
               {sample.customerNotes && <p className="mt-1 break-words text-xs leading-4 text-amber-900">Customer notes: {sample.customerNotes}</p>}
             </div>
-            <a href={sample.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center gap-1 text-xs font-medium text-[#344e43] underline"><ExternalLink className="h-3 w-3" />Open</a>
+            <div className="w-full sm:w-56">
+              <AbodeSamplePreview sample={sample} name={name} />
+            </div>
           </li>)}
         </ol>
       </details>}
 
       <Dialog open={reviewOpen} onOpenChange={(open) => { if (!decisionPending) setReviewOpen(open); }}>
         <DialogContent className="max-h-[92dvh] overflow-y-auto border-stone-200 bg-[#fbfaf7]">
-          <DialogHeader><DialogTitle>Review this stocking sample</DialogTitle><DialogDescription>Check the exact personalisation shown here. This decision applies only to this stocking, not the rest of the order.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{decisionIntent === "approved" ? "Approve this stocking sample" : "Reject this stocking sample"}</DialogTitle><DialogDescription>Check the exact personalisation shown here. This decision applies only to this stocking, not the rest of the order.</DialogDescription></DialogHeader>
           {reviewSample && <p className="text-sm font-semibold">Digital sample version {reviewSample.version}</p>}
-          {reviewSample && latest?.id !== reviewSample.id && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">A newer sample has been uploaded. Close this review and open the latest version before deciding.</p>}
+          {reviewSample && (latest?.id !== reviewSample.id || latest.status !== "pending_approval") && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">This review is no longer current. A newer version or decision is now on file. Close this review and check the latest sample before deciding.</p>}
           <div className="rounded-xl border border-stone-200 bg-white p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">Approval details</p>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
@@ -242,31 +252,22 @@ export function AbodeStockingSample({ jobId, itemId, name, font, colour, thread,
               <div><dt className="text-xs text-stone-500">Thread colour</dt><dd className="mt-0.5 font-medium">{thread || "—"}</dd></div>
             </dl>
           </div>
-          {reviewSample && (reviewSample.fileType.toLowerCase().includes("pdf") || /\.pdf$/i.test(reviewSample.fileName))
-            ? <a href={reviewSample.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-[#344e43] underline underline-offset-2"><FileText className="h-4 w-4" />Open the sample PDF in a new tab</a>
-            : reviewSample && <button type="button" onClick={() => setViewer(reviewSample)} className="block w-full overflow-hidden rounded-lg border border-stone-200 bg-stone-100 text-left" aria-label="Enlarge the sample image">
-              <img src={reviewSample.fileUrl} alt={`Sample for ${name || "stocking"}`} className="max-h-56 w-full object-contain" />
-              <span className="block border-t border-stone-200 bg-white px-3 py-2 text-xs font-medium text-[#344e43]">Open full-size sample</span>
-            </button>}
-          <label className="flex items-start gap-3 rounded-lg border border-[#d6c3ae] bg-[#fbf8f3] p-3 text-sm leading-5 text-stone-800">
+          {reviewSample && <div className="rounded-lg border border-stone-200 bg-white p-2">
+            <AbodeSamplePreview sample={reviewSample} name={name} />
+            <p className="px-1 pb-1 pt-2 text-xs text-stone-500">Inspect the on-screen preview before confirming your decision.</p>
+          </div>}
+          {decisionIntent === "approved" && <label className="flex items-start gap-3 rounded-lg border border-[#d6c3ae] bg-[#fbf8f3] p-3 text-sm leading-5 text-stone-800">
             <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} className="mt-1 h-4 w-4 accent-[#344e43]" />
             <span>I have reviewed the sample and the name, font and colours above are correct.</span>
+          </label>}
+          <label className="space-y-1.5 text-sm font-medium">
+            Notes for the production team{decisionIntent === "amends_required" ? <span className="ml-1 text-amber-800">(required to reject)</span> : <span className="ml-1 font-normal text-stone-500">(optional)</span>}
+            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} maxLength={2000} required={decisionIntent === "amends_required"} className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 font-normal outline-none transition focus-visible:ring-2 focus-visible:ring-[#344e43] focus-visible:ring-offset-1" placeholder={decisionIntent === "amends_required" ? "Describe what needs changing" : "Add a note (optional)"} />
           </label>
-          <label className="space-y-1.5 text-sm font-medium">Optional note for the production team<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} maxLength={2000} className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 font-normal outline-none focus-visible:ring-2 focus-visible:ring-[#344e43]" placeholder="Add a note (optional)" /></label>
-          <label className="space-y-1.5 text-sm font-medium">Request changes instead<textarea value={changeNotes} onChange={(event) => setChangeNotes(event.target.value)} rows={2} maxLength={2000} className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 font-normal outline-none focus-visible:ring-2 focus-visible:ring-[#344e43]" placeholder="Describe what needs changing" /></label>
           <DialogFooter className="flex-col gap-2 sm:flex-row">
-            <Button type="button" variant="outline" onClick={() => void submitDecision("amends_required")} disabled={!changeNotes.trim() || decisionPending || latest?.id !== reviewSample?.id}>{decisionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Request changes</Button>
-            <Button type="button" onClick={() => void submitDecision("approved")} disabled={!confirmed || decisionPending || latest?.id !== reviewSample?.id}>{decisionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Approve this stocking</Button>
+            <Button type="button" variant="outline" className="min-h-11" onClick={() => setReviewOpen(false)} disabled={decisionPending}>Back to sample</Button>
+            <Button type="button" variant={decisionIntent === "approved" ? "default" : "outline"} className={`min-h-11 ${decisionIntent === "amends_required" ? "border-amber-300 text-amber-950 hover:bg-amber-50" : ""}`} onClick={() => void submitDecision(decisionIntent)} disabled={(decisionIntent === "approved" && !confirmed) || (decisionIntent === "amends_required" && !notes.trim()) || decisionPending || latest?.id !== reviewSample?.id || latest?.status !== "pending_approval"}>{decisionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{decisionIntent === "approved" ? "Confirm approval" : "Reject sample"}</Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(viewer)} onOpenChange={(open) => !open && setViewer(null)}>
-        <DialogContent className="max-h-[92dvh] max-w-4xl overflow-hidden border-stone-200 bg-[#fbfaf7]">
-          <DialogHeader><DialogTitle className="break-all">{viewer?.fileName}</DialogTitle><DialogDescription>Digital sample · version {viewer?.version}</DialogDescription></DialogHeader>
-          <div className="flex max-h-[72dvh] min-h-40 items-center justify-center overflow-auto rounded-lg bg-stone-100 p-2 sm:p-4">
-            {viewer && <img src={viewer.fileUrl} alt={`Digital sample for ${name || "stocking"}`} className="max-h-[68dvh] max-w-full object-contain" />}
-          </div>
         </DialogContent>
       </Dialog>
 
