@@ -7,6 +7,7 @@ import { jobs, jobLineItems, stockingSamples, productionEntries } from "@shared/
 import { ObjectStorageService } from "./objectStorage";
 import { photoBytesMatchType } from "./abodePhotos";
 import { hasPdfSignature } from "./abodeDeliveryNotes";
+import { abodeReferenceContentType } from "@shared/abodeReferenceFiles";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export const MAX_SAMPLE_BYTES = 10 * 1024 * 1024;
@@ -125,11 +126,12 @@ export function registerAbodeSampleRoutes(app: Express, deps: {
     }).parse(req.body);
     const file = await new ObjectStorageService().getObjectEntityFile(objectKey);
     const [metadata] = await file.getMetadata();
-    const type = metadata.contentType || "";
     const size = Number(metadata.size);
-    if (!SAMPLE_TYPES.some(value => value === type) || !Number.isFinite(size) || size <= 0 || size > MAX_SAMPLE_BYTES) throw new Error("Choose a JPEG, PNG, WebP or PDF up to 10 MB");
+    if (!Number.isFinite(size) || size <= 0) throw new Error("The uploaded sample is empty. Choose the PDF printout or an image and upload it again.");
+    if (size > MAX_SAMPLE_BYTES) throw new Error("This sample is larger than 10 MB. Choose a smaller PDF or image.");
     const [bytes] = await file.download({ start: 0, end: 11 });
-    if (!sampleSignatureMatches(bytes, type)) throw new Error("This file is not a supported digital sample");
+    const type = abodeReferenceContentType(bytes);
+    if (!type) throw new Error("This file is not a readable PDF, JPEG, PNG or WebP. EMB files need embroidery software; upload the PDF printout for customer approval.");
     const result = await db.transaction(async tx => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(71024002)`);
       const [job] = await tx.select().from(jobs).where(eq(jobs.id, req.params.id)).for("update");

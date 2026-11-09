@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, ExternalLink, FileText, ImagePlus, Loader2, ShieldCheck } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { uploadAbodeReferenceFile } from "@/lib/abodeReferenceUpload";
+import { inspectAbodeReferenceFile, uploadAbodeReferenceFile } from "@/lib/abodeReferenceUpload";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -31,9 +31,6 @@ type Props = {
   canUpload: boolean;
   onChanged: () => void;
 };
-
-const MAX_SIZE = 10 * 1024 * 1024;
-const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 
 function friendlyError(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -95,17 +92,20 @@ export function AbodeStockingSample({ jobId, itemId, name, font, colour, thread,
     }
   };
 
-  const chooseFile = (file?: File) => {
-    if (!file || !canUpload) return;
-    if (!ALLOWED_TYPES.has(file.type)) {
-      toast({ title: "Choose an image or PDF", description: "Supported formats are JPEG, PNG, WebP and PDF.", variant: "destructive" });
+  const chooseFile = async (file?: File) => {
+    if (!file || !canUpload || uploading) return;
+    setUploading(true);
+    setSelectedFile(null);
+    objectKeyRef.current = null;
+    setUploadError("");
+    try {
+      await inspectAbodeReferenceFile(file);
+    } catch (error) {
+      toast({ title: "Cannot use this sample", description: friendlyError(error), variant: "destructive" });
       if (inputRef.current) inputRef.current.value = "";
       return;
-    }
-    if (file.size > MAX_SIZE) {
-      toast({ title: "File is too large", description: "Samples must be no larger than 10 MB.", variant: "destructive" });
-      if (inputRef.current) inputRef.current.value = "";
-      return;
+    } finally {
+      setUploading(false);
     }
     setSelectedFile(file);
     objectKeyRef.current = null;

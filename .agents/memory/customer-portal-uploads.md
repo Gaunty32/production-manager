@@ -58,6 +58,9 @@ backup only for these small Abode reference files. Preserve order/stocking owner
 reuse the saved object key when retrying attachment persistence.
 
 ## Gotchas
+- Verify Abode proofs with a real PDF through the successful direct-upload path as well as the backup path; include absent/generic browser and storage MIME labels.
+  **Why:** PNG-only testing with forced backup uploads passed while a user subsequently reported a valid embroidery-printout PDF being rejected. That incident's exact browser cause was not established.
+  **How to apply:** Validate known file signatures, retain the original bytes, and never accept EMB source files as customer-readable proofs merely because a filename or MIME label claims they are PDFs.
 - `apiRequest` throws on non-2xx, so it can't surface a 401 for session-expiry.
   In customer flows use a **raw `fetch`** to the `objects/upload` route so you can
   check `status === 401` and route to login.

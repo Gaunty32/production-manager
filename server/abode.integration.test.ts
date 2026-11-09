@@ -210,6 +210,24 @@ test("import → completion threshold → dispatch → draft billing with safe r
       assert.equal(response.status, 200);
       return response.json();
     };
+    // Storage MIME metadata is not authoritative; validate the actual proof bytes.
+    objectBytes = Buffer.from("%PDF-1.7\nCharlotte printout\n%%EOF");
+    photoType = "application/octet-stream";
+    const pdfResponse = await request(samplePath(dpd.items[1]), {
+      objectKey: `/objects/uploads/${randomUUID()}`, fileName: "Charlotte_Print.pdf",
+    });
+    assert.equal(pdfResponse.status, 200, "A real PDF with generic storage metadata must be accepted");
+    const pdfProof = await pdfResponse.json();
+    const storedPdf = await customerRequest(`${samplePath(dpd.items[1])}/${pdfProof.id}/file`);
+    assert.equal(storedPdf.headers.get("content-type"), "application/pdf", "Serve the verified type, not generic storage metadata");
+    assert.deepEqual(Buffer.from(await storedPdf.arrayBuffer()), objectBytes);
+    photoType = "application/pdf";
+    objectBytes = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+    assert.equal((await request(samplePath(dpd.items[1]), {
+      objectKey: `/objects/uploads/${randomUUID()}`, fileName: "Charlotte.EMB",
+    })).status, 400, "Embroidery source bytes must not be served as a PDF");
+    photoType = "image/png";
+    objectBytes = photoBytes;
     const firstProof = await saveSample(dpd.items[0]);
     const firstReview = `${samplePath(dpd.items[0])}/${firstProof.id}/decision`;
     assert.equal((await request(firstReview, { decision: "approved" })).status, 404, "Staff cannot approve on the customer's behalf");
