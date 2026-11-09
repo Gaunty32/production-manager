@@ -129,6 +129,8 @@ test("import → completion threshold → dispatch → draft billing with safe r
       headers: { "content-type": "application/json", "x-test-customer": "yes" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    assert.equal((await request(`/orders/${dpd.id}/delivery-note`)).status, 409, "No generated delivery note is available without a supplied PDF");
+    assert.equal((await customerRequest(`/orders/${dpd.id}/delivery-note`)).status, 409);
     const notesPreview = await (await customerRequest("/delivery-notes/preview", {
       fileNames: ["dispatch-note-TEST-1.pdf", "dispatch-note-TEST-2.pdf", "dispatch-note-UNKNOWN.pdf", "unmatched.pdf"],
     })).json();
@@ -193,6 +195,9 @@ test("import → completion threshold → dispatch → draft billing with safe r
     assert.equal(label.status, 200);
     assert.ok((await label.text()).includes('sandbox="allow-same-origin allow-modals"'));
     await request(`/orders/${royal.id}/complete`, {});
+    const missingNote = await request(`/orders/${royal.id}/delivery-note`);
+    assert.equal(missingNote.status, 409, "Completing production must not enable the old generated delivery note");
+    assert.match((await missingNote.json()).error, /customer-supplied PDF/);
     assert.equal((await request(`/orders/${royal.id}/book`, { weightGrams: 500 })).status, 409);
     assert.equal((await request(`/orders/${royal.id}/royal-mail`, { trackingNumber: "AB123456789GB" })).status, 200);
     const savedRoyal = await storage.getJob(royal.id);

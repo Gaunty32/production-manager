@@ -9,7 +9,7 @@ import { customers, jobs, jobLineItems, jobFiles, stockingOrders, stockingProduc
 import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate, stockingBagNetworkCode } from "@shared/abode";
 import { parseStockingRows } from "./abodeImport";
 import { completeStockingOrder } from "./abodeProduction";
-import { renderStockingDeliveryNote, renderStockingLabel } from "./abodeDocuments";
+import { renderStockingLabel } from "./abodeDocuments";
 import { dpdService } from "./dpd";
 import { maybeSendDispatchNotification } from "./customerOrderNotifications";
 import { ObjectStorageService } from "./objectStorage";
@@ -141,20 +141,11 @@ export function registerAbodeRoutes(app: Express, deps: {
       }));
     }
     app.get(`${base}/orders/:id/delivery-note`, auth, wrap(async (req, res, customer) => {
-      const { order, job } = await owned(req.params.id, customer);
+      const { job } = await owned(req.params.id, customer);
       const [suppliedNote] = (await storage.getJobFiles(job.id)).filter(isSuppliedDeliveryNote)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       if (suppliedNote) return res.redirect(`${base}/orders/${encodeURIComponent(job.id)}/delivery-notes/${encodeURIComponent(suppliedNote.id)}`);
-      if (!job.completed) return res.status(409).json({ error: "Complete production before printing the delivery note" });
-      if (!customer.logoUrl) return res.status(409).json({ error: "Add Abode's logo on the Customers page before printing a branded delivery note" });
-      const items = await storage.getJobLineItems(job.id);
-      res.set({
-        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
-        "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex",
-      }).type("html").send(renderStockingDeliveryNote({
-        brand: customer.name, logoUrl: customer.logoUrl, orderNumber: order.orderNumber,
-        recipient: order.recipient, items: items.flatMap(item => item.stockingDetails ? [item.stockingDetails] : []),
-      }));
+      return res.status(409).json({ error: "Upload the customer-supplied PDF delivery note for this order before printing. Generated delivery notes are no longer used for Abode." });
     }));
     app.post(`${base}/delivery-notes/preview`, auth, wrap(async (req, res, customer) => {
       const { fileNames } = z.object({ fileNames: z.array(z.string().trim().min(1).max(200)).min(1).max(50) }).parse(req.body);

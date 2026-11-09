@@ -282,7 +282,7 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
 }
 
 export function AbodeOrderDeliveryNotes({ notes = [] }: AbodeOrderDeliveryNotesProps) {
-  if (!notes.length) return <div className="border-t border-stone-100 px-4 py-3 text-xs text-stone-500 md:px-5">No customer-supplied delivery note uploaded yet.</div>;
+  if (!notes.length) return <div className="border-t border-stone-100 px-4 py-3 text-xs text-amber-900 md:px-5">Delivery note needed — upload the customer-supplied PDF using the delivery-note uploader above.</div>;
   return (
     <section className="border-t border-stone-100 px-4 py-3 md:px-5" aria-label="Customer-supplied delivery notes">
       <div className="flex flex-wrap items-center justify-between gap-2">

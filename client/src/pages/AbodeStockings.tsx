@@ -79,8 +79,6 @@ export default function AbodeStockings() {
   const [dialog, setDialog] = useState<"complete" | "book" | "royal-mail" | "recover" | null>(null);
   const [weight, setWeight] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
-  const [logoDialogOpen, setLogoDialogOpen] = useState(false);
-  const [logoUrl, setLogoUrl] = useState("");
   const [bookingRecovery, setBookingRecovery] = useState<{ trackingNumber: string; warning: string; labelHtml?: string } | null>(null);
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery<StockingsData>({
@@ -136,19 +134,6 @@ export default function AbodeStockings() {
       refresh();
       toast({ title: "Could not update order", description: friendlyError(err), variant: "destructive" });
     },
-  });
-  const logoMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", `${STAFF_URL}/logo`, { logoUrl: logoUrl.trim() });
-      return response;
-    },
-    onSuccess: () => {
-      toast({ title: "Customer logo saved" });
-      setLogoDialogOpen(false);
-      setLogoUrl("");
-      refresh();
-    },
-    onError: (err) => toast({ title: "Could not save logo", description: friendlyError(err), variant: "destructive" }),
   });
 
   const isStaff = !isCustomer;
@@ -226,11 +211,7 @@ export default function AbodeStockings() {
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">{isStaff ? "One name at a time. Keep personalisation, packing and dispatch in step." : "Follow every personalised stocking from your sheet to its delivery."}</p>
           </div>
           <div className="flex items-center gap-3">
-            {data.customer.logoUrl
-              ? <img src={data.customer.logoUrl} alt={`${data.customer.name} logo`} className="max-h-12 max-w-36 object-contain" />
-              : isStaff
-                ? <button onClick={() => setLogoDialogOpen(true)} className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 underline underline-offset-2">Customer logo not set · add logo</button>
-                : <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">Customer logo not set</div>}
+            {data.customer.logoUrl && <img src={data.customer.logoUrl} alt={`${data.customer.name} logo`} className="max-h-12 max-w-36 object-contain" />}
             <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} aria-label="Refresh orders"><RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /></Button>
           </div>
         </header>
@@ -349,7 +330,7 @@ export default function AbodeStockings() {
                       {(order.shipmentState === "review" || order.shipmentState === "booking") && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setTrackingNumber(""); setDialog("recover"); }}><ShieldAlert className="mr-1.5 h-4 w-4" />Recover booking</Button>}
                       {order.labelAvailable && <Button variant="outline" size="sm" onClick={() => openDocument(order, "label")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Label</Button>}
                     </div>}
-                    {!isStaff && (order.completed || Boolean(order.deliveryNotes?.length)) && <Button variant="outline" size="sm" disabled={!data.customer.logoUrl && !order.deliveryNotes?.length} title={!data.customer.logoUrl && !order.deliveryNotes?.length ? "A customer logo or supplied delivery note is needed." : undefined} onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />{order.deliveryNotes?.length ? "Delivery note" : data.customer.logoUrl ? "Delivery note" : "Delivery note · logo required"}</Button>}
+                    {!isStaff && Boolean(order.deliveryNotes?.length) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Delivery note PDF</Button>}
                   </div>
                   <div className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_240px] md:px-5">
                     <div className="space-y-2">
@@ -377,7 +358,7 @@ export default function AbodeStockings() {
                     onChanged={refresh}
                   />
                   <AbodeOrderDeliveryNotes notes={order.deliveryNotes} />
-                  {isStaff && (order.completed || Boolean(order.deliveryNotes?.length)) && <div className="flex flex-wrap gap-2 border-t border-stone-100 px-4 py-3 md:px-5"><Button variant="ghost" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Customer delivery note</Button><span className="self-center text-xs text-stone-500">{order.deliveryNotes?.length ? "Uses the latest customer-supplied PDF" : "Server-rendered with Abode branding"}</span></div>}
+                  {isStaff && Boolean(order.deliveryNotes?.length) && <div className="flex flex-wrap gap-2 border-t border-stone-100 px-4 py-3 md:px-5"><Button variant="ghost" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Customer delivery note PDF</Button><span className="self-center text-xs text-stone-500">Uses the latest customer-supplied PDF</span></div>}
                 </CardContent>
               </Card>;
             })}
@@ -413,9 +394,6 @@ export default function AbodeStockings() {
       </Dialog>
       <Dialog open={dialog === "royal-mail" || dialog === "recover"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent><DialogHeader><DialogTitle>{dialog === "recover" ? "Record recovered DPD booking" : "Save Royal Mail tracking"}</DialogTitle><DialogDescription>{dialog === "recover" ? "Only use this after checking the original DPD booking. This records its tracking number; it does not create a new parcel." : "Book the parcel externally, then record the tracking number here."}</DialogDescription></DialogHeader><label className="space-y-2 text-sm font-medium">Tracking number<Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} autoComplete="off" /></label>{dialog === "royal-mail" && <a className="inline-flex items-center gap-1 text-sm font-medium text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3.5 w-3.5" /></a>}<DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button><Button disabled={!trackingNumber.trim() || operationMutation.isPending} onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: dialog === "recover" ? "recover" : "royal-mail", payload: { trackingNumber: trackingNumber.trim() } })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save tracking</Button></DialogFooter></DialogContent>
-      </Dialog>
-      <Dialog open={logoDialogOpen} onOpenChange={setLogoDialogOpen}>
-        <DialogContent><DialogHeader><DialogTitle>Add Abode customer logo</DialogTitle><DialogDescription>Use an HTTPS image URL or an existing /objects/ asset path. The delivery note will use the saved logo.</DialogDescription></DialogHeader><label className="space-y-2 text-sm font-medium">Logo URL<Input value={logoUrl} onChange={(event) => setLogoUrl(event.target.value)} placeholder="https://… or /objects/…" /></label><DialogFooter><Button variant="outline" onClick={() => setLogoDialogOpen(false)}>Cancel</Button><Button disabled={logoMutation.isPending || !(/^(https:\/\/|\/objects\/)/.test(logoUrl.trim()))} onClick={() => logoMutation.mutate()}>{logoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save logo</Button></DialogFooter></DialogContent>
       </Dialog>
     </div>
   );
