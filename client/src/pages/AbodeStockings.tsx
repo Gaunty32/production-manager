@@ -148,6 +148,8 @@ export default function AbodeStockings() {
   const inWorkCount = orders.filter((order) => !order.completed).length;
   const readyCount = orders.filter((order) => order.completed && !order.dhlTrackingNumber).length;
   const dispatchedCount = orders.filter((order) => Boolean(order.dhlTrackingNumber)).length;
+  const awaitingApprovalCount = orders.filter(order => !order.completed && !order.dhlTrackingNumber && !order.sampleApprovalReady).length;
+  const awaitingDeliveryNoteCount = orders.filter(order => !order.dhlTrackingNumber && !order.deliveryNotes?.length).length;
   const shownOrders = useMemo(() => orders.filter((order) => {
     const status = order.dhlTrackingNumber ? "dispatched" : order.completed ? "ready" : "in-work";
     if (filter !== "all" && filter !== status) return false;
@@ -222,9 +224,11 @@ export default function AbodeStockings() {
           </div>
         </header>
 
-        <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
           <Metric label="Open orders" value={String(orders.length)} note={`${totalStockings} stockings`} />
-          <Metric label="Outstanding" value={String(inWorkCount)} note={`${orders.filter(order => !order.completed && !order.sampleApprovalReady).length} awaiting sample approval`} />
+          <Metric label="Outstanding" value={String(inWorkCount)} note="Production outstanding" />
+          <Metric label="Awaiting approval" value={String(awaitingApprovalCount)} note="Orders needing sample approval" />
+          <Metric label="Awaiting delivery note" value={String(awaitingDeliveryNoteCount)} note="Undispatched orders missing a PDF" />
           <Metric label="Ready to dispatch" value={String(readyCount)} note="Production complete" />
           <Metric label="Dispatched" value={String(dispatchedCount)} note={`${data.completedCount} stockings completed`} />
         </section>

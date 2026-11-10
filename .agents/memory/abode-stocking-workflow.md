@@ -62,3 +62,9 @@ Bulk delivery-note selection should match automatically and accept multiple PDFs
 **Why:** The user requested: “i would like this to auto match and i would like to drag more than one file at a time.”
 
 **How to apply:** Start filename matching on selection/drop; keep the explicit upload step separate from matching so unmatched PDFs are never saved.
+
+Show separate “Awaiting approval” and “Awaiting delivery note” order totals in the stocking-room summary.
+
+**Why:** The user requested both statuses alongside the existing summary totals.
+
+**How to apply:** Count orders, not stockings. Approval holds apply to unfinished, undispatched orders; missing-note totals include undispatched orders even when production is complete. An order may need both.
