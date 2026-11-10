@@ -4,6 +4,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { uploadAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
+import { AbodeOrderDeliveryNoteUpload } from "@/components/AbodeOrderDeliveryNoteUpload";
 
 export type AbodeDeliveryNote = {
   id: string;
@@ -32,6 +33,11 @@ interface AbodeDeliveryNotesProps {
 
 interface AbodeOrderDeliveryNotesProps {
   notes?: AbodeDeliveryNote[];
+  baseUrl: string;
+  jobId: string;
+  orderNumber: string;
+  isStaff: boolean;
+  onChanged: () => void;
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -273,15 +279,14 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
   );
 }
 
-export function AbodeOrderDeliveryNotes({ notes = [] }: AbodeOrderDeliveryNotesProps) {
-  if (!notes.length) return <div className="border-t border-stone-100 px-4 py-3 text-xs text-amber-900 md:px-5">Delivery note needed — upload the customer-supplied PDF using the delivery-note uploader above.</div>;
+export function AbodeOrderDeliveryNotes({ notes = [], baseUrl, jobId, orderNumber, isStaff, onChanged }: AbodeOrderDeliveryNotesProps) {
   return (
     <section className="border-t border-stone-100 px-4 py-3 md:px-5" aria-label="Customer-supplied delivery notes">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold text-stone-800">Customer-supplied notes</h4>
-        <span className="text-xs text-stone-500">{notes.length} PDF{notes.length === 1 ? "" : "s"} · newest first</span>
+        <h4 className="text-sm font-semibold text-stone-800">Delivery note</h4>
+        {notes.length > 0 && <span className="text-xs text-stone-500">{notes.length} PDF{notes.length === 1 ? "" : "s"} · newest first</span>}
       </div>
-      <p className="mt-1 text-xs text-stone-500">Open the PDF, then choose Print in the PDF viewer to print all pages.</p>
+      <p className={`mt-1 text-xs ${notes.length ? "text-stone-500" : "text-amber-900"}`}>{notes.length ? "Check the saved PDF using Open. To print all pages, choose Print in the PDF viewer." : "No delivery note is saved to this order yet. Upload the original PDF here."}</p>
       <ul className="mt-2 space-y-2">
         {notes.map((note, index) => (
           <li key={note.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg bg-[#f8f6f2] px-3 py-2.5">
@@ -303,6 +308,7 @@ export function AbodeOrderDeliveryNotes({ notes = [] }: AbodeOrderDeliveryNotesP
           </li>
         ))}
       </ul>
+      <AbodeOrderDeliveryNoteUpload baseUrl={baseUrl} jobId={jobId} orderNumber={orderNumber} isStaff={isStaff} hasNotes={notes.length > 0} onChanged={onChanged} />
     </section>
   );
 }

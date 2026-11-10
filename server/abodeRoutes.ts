@@ -79,7 +79,7 @@ export function registerAbodeRoutes(app: Express, deps: {
         canApproveSamples: customerMode && !req.session.impersonationStaffUserId && !req.session.impersonationCustomerUserId,
         completedCount: count.count, currentRate: stockingRate(count.count),
         orders: orders.map(({ order, job }) => ({
-          ...job, recipient: order.recipient, shippingRoute: order.shippingRoute,
+          ...job, orderNumber: order.orderNumber, recipient: order.recipient, shippingRoute: order.shippingRoute,
           shipmentState: order.shipmentState, labelAvailable: Boolean(order.labelHtml || order.shipmentId),
           sampleApprovalReady: items.filter(item => item.jobId === job.id).every(item => item.completed || samples.find(sample => sample.lineItemId === item.id)?.status === "approved"),
           items: items.filter(item => item.jobId === job.id).map(item => ({

@@ -50,3 +50,9 @@ Abode supplies its own delivery-note PDFs for staff to print and enclose; either
 **Why:** The user supplied dispatch-note examples and explicitly requested uploads by either side, with printing against the matching order. They then confirmed: “we can abandon our delivery notes and use these instead.”
 
 **How to apply:** Match the whole order number from the filename, flag unmatched files rather than guessing, and preserve the original PDF and all pages. Use only supplied PDFs, with no generated delivery-note fallback for Abode. Flag missing notes for upload instead. These notes may include Abode's retail prices; do not substitute our production prices. Other customers' delivery-note behaviour is unchanged.
+
+Delivery notes must be accessible on each customer's order card, with a way to check the saved PDF or upload one there, not only through the bulk uploader above the orders.
+
+**Why:** The user said: “It shoudl show here for the customer to check or upload.”
+
+**How to apply:** Keep saved notes visible alongside an order-level upload control. Only report a note as attached after it has actually been saved to that order.

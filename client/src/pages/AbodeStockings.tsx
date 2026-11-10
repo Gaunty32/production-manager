@@ -27,6 +27,7 @@ type StockingOrder = {
   id: string;
   jobNumber: number;
   poNumber: string;
+  orderNumber: string;
   jobName: string;
   completed: boolean;
   invoiceStatus: string;
@@ -391,7 +392,7 @@ export default function AbodeStockings() {
                     canUpload={false}
                     onChanged={refresh}
                   />
-                  <AbodeOrderDeliveryNotes notes={order.deliveryNotes} />
+                  <AbodeOrderDeliveryNotes notes={order.deliveryNotes} baseUrl={baseUrl} jobId={order.id} orderNumber={order.orderNumber} isStaff={isStaff} onChanged={refresh} />
                   {isStaff && Boolean(order.deliveryNotes?.length) && <div className="flex flex-wrap gap-2 border-t border-stone-100 px-4 py-3 md:px-5"><Button variant="ghost" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Customer delivery note PDF</Button><span className="self-center text-xs text-stone-500">Uses the latest customer-supplied PDF</span></div>}
                 </CardContent>
               </Card>;
