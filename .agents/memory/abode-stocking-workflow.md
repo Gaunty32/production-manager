@@ -7,6 +7,12 @@ Abode Home & Gifts sells personalised Christmas stockings. Keep this workflow sp
 
 **Why:** The user described Abode as a test of a different operating model and explicitly requested tweaks just for them.
 
+Abode's font details are Font 1: Sad Night Script Regular; Font 2: Tabac G3 Semibold; Font 3: Stolen Times Italic.
+
+**Why:** The user supplied these names for display in the production planner.
+
+**How to apply:** Show the font name alongside its number for stocking production reference; preserve the original imported order details.
+
 **How to apply:** Spreadsheet uploads create one job per order number, with individual stockings recording stocking colour, font, thread colour and the exact supplied name, preserving capitalisation. Keep each order separate. Eligible UK mainland addresses, excluding Scottish Highlands and Islands, ship via DPD as a bag. On completion, provide a DPD label and print Abode's supplied delivery-note PDF (see below). Save shipment tracking against the job, expose in-work/despatched status and tracking to Abode, and retain the existing draft-invoicing flow.
 
 The stated prices are £7 per stocking, reducing to £5 once 100 have been produced, plus £5.50 carriage per order. The user confirmed that the system should monitor produced stockings, not uploaded orders. Anything outside standard DPD shipping needs a Parcel2Go link to book Royal Mail.

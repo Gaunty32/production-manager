@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, Clock3, ExternalLink, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, Search, Send, ShieldAlert, Truck, Upload } from "lucide-react";
 import { getDpdTrackingUrl } from "@shared/dpd-tracking";
+import { stockingFontLabel } from "@shared/abode";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -352,7 +353,7 @@ export default function AbodeStockings() {
                         <div className="grid grid-cols-[1fr_auto] gap-3 rounded-lg bg-[#f8f6f2] p-3 sm:grid-cols-[minmax(120px,1fr)_repeat(3,minmax(90px,0.8fr))_auto]">
                         <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Name on stocking</p><p className="mt-1 whitespace-pre-wrap break-words text-lg font-semibold leading-tight">{item.stockingDetails.name || "Name not provided"}</p><p className="mt-1 text-xs text-stone-500">{item.quantity} piece{item.quantity === 1 ? "" : "s"}</p></div>
                         <Spec label="Colour" value={item.stockingDetails.colour} />
-                        <Spec label="Font" value={item.stockingDetails.font} />
+                        <Spec label="Font" value={stockingFontLabel(item.stockingDetails.font)} />
                         <Spec label="Thread" value={item.stockingDetails.thread} />
                         <div className="col-span-2 self-start text-right sm:col-span-1"><span className={`inline-flex items-center gap-1 text-xs font-medium ${item.completed ? "text-emerald-800" : "text-stone-500"}`}>{item.completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}{item.completed ? "Done" : "In work"}</span></div>
                         </div>

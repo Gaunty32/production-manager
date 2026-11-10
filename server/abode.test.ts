@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { existsSync, readFileSync } from "node:fs";
 import * as XLSX from "xlsx";
 import { parseStockingRows } from "./abodeImport";
-import { isAbodeCustomer, stockingRate, stockingShippingRoute, stockingBagNetworkCode } from "../shared/abode";
+import { isAbodeCustomer, stockingRate, stockingShippingRoute, stockingBagNetworkCode, stockingFontLabel } from "../shared/abode";
 import { billedQuantityForMatchingLine, calculateJobPrice } from "../shared/pricing";
 import { renderStockingDeliveryNote, renderStockingLabel } from "./abodeDocuments";
 import { getDpdTrackingUrl } from "../shared/dpd-tracking";
@@ -14,6 +14,16 @@ const row = {
   Name: "McDONALD  Jr", "Delivery name": "Test Recipient", "Address line 1": "1 Test Street",
   "Address line 2": "", Town: "London", County: "", Postcode: "SW1A 1AA",
 };
+test("stocking font labels show the supplied production names without changing unknown values", () => {
+  assert.equal(stockingFontLabel("Font 1"), "Font 1 — Sad Night Script Regular");
+  assert.equal(stockingFontLabel("Font 2"), "Font 2 — Tabac G3 Semibold");
+  assert.equal(stockingFontLabel("Font 3"), "Font 3 — Stolen Times Italic");
+  assert.equal(stockingFontLabel("  font 2  "), "Font 2 — Tabac G3 Semibold");
+  assert.equal(stockingFontLabel("3"), "Font 3 — Stolen Times Italic");
+  assert.equal(stockingFontLabel("Font 4"), "Font 4");
+  assert.equal(stockingFontLabel("Sad Night Script Regular"), "Sad Night Script Regular");
+  assert.equal(stockingFontLabel(""), "");
+});
 test("uploaded first order contains 33 stockings grouped into 15 independent jobs", t => {
   const file = "attached_assets/Select_Branding_Stocking_Orders_06.11.26_1793983854505.csv";
   // The customer's private source upload is deliberately not a public fixture.

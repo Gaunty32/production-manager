@@ -1,5 +1,17 @@
 export const ABODE_CUSTOMER_NAME = "Abode Home & Gifts";
 export const ABODE_CARRIAGE = 5.50;
+const STOCKING_FONT_NAMES: Record<string, string> = {
+  "1": "Sad Night Script Regular",
+  "2": "Tabac G3 Semibold",
+  "3": "Stolen Times Italic",
+};
+
+// Display-only mapping: keep the original spreadsheet values intact.
+export function stockingFontLabel(font: string): string {
+  const number = /^(?:font\s*)?([1-3])$/i.exec(font.trim())?.[1];
+  return number ? `Font ${number} — ${STOCKING_FONT_NAMES[number]}` : font;
+}
+
 export function isAbodeCustomer(customer: { name: string } | null | undefined): boolean {
   return customer?.name.trim().toLowerCase() === ABODE_CUSTOMER_NAME.toLowerCase();
 }

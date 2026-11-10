@@ -6,6 +6,7 @@ import { inspectAbodeReferenceFile, uploadAbodeReferenceFile } from "@/lib/abode
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AbodeSamplePreview } from "@/components/AbodeSamplePreview";
+import { stockingFontLabel } from "@shared/abode";
 
 export type AbodeDigitalSample = {
   id: string;
@@ -247,7 +248,7 @@ export function AbodeStockingSample({ jobId, itemId, name, font, colour, thread,
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">Approval details</p>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <div className="col-span-2"><dt className="text-xs text-stone-500">Name</dt><dd className="mt-0.5 break-words text-lg font-semibold">{name || "Name not provided"}</dd></div>
-              <div><dt className="text-xs text-stone-500">Font</dt><dd className="mt-0.5 font-medium">{font || "—"}</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-stone-500">Font</dt><dd className="mt-0.5 break-words font-medium">{stockingFontLabel(font) || "—"}</dd></div>
               <div><dt className="text-xs text-stone-500">Stocking colour</dt><dd className="mt-0.5 font-medium">{colour || "—"}</dd></div>
               <div><dt className="text-xs text-stone-500">Thread colour</dt><dd className="mt-0.5 font-medium">{thread || "—"}</dd></div>
             </dl>
