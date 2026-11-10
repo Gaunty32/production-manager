@@ -172,14 +172,27 @@ test("import → completion threshold → dispatch → draft billing with safe r
     const staffNote = await (await request("/delivery-notes", notePayload)).json();
     assert.ok(staffNote.id);
     assert.equal((await (await request("/delivery-notes", notePayload)).json()).id, staffNote.id);
-    const customerNote = await (await customerRequest("/delivery-notes", { ...notePayload, objectKey: `/objects/uploads/${randomUUID()}` })).json();
-    assert.ok(customerNote.id);
+    const duplicateNote = await (await customerRequest("/delivery-notes", { ...notePayload, objectKey: `/objects/uploads/${randomUUID()}` })).json();
+    assert.equal(duplicateNote.id, staffNote.id);
+    assert.equal(duplicateNote.skipped, true, "A different PDF cannot create another note");
+    assert.equal((await backupUpload(false)).status, 409, "Existing notes block backup uploads too");
+    assert.equal(backupUploads, 2, "An existing note must not write more storage");
+    const concurrentOrder = context.orders.find((o: any) => o.poNumber === "TEST-3");
+    const concurrentNotes = await Promise.all([1, 2].map(() => customerRequest("/delivery-notes", {
+      jobId: concurrentOrder.id, fileName: "dispatch-note-TEST-3.pdf", objectKey: `/objects/uploads/${randomUUID()}`,
+    }).then(response => response.json())));
+    assert.equal(concurrentNotes[0].id, concurrentNotes[1].id, "Concurrent uploads must resolve to the same note");
+    assert.equal(concurrentNotes.filter(note => note.skipped).length, 1, "Only one concurrent request inserts");
     const notesContext = await (await customerRequest("")).json();
     const orderNotes = notesContext.orders.find((o: any) => o.id === dpd.id).deliveryNotes;
-    assert.equal(orderNotes.length, 2, "New versions keep earlier delivery notes");
+    assert.equal(orderNotes.length, 1, "Each order has one delivery note");
     assert.ok(orderNotes.some((note: any) => note.uploadedBy === "staff"));
-    assert.ok(orderNotes.some((note: any) => note.uploadedBy === "customer"));
-    const pdf = await customerRequest(`/orders/${dpd.id}/delivery-notes/${customerNote.id}`);
+    const concurrentOrderNotes = notesContext.orders.find((o: any) => o.id === concurrentOrder.id).deliveryNotes;
+    assert.equal(concurrentOrderNotes.length, 1);
+    assert.equal(concurrentOrderNotes[0].uploadedBy, "customer");
+    const savedNotes = await storage.getJobFiles(concurrentOrder.id);
+    assert.equal(savedNotes.filter(file => file.fileName.startsWith("Supplied delivery note — ")).length, 1);
+    const pdf = await customerRequest(`/orders/${dpd.id}/delivery-notes/${staffNote.id}`);
     assert.equal(pdf.status, 200);
     assert.equal(pdf.headers.get("content-type"), "application/pdf");
     assert.equal(pdf.headers.get("cache-control"), "private, no-store");
@@ -191,7 +204,7 @@ test("import → completion threshold → dispatch → draft billing with safe r
     assert.equal(preferredNote.headers.get("content-type"), "application/pdf");
     assert.deepEqual(Buffer.from(await preferredNote.arrayBuffer()), objectBytes);
     const afterNotesPreview = await (await request("/delivery-notes/preview", { fileNames: ["dispatch-note-TEST-1.pdf"] })).json();
-    assert.equal(afterNotesPreview.files[0].existingCount, 2);
+    assert.equal(afterNotesPreview.files[0].existingCount, 1);
     objectBytes = photoBytes;
     photoType = "image/png";
     // Every personalised stocking needs its own current-version sign-off.

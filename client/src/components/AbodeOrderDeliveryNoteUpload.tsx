@@ -5,12 +5,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { uploadAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
 import { useToast } from "@/hooks/use-toast";
 
-export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isStaff, hasNotes, onChanged }: {
+export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isStaff, onChanged }: {
   baseUrl: string;
   jobId: string;
   orderNumber: string;
   isStaff: boolean;
-  hasNotes: boolean;
   onChanged: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -34,13 +33,18 @@ export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isSt
       if (result.files?.[0]?.status !== "matched" || result.files[0].jobId !== jobId) {
         throw new Error(`This filename does not match this order. Name the PDF dispatch-note-${orderNumber}.pdf and select it again.`);
       }
+      if (result.files[0].existingCount > 0) {
+        onChanged();
+        throw new Error("This order already has a delivery note. Another upload is not needed.");
+      }
       const objectKey = savedKey.current || await uploadAbodeDeliveryNote(file, { baseUrl, isStaff, jobId });
       savedKey.current = objectKey;
-      await apiRequest("POST", `${baseUrl}/delivery-notes`, { objectKey, jobId, fileName: file.name });
+      const saved = await apiRequest("POST", `${baseUrl}/delivery-notes`, { objectKey, jobId, fileName: file.name });
+      const savedResult = await saved.json();
       savedKey.current = null;
       setFile(null);
       if (input.current) input.current.value = "";
-      toast({ title: "Delivery note saved", description: `The PDF is attached to order ${orderNumber}.` });
+      toast({ title: savedResult.skipped ? "Delivery note already attached" : "Delivery note saved", description: savedResult.skipped ? "The existing PDF has been kept." : `The PDF is attached to order ${orderNumber}.` });
       onChanged();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The delivery note could not be saved. Please retry.");
@@ -67,8 +71,8 @@ export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isSt
         setFile(next);
       }} />
     <Button type="button" size="sm" variant="outline" className="min-h-10 w-full sm:w-auto" disabled={busy}
-      onClick={() => input.current?.click()}><Upload className="mr-1.5 h-4 w-4" />{hasNotes ? "Choose updated delivery note" : "Choose delivery note PDF"}</Button>
-    <p className="break-words text-xs leading-5 text-stone-500">Name the file dispatch-note-{orderNumber}.pdf. Maximum 10 MB.{hasNotes ? " A new upload keeps earlier versions." : ""}</p>
+      onClick={() => input.current?.click()}><Upload className="mr-1.5 h-4 w-4" />Choose delivery note PDF</Button>
+    <p className="break-words text-xs leading-5 text-stone-500">Name the file dispatch-note-{orderNumber}.pdf. Maximum 10 MB. One delivery note per order.</p>
     {file && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white p-2">
       <span className="min-w-0 flex-1 break-all text-xs text-stone-700">{file.name}</span>
       <Button type="button" size="sm" className="min-h-10 w-full sm:w-auto" disabled={busy} onClick={() => void save()}>

@@ -147,12 +147,20 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
 
   const uploadMatched = async () => {
     if (lock.current || isPreviewing || isUploading) return;
-    const matched = rows.filter((row) => row.status === "matched" && row.jobId && row.state !== "success");
+    const matched = rows.filter((row) => row.status === "matched" && row.jobId && !row.existingCount && row.state !== "success");
     if (!matched.length) return;
     lock.current = true;
     setIsUploading(true);
     let completed = 0;
+    let skipped = 0;
+    let failures = 0;
+    const attachedOrders = new Set<string>();
     for (const row of matched) {
+      if (attachedOrders.has(row.jobId!)) {
+        skipped++;
+        setRows(current => current.map(item => item.file === row.file ? { ...item, existingCount: 1, state: "queued" } : item));
+        continue;
+      }
       setRows((current) => current.map((item) => item.file === row.file ? { ...item, state: "uploading", message: undefined } : item));
       try {
         let objectKey = row.objectKey;
@@ -161,21 +169,26 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
           objectKey = key;
           setRows((current) => current.map((item) => item.file === row.file ? { ...item, objectKey: key } : item));
         }
-        await apiRequest("POST", `${baseUrl}/delivery-notes`, {
+        const response = await apiRequest("POST", `${baseUrl}/delivery-notes`, {
           objectKey,
           fileName: row.file.name,
           jobId: row.jobId,
         });
-        completed += 1;
-        setRows((current) => current.map((item) => item.file === row.file ? { ...item, state: "success", message: "Saved to the order." } : item));
+        const result = await response.json();
+        attachedOrders.add(row.jobId!);
+        if (result.skipped) skipped++;
+        else completed++;
+        setRows((current) => current.map((item) => item.file === row.file
+          ? result.skipped ? { ...item, state: "queued", existingCount: 1 } : { ...item, state: "success", message: "Saved to the order." }
+          : item.jobId === row.jobId ? { ...item, existingCount: 1 } : item));
       } catch (error) {
+        failures++;
         setRows((current) => current.map((item) => item.file === row.file ? { ...item, state: "error", message: friendlyError(error) } : item));
       }
     }
     lock.current = false;
     setIsUploading(false);
     onChanged();
-    const failures = matched.length - completed;
     if (failures) {
       toast({
         title: `${completed} saved · ${failures} failed`,
@@ -183,11 +196,11 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
         variant: "destructive",
       });
     } else {
-      toast({ title: "Delivery notes uploaded", description: `${completed} PDF${completed === 1 ? "" : "s"} saved to the matched orders.` });
+      toast({ title: "Delivery notes processed", description: `${completed} PDF${completed === 1 ? "" : "s"} saved.${skipped ? ` ${skipped} skipped because the order already has a note.` : ""}` });
     }
   };
 
-  const matchedCount = rows.filter((row) => row.status === "matched" && row.jobId && row.state !== "success").length;
+  const matchedCount = new Set(rows.filter((row) => row.status === "matched" && row.jobId && !row.existingCount && row.state !== "success").map(row => row.jobId)).size;
 
   return (
     <section className="mb-6 rounded-2xl border border-stone-200 bg-white shadow-sm" aria-labelledby="delivery-notes-title">
@@ -253,7 +266,7 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
           </div>
           {hasPreview && rows.some((row) => row.status === "matched" && row.existingCount > 0) && (
             <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-950">
-              Some orders already have a delivery note. Uploading adds a new version; earlier PDFs are kept.
+              Orders that already have a delivery note are skipped. Each order needs only one delivery note.
             </p>
           )}
           {hasPreview && rows.some((row) => row.status === "not_found" || row.status === "invalid") && (
@@ -274,7 +287,7 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
                     <p className="break-all text-sm font-medium text-stone-800">{row.file.name}</p>
                     <p className={`mt-0.5 text-xs leading-5 ${row.state === "error" || row.status !== "matched" && hasPreview ? "text-amber-900" : "text-stone-500"}`}>
                       {!hasPreview ? isPreviewing ? "Matching automatically…" : "Waiting for matching — use Retry matching if needed" : row.status === "matched"
-                        ? `Matched to order ${row.orderNumber ?? "—"}${row.existingCount ? ` · ${row.existingCount} earlier PDF${row.existingCount === 1 ? "" : "s"}` : ""}`
+                        ? `Matched to order ${row.orderNumber ?? "—"}${row.existingCount && row.state !== "success" ? " · Already attached — skipped" : ""}`
                         : row.status === "not_found" ? "No order found for this filename"
                         : row.message ?? "Filename could not be matched"}
                       {row.state === "uploading" && " · Uploading"}
@@ -300,17 +313,17 @@ export function AbodeOrderDeliveryNotes({ notes = [], baseUrl, jobId, orderNumbe
     <section className="border-t border-stone-100 px-4 py-3 md:px-5" aria-label="Customer-supplied delivery notes">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-sm font-semibold text-stone-800">Delivery note</h4>
-        {notes.length > 0 && <span className="text-xs text-stone-500">{notes.length} PDF{notes.length === 1 ? "" : "s"} · newest first</span>}
+        {notes.length > 0 && <span className="text-xs text-stone-500">PDF attached</span>}
       </div>
       <p className={`mt-1 text-xs ${notes.length ? "text-stone-500" : "text-amber-900"}`}>{notes.length ? "Check the saved PDF using Open. To print all pages, choose Print in the PDF viewer." : "No delivery note is saved to this order yet. Upload the original PDF here."}</p>
       <ul className="mt-2 space-y-2">
-        {notes.map((note, index) => (
+        {notes.slice(0, 1).map((note) => (
           <li key={note.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg bg-[#f8f6f2] px-3 py-2.5">
             <div className="flex min-w-0 items-start gap-2">
               <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#8a4e3d]" />
               <div className="min-w-0">
                 <p className="break-all text-sm font-medium text-stone-800">{note.fileName}</p>
-                <p className="mt-0.5 text-xs text-stone-500">{index === 0 ? "Current note" : "Previous version"} · {addedDate(note.createdAt)}</p>
+                <p className="mt-0.5 text-xs text-stone-500">Added {addedDate(note.createdAt)}</p>
               </div>
             </div>
             <div className="flex shrink-0 gap-3 text-sm font-medium text-[#344e43]">
@@ -324,7 +337,7 @@ export function AbodeOrderDeliveryNotes({ notes = [], baseUrl, jobId, orderNumbe
           </li>
         ))}
       </ul>
-      <AbodeOrderDeliveryNoteUpload baseUrl={baseUrl} jobId={jobId} orderNumber={orderNumber} isStaff={isStaff} hasNotes={notes.length > 0} onChanged={onChanged} />
+      {!notes.length && <AbodeOrderDeliveryNoteUpload baseUrl={baseUrl} jobId={jobId} orderNumber={orderNumber} isStaff={isStaff} onChanged={onChanged} />}
     </section>
   );
 }

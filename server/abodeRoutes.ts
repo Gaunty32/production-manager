@@ -94,7 +94,7 @@ export function registerAbodeRoutes(app: Express, deps: {
             fileUrl: `${base}/orders/${encodeURIComponent(job.id)}/photos/${encodeURIComponent(photo.id)}`,
             createdAt: photo.createdAt, lineItemId: photo.lineItemId,
           })),
-          deliveryNotes: deliveryNotes.filter(note => note.jobId === job.id).map(note => ({
+          deliveryNotes: deliveryNotes.filter(note => note.jobId === job.id).slice(0, 1).map(note => ({
             id: note.id, fileName: note.fileName.slice(DELIVERY_NOTE_PREFIX.length),
             fileUrl: `${base}/orders/${encodeURIComponent(job.id)}/delivery-notes/${encodeURIComponent(note.id)}`,
             createdAt: note.createdAt, uploadedBy: note.uploadedBy,
@@ -190,6 +190,9 @@ export function registerAbodeRoutes(app: Express, deps: {
       if (deliveryNoteOrderNumber(fileName) !== order.orderNumber) {
         return res.status(400).json({ error: "The PDF filename does not match this order number. Nothing has been attached." });
       }
+      if ((await storage.getJobFiles(jobId)).some(isSuppliedDeliveryNote)) {
+        return res.status(409).json({ error: "This order already has a delivery note. Another upload is not needed." });
+      }
       if (!Buffer.isBuffer(req.body) || !req.body.length || req.body.length > MAX_DELIVERY_NOTE_BYTES || !hasPdfSignature(req.body)) {
         return res.status(400).json({ error: "Choose a valid PDF delivery note up to 10 MB" });
       }
@@ -214,12 +217,21 @@ export function registerAbodeRoutes(app: Express, deps: {
       }
       const [signature] = await file.download({ start: 0, end: 7 });
       if (!hasPdfSignature(signature)) return res.status(400).json({ error: "This file is not a PDF delivery note" });
-      const note = await storage.createJobFile({
-        jobId: job.id, fileName: `${DELIVERY_NOTE_PREFIX}${fileName}`, fileUrl: objectKey,
-        fileSize: size, fileType: "application/pdf", uploadedBy: customerMode ? "customer" : "staff",
-        uploaderId: customerMode ? req.session.impersonationCustomerUserId || req.session.customerUserId : req.session.userId,
+      // Serialize staff/customer uploads for the same order. Lock the parent
+      // even when no note exists yet so concurrent requests cannot both insert.
+      const result = await db.transaction(async tx => {
+        await tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, job.id)).for("update");
+        const existing = (await tx.select().from(jobFiles).where(eq(jobFiles.jobId, job.id))
+          .orderBy(desc(jobFiles.createdAt))).find(isSuppliedDeliveryNote);
+        if (existing) return { note: existing, skipped: existing.fileUrl !== objectKey };
+        const [note] = await tx.insert(jobFiles).values({
+          jobId: job.id, fileName: `${DELIVERY_NOTE_PREFIX}${fileName}`, fileUrl: objectKey,
+          fileSize: size, fileType: "application/pdf", uploadedBy: customerMode ? "customer" : "staff",
+          uploaderId: customerMode ? req.session.impersonationCustomerUserId || req.session.customerUserId : req.session.userId,
+        }).returning();
+        return { note, skipped: false };
       });
-      res.json({ id: note.id, success: true, orderNumber: order.orderNumber });
+      res.json({ id: result.note.id, success: true, skipped: result.skipped, orderNumber: order.orderNumber });
     }));
     app.get(`${base}/orders/:id/delivery-notes/:noteId`, auth, wrap(async (req, res, customer) => {
       const { job } = await owned(req.params.id, customer);

@@ -57,6 +57,12 @@ Delivery notes must be accessible on each customer's order card, with a way to c
 
 **How to apply:** Keep saved notes visible alongside an order-level upload control. Only report a note as attached after it has actually been saved to that order.
 
+Each order has one delivery note, not delivery-note revisions.
+
+**Why:** The user said: “we don't need to upload another version of the delivery note. each order just has one delivery note.”
+
+**How to apply:** Skip already-attached orders in bulk uploads and offer order-level upload only when no note is saved. Enforce this atomically across staff/customer uploads. Preserve existing stored files rather than deleting historical duplicates.
+
 Bulk delivery-note selection should match automatically and accept multiple PDFs in a drop, including additional batches without replacing the existing selection.
 
 **Why:** The user requested: “i would like this to auto match and i would like to drag more than one file at a time.”
