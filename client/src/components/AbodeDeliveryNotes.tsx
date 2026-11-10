@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, ExternalLink, FileText, Loader2, Printer, Upload } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -63,35 +63,40 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
   const [hasPreview, setHasPreview] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [matchAttempt, setMatchAttempt] = useState(0);
   const { toast } = useToast();
 
   const chooseFiles = (fileList: FileList | File[]) => {
-    if (lock.current || isPreviewing) return;
+    if (lock.current) return;
     const incoming = Array.from(fileList);
     if (!incoming.length) return;
-    setHasPreview(false);
     setPreviewError("");
-    if (incoming.length > MAX_FILES) {
-      setRows([]);
-      setPreviewError("Choose no more than 50 PDFs at a time.");
-      if (inputRef.current) inputRef.current.value = "";
-      return;
-    }
+    if (inputRef.current) inputRef.current.value = "";
     const invalid = incoming.find((file) => !/\.pdf$/i.test(file.name) || (file.type && file.type !== "application/pdf"));
     if (invalid) {
-      setRows([]);
       setPreviewError(`${invalid.name} is not a PDF. Choose PDF files only.`);
-      if (inputRef.current) inputRef.current.value = "";
       return;
     }
-    const tooLarge = incoming.find((file) => file.size > MAX_FILE_SIZE);
+    const tooLarge = incoming.find((file) => !file.size || file.size > MAX_FILE_SIZE);
     if (tooLarge) {
-      setRows([]);
-      setPreviewError(`${tooLarge.name} is over 10 MB. Each PDF must be 10 MB or smaller.`);
-      if (inputRef.current) inputRef.current.value = "";
+      setPreviewError(`${tooLarge.name} is empty or over 10 MB. Each PDF must contain data and be 10 MB or smaller.`);
       return;
     }
-    setRows(incoming.map((file) => ({
+    const identity = (file: File) => JSON.stringify([file.name, file.size, file.lastModified]);
+    const seen = new Set(rows.map(row => identity(row.file)));
+    const additions = incoming.filter(file => {
+      const key = identity(file);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (rows.length + additions.length > MAX_FILES) {
+      setPreviewError("Keep no more than 50 PDFs in the list. Your existing selection has been kept.");
+      return;
+    }
+    if (!additions.length) return;
+    setHasPreview(false);
+    setRows(current => [...current, ...additions.map((file): UploadRow => ({
       file,
       fileName: file.name,
       orderNumber: null,
@@ -99,20 +104,28 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
       status: "invalid",
       existingCount: 0,
       state: "queued",
-    })));
-    if (inputRef.current) inputRef.current.value = "";
+    }))]);
   };
 
-  const previewFiles = async () => {
-    if (isPreviewing || isUploading || !rows.length) return;
+  // Match whenever the selected files change, not when match/upload metadata
+  // changes. Cancel stale responses when another batch is added mid-request.
+  const selectionKey = JSON.stringify(rows.map(row => [row.file.name, row.file.size, row.file.lastModified]));
+  useEffect(() => {
+    if (!rows.length) {
+      setHasPreview(false);
+      setIsPreviewing(false);
+      return;
+    }
+    let cancelled = false;
     setIsPreviewing(true);
     setHasPreview(false);
     setPreviewError("");
-    try {
+    void (async () => { try {
       const response = await apiRequest("POST", `${baseUrl}/delivery-notes/preview`, {
         fileNames: rows.map((row) => row.file.name),
       });
       const result = await response.json() as { files: PreviewMatch[] };
+      if (cancelled) return;
       if (!Array.isArray(result.files)) throw new Error("The preview response was not valid. Please try again.");
       const byName = new Map(result.files.map((item) => [item.fileName, item]));
       setRows((current) => current.map((row) => {
@@ -123,12 +136,14 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
       }));
       setHasPreview(true);
     } catch (error) {
+      if (cancelled) return;
       setPreviewError(friendlyError(error));
       toast({ title: "Could not match delivery notes", description: friendlyError(error), variant: "destructive" });
     } finally {
-      setIsPreviewing(false);
-    }
-  };
+      if (!cancelled) setIsPreviewing(false);
+    } })();
+    return () => { cancelled = true; };
+  }, [selectionKey, matchAttempt, baseUrl]);
 
   const uploadMatched = async () => {
     if (lock.current || isPreviewing || isUploading) return;
@@ -196,7 +211,7 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
           accept="application/pdf,.pdf"
           multiple
           aria-label="Choose customer delivery note PDFs"
-          disabled={isUploading || isPreviewing}
+          disabled={isUploading}
           onChange={(event) => event.target.files && chooseFiles(event.target.files)}
         />
         <button
@@ -211,11 +226,11 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
             setIsDragging(false);
             chooseFiles(event.dataTransfer.files);
           }}
-          disabled={isUploading || isPreviewing}
+          disabled={isUploading}
         >
           <Upload aria-hidden="true" className="h-5 w-5 text-[#344e43]" />
-          <span className="text-sm font-semibold">{isDragging ? "Drop delivery-note PDFs here" : "Choose or drop delivery-note PDFs"}</span>
-          <span className="text-xs text-stone-500">PDF only · up to 10 MB each · maximum 50 files</span>
+          <span className="text-sm font-semibold">{isDragging ? "Drop delivery-note PDFs here" : "Choose or drop one or more delivery-note PDFs"}</span>
+          <span className="text-xs text-stone-500">Matches automatically · add more in another drop · up to 10 MB each · maximum 50 files</span>
         </button>
         <p className="mt-3 text-xs leading-5 text-stone-500">Import the orders first, then name each PDF dispatch-note-ORDERNUMBER.pdf, for example dispatch-note-12345678.pdf. Original PDFs are kept unchanged, including every page.</p>
 
@@ -225,10 +240,11 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-medium">{rows.length} PDF{rows.length === 1 ? "" : "s"} selected</p>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={isPreviewing || isUploading} onClick={previewFiles}>
+              <Button type="button" variant="outline" size="sm" disabled={isPreviewing || isUploading} onClick={() => setMatchAttempt(value => value + 1)}>
                 {isPreviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-                {hasPreview ? "Check matches again" : "Match filenames"}
+                {isPreviewing ? "Matching…" : hasPreview ? "Check matches again" : "Retry matching"}
               </Button>
+              <Button type="button" variant="ghost" size="sm" disabled={isUploading} onClick={() => { setRows([]); setPreviewError(""); }}>Clear list</Button>
               <Button type="button" size="sm" disabled={!matchedCount || !hasPreview || isPreviewing || isUploading} onClick={() => void uploadMatched()}>
                 {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                 {isUploading ? "Uploading…" : `Upload matched (${matchedCount})`}
@@ -257,7 +273,7 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
                   <div className="min-w-0 flex-1">
                     <p className="break-all text-sm font-medium text-stone-800">{row.file.name}</p>
                     <p className={`mt-0.5 text-xs leading-5 ${row.state === "error" || row.status !== "matched" && hasPreview ? "text-amber-900" : "text-stone-500"}`}>
-                      {!hasPreview ? "Ready to match" : row.status === "matched"
+                      {!hasPreview ? isPreviewing ? "Matching automatically…" : "Waiting for matching — use Retry matching if needed" : row.status === "matched"
                         ? `Matched to order ${row.orderNumber ?? "—"}${row.existingCount ? ` · ${row.existingCount} earlier PDF${row.existingCount === 1 ? "" : "s"}` : ""}`
                         : row.status === "not_found" ? "No order found for this filename"
                         : row.message ?? "Filename could not be matched"}

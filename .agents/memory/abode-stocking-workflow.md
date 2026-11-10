@@ -56,3 +56,9 @@ Delivery notes must be accessible on each customer's order card, with a way to c
 **Why:** The user said: “It shoudl show here for the customer to check or upload.”
 
 **How to apply:** Keep saved notes visible alongside an order-level upload control. Only report a note as attached after it has actually been saved to that order.
+
+Bulk delivery-note selection should match automatically and accept multiple PDFs in a drop, including additional batches without replacing the existing selection.
+
+**Why:** The user requested: “i would like this to auto match and i would like to drag more than one file at a time.”
+
+**How to apply:** Start filename matching on selection/drop; keep the explicit upload step separate from matching so unmatched PDFs are never saved.
