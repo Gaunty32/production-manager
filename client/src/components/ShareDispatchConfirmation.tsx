@@ -52,7 +52,7 @@ export function ShareDispatchConfirmation({ jobId }: { jobId: string }) {
           <DialogHeader>
             <DialogTitle>Share your dispatch confirmation</DialogTitle>
             <DialogDescription>
-              A Merox-branded confirmation for your customer. This is not live DPD tracking and contains no DPD tracking link or collection details.
+              A Merox-branded confirmation for your customer, with a Track your parcel button for delivery updates from DPD Local.
             </DialogDescription>
           </DialogHeader>
           <div className="min-w-0 space-y-3">

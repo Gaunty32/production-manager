@@ -3,6 +3,7 @@ import type { IStorage } from "./storage";
 import { canShareDispatchConfirmation, MEROX_DISPATCH_CUSTOMER_ID } from "../shared/dispatch-confirmation";
 import { createDispatchToken, shipmentFingerprint, verifyDispatchToken } from "./dispatchConfirmationTokens";
 import { renderDispatchConfirmationPage } from "./dispatchConfirmationPage";
+import { getDpdTrackingUrl } from "../shared/dpd-tracking";
 
 type Dependencies = {
   storage: Pick<IStorage, "getCustomerUserById" | "getJob" | "getCustomer">;
@@ -60,6 +61,7 @@ export function registerDispatchConfirmationRoutes(app: Express, deps: Dependenc
         logoUrl: customer.logoUrl,
         reference: job.poNumber?.trim() || `Order ${job.jobNumber ?? "reference unavailable"}`,
         dispatchRecordedAt: recordedAt ? new Date(recordedAt).toISOString() : null,
+        trackingUrl: getDpdTrackingUrl(job, customer.address),
       }));
     } catch {
       console.error("Could not load dispatch confirmation");

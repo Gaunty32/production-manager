@@ -32,6 +32,7 @@ test("sharing is restricted to completed, tracked Merox DPD orders", () => {
     { customerId: "other-customer" }, { completed: false }, { status: "cancelled" },
     { status: "pending_customer_approval" }, { dhlTrackingNumber: "" },
     { dhlTrackingNumber: "  " }, { shippingMethod: "Collection" },
+    { shippingCarrier: "royal_mail" },
   ]) assert.equal(canShareDispatchConfirmation({ ...job, ...changes }), false);
 });
 
@@ -81,6 +82,22 @@ test("public renderer has no planner branding, outbound tracking or fabricated m
   assert.ok(renderDispatchConfirmationPage(null).includes("unavailable"));
 });
 
+test("tracking button only links to DPD Local and keeps postcode encoding safe", () => {
+  const data = {
+    brandName: "Merox", logoUrl: null, reference: "PO 1", dispatchRecordedAt: null,
+    trackingUrl: "https://track.dpdlocal.co.uk/search?reference=1234567890&postcode=SW1A+1AA",
+  };
+  const html = renderDispatchConfirmationPage(data);
+  assert.ok(html.includes('class="tracking-button"'));
+  assert.ok(html.includes("Track your parcel"));
+  assert.ok(html.includes("reference=1234567890&amp;postcode=SW1A+1AA"));
+  assert.ok(html.includes('rel="noopener noreferrer"'));
+  assert.ok(!html.includes("There are no live delivery updates"));
+  for (const trackingUrl of ["javascript:alert(1)", "https://evil.example/search", "https://track.dpdlocal.co.uk.evil.example/search"]) {
+    assert.ok(!renderDispatchConfirmationPage({ ...data, trackingUrl }).includes('class="tracking-button"'));
+  }
+});
+
 test("routes enforce ownership, Merox-only scope, eligibility and minimal public output", async () => {
   let currentJob = { ...job };
   const storage = {
@@ -119,7 +136,9 @@ test("routes enforce ownership, Merox-only scope, eligibility and minimal public
     assert.ok(page.headers.get("content-security-policy")?.includes("default-src 'none'"));
     assert.equal(page.headers.get("referrer-policy"), "no-referrer");
     assert.ok(html.includes(job.poNumber));
-    for (const privateValue of [job.jobName, job.notes, job.deliveryAddress, job.dhlTrackingNumber, "123456", "Select Branding"]) {
+    assert.ok(html.includes(`https://track.dpdlocal.co.uk/search?reference=${job.dhlTrackingNumber}`));
+    assert.ok(html.includes("Track your parcel"));
+    for (const privateValue of [job.jobName, job.notes, job.deliveryAddress, "123456", "Select Branding"]) {
       assert.ok(!html.includes(privateValue), `Public output leaked ${privateValue}`);
     }
     currentJob = { ...job, dhlTrackingNumber: "REPLACEMENT-TRACKING" };

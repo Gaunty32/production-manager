@@ -3,6 +3,7 @@ export interface DispatchConfirmationView {
   logoUrl: string | null;
   reference: string;
   dispatchRecordedAt: string | null;
+  trackingUrl?: string | null;
 }
 
 function escapeHtml(value: string): string {
@@ -235,6 +236,22 @@ function document(content: string, title: string): string {
       background: #f8f8f1;
     }
     .recorded-label { color: var(--muted); font-size: .82rem; }
+    .tracking-button {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 48px;
+      margin-top: 24px;
+      padding: 14px 20px;
+      border-radius: 10px;
+      background: var(--green);
+      color: #fff;
+      font-weight: 700;
+      text-decoration: none;
+      text-align: center;
+    }
+    .tracking-button:hover { background: var(--green-deep); }
+    .tracking-button:focus-visible { outline: 3px solid var(--gold); outline-offset: 4px; }
     .recorded time { color: var(--ink); font-size: .87rem; font-weight: 650; }
     .notice {
       margin: 20px 0 0;
@@ -325,6 +342,13 @@ export function renderDispatchConfirmationPage(data: DispatchConfirmationView | 
   const reference = escapeHtml(data.reference);
   const logoUrl = safeHttpsUrl(data.logoUrl);
   const date = formatRecordedDate(data.dispatchRecordedAt);
+  const trackingUrl = safeHttpsUrl(data.trackingUrl || null);
+  const hasDpdTracking = trackingUrl && new URL(trackingUrl).origin === "https://track.dpdlocal.co.uk"
+    && new URL(trackingUrl).pathname === "/search";
+  const tracking = hasDpdTracking
+    ? `<a class="tracking-button" href="${escapeHtml(trackingUrl!)}" target="_blank" rel="noopener noreferrer">Track your parcel</a>
+      <p class="notice">View the latest delivery updates on DPD Local. You may be asked for your delivery postcode.</p>`
+    : `<p class="notice">This confirms dispatch only. There are no live delivery updates or delivery estimate on this page.</p>`;
   const brand = logoUrl
     ? `<img class="brand-logo" src="${escapeHtml(logoUrl)}" alt="${brandName}" referrerpolicy="no-referrer">`
     : `<span class="brand-mark" aria-hidden="true">
@@ -362,12 +386,12 @@ export function renderDispatchConfirmationPage(data: DispatchConfirmationView | 
           </svg>
         </div>
         <div class="carrier-copy">
-          <strong>Dispatch confirmed with DPD</strong>
+          <strong>Dispatch confirmed with DPD Local</strong>
           <span>Your order has been marked as dispatched.</span>
         </div>
       </div>
       ${recorded}
-      <p class="notice">This confirms dispatch only. There are no live delivery updates or delivery estimate on this page.</p>
+      ${tracking}
     </div>
   </article>
   <p class="footer">This page is a dispatch confirmation for the order reference shown above.</p>

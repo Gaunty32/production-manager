@@ -7,11 +7,13 @@ export function canShareDispatchConfirmation(job: {
   status?: string;
   dhlTrackingNumber?: string | null;
   shippingMethod?: string | null;
+  shippingCarrier?: string | null;
 }): boolean {
   return job.customerId === MEROX_DISPATCH_CUSTOMER_ID &&
     job.completed &&
     job.status !== "cancelled" &&
     job.status !== "pending_customer_approval" &&
+    job.shippingCarrier !== "royal_mail" &&
     Boolean(job.dhlTrackingNumber?.trim()) &&
     // These are billing/fulfilment methods, not courier names.
     (!job.shippingMethod || ["direct_delivery", "consolidated"].includes(job.shippingMethod) || /^dpd\b/i.test(job.shippingMethod));
