@@ -158,10 +158,14 @@ test("Abode import → early label → no approval → photo → actual despatch
     await db.insert(stockingProduction).values(Array.from({ length: 99 }, () => ({ lineItemId: randomUUID(), customerId: customer.id, unitPrice: 7 })));
     await storage.updateJobLineItem(dpd.items[0].id, { completed: true });
     assert.equal((await request(`/orders/${dpd.id}/complete`, {})).status, 200, "No sample approval required");
+    const completedOrder = await storage.getJob(dpd.id);
+    assert.equal(completedOrder?.completed, true);
+    assert.equal(completedOrder?.invoiceStatus, "ready", "Completing in Abode puts the order into draft invoicing without the main queue");
     const items = await storage.getJobLineItems(dpd.id);
     assert.deepEqual(items.map(item => item.agreedUnitPrice).sort(), [5, 5, 7]);
     assert.equal(calculateJobPrice(items).totalPrice, 17);
     assert.equal((await request(`/orders/${dpd.id}/complete`, {})).status, 200);
+    assert.equal((await storage.getJob(dpd.id))?.invoiceStatus, "ready", "Completion retries keep the draft invoice ready");
     const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(stockingProduction).where(eq(stockingProduction.customerId, customer.id));
     assert.equal(count.count, 102, "Completion retries preserve lifetime count");
     assert.equal(await hasUndespatchedAbodeOrder([dpd.id]), true, "Completion plus early tracking must not trigger despatch email");

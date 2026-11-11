@@ -65,6 +65,7 @@ import { useParams, useLocation } from "wouter";
 import { isPast, isToday, format, addDays, startOfDay, endOfDay } from "date-fns";
 import { calculateJobPrice, type PricingTable } from "@shared/pricing";
 import { getCustomerColorClasses } from "@shared/colors";
+import { isStockingWorkflowJob } from "@shared/abode";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -141,9 +142,12 @@ export default function Dashboard() {
     return null;
   };
 
-  const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithLineItems[]>({
+  const { data: allJobs = [], isLoading: jobsLoading } = useQuery<JobWithLineItems[]>({
     queryKey: machineId ? ["/api/jobs", `?machineId=${machineId}`] : ["/api/jobs"],
   });
+  // Keep the shared API/cache intact for invoicing. Only the main production
+  // view excludes stockings, which are managed in the Abode sidebar section.
+  const jobs = allJobs.filter(job => !isStockingWorkflowJob(job));
 
   const { data: logoSetups = [], isLoading: logoSetupsLoading } = useQuery<LogoSetup[]>({
     queryKey: ["/api/logo-setups"],

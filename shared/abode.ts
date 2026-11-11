@@ -29,6 +29,13 @@ export function stockingBagNetworkCode(weightGrams: number): string {
   return weightGrams <= 1000 ? "2^68" : "2^32";
 }
 export type StockingDetails = { colour: string; font: string; thread: string; name: string };
+/** Stocking imports are worked in their own section, not the main queue. */
+export function isStockingWorkflowJob(job: {
+  lineItems?: readonly { stockingDetails?: StockingDetails | null }[] | null;
+}): boolean {
+  return job.lineItems?.some(item => Boolean(item.stockingDetails)) ?? false;
+}
+
 export type StockingRecipient = { name: string; line1: string; line2: string; town: string; county: string; postcode: string };
 
 // Conservative UK remote-area routing: anything uncertain goes to staff/Royal
