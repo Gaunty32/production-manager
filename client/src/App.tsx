@@ -352,10 +352,10 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
 
   return (
     <DemoModeContext.Provider value={isDemoMode}>
-      <SidebarProvider defaultOpen={true} style={style as React.CSSProperties}>
-        <div className="flex h-screen h-dvh w-full">
+      <SidebarProvider defaultOpen={true} style={style as React.CSSProperties} className="h-screen h-dvh min-h-0 overflow-hidden">
+        <div className="flex h-full min-h-0 w-full overflow-hidden">
           <AppSidebar />
-          <div className="flex flex-col flex-1 min-w-0">
+          <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
             {isDemoMode && (
               <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/15 border-b border-amber-500/30 shrink-0" data-testid="banner-demo-mode">
                 <FlaskConical className="h-4 w-4 text-amber-600 shrink-0" />
@@ -367,7 +367,7 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
             {isStaffImpersonating && user && realUser && (
               <StaffImpersonationBanner impersonatedUser={user as any} realUser={realUser as any} />
             )}
-            <header className="flex items-center justify-between p-3 md:p-4 border-b sticky top-0 bg-background z-10 gap-2">
+            <header className="flex shrink-0 items-center justify-between p-3 md:p-4 border-b sticky top-0 bg-background z-10 gap-2">
               <div className="flex items-center gap-2 md:gap-3">
                 <SidebarTrigger data-testid="button-sidebar-toggle" />
               </div>
@@ -395,7 +395,7 @@ function AuthenticatedApp({ style }: { style: Record<string, string> }) {
                 </DropdownMenu>
               </div>
             </header>
-            <main className="flex-1 overflow-hidden">
+            <main className="min-h-0 flex-1 overflow-hidden">
               <StaffRouter />
             </main>
           </div>
