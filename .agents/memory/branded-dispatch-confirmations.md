@@ -15,8 +15,8 @@ A branded page does not conceal the hosting domain or change existing DPD emails
 
 **How to apply:** Explain these limits when describing the feature; do not promise complete anonymity or white-labelling across the delivery experience.
 
-The user reports that DPD are removing Select Branding's name and logo and replacing them with the DPD Local name and logo for the Merox arrangement. The affected touchpoints and whether origin-history details are also removed are not yet confirmed.
+The user confirms that DPD are removing all Select Branding sender references, including tracking-history references, and replacing the name and logo with DPD Local branding for the Merox arrangement.
 
-**Why:** DPD-side branding changes may remove the original reason for avoiding their tracking page, but replacing a logo alone does not establish that all sender details are hidden.
+**Why:** This planned DPD-side change addresses the original reason for avoiding their tracking page.
 
-**How to apply:** Confirm the scope before replacing the interim Merox dispatch confirmation with DPD tracking links.
+**How to apply:** DPD tracking links can be considered for Merox once the change is active and a real tracking page has been checked. The user has confirmed the scope, not that the change is already live; do not replace the interim feature without their request.
