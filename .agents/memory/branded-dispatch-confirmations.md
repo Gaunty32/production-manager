@@ -20,3 +20,9 @@ The user confirms that DPD are removing all Select Branding sender references, i
 **Why:** This planned DPD-side change addresses the original reason for avoiding their tracking page.
 
 **How to apply:** The user authorised DPD links and said the change should now be live. Do not claim DPD's external branding has been independently verified unless a real recipient tracking page has been checked.
+
+Merox's despatch email must contain the shareable branded confirmation links, rather than requiring Merox to open the planner to obtain them. Tell Merox to share the link, not the entire internal email.
+
+**Why:** The user explicitly asked for the links in the email; forwarding the internal email would expose information the recipient page intentionally excludes.
+
+**How to apply:** Preserve one email per consolidated shipment, with a separate confirmation link per included eligible order. Keep retry link contents stable for provider idempotency; do not resend historical notifications to add links.
