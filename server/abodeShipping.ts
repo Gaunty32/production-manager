@@ -29,11 +29,13 @@ export async function bookAbodeLabel(jobId: string) {
   try {
     const r = order.recipient;
     result = await dpdService.createShipment({
+      deferLabelFetch: true,
       recipient: { name: r.name, street: [r.line1, r.line2].filter(Boolean).join(", "), city: r.town, zipCode: r.postcode, country: "GB" },
       parcels: [{ weight: ABODE_DEFAULT_WEIGHT_GRAMS, customerReference: order.orderNumber }],
       reference: order.orderNumber, networkCode: ABODE_NETWORK_CODE,
     });
-  } catch {
+  } catch (error) {
+    console.error(`[Abode] DPD booking failed for job ${jobId}:`, error instanceof Error ? error.message : "Courier error");
     await db.update(stockingOrders).set({ shipmentState: "review" }).where(eq(stockingOrders.jobId, jobId));
     throw new Error("DPD booking needs review. Check your DPD account before doing anything else; do not rebook.");
   }
@@ -48,9 +50,23 @@ export async function bookAbodeLabel(jobId: string) {
         shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
       }).where(eq(jobs.id, jobId));
     });
-  } catch {
+  } catch (error) {
+    console.error(`[Abode] Could not save booked shipment for job ${jobId}, shipment ${result.shipmentJobId}, tracking ${result.trackingNumber}:`, error instanceof Error ? error.message : "Database error");
     // Never buy another shipment when the remote purchase may have succeeded.
     return { ...result, warning: "DPD booked this parcel but saving failed. Keep this tracking number and label, then recover the booking. Do not book again." };
+  }
+  // Tracking and the shipment ID are already durable if label retrieval is slow
+  // or interrupted. Fetching/printing can safely be retried without repurchasing.
+  if (!result.labelHtml && result.shipmentJobId) {
+    const label = await dpdService.fetchLabel(result.shipmentJobId);
+    if (label) {
+      result.labelHtml = label;
+      try {
+        await db.update(stockingOrders).set({ labelHtml: label }).where(eq(stockingOrders.jobId, jobId));
+      } catch (error) {
+        console.error(`[Abode] Could not cache label for booked job ${jobId}:`, error instanceof Error ? error.message : "Database error");
+      }
+    }
   }
   return result;
 }

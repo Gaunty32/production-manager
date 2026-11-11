@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, serial, timestamp, boolean, index, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, bigint, serial, timestamp, boolean, index, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -255,7 +255,7 @@ export const stockingOrders = pgTable("stocking_orders", {
   shippingRoute: text("shipping_route").notNull(),
   shipmentState: text("shipment_state").notNull().default("unbooked"),
   labelHtml: text("label_html"),
-  shipmentId: integer("shipment_id"),
+  shipmentId: bigint("shipment_id", { mode: "number" }),
   bookedAt: timestamp("booked_at"),
   dispatchedAt: timestamp("dispatched_at"),
   deliveredAt: timestamp("delivered_at"),

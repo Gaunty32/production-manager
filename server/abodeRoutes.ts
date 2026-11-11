@@ -10,6 +10,7 @@ import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate } fr
 import { parseStockingRows } from "./abodeImport";
 import { completeStockingOrder } from "./abodeProduction";
 import { renderStockingLabel } from "./abodeDocuments";
+import { renderAbodeLabelPdf } from "./abodeLabelPdf";
 import { dpdService } from "./dpd";
 import { maybeSendDispatchNotification } from "./customerOrderNotifications";
 import { ObjectStorageService } from "./objectStorage";
@@ -375,7 +376,19 @@ export function registerAbodeRoutes(app: Express, deps: {
         if (recovery ? order.shippingRoute !== "dpd" || !["booking", "review"].includes(order.shipmentState) : order.shippingRoute !== "royal_mail") {
           return res.status(409).json({ error: "This action does not match this order's shipping route" });
         }
-        const { trackingNumber } = z.object({ trackingNumber: z.string().trim().min(5).max(80).regex(/^[A-Za-z0-9 -]+$/) }).parse(req.body);
+        const { trackingNumber, shipmentId } = z.object({
+          trackingNumber: z.string().trim().min(5).max(80).regex(/^[A-Za-z0-9 -]+$/),
+          shipmentId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+        }).parse(req.body);
+        let existingLabel: string | null = null;
+        if (recovery && shipmentId) {
+          existingLabel = await dpdService.fetchLabel(shipmentId);
+          const labelText = existingLabel?.replace(/<[^>]*>/g, " ") || "";
+          const contains = (value: string) => new RegExp(`(^|[^A-Za-z0-9])${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z0-9]|$)`).test(labelText);
+          if (!existingLabel || !contains(order.orderNumber) || !contains(trackingNumber)) {
+            return res.status(409).json({ error: "The existing DPD label could not be verified against this order and tracking number." });
+          }
+        }
         await db.transaction(async tx => {
           const [locked] = await tx.select().from(jobs).where(eq(jobs.id, job.id)).for("update");
           if (!editable(locked.invoiceStatus)) throw new Error("This order has already been invoiced");
@@ -384,7 +397,10 @@ export function registerAbodeRoutes(app: Express, deps: {
             dhlTrackingNumber: trackingNumber, shippingCost: String(ABODE_CARRIAGE),
             shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
           }).where(eq(jobs.id, job.id));
-          await tx.update(stockingOrders).set({ shipmentState: "booked", bookedAt: order.bookedAt || new Date() }).where(eq(stockingOrders.jobId, job.id));
+          await tx.update(stockingOrders).set({
+            shipmentState: "booked", bookedAt: order.bookedAt || new Date(),
+            ...(recovery && shipmentId ? { shipmentId, labelHtml: existingLabel, trackingStatus: "Label created — awaiting despatch" } : {}),
+          }).where(eq(stockingOrders.jobId, job.id));
         });
         res.json({ success: true });
       }));
@@ -397,6 +413,13 @@ export function registerAbodeRoutes(app: Express, deps: {
         if (label) await db.update(stockingOrders).set({ labelHtml: label }).where(eq(stockingOrders.jobId, order.jobId));
       }
       if (!label) return res.status(404).json({ error: "No saved DPD label. Retrieve the existing label from DPD; do not book again." });
+      if (req.query.format === "pdf") {
+        const pdf = await renderAbodeLabelPdf(label);
+        return res.set({
+          "Content-Disposition": `inline; filename="DPD-label-${order.orderNumber.replace(/[^A-Za-z0-9_-]/g, "_")}.pdf"`,
+          "X-Content-Type-Options": "nosniff",
+        }).type("application/pdf").send(pdf);
+      }
       const nonce = randomBytes(16).toString("base64");
       res.set({
         "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src 'self' https: data:; frame-src 'self' about:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'`,

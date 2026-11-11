@@ -57,6 +57,12 @@ Manual Abode label booking should book directly, without a warning-filled confir
 
 **How to apply:** Keep the normal booking action direct; retain genuine failure/recovery messages and duplicate-booking protection.
 
+Abode needs the courier label as a PDF, its tracking code, and the master order spreadsheet updated from the booking.
+
+**Why:** The user said: “i just need a label as a PDF and the tracking code and the spreadsheet updated.”
+
+**How to apply:** Save booking details before label rendering. For a shipment already booked in DPD, retrieve and verify that same shipment rather than buying a replacement.
+
 The customer needs a master spreadsheet list of orders showing despatch dates, delivered dates and tracking numbers, with automatic DPD tracking rather than staff-entered delivered dates.
 
 **Why:** The user requested the master list and selected “Connect automatic DPD tracking”.

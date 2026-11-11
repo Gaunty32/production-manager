@@ -102,6 +102,7 @@ export default function AbodeStockings() {
   const [activeOrder, setActiveOrder] = useState<StockingOrder | null>(null);
   const [dialog, setDialog] = useState<"complete" | "royal-mail" | "recover" | "dispatch" | null>(null);
   const [trackingNumber, setTrackingNumber] = useState("");
+  const [existingShipmentId, setExistingShipmentId] = useState("");
   const [bookingRecovery, setBookingRecovery] = useState<BookingRecovery[]>([]);
   const [noteFiles, setNoteFiles] = useState<File[]>([]);
   const [noteRows, setNoteRows] = useState<NoteRow[]>([]);
@@ -184,6 +185,12 @@ export default function AbodeStockings() {
 
   const isStaff = !isCustomer;
   const orders = data?.orders ?? [];
+  const existingBookingQuery = new URLSearchParams(window.location.search);
+  const existingBookingOrder = orders.find(order => order.orderNumber === existingBookingQuery.get("existingDpdOrder"));
+  const linkedShipmentId = Number(existingBookingQuery.get("existingDpdShipment"));
+  const linkedTracking = existingBookingQuery.get("existingDpdTracking") || "";
+  const canSyncLinkedBooking = isStaff && existingBookingOrder && ["booking", "review"].includes(existingBookingOrder.shipmentState)
+    && Number.isSafeInteger(linkedShipmentId) && linkedShipmentId > 0 && /^[A-Za-z0-9 -]{5,80}$/.test(linkedTracking);
   const totalStockings = orders.reduce((sum, order) => sum + order.items.reduce((n, item) => n + item.quantity, 0), 0);
   const inWorkCount = orders.filter((order) => !order.completed).length;
   const readyCount = orders.filter((order) => order.completed && !order.dispatchedAt).length;
@@ -350,7 +357,7 @@ export default function AbodeStockings() {
   }
 
   const openDocument = (order: StockingOrder, kind: "label" | "delivery-note") => {
-    const path = `${baseUrl}/orders/${encodeURIComponent(order.id)}/${kind}`;
+    const path = `${baseUrl}/orders/${encodeURIComponent(order.id)}/${kind}${kind === "label" ? "?format=pdf" : ""}`;
     window.open(path, "_blank", "noopener,noreferrer");
   };
   const trackingUrl = (order: StockingOrder) => order.shippingRoute === "royal_mail"
@@ -384,6 +391,12 @@ export default function AbodeStockings() {
             <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} aria-label="Refresh orders"><RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /></Button>
           </div>
         </header>
+        {canSyncLinkedBooking && <div className="mb-5 rounded-xl border border-stone-200 bg-white p-4 text-sm">
+          <p>Existing DPD booking for order <strong>{existingBookingOrder.orderNumber}</strong> · tracking <strong>{linkedTracking}</strong></p>
+          <Button className="mt-3" disabled={operationMutation.isPending} onClick={() => operationMutation.mutate({
+            order: existingBookingOrder, action: "recover", payload: { shipmentId: linkedShipmentId, trackingNumber: linkedTracking },
+          })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save existing label and update order list</Button>
+        </div>}
         {!data.trackingConfigured && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="font-semibold">DPD tracking is not connected</p>
           <p className="mt-1">Confirmed delivery dates will appear after the tracking connection is configured. Labels and despatch dates remain separate.</p>
@@ -474,7 +487,7 @@ export default function AbodeStockings() {
                 <p className="mt-1 text-xs text-stone-600">Only newly created DPD orders were booked during import. Printing a label does not create another booking.</p>
                  <ul className="mt-3 space-y-2">{labelResults.map((result, index) => <li key={`${result.jobId}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-3 text-sm">
                     <span><strong>{result.orderNumber}</strong> · {result.status === "booked" ? "Booked" : result.status === "royal_mail" ? "Royal Mail — book externally" : result.status === "review" ? "Needs booking review — check DPD before retrying" : "Booking failed — check DPD before retrying"}</span>
-                   {result.status === "booked" && !result.warning && <Button size="sm" variant="outline" onClick={() => window.open(`${baseUrl}/orders/${encodeURIComponent(result.jobId)}/label`, "_blank", "noopener,noreferrer")}><Printer className="mr-1.5 h-4 w-4" />Print label</Button>}
+                   {result.status === "booked" && !result.warning && <Button size="sm" variant="outline" onClick={() => window.open(`${baseUrl}/orders/${encodeURIComponent(result.jobId)}/label?format=pdf`, "_blank", "noopener,noreferrer")}><Printer className="mr-1.5 h-4 w-4" />Label PDF</Button>}
                    {(Boolean(result.warning && result.trackingNumber) || result.status === "review" && Boolean(result.trackingNumber)) && <div className="w-full border-t border-amber-200 pt-2 text-xs text-amber-950"><p>Recovery tracking: <span className="font-mono font-semibold">{result.trackingNumber}</span> · Do not book again.</p>{result.labelHtml && <Button className="mt-2" size="sm" variant="outline" onClick={() => downloadBookedLabel(result.labelHtml!, `booked-label-${result.orderNumber || result.jobId}.html`)}>Save recovered label</Button>}</div>}
                 </li>)}</ul>
               </div>}
@@ -547,8 +560,8 @@ export default function AbodeStockings() {
                       {!order.completed && <Button size="sm" onClick={() => { setActiveOrder(order); setDialog("complete"); }}><Check className="mr-1.5 h-4 w-4" />Complete work</Button>}
                       {!order.labelAvailable && !order.dhlTrackingNumber && order.shippingRoute === "dpd" && order.shipmentState === "unbooked" && <Button size="sm" disabled={operationMutation.isPending} onClick={() => operationMutation.mutate({ order, action: "book", payload: {} })}>{operationMutation.isPending && operationMutation.variables?.order.id === order.id && operationMutation.variables.action === "book" ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Booking…</> : <><Truck className="mr-1.5 h-4 w-4" />Book DPD label</>}</Button>}
                       {order.completed && !order.dhlTrackingNumber && order.shippingRoute === "royal_mail" && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setDialog("royal-mail"); }}><Send className="mr-1.5 h-4 w-4" />Add tracking</Button>}
-                      {(order.shipmentState === "review" || order.shipmentState === "booking") && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setTrackingNumber(""); setDialog("recover"); }}><ShieldAlert className="mr-1.5 h-4 w-4" />Recover booking</Button>}
-                      {order.labelAvailable && !(order.shipmentState === "review" && !order.dhlTrackingNumber) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "label")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Label</Button>}
+                      {(order.shipmentState === "review" || order.shipmentState === "booking") && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setTrackingNumber(""); setExistingShipmentId(""); setDialog("recover"); }}><Printer className="mr-1.5 h-4 w-4" />Get existing label</Button>}
+                      {order.labelAvailable && !(order.shipmentState === "review" && !order.dhlTrackingNumber) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "label")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Label PDF</Button>}
                       <Button size="sm" disabled={!order.completed || !order.deliveryNotes?.length || !order.dhlTrackingNumber || Boolean(order.dispatchedAt)} title={!order.completed ? "Complete production first" : !order.deliveryNotes?.length ? "Save the delivery note first" : !order.dhlTrackingNumber ? "Add tracking before despatch" : undefined} onClick={() => { setActiveOrder(order); setDialog("dispatch"); }}>Mark dispatched</Button>
                       </div>}
                       {!isStaff && Boolean(order.deliveryNotes?.length) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Delivery note PDF</Button>}
@@ -577,7 +590,7 @@ export default function AbodeStockings() {
                        {isStaff ? <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Recipient</p><p className="mt-1 font-medium">{order.recipient.name}</p><p className="mt-1 text-sm leading-5 text-stone-600">{[order.recipient.line1, order.recipient.line2, order.recipient.town, order.recipient.county, order.recipient.postcode].filter(Boolean).join(", ")}</p></> : <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Delivery</p>{order.dhlTrackingNumber ? <><a className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-[#344e43] underline underline-offset-2" href={trackingUrl(order)} target="_blank" rel="noreferrer">Track parcel <ExternalLink className="h-3.5 w-3.5" /></a><p className="mt-1 break-all font-mono text-xs text-stone-600">{order.dhlTrackingNumber}</p><p className="mt-1 text-xs text-stone-600">Status: {order.trackingError ? "Tracking check failed" : order.deliveredAt ? "Delivered" : order.trackingStatus || "Awaiting carrier confirmation"}</p><p className="text-xs text-stone-600">Despatched {formatDate(order.dispatchedAt)} · Delivered {formatDate(order.deliveredAt)}</p>{order.trackingError && <p className="mt-1 text-xs text-amber-900">Latest tracking check did not complete. Refresh tracking to try again.</p>}</> : <p className="mt-2 text-sm text-stone-600">{order.dispatchedAt ? `Dispatched ${formatDate(order.dispatchedAt)}` : order.completed ? "Ready for dispatch" : "In production"}</p>}</>}
                        {isStaff && order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Parcel tracking</p><a href={trackingUrl(order)} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 break-all text-sm font-medium text-[#344e43] underline underline-offset-2">{order.dhlTrackingNumber}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a><p className="mt-1 text-xs text-stone-600">Despatch: {formatDate(order.dispatchedAt)} · Delivered: {formatDate(order.deliveredAt)}</p><p className="mt-1 text-xs text-stone-600">Tracking status: {order.deliveredAt ? "Delivered" : order.trackingStatus || "Awaiting carrier confirmation"}</p>{order.trackingError && <p className="mt-1 text-xs text-amber-900">Latest tracking check did not complete. Refresh to try again.</p>}</div>}
                       {isStaff && order.shippingRoute === "royal_mail" && !order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-xs text-stone-600">Royal Mail route: book externally, then save its tracking number here.</p><a className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3 w-3" /></a></div>}
-                      {isStaff && order.shipmentState === "booking" && <div className="mt-3 rounded-md bg-amber-50 p-2 text-xs leading-5 text-amber-900"><AlertCircle className="mr-1 inline h-3.5 w-3.5" />DPD booking is still processing. Do not book again. Use recovery only after checking the original booking.</div>}
+                      {isStaff && order.shipmentState === "booking" && <p className="mt-3 text-xs text-stone-600">Waiting for the booked label and tracking to be saved.</p>}
                       {isStaff && order.shipmentState === "review" && <div className="mt-3 rounded-md bg-rose-50 p-2 text-xs leading-5 text-rose-900">Booking needs review. Check the DPD portal before recording recovered tracking.</div>}
                       {isStaff && order.shippingCost != null && <p className="mt-3 border-t border-stone-100 pt-2 text-xs text-stone-500">Carriage recorded: {MONEY(Number(order.shippingCost))} ex. VAT</p>}
                     </div>
@@ -615,7 +628,22 @@ export default function AbodeStockings() {
         </DialogContent>
       </Dialog>
       <Dialog open={dialog === "royal-mail" || dialog === "recover"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent><DialogHeader><DialogTitle>{dialog === "recover" ? "Record recovered DPD booking" : "Save Royal Mail tracking"}</DialogTitle><DialogDescription>{dialog === "recover" ? "Only use this after checking the original DPD booking. This records its tracking number; it does not create a new parcel." : "Book the parcel externally, then record the tracking number here."}</DialogDescription></DialogHeader><label className="space-y-2 text-sm font-medium">Tracking number<Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} autoComplete="off" /></label>{dialog === "royal-mail" && <a className="inline-flex items-center gap-1 text-sm font-medium text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3.5 w-3.5" /></a>}<DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button><Button disabled={!trackingNumber.trim() || operationMutation.isPending} onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: dialog === "recover" ? "recover" : "royal-mail", payload: { trackingNumber: trackingNumber.trim() } })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save tracking</Button></DialogFooter></DialogContent>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{dialog === "recover" ? "Get existing DPD label" : "Save Royal Mail tracking"}</DialogTitle>
+            <DialogDescription>{dialog === "recover" ? "Retrieve the label from the existing DPD shipment and save its tracking to this order." : "Book the parcel externally, then record the tracking number here."}</DialogDescription>
+          </DialogHeader>
+          {dialog === "recover" && <label className="space-y-2 text-sm font-medium">DPD shipment ID<Input value={existingShipmentId} onChange={event => setExistingShipmentId(event.target.value)} inputMode="numeric" autoComplete="off" /></label>}
+          <label className="space-y-2 text-sm font-medium">Tracking number<Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} autoComplete="off" /></label>
+          {dialog === "royal-mail" && <a className="inline-flex items-center gap-1 text-sm font-medium text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3.5 w-3.5" /></a>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button>
+            <Button disabled={!trackingNumber.trim() || operationMutation.isPending || (dialog === "recover" && (!Number.isSafeInteger(Number(existingShipmentId)) || Number(existingShipmentId) <= 0))}
+              onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: dialog === "recover" ? "recover" : "royal-mail", payload: {
+                trackingNumber: trackingNumber.trim(), ...(dialog === "recover" ? { shipmentId: Number(existingShipmentId) } : {}),
+              } })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{dialog === "recover" ? "Save label and tracking" : "Save tracking"}</Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );

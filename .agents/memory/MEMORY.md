@@ -52,6 +52,7 @@
 - [Casual shift offers](casual-shift-offers.md) — offeredToId reservation must be re-checked inside claimShiftAtomic's lock (TOCTOU), and every claimed→available transition must null offeredToId.
 
 - [DPD Local API](dpd-local-api.md) — use api.dpdlocal.co.uk (old public-ws is dead); labels are HTML, print via sandboxed no-scripts iframe; fail hard on missing consignment number.
+- [PDF rendering runtime](pdf-rendering-runtime.md) — use Nix Chromium for server-rendered PDFs; Lambda Chromium binaries lack shared libraries on this host.
 
 - [Neon SQL array params](neon-sql-array-params.md) — JS arrays in drizzle sql`` fail ("malformed array literal"); expand via jsonb_array_elements_text(JSON.stringify(ids)).
 - [Default query fetcher](query-default-fetcher.md) — queryKey.join("/") turns object segments into "[object Object]"; params need an explicit queryFn.

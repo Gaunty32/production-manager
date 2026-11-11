@@ -8,6 +8,8 @@
  */
 
 export interface DpdShipmentRequest {
+  // Abode saves the booking before requesting its label.
+  deferLabelFetch?: boolean;
   networkCode?: string;
   recipient: {
     name: string;
@@ -244,7 +246,7 @@ class DpdService {
 
     console.log(`[DPD] Shipment created — consignment: ${consignmentNumber}, jobId: ${jobId}`);
 
-    const labelHtml = jobId ? await this.fetchLabel(jobId) : null;
+    const labelHtml = jobId && !request.deferLabelFetch ? await this.fetchLabel(jobId) : null;
     if (!jobId) {
       console.error("[DPD] No jobId in shipment response — cannot fetch label:", JSON.stringify(shipJson));
     }

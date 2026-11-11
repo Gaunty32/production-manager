@@ -8,6 +8,8 @@ description: Which DPD API works, label format, and the safe label-print pattern
 - Labels come back as **HTML** (GET `/shipping/shipment/{jobId}/label/` with `Accept: text/html`), not PDF.
 - **Why / how to print safely:** third-party label HTML must never execute scripts in app origin. Canonical pattern (architect-approved): render sanitized HTML in a hidden iframe with `sandbox="allow-same-origin allow-modals"` (NO `allow-scripts`), then `iframe.contentWindow.print()`. Keep a regex sanitizer as defense-in-depth only.
 - Booking must fail hard if DPD returns no consignment number — otherwise blank tracking numbers get saved and dispatch emails fire on failed bookings.
+- DPD shipment identifiers can be 16 digits, despite the API naming them job IDs. Preserve their full precision and save them before fetching/rendering labels.
+  **Why:** DPD can successfully purchase a shipment while local persistence fails if its identifier is treated as a 32-bit integer; never interpret that as permission to rebook.
 - Optional env: `DPD_SENDER_NAME/LINE1/TOWN/POSTCODE`, `DPD_NETWORK_CODE` (default `2^12`). Channel Islands (JE/GY) need `customsValue` + `parcelDescription`.
 
 ## Separate tracking API access

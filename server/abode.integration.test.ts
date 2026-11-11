@@ -68,7 +68,7 @@ test("Abode import → early label → no approval → photo → actual despatch
   const [customer] = await db.insert(customers).values({ name: `Abode integration fixture ${id}` }).returning();
   const originals = {
     customers: storage.getCustomers, customer: storage.getCustomer, customerUser: storage.getCustomerUserById,
-    configured: dpdService.isConfigured, book: dpdService.createShipment,
+    configured: dpdService.isConfigured, book: dpdService.createShipment, label: dpdService.fetchLabel,
     file: ObjectStorageService.prototype.getObjectEntityFile, small: ObjectStorageService.prototype.saveSmallObject,
   };
   storage.getCustomers = async () => [{ ...customer, name: "Abode Home & Gifts" }];
@@ -90,7 +90,8 @@ test("Abode import → early label → no approval → photo → actual despatch
     assert.equal(request.parcels.length, 1);
     await new Promise(resolve => setTimeout(resolve, 30));
     if (failBooking) throw new Error("Simulated uncertain courier response");
-    return { trackingNumber: `TEST${bookings}${id}`, labelHtml: "<p>TEST LABEL</p>", parcelNumbers: ["15501234567890"], shipmentJobId: 123, trackingUrl: "" };
+    assert.equal(request.deferLabelFetch, true, "Persist tracking before fetching the label");
+    return { trackingNumber: `TEST${bookings}${id}`, labelHtml: "<p>TEST LABEL</p>", parcelNumbers: ["15501234567890"], shipmentJobId: 2689513245121500, trackingUrl: "" };
   };
   const app = express();
   app.use(express.json());
@@ -133,6 +134,8 @@ test("Abode import → early label → no approval → photo → actual despatch
     assert.equal(dpd.completed, false);
     assert.equal(dpd.sampleApprovalReady, true);
     assert.ok(dpd.bookedAt && dpd.labelAvailable && dpd.dhlTrackingNumber);
+    const [savedBooking] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, dpd.id));
+    assert.equal(savedBooking.shipmentId, 2689513245121500, "Real-sized DPD IDs must save without integer overflow");
     assert.equal(dpd.dispatchedAt, null);
     assert.equal(dpd.deliveredAt, null);
     assert.equal(dpd.dispatchEmailQueuedAt, null, "Booking cannot queue a despatch email");
@@ -211,11 +214,23 @@ test("Abode import → early label → no approval → photo → actual despatch
     const before = bookings;
     await Promise.all([request(`/orders/${failedId}/book`, {}), request(`/orders/${failedId}/book`, {})]);
     assert.equal(bookings, before, "Uncertain purchase must never be retried automatically");
-    assert.equal((await request(`/orders/${failedId}/recover`, { trackingNumber: "RECOVERED12345" })).status, 200, "Early booking can be recovered before completion");
+    dpdService.fetchLabel = async () => "<p>OTHER-ORDER RECOVERED12345</p>";
+    const existingPayload = { trackingNumber: "RECOVERED12345", shipmentId: 2689513245121500 };
+    assert.equal((await request(`/orders/${failedId}/recover`, existingPayload)).status, 409, "Never attach another order's label");
+    dpdService.fetchLabel = async () => "<p>TEST-FAILED RECOVERED12345</p>";
+    assert.equal((await request(`/orders/${failedId}/recover`, existingPayload)).status, 200, "Existing shipment restores label and tracking without another purchase");
+    const [recovered] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, failedId));
+    assert.equal(recovered.shipmentId, existingPayload.shipmentId);
+    assert.equal(recovered.shipmentState, "booked");
+    assert.ok(recovered.labelHtml?.includes("TEST-FAILED"));
+    assert.equal(bookings, before);
+    const labelPdf = await request(`/orders/${failedId}/label?format=pdf`);
+    assert.equal(labelPdf.headers.get("content-type"), "application/pdf");
+    assert.equal(Buffer.from(await labelPdf.arrayBuffer()).subarray(0,5).toString(), "%PDF-");
     assert.equal((await storage.getJob(failedId))?.dispatchEmailQueuedAt, null);
   } finally {
     storage.getCustomers = originals.customers; storage.getCustomer = originals.customer; storage.getCustomerUserById = originals.customerUser;
-    dpdService.isConfigured = originals.configured; dpdService.createShipment = originals.book;
+    dpdService.isConfigured = originals.configured; dpdService.createShipment = originals.book; dpdService.fetchLabel = originals.label;
     ObjectStorageService.prototype.getObjectEntityFile = originals.file; ObjectStorageService.prototype.saveSmallObject = originals.small;
     const fixtures = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.customerId, customer.id));
     for (const fixture of fixtures) await db.delete(jobFiles).where(eq(jobFiles.jobId, fixture.id));
