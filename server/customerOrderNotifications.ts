@@ -3,6 +3,7 @@ import { jobs } from "@shared/schema";
 import { db } from "./db";
 import { storage } from "./storage";
 import { hasUndespatchedAbodeOrder } from "./abodeShipping";
+import { buildEmailDispatchConfirmations } from "./dispatchConfirmationEmail";
 import {
   getBaseUrl,
   sendDispatchNotificationEmail,
@@ -103,6 +104,9 @@ export async function maybeSendDispatchNotification(jobId: string): Promise<void
     const recipients = (await storage.getCustomerUsersByCustomerId(job.customerId))
       .filter((user) => user.active && user.emailNotificationsDispatch && user.email);
     const portalUrl = `${getBaseUrl()}/customer/dashboard`;
+    const dispatchConfirmations = buildEmailDispatchConfirmations(
+      groupedJobs, getBaseUrl(), process.env.SESSION_SECRET || "",
+    );
     await Promise.all(recipients.map((recipient) =>
       sendDispatchNotificationEmail([recipient.email], {
         customerName: customer.name,
@@ -111,6 +115,7 @@ export async function maybeSendDispatchNotification(jobId: string): Promise<void
         trackingNumber,
         carrier: job.shippingCarrier === "royal_mail" ? "Royal Mail" : "DPD",
         portalUrl,
+        dispatchConfirmations,
         completedByName: operator?.name,
         operatorProfileImageUrl: operator?.profileImageUrl,
         customerLogoUrl: customer.logoUrl,

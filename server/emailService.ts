@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import { generateOrderAcknowledgementPdf, type OrderAcknowledgementData } from './orderAcknowledgementPdf';
 import { recordEmailSent } from './emailBudget';
 import { articleCampaignUnsubscribeUrl } from './articleCampaignUnsubscribe';
+import { renderEmailDispatchConfirmations, type EmailDispatchConfirmation } from "./dispatchConfirmationEmail";
 
 let connectionSettings: any;
 
@@ -1556,6 +1557,7 @@ export async function sendDispatchNotificationEmail(
     trackingNumber: string;
     carrier?: "DPD" | "Royal Mail";
     portalUrl: string;
+    dispatchConfirmations?: EmailDispatchConfirmation[];
     completedByName?: string | null;
     operatorProfileImageUrl?: string | null;
     customerLogoUrl?: string | null;
@@ -1589,6 +1591,7 @@ export async function sendDispatchNotificationEmail(
     <ul style="margin:0 0 20px;padding-left:20px;">${jobList}</ul>
     <p style="margin:0 0 20px;font-size:14px;color:#71717a;">Your ${details.carrier || "DPD"} tracking number (${safeTracking}) and tracking link are available in your customer planner.</p>
     ${ctaButton(details.portalUrl, 'View Tracking in Your Planner')}
+    ${renderEmailDispatchConfirmations(details.dispatchConfirmations)}
     ${muted('If you have any questions about your delivery, please don\'t hesitate to get in touch.')}
   `;
 
