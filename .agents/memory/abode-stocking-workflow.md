@@ -7,6 +7,12 @@ Abode Home & Gifts sells personalised Christmas stockings. Keep this workflow sp
 
 **Why:** The user described Abode as a test of a different operating model and explicitly requested tweaks just for them.
 
+Manage Abode stocking orders only in their dedicated sidebar section, not duplicated in the main Production Queue. Completing them there must still put them into draft invoicing.
+
+**Why:** The user explicitly said the separate Abode section is sufficient, provided completion generates the draft invoice.
+
+**How to apply:** Hide stocking-workflow orders from the main production view, not from the shared jobs data used for invoicing. Do not hide ordinary non-stocking Abode jobs or change other customers' queues.
+
 Abode's font details are Font 1: Sad Night Script Regular; Font 2: Tabac G3 Semibold; Font 3: Stolen Times Italic.
 
 **Why:** The user supplied these names for display in the production planner.
