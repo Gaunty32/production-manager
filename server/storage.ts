@@ -944,16 +944,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllJobLineItems(): Promise<JobLineItem[]> {
-    return await db.select().from(jobLineItems);
+    return (await db.select().from(jobLineItems)).map(item => item.stockingDetails ? { ...item, logoApproved: true } : item);
   }
 
   async getJobLineItems(jobId: string): Promise<JobLineItem[]> {
-    return await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId));
+    return (await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId))).map(item => item.stockingDetails ? { ...item, logoApproved: true } : item);
   }
 
   async getJobLineItem(id: string): Promise<JobLineItem | null> {
     const [lineItem] = await db.select().from(jobLineItems).where(eq(jobLineItems.id, id));
-    return lineItem || null;
+    return lineItem ? (lineItem.stockingDetails ? { ...lineItem, logoApproved: true } : lineItem) : null;
   }
 
   async createJobLineItem(insertLineItem: InsertJobLineItem): Promise<JobLineItem> {

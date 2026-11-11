@@ -256,6 +256,13 @@ export const stockingOrders = pgTable("stocking_orders", {
   shipmentState: text("shipment_state").notNull().default("unbooked"),
   labelHtml: text("label_html"),
   shipmentId: integer("shipment_id"),
+  bookedAt: timestamp("booked_at"),
+  dispatchedAt: timestamp("dispatched_at"),
+  deliveredAt: timestamp("delivered_at"),
+  parcelNumbers: jsonb("parcel_numbers").$type<string[]>(),
+  trackingStatus: text("tracking_status"),
+  trackingCheckedAt: timestamp("tracking_checked_at"),
+  trackingError: text("tracking_error"),
 }, table => [uniqueIndex("stocking_customer_order_unique").on(table.customerId, table.orderNumber)]);
 
 // A permanent production ledger: reopening/deleting a job must not reset the
@@ -267,8 +274,8 @@ export const stockingProduction = pgTable("stocking_production", {
   completedAt: timestamp("completed_at").notNull().defaultNow(),
 });
 
-// Each revision is immutable; approval applies only to the latest version of
-// one personalised stocking, never to another stocking in the same order.
+// Historical digital samples only. Abode no longer requires customer approval;
+// retain previous revisions and decisions without allowing new sample writes.
 export const stockingSamples = pgTable("stocking_samples", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   lineItemId: varchar("line_item_id").notNull().references(() => jobLineItems.id, { onDelete: "cascade" }),

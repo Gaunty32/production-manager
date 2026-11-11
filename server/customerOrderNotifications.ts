@@ -2,6 +2,7 @@ import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { jobs } from "@shared/schema";
 import { db } from "./db";
 import { storage } from "./storage";
+import { hasUndespatchedAbodeOrder } from "./abodeShipping";
 import {
   getBaseUrl,
   sendDispatchNotificationEmail,
@@ -80,6 +81,7 @@ export async function maybeSendDispatchNotification(jobId: string): Promise<void
   const job = await storage.getJob(jobId);
   const trackingNumber = job?.dhlTrackingNumber?.trim();
   if (!job || !job.completed || !trackingNumber || job.dispatchEmailSentAt) return;
+  if (await hasUndespatchedAbodeOrder([job.id])) return;
 
   try {
     await db.update(jobs)
@@ -93,6 +95,7 @@ export async function maybeSendDispatchNotification(jobId: string): Promise<void
       .filter((groupedJob) => !groupedJob.dispatchEmailSentAt)
       .sort((a, b) => a.id.localeCompare(b.id));
     if (groupedJobs.length === 0) return;
+    if (await hasUndespatchedAbodeOrder(groupedJobs.map(job => job.id))) return;
     const customer = await storage.getCustomer(job.customerId);
     const completedById = job.completedById || job.responsibleOperatorId;
     const operator = await getOperatorDetails(completedById);

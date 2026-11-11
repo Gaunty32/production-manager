@@ -1,5 +1,7 @@
 export const ABODE_CUSTOMER_NAME = "Abode Home & Gifts";
 export const ABODE_CARRIAGE = 5.50;
+export const ABODE_DEFAULT_WEIGHT_GRAMS = 4000;
+export const ABODE_NETWORK_CODE = "2^32"; // Expresspak 5 Next Day
 const STOCKING_FONT_NAMES: Record<string, string> = {
   "1": "Sad Night Script Regular",
   "2": "Tabac G3 Semibold",

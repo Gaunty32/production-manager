@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "./db";
 import { storage } from "./storage";
 import { customers, jobs, jobLineItems, jobFiles, stockingOrders, stockingProduction, stockingSamples } from "@shared/schema";
-import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate, stockingBagNetworkCode } from "@shared/abode";
+import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate } from "@shared/abode";
 import { parseStockingRows } from "./abodeImport";
 import { completeStockingOrder } from "./abodeProduction";
 import { renderStockingLabel } from "./abodeDocuments";
@@ -15,7 +15,9 @@ import { maybeSendDispatchNotification } from "./customerOrderNotifications";
 import { ObjectStorageService } from "./objectStorage";
 import { FINISHED_PHOTO_PREFIX, FINISHED_PHOTO_TYPES, MAX_FINISHED_PHOTO_BYTES, isFinishedPhoto, photoBytesMatchType } from "./abodePhotos";
 import { DELIVERY_NOTE_PREFIX, MAX_DELIVERY_NOTE_BYTES, deliveryNoteOrderNumber, isSuppliedDeliveryNote, hasPdfSignature } from "./abodeDeliveryNotes";
-import { registerAbodeSampleRoutes, sampleUploadBody, requireStockingDispatchApproval } from "./abodeSamples";
+import { registerAbodeSampleRoutes, sampleUploadBody } from "./abodeSamples";
+import { abodeDispatchedAt, bookAbodeLabel } from "./abodeShipping";
+import { abodeTrackingConfigured, syncAbodeTracking } from "./abodeTracking";
 
 type CompletionGuard = (req: any, jobId: string, item?: any) => Promise<string | null>;
 const editable = (status: string) => ["pending", "ready", "draft"].includes(status);
@@ -65,7 +67,7 @@ export function registerAbodeRoutes(app: Express, deps: {
     };
     registerAbodeSampleRoutes(app, { base, auth, wrap, owned, customerMode });
     app.get(base, auth, wrap(async (req, res, customer) => {
-      if (!customer) return res.json({ enabled: true, customer: { id: "", name: ABODE_CUSTOMER_NAME, logoUrl: null }, completedCount: 0, currentRate: 7, orders: [] });
+      if (!customer) return res.json({ enabled: true, customer: { id: "", name: ABODE_CUSTOMER_NAME, logoUrl: null }, completedCount: 0, currentRate: 7, trackingConfigured: abodeTrackingConfigured(), orders: [] });
       const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(stockingProduction).where(eq(stockingProduction.customerId, customer.id));
       const orders = await db.select({ order: stockingOrders, job: jobs }).from(stockingOrders)
         .innerJoin(jobs, eq(jobs.id, stockingOrders.jobId)).where(eq(stockingOrders.customerId, customer.id)).orderBy(desc(jobs.jobNumber));
@@ -76,12 +78,14 @@ export function registerAbodeRoutes(app: Express, deps: {
       const deliveryNotes = files.filter(isSuppliedDeliveryNote);
       res.json({
         enabled: true, customer: { id: customer.id, name: customer.name, logoUrl: customer.logoUrl },
-        canApproveSamples: customerMode && !req.session.impersonationStaffUserId && !req.session.impersonationCustomerUserId,
+        canApproveSamples: false, trackingConfigured: abodeTrackingConfigured(),
         completedCount: count.count, currentRate: stockingRate(count.count),
         orders: orders.map(({ order, job }) => ({
           ...job, orderNumber: order.orderNumber, recipient: order.recipient, shippingRoute: order.shippingRoute,
           shipmentState: order.shipmentState, labelAvailable: Boolean(order.labelHtml || order.shipmentId),
-          sampleApprovalReady: items.filter(item => item.jobId === job.id).every(item => item.completed || samples.find(sample => sample.lineItemId === item.id)?.status === "approved"),
+          bookedAt: order.bookedAt, dispatchedAt: abodeDispatchedAt(order, job), deliveredAt: order.deliveredAt,
+          trackingStatus: order.trackingStatus, trackingCheckedAt: order.trackingCheckedAt, trackingError: order.trackingError,
+          sampleApprovalReady: true,
           items: items.filter(item => item.jobId === job.id).map(item => ({
             ...item, digitalSamples: samples.filter(sample => sample.lineItemId === item.id).map(sample => ({
               id: sample.id, version: sample.version, fileName: sample.fileName, fileType: sample.fileType,
@@ -101,6 +105,9 @@ export function registerAbodeRoutes(app: Express, deps: {
           })),
         })),
       });
+    }));
+    app.post(`${base}/tracking/refresh`, auth, wrap(async (_req, res, customer) => {
+      res.json(customer ? await syncAbodeTracking(customer.id) : { configured: abodeTrackingConfigured(), updated: 0, errors: 0 });
     }));
     for (const preview of [true, false]) {
       app.post(`${base}/imports${preview ? "/preview" : ""}`, auth, wrap(async (req, res, customer) => {
@@ -125,6 +132,7 @@ export function registerAbodeRoutes(app: Express, deps: {
           const [maximum] = await tx.select({ number: sql<number>`coalesce(max(job_number),0)::int` }).from(jobs);
           let nextNumber = maximum.number;
           let created = 0, skipped = 0;
+          const createdOrders: { jobId: string; orderNumber: string; shippingRoute: string }[] = [];
           const flaggedOrders: { orderNumber: string; detailsChanged: boolean }[] = [];
           for (const order of parsed) {
             const [prior] = await tx.select().from(stockingOrders).where(and(eq(stockingOrders.customerId, target.id), eq(stockingOrders.orderNumber, order.orderNumber)));
@@ -143,7 +151,7 @@ export function registerAbodeRoutes(app: Express, deps: {
               shippingCost: String(ABODE_CARRIAGE), deliveryAddressType: "custom",
               shippingCarrier: order.shippingRoute === "dpd" ? "dpd" : "royal_mail",
               deliveryAddress: [r.name, r.line1, r.line2, r.town, r.county, r.postcode].filter(Boolean).join("\n"),
-              notes: "Abode stocking order. Preserve all names exactly as supplied, including capitalisation. See each stocking's colour, font and thread. Confirm stock and font samples before production.",
+              notes: "Abode stocking order. Preserve all names exactly as supplied, including capitalisation. See each stocking's colour, font and thread. No customer sample approval is required. Upload a finished-product photograph.",
             }).returning();
             await tx.insert(stockingOrders).values({
               jobId: job.id, customerId: target.id, orderNumber: order.orderNumber, importHash: order.importHash,
@@ -152,13 +160,33 @@ export function registerAbodeRoutes(app: Express, deps: {
             await tx.insert(jobLineItems).values(order.items.map(item => ({
               jobId: job.id, jobType: "Embroidery Initials/Name", quantity: 1, stitchCount: 0,
               description: `Stocking: ${item.colour} | ${item.font} | Thread: ${item.thread} | Name: ${item.name}`,
-              stockingDetails: item, logoApproved: false, awaitingStock: true,
+              stockingDetails: item, logoApproved: true, awaitingStock: true,
             })));
+            createdOrders.push({ jobId: job.id, orderNumber: order.orderNumber, shippingRoute: order.shippingRoute });
             created++;
           }
-          return { created, skipped, flaggedOrders };
+          return { created, skipped, flaggedOrders, createdOrders };
         });
-        res.json(result);
+        // Courier purchases happen only after import commits, and only for new
+        // orders. Retrying a sheet must never buy another shipment.
+        const labelResults = [];
+        for (const order of result.createdOrders) {
+          if (order.shippingRoute !== "dpd") {
+            labelResults.push({ ...order, status: "royal_mail" });
+            continue;
+          }
+          try {
+            const booking = await bookAbodeLabel(order.jobId);
+            labelResults.push({
+              ...order, status: "warning" in booking ? "review" : "booked",
+              ...("warning" in booking ? { error: booking.warning, trackingNumber: booking.trackingNumber, labelHtml: booking.labelHtml } : {}),
+            });
+          } catch (error) {
+            const [saved] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, order.jobId));
+            labelResults.push({ ...order, status: saved?.shipmentState === "review" ? "review" : "error", error: error instanceof Error ? error.message : "Label creation failed" });
+          }
+        }
+        res.json({ ...result, labelResults });
       }));
     }
     app.get(`${base}/orders/:id/delivery-note`, auth, wrap(async (req, res, customer) => {
@@ -317,51 +345,32 @@ export function registerAbodeRoutes(app: Express, deps: {
       res.json({ success: true });
     }));
     app.post(`${base}/orders/:id/book`, auth, wrap(async (req, res, customer) => {
-      const { order, job } = await owned(req.params.id, customer);
-      if (order.shippingRoute !== "dpd") return res.status(409).json({ error: "Book this address through Parcel2Go using Royal Mail" });
-      if (!job.completed) return res.status(409).json({ error: "Complete production before booking dispatch" });
-      await requireStockingDispatchApproval(job.id);
-      if (!editable(job.invoiceStatus)) return res.status(409).json({ error: "This order has already been invoiced" });
-      if (job.dhlTrackingNumber) return res.status(409).json({ error: "This order already has tracking. Use its existing label; do not book twice." });
-      const { weightGrams } = z.object({ weightGrams: z.coerce.number().int().min(100).max(5000) }).parse(req.body);
-      if (!dpdService.isConfigured()) return res.status(503).json({ error: "DPD is not configured" });
-      const claimed = await db.update(stockingOrders).set({ shipmentState: "booking" }).where(and(
-        eq(stockingOrders.jobId, job.id), eq(stockingOrders.shipmentState, "unbooked"),
-      )).returning();
-      if (!claimed.length) return res.status(409).json({ error: "Booking has already been attempted. Check DPD and recover its tracking number; do not book again." });
-      try {
-        const r = order.recipient;
-        const result = await dpdService.createShipment({
-          recipient: { name: r.name, street: [r.line1, r.line2].filter(Boolean).join(", "), city: r.town, zipCode: r.postcode, country: "GB" },
-          parcels: [{ weight: weightGrams, customerReference: order.orderNumber }], reference: order.orderNumber,
-          networkCode: stockingBagNetworkCode(weightGrams),
-        });
-        try {
-          await db.transaction(async tx => {
-            await tx.update(stockingOrders).set({ shipmentState: "booked", labelHtml: result.labelHtml, shipmentId: result.shipmentJobId }).where(eq(stockingOrders.jobId, job.id));
-            await tx.update(jobs).set({
-              dhlTrackingNumber: result.trackingNumber, shippingCost: String(ABODE_CARRIAGE),
-              shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
-              dispatchEmailQueuedAt: new Date(),
-            }).where(eq(jobs.id, job.id));
-          });
-        } catch {
-          // A courier purchase cannot be rolled back. Return recovery material
-          // without suggesting another paid booking.
-          return res.json({ trackingNumber: result.trackingNumber, labelHtml: result.labelHtml, warning: "DPD booked the parcel but saving failed. Keep this tracking number and label, then recover the booking. Do not book again." });
-        }
-        await maybeSendDispatchNotification(job.id).catch(() => console.error("[Abode] Dispatch email deferred"));
-        res.json({ trackingNumber: result.trackingNumber, labelAvailable: Boolean(result.labelHtml) });
-      } catch (error) {
-        await db.update(stockingOrders).set({ shipmentState: "review" }).where(eq(stockingOrders.jobId, job.id));
-        throw new Error(`DPD booking needs review. Check your DPD account before doing anything else; do not rebook. ${error instanceof Error ? error.message : ""}`);
-      }
+      const { job } = await owned(req.params.id, customer);
+      res.json(await bookAbodeLabel(job.id));
+    }));
+    app.post(`${base}/orders/:id/dispatch`, auth, wrap(async (req, res, customer) => {
+      const { job } = await owned(req.params.id, customer);
+      await db.transaction(async tx => {
+        const [locked] = await tx.select().from(jobs).where(eq(jobs.id, job.id)).for("update");
+        const [order] = await tx.select().from(stockingOrders).where(eq(stockingOrders.jobId, job.id)).for("update");
+        if (abodeDispatchedAt(order, locked)) return;
+        if (!locked.completed) throw new Error("Complete production before confirming despatch");
+        const items = await tx.select().from(jobLineItems).where(eq(jobLineItems.jobId, job.id));
+        if (!items.length || items.some(item => !item.completed)) throw new Error("Complete every stocking before confirming despatch");
+        if (!locked.dhlTrackingNumber || order.shipmentState !== "booked") throw new Error("Save the shipment tracking before confirming despatch");
+        const files = await tx.select().from(jobFiles).where(eq(jobFiles.jobId, job.id));
+        if (!files.some(isSuppliedDeliveryNote)) throw new Error("Attach the customer's delivery note before confirming despatch");
+        const now = new Date();
+        await tx.update(stockingOrders).set({ dispatchedAt: now }).where(eq(stockingOrders.jobId, job.id));
+        await tx.update(jobs).set({ dispatchEmailQueuedAt: now }).where(eq(jobs.id, job.id));
+      });
+      await maybeSendDispatchNotification(job.id).catch(() => console.error("[Abode] Dispatch email deferred"));
+      res.json({ success: true });
     }));
     for (const recovery of [false, true]) {
       app.post(`${base}/orders/:id/${recovery ? "recover" : "royal-mail"}`, auth, wrap(async (req, res, customer) => {
         const { order, job } = await owned(req.params.id, customer);
-        if (!job.completed) return res.status(409).json({ error: "Complete production first" });
-        await requireStockingDispatchApproval(job.id);
+        if (!recovery && !job.completed) return res.status(409).json({ error: "Complete production first" });
         if (!editable(job.invoiceStatus)) return res.status(409).json({ error: "Invoiced dispatch details cannot be changed here" });
         if (recovery ? order.shippingRoute !== "dpd" || !["booking", "review"].includes(order.shipmentState) : order.shippingRoute !== "royal_mail") {
           return res.status(409).json({ error: "This action does not match this order's shipping route" });
@@ -373,11 +382,10 @@ export function registerAbodeRoutes(app: Express, deps: {
           if (locked.dhlTrackingNumber && locked.dhlTrackingNumber !== trackingNumber) throw new Error("Tracking already recorded; review the existing shipment");
           await tx.update(jobs).set({
             dhlTrackingNumber: trackingNumber, shippingCost: String(ABODE_CARRIAGE),
-            shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1, dispatchEmailQueuedAt: new Date(),
+            shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
           }).where(eq(jobs.id, job.id));
-          await tx.update(stockingOrders).set({ shipmentState: "booked" }).where(eq(stockingOrders.jobId, job.id));
+          await tx.update(stockingOrders).set({ shipmentState: "booked", bookedAt: order.bookedAt || new Date() }).where(eq(stockingOrders.jobId, job.id));
         });
-        await maybeSendDispatchNotification(job.id).catch(() => {});
         res.json({ success: true });
       }));
     }

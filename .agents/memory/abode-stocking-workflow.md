@@ -39,17 +39,23 @@ Staff should be able to attach finished-item photos to an Abode order for the cu
 
 **How to apply:** Keep final photos separate from digital samples, linked to the matching individual stocking in both staff and customer views; customer access is read-only. Keep older order-level photos visible. Photos are optional reference material, not a production-completion or dispatch requirement.
 
-Digital samples need customer approval for each individual stocking before production, not a single approval for the whole order. A customer can request changes; a revised sample needs fresh approval.
+Abode no longer supplies samples for customer approval; staff upload photographs of finished products instead. This supersedes the previous per-stocking sample-approval workflow.
 
-**Why:** The user requested: “upload our digital sample for each of these for the customer to approve, once approved we will process and despatch and upload a picture of the final produced stocking”, then chose “Each stocking”.
+**Why:** The user said: “we are no longer supplying a sample for customer approval, but we are uploading a photograph of the finished product.”
 
-**How to apply:** Preserve version/decision history and customer notes. Only the customer using their own login can approve; staff impersonation is read-only for decisions. Gate generic production/completion paths as well as the Abode screen, and never reuse an old revision's approval. Already completed historical stockings without samples are not retroactively put on hold, since they were produced before this requirement.
+**How to apply:** Do not show sample-approval actions or hold production/completion/despatch for old pending samples. Retain historical sample files and decisions without deleting them. Keep finished photographs linked to their stockings and visible to the customer.
 
-Customers review digital samples as on-screen previews, with hover enlargement and a mobile tap-to-enlarge alternative, then approve or reject with notes. Do not make them open or download the source PDF to review it.
+Orders and their delivery-note PDFs should be uploaded together, and DPD labels should be available to print at import, before production is finished. Abode uses Expresspak 5 Next Day with a default weight of 4 kg.
 
-**Why:** The user said: “from the customers screen, they need to see a preview of the sample for approval only, as long as when they hover they can view it on screen. Then either approve or reject and add notes.”
+**Why:** The user requested delivery notes and printable labels at order upload, then specified: “We are using the product expresspak 5 on a next day service, default weight 4 kgs.”
 
-**How to apply:** Keep customer review within the portal, including PDFs and earlier versions. Rejection requires notes and requests a revision rather than cancelling the stocking order.
+**How to apply:** Treat label creation as a real courier booking, never as actual despatch. Never send a despatch email or count an order as despatched just because it has tracking. Keep imports and note attachment retry-safe, preserve one note per order, and never automatically repeat an uncertain courier purchase.
+
+The customer needs a master spreadsheet list of orders showing despatch dates, delivered dates and tracking numbers, with automatic DPD tracking rather than staff-entered delivered dates.
+
+**Why:** The user requested the master list and selected “Connect automatic DPD tracking”.
+
+**How to apply:** Show only the customer's own orders and provide an Excel download. Delivered dates must come from confirmed courier delivery, not booking dates, next-day estimates or completion dates. Separate tracking API access is required; absent access must be visible rather than silently inventing dates.
 
 Abode supplies its own delivery-note PDFs for staff to print and enclose; either staff or the customer may upload them, and the filename identifies the order.
 
@@ -75,8 +81,8 @@ Bulk delivery-note selection should match automatically and accept multiple PDFs
 
 **How to apply:** Start filename matching on selection/drop; keep the explicit upload step separate from matching so unmatched PDFs are never saved.
 
-Show separate “Awaiting approval” and “Awaiting delivery note” order totals in the stocking-room summary.
+Keep the “Awaiting delivery note” order total in the stocking-room summary. The earlier “Awaiting approval” total is superseded by removal of sample approval.
 
 **Why:** The user requested both statuses alongside the existing summary totals.
 
-**How to apply:** Count orders, not stockings. Approval holds apply to unfinished, undispatched orders; missing-note totals include undispatched orders even when production is complete. An order may need both.
+**How to apply:** Count orders, not stockings. Missing-note totals include undispatched orders even when production is complete or a label has already been created.

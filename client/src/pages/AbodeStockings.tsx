@@ -1,19 +1,18 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
-import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, Clock3, ExternalLink, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, Search, Send, ShieldAlert, Truck, Upload } from "lucide-react";
+import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, Clock3, ExternalLink, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, Search, Send, ShieldAlert, Truck, Upload, Printer } from "lucide-react";
 import { getDpdTrackingUrl } from "@shared/dpd-tracking";
 import { stockingFontLabel } from "@shared/abode";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AbodeFinishedPhotos, type AbodeFinishedPhoto } from "@/components/AbodeFinishedPhotos";
-import { AbodeStockingSample, type AbodeDigitalSample } from "@/components/AbodeStockingSample";
-import { AbodeDeliveryNotes, AbodeOrderDeliveryNotes, type AbodeDeliveryNote } from "@/components/AbodeDeliveryNotes";
+import { AbodeOrderDeliveryNotes, type AbodeDeliveryNote } from "@/components/AbodeDeliveryNotes";
+import { uploadAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
 
 type StockingItem = {
   id: string;
@@ -22,7 +21,6 @@ type StockingItem = {
   description: string;
   stockingDetails: { colour: string; font: string; thread: string; name: string };
   agreedUnitPrice: number | null;
-  digitalSamples?: AbodeDigitalSample[];
 };
 type StockingOrder = {
   id: string;
@@ -32,7 +30,6 @@ type StockingOrder = {
   jobName: string;
   completed: boolean;
   invoiceStatus: string;
-  sampleApprovalReady: boolean;
   dhlTrackingNumber: string | null;
   shippingCost: string | null;
   dispatchEmailQueuedAt: string | null;
@@ -40,6 +37,12 @@ type StockingOrder = {
   shippingRoute: "dpd" | "royal_mail";
   shipmentState: "unbooked" | "booking" | "booked" | "review";
   labelAvailable: boolean;
+  bookedAt: string | null;
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+  trackingStatus: string | null;
+  trackingCheckedAt: string | null;
+  trackingError: string | null;
   items: StockingItem[];
   finishedPhotos?: AbodeFinishedPhoto[];
   deliveryNotes?: AbodeDeliveryNote[];
@@ -49,7 +52,7 @@ type StockingsData = {
   customer: { id: string; name: string; logoUrl: string | null };
   completedCount: number;
   currentRate: number;
-  canApproveSamples: boolean;
+  trackingConfigured: boolean;
   orders: StockingOrder[];
 };
 type PreviewData = {
@@ -57,6 +60,10 @@ type PreviewData = {
   stockingCount: number;
   orderCount: number;
 };
+type LabelResult = { jobId: string; orderNumber: string; status: "booked" | "review" | "error" | "royal_mail"; error?: string; warning?: boolean; trackingNumber?: string | null; labelHtml?: string };
+type ImportResult = { created: number; skipped: number; flaggedOrders: { orderNumber: string; detailsChanged: boolean }[]; labelResults: LabelResult[] };
+type NoteRow = { file: File; status: "queued" | "matching" | "matched" | "unmatched" | "skipped" | "uploading" | "saved" | "error"; jobId?: string; message?: string; progress?: string; objectKey?: string };
+type BookingRecovery = { jobId?: string; orderNumber?: string; trackingNumber: string; warning: string; labelHtml?: string };
 type RowRecord = Record<string, string>;
 
 const STAFF_URL = "/api/abode";
@@ -65,6 +72,17 @@ const MONEY = (value: number) => new Intl.NumberFormat("en-GB", { style: "curren
 
 function friendlyError(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+}
+
+function downloadBookedLabel(labelHtml: string, fileName: string) {
+  const escaped = labelHtml.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+  const blob = new Blob([`<!doctype html><title>Booked DPD label</title><iframe title="DPD label" sandbox="allow-same-origin allow-modals" style="width:100%;height:95vh;border:0" srcdoc="${escaped}"></iframe>`], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 export default function AbodeStockings() {
@@ -79,13 +97,19 @@ export default function AbodeStockings() {
   const [rows, setRows] = useState<RowRecord[] | null>(null);
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [flaggedOrders, setFlaggedOrders] = useState<{ orderNumber: string; detailsChanged: boolean }[]>([]);
-  const [filter, setFilter] = useState<"all" | "in-work" | "ready" | "dispatched">("all");
+  const [filter, setFilter] = useState<"all" | "in-work" | "ready" | "dispatched" | "delivered">("all");
   const [search, setSearch] = useState("");
   const [activeOrder, setActiveOrder] = useState<StockingOrder | null>(null);
-  const [dialog, setDialog] = useState<"complete" | "book" | "royal-mail" | "recover" | null>(null);
-  const [weight, setWeight] = useState("");
+  const [dialog, setDialog] = useState<"complete" | "book" | "royal-mail" | "recover" | "dispatch" | null>(null);
   const [trackingNumber, setTrackingNumber] = useState("");
-  const [bookingRecovery, setBookingRecovery] = useState<{ trackingNumber: string; warning: string; labelHtml?: string } | null>(null);
+  const [bookingRecovery, setBookingRecovery] = useState<BookingRecovery[]>([]);
+  const [noteFiles, setNoteFiles] = useState<File[]>([]);
+  const [noteRows, setNoteRows] = useState<NoteRow[]>([]);
+  const [isProcessingNotes, setIsProcessingNotes] = useState(false);
+  const noteProcessingLock = useRef(false);
+  const [labelResults, setLabelResults] = useState<LabelResult[]>([]);
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false);
+  const [view, setView] = useState<"cards" | "list">("cards");
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery<StockingsData>({
     queryKey,
@@ -111,13 +135,28 @@ export default function AbodeStockings() {
   const importMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", `${baseUrl}/imports`, { rows });
-      return response.json() as Promise<{ created: number; skipped: number; flaggedOrders: { orderNumber: string; detailsChanged: boolean }[] }>;
+      return response.json() as Promise<ImportResult>;
     },
     onSuccess: (result) => {
-      toast({ title: "Order sheet processed", description: `${result.created} created · ${result.skipped} repeat orders flagged for checking` });
+      toast({ title: "Order sheet processed", description: `${result.created} new orders · ${result.skipped} repeats skipped` });
       setFlaggedOrders(result.flaggedOrders);
+      setLabelResults(result.labelResults ?? []);
       setRows(null); setPreview(null); setSelectedFile("");
       if (fileRef.current) fileRef.current.value = "";
+      setImportConfirmOpen(false);
+      setBookingRecovery(current => [
+        ...current,
+        ...(result.labelResults ?? [])
+          .filter(label => Boolean(label.warning && label.trackingNumber) || label.status === "review" && Boolean(label.trackingNumber))
+          .map(label => ({
+            jobId: label.jobId,
+            orderNumber: label.orderNumber,
+            trackingNumber: label.trackingNumber!,
+            warning: label.error || "DPD booking needs recovery. Do not book again.",
+            labelHtml: label.labelHtml,
+          })),
+      ]);
+      void processImportNotes();
       refresh();
     },
     onError: (err) => toast({ title: "Import failed", description: friendlyError(err), variant: "destructive" }),
@@ -129,7 +168,7 @@ export default function AbodeStockings() {
     },
     onSuccess: (result) => {
       if (result.warning) {
-        setBookingRecovery(result);
+        setBookingRecovery(current => [...current, result]);
         toast({ title: "Keep this booked shipment", description: result.warning, variant: "destructive" });
       } else {
       toast({ title: "Order updated", description: "The latest status is now reflected below." });
@@ -147,18 +186,143 @@ export default function AbodeStockings() {
   const orders = data?.orders ?? [];
   const totalStockings = orders.reduce((sum, order) => sum + order.items.reduce((n, item) => n + item.quantity, 0), 0);
   const inWorkCount = orders.filter((order) => !order.completed).length;
-  const readyCount = orders.filter((order) => order.completed && !order.dhlTrackingNumber).length;
-  const dispatchedCount = orders.filter((order) => Boolean(order.dhlTrackingNumber)).length;
-  const awaitingApprovalCount = orders.filter(order => !order.completed && !order.dhlTrackingNumber && !order.sampleApprovalReady).length;
-  const awaitingDeliveryNoteCount = orders.filter(order => !order.dhlTrackingNumber && !order.deliveryNotes?.length).length;
+  const readyCount = orders.filter((order) => order.completed && !order.dispatchedAt).length;
+  const dispatchedCount = orders.filter((order) => Boolean(order.dispatchedAt)).length;
   const shownOrders = useMemo(() => orders.filter((order) => {
-    const status = order.dhlTrackingNumber ? "dispatched" : order.completed ? "ready" : "in-work";
-    if (filter !== "all" && filter !== status) return false;
+    const status = order.deliveredAt ? "delivered" : order.dispatchedAt ? "dispatched" : order.completed ? "ready" : "in-work";
+    if (filter !== "all" && filter !== status && !(filter === "dispatched" && status === "delivered")) return false;
     const term = search.trim().toLocaleLowerCase();
-    return !term || [order.jobNumber, order.poNumber, order.jobName, ...order.items.map((item) => item.stockingDetails.name)].some((value) => String(value ?? "").toLocaleLowerCase().includes(term));
+    return !term || [order.jobNumber, order.poNumber, order.jobName, order.orderNumber, order.dhlTrackingNumber, order.dispatchedAt, order.deliveredAt, order.trackingStatus, ...order.items.map((item) => item.stockingDetails.name)].some((value) => String(value ?? "").toLocaleLowerCase().includes(term));
   }), [orders, filter, search]);
 
+  async function processImportNotes() {
+    if (noteProcessingLock.current || !noteFiles.length) return;
+    noteProcessingLock.current = true;
+    setIsProcessingNotes(true);
+    const pending = [...noteFiles];
+    const identity = (file: File) => JSON.stringify([file.name, file.size, file.lastModified]);
+    const previous = new Map(noteRows.map(row => [identity(row.file), row]));
+    const putRow = (row: NoteRow) => setNoteRows(current => {
+      const key = identity(row.file);
+      const index = current.findIndex(existing => identity(existing.file) === key);
+      if (index < 0) return [...current, row];
+      return current.map((existing, i) => i === index ? row : existing);
+    });
+    try {
+      pending.forEach(file => {
+        const old = previous.get(identity(file));
+        putRow({ file, status: old?.status ?? "queued", jobId: old?.jobId, objectKey: old?.objectKey, message: old?.message, progress: "Matching order…" });
+      });
+      const response = await apiRequest("POST", `${baseUrl}/delivery-notes/preview`, { fileNames: pending.map(file => file.name) });
+      const preview = await response.json() as { files: { fileName: string; jobId: string | null; status: string; existingCount: number }[] };
+      const retained = new Set(pending.map(identity));
+      for (const file of pending) {
+        const old = previous.get(identity(file));
+        const match = preview.files?.find(entry => entry.fileName === file.name);
+        if (!match || match.status !== "matched" || !match.jobId) {
+          putRow({ file, status: "unmatched", message: "No matching imported order.", progress: undefined });
+          continue;
+        }
+        if (match.existingCount > 0) {
+          putRow({ file, status: "skipped", jobId: match.jobId, message: "Order already has a delivery note.", progress: undefined });
+          retained.delete(identity(file));
+          continue;
+        }
+        let currentObjectKey = old?.objectKey;
+        try {
+          putRow({ file, status: old?.status ?? "queued", jobId: match.jobId, objectKey: currentObjectKey, message: old?.message, progress: "Checking PDF…" });
+          const signature = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+          if (new TextDecoder().decode(signature) !== "%PDF-") throw new Error("File content is not a valid PDF.");
+          if (!currentObjectKey) {
+            putRow({ file, status: old?.status ?? "queued", jobId: match.jobId, message: old?.message, progress: "Uploading PDF…" });
+            currentObjectKey = await uploadAbodeDeliveryNote(file, { baseUrl, isStaff, jobId: match.jobId });
+            putRow({ file, status: old?.status ?? "queued", jobId: match.jobId, objectKey: currentObjectKey, message: old?.message, progress: "Saving attachment…" });
+          }
+          const attachResponse = await apiRequest("POST", `${baseUrl}/delivery-notes`, { objectKey: currentObjectKey, fileName: file.name, jobId: match.jobId });
+          const attachResult = await attachResponse.json() as { skipped?: boolean };
+          if (attachResult.skipped) {
+            putRow({ file, status: "skipped", jobId: match.jobId, objectKey: currentObjectKey, message: "Order already has a delivery note.", progress: undefined });
+          } else {
+            putRow({ file, status: "saved", jobId: match.jobId, objectKey: currentObjectKey, message: "Saved to order.", progress: undefined });
+          }
+          retained.delete(identity(file));
+        } catch (error) {
+          putRow({ file, status: "error", jobId: match.jobId, objectKey: currentObjectKey, message: friendlyError(error), progress: undefined });
+        }
+      }
+      setNoteFiles(current => current.filter(file => retained.has(identity(file))));
+      refresh();
+    } catch (error) {
+      pending.forEach(file => {
+        const old = previous.get(identity(file));
+        putRow({ file, status: "error", jobId: old?.jobId, objectKey: old?.objectKey, message: friendlyError(error), progress: undefined });
+      });
+    } finally {
+      noteProcessingLock.current = false;
+      setIsProcessingNotes(false);
+    }
+  }
+
+  function addNoteFiles(list: FileList | File[]) {
+    if (noteProcessingLock.current || isProcessingNotes || importMutation.isPending) return;
+    const incoming = Array.from(list);
+    const valid = incoming.filter(file => {
+      if (!/\.pdf$/i.test(file.name) || (file.type && file.type !== "application/pdf") || !file.size || file.size > 10 * 1024 * 1024) {
+        toast({ title: "Delivery note not added", description: `${file.name}: choose a valid PDF no larger than 10 MB.`, variant: "destructive" });
+        return false;
+      }
+      return true;
+    });
+    const next = [...noteFiles];
+    const seen = new Set(next.map(file => JSON.stringify([file.name, file.size, file.lastModified])));
+    for (const file of valid) {
+      const key = JSON.stringify([file.name, file.size, file.lastModified]);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      next.push(file);
+    }
+    if (next.length > 50) {
+      toast({ title: "Delivery note limit reached", description: "Select no more than 50 PDFs across this import and retry queue.", variant: "destructive" });
+      return;
+    }
+    setNoteFiles(next);
+  }
+
+  async function downloadRegister() {
+    const safe = (value: unknown) => String(value ?? "").replace(/^[\s]*[=+\-@]/, "'$&");
+    const rows = orders.map(order => ({
+      "Order number": safe(order.orderNumber),
+      "Personalisation names": safe(order.items.map(item => item.stockingDetails.name).join(", ")),
+      Quantity: order.items.reduce((sum, item) => sum + item.quantity, 0),
+      Production: order.completed ? "Complete" : "In production",
+      Label: order.labelAvailable ? "Available" : order.shipmentState === "review" ? "Review required" : order.shipmentState === "booking" ? "Booking" : "Not booked",
+      Despatch: order.dispatchedAt ? "Dispatched" : "Not dispatched",
+      "Despatch date": formatDate(order.dispatchedAt),
+      Delivery: safe(order.trackingError ? "Tracking check failed" : order.deliveredAt ? "Delivered" : order.trackingStatus || "Not delivered"),
+      "Delivered date": formatDate(order.deliveredAt),
+      "Tracking number": safe(order.dhlTrackingNumber),
+      "Tracking link": order.dhlTrackingNumber ? trackingUrl(order) : "",
+    }));
+    const sheet = XLSX.utils.json_to_sheet(rows, { cellDates: false });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Stocking orders");
+    XLSX.writeFile(workbook, "abode-stocking-orders.xlsx");
+  }
+
+  const trackingRefresh = useMutation({
+    mutationFn: async () => {
+      const result = await apiRequest("POST", `${baseUrl}/tracking/refresh`, {});
+      return result.json() as Promise<{ configured: boolean; updated: number; errors: number }>;
+    },
+    onSuccess: result => {
+      refresh();
+      toast({ title: result.configured ? "Tracking refreshed" : "Tracking not connected", description: result.configured ? `${result.updated} orders updated${result.errors ? ` · ${result.errors} need attention` : ""}.` : "Confirmed delivery dates will appear once the DPD tracking connection is configured." });
+    },
+      onError: () => toast({ title: "Tracking refresh failed", description: "The carrier check could not be completed. Try again shortly.", variant: "destructive" }),
+  });
+
   async function onFileChange(file?: File) {
+    if (noteProcessingLock.current || isProcessingNotes) return;
     setPreview(null); setRows(null); setSelectedFile("");
     if (!file) return;
     if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
@@ -201,17 +365,13 @@ export default function AbodeStockings() {
     <div className="h-full overflow-y-auto bg-[#f6f4ef] text-stone-900">
       <div className="mx-auto max-w-6xl px-4 pb-10 pt-5 md:px-8 md:pt-8">
         {isCustomer && <a href="/customer/dashboard" className="mb-4 inline-block text-sm underline">Back to your dashboard</a>}
-        {bookingRecovery && <div role="alert" className="mb-5 rounded-lg border border-red-300 bg-red-50 p-4 break-words">
+        {bookingRecovery.length > 0 && <div role="alert" className="mb-5 rounded-lg border border-red-300 bg-red-50 p-4 break-words">
           <strong>Shipment already booked — do not book again</strong>
-          <p className="mt-2">{bookingRecovery.warning}</p>
-          <p className="mt-2 font-mono font-bold">Tracking: {bookingRecovery.trackingNumber}</p>
-          {bookingRecovery.labelHtml && <Button className="mt-3" variant="outline" onClick={() => {
-            const escaped = bookingRecovery.labelHtml!.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
-            const blob = new Blob([`<!doctype html><title>Booked DPD label</title><iframe title="DPD label" sandbox="allow-same-origin allow-modals" style="width:100%;height:95vh;border:0" srcdoc="${escaped}"></iframe>`], { type: "text/html" });
-            const url = URL.createObjectURL(blob);
-            const anchor = document.createElement("a"); anchor.href = url; anchor.download = "booked-dpd-label.html"; anchor.click();
-            setTimeout(() => URL.revokeObjectURL(url), 30_000);
-          }}>Save booked label</Button>}
+          <ul className="mt-2 space-y-3">{bookingRecovery.map((recovery, index) => <li key={`${recovery.jobId ?? recovery.orderNumber ?? "shipment"}-${recovery.trackingNumber}-${index}`} className="border-t border-red-200 pt-2">
+            <p>{recovery.orderNumber ? `${recovery.orderNumber} · ` : ""}{recovery.warning}</p>
+            <p className="mt-1 font-mono font-bold">Tracking: {recovery.trackingNumber}</p>
+            {recovery.labelHtml && <Button className="mt-2" variant="outline" onClick={() => downloadBookedLabel(recovery.labelHtml!, `booked-label-${recovery.orderNumber ?? recovery.jobId ?? index}.html`)}>Save booked label</Button>}
+          </li>)}</ul>
         </div>}
         <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
@@ -224,14 +384,23 @@ export default function AbodeStockings() {
             <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} aria-label="Refresh orders"><RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /></Button>
           </div>
         </header>
+        {!data.trackingConfigured && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-semibold">DPD tracking is not connected</p>
+          <p className="mt-1">Confirmed delivery dates will appear after the tracking connection is configured. Labels and despatch dates remain separate.</p>
+        </div>}
+        {orders.some(order => order.trackingError) && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-semibold">Some tracking checks need attention</p>
+          <p className="mt-1">The carrier has not confirmed delivery for every parcel. No estimated delivery date is shown as confirmed.</p>
+        </div>}
 
         <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
           <Metric label="Open orders" value={String(orders.length)} note={`${totalStockings} stockings`} />
           <Metric label="Outstanding" value={String(inWorkCount)} note="Production outstanding" />
-          <Metric label="Awaiting approval" value={String(awaitingApprovalCount)} note="Orders needing sample approval" />
-          <Metric label="Awaiting delivery note" value={String(awaitingDeliveryNoteCount)} note="Undispatched orders missing a PDF" />
+          <Metric label="Labels ready" value={String(orders.filter(order => order.labelAvailable).length)} note="Can print before production is complete" />
+          <Metric label="Awaiting delivery note" value={String(orders.filter(order => !order.dispatchedAt && !order.deliveryNotes?.length).length)} note="Undispatched orders missing a PDF" />
           <Metric label="Ready to dispatch" value={String(readyCount)} note="Production complete" />
-          <Metric label="Dispatched" value={String(dispatchedCount)} note={`${data.completedCount} stockings completed`} />
+          <Metric label="Dispatched" value={String(dispatchedCount)} note="Actual despatch recorded" />
+          <Metric label="Delivered" value={String(orders.filter(order => Boolean(order.deliveredAt)).length)} note="Confirmed by tracking" />
         </section>
 
         <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_310px]">
@@ -242,7 +411,7 @@ export default function AbodeStockings() {
                   <div className="rounded-xl bg-[#f3e7df] p-3 text-[#8a4e3d]"><FileSpreadsheet className="h-5 w-5" /></div>
                   <div>
                     <h2 className="font-semibold">Import order sheet</h2>
-                    <p className="mt-1 text-sm text-stone-600">Preview everything before any orders are added. No minimum order.</p>
+                    <p className="mt-1 text-sm text-stone-600">Preview the sheet and attach delivery notes in one import. Repeat orders are never booked again.</p>
                   </div>
                 </div>
               </div>
@@ -265,6 +434,7 @@ export default function AbodeStockings() {
                 onDrop={(event) => {
                   event.preventDefault(); event.stopPropagation();
                   dragDepth.current = 0; setIsDraggingFile(false);
+                  if (noteProcessingLock.current || isProcessingNotes) return;
                   if (event.dataTransfer.files.length !== 1) {
                     toast({ title: "Drop one file at a time", description: "Choose one Excel or CSV order sheet.", variant: "destructive" });
                     return;
@@ -276,18 +446,37 @@ export default function AbodeStockings() {
                 <Upload aria-hidden="true" className="h-6 w-6 text-[#344e43]" />
                 <span className="text-sm font-semibold">{isDraggingFile ? "Drop your order sheet here" : "Drag and drop your order sheet here"}</span>
                 <span className="text-sm text-stone-600">or <span className="font-medium underline underline-offset-2">choose a file</span></span>
-                <input ref={fileRef} aria-label="Choose an Excel or CSV order sheet" className="sr-only" type="file" accept=".xlsx,.xls,.csv" onChange={(event) => onFileChange(event.target.files?.[0])} />
+                <input ref={fileRef} aria-label="Choose an Excel or CSV order sheet" className="sr-only" type="file" accept=".xlsx,.xls,.csv" disabled={isProcessingNotes || importMutation.isPending} onChange={(event) => onFileChange(event.target.files?.[0])} />
               </label>
               <p className="mt-4 text-xs text-stone-500">Excel or CSV · first worksheet · maximum 5,000 rows / 5 MB</p>
-              {selectedFile && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-stone-50 p-3 text-sm"><span className="min-w-0 truncate font-medium">{selectedFile} <span className="font-normal text-stone-500">({rows?.length ?? 0} rows)</span></span><Button size="sm" onClick={() => rows && previewMutation.mutate(rows)} disabled={previewMutation.isPending || !rows}>{previewMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Preview sheet</Button></div>}
+              {selectedFile && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-stone-50 p-3 text-sm"><span className="min-w-0 truncate font-medium">{selectedFile} <span className="font-normal text-stone-500">({rows?.length ?? 0} rows)</span></span><Button size="sm" onClick={() => !noteProcessingLock.current && rows && previewMutation.mutate(rows)} disabled={isProcessingNotes || importMutation.isPending || previewMutation.isPending || !rows}>{previewMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Preview sheet</Button></div>}
+              <div className="mt-5 border-t border-stone-100 pt-4">
+                <h3 className="text-sm font-semibold">Delivery note PDFs</h3>
+                <p className="mt-1 text-xs leading-5 text-stone-600">Select PDFs now; after the order import, matching notes are attached automatically. Add multiple files before confirming.</p>
+                <input className="sr-only" id="import-note-files" type="file" accept="application/pdf,.pdf" multiple disabled={isProcessingNotes || importMutation.isPending} onChange={event => { if (event.target.files) addNoteFiles(event.target.files); event.currentTarget.value = ""; }} />
+                <label htmlFor="import-note-files" aria-disabled={isProcessingNotes || importMutation.isPending} className={`mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium ${isProcessingNotes || importMutation.isPending ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-stone-50"}`}><Upload className="h-4 w-4" />Choose PDFs</label>
+                {noteFiles.length > 0 && <ul className="mt-3 space-y-1 text-xs text-stone-700">{noteFiles.map((file, index) => <li className="flex items-start justify-between gap-2" key={`${file.name}-${index}`}><span className="break-all">{file.name} <span className="text-stone-500">({Math.ceil(file.size / 1024)} KB)</span></span><Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 px-2" disabled={isProcessingNotes || importMutation.isPending} onClick={() => { setNoteFiles(current => current.filter(item => item !== file)); setNoteRows(current => current.filter(row => row.file !== file)); }}>Remove</Button></li>)}</ul>}
+                {noteRows.length > 0 && <div className="mt-3 space-y-1" aria-live="polite">{noteRows.map((row, index) => <p key={`${row.file.name}-${index}`} className={`break-words text-xs ${row.status === "error" || row.status === "unmatched" ? "text-rose-800" : "text-stone-600"}`}><span className="font-medium">{row.file.name}:</span> {row.progress ? `${row.progress} ` : ""}{row.message ?? row.status}</p>)}</div>}
+                <p className="mt-2 text-xs text-stone-500">Retry matching and note uploads here without importing orders or purchasing labels.</p>
+                {noteFiles.length > 0 && <Button size="sm" variant="outline" className="mt-3" disabled={isProcessingNotes || importMutation.isPending} onClick={() => void processImportNotes()}>{isProcessingNotes && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isProcessingNotes ? "Matching & saving…" : "Retry matching & notes"}</Button>}
+              </div>
               {preview && <div className="mt-4 rounded-xl border border-[#d6c3ae] bg-[#fbf8f3] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div><p className="font-semibold">{preview.orderCount} orders · {preview.stockingCount} stockings</p><p className="mt-1 text-xs text-stone-600">Repeat order numbers are flagged for checking and will not be imported again. Existing jobs stay unchanged.</p></div>
-                  <div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setPreview(null)}>Cancel</Button><Button size="sm" onClick={() => importMutation.mutate()} disabled={importMutation.isPending}>{importMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm import</Button></div>
+                  <div><p className="font-semibold">{preview.orderCount} orders · {preview.stockingCount} stockings</p><p className="mt-1 text-xs text-stone-600">Repeat order numbers will not be imported or booked again. Existing jobs stay unchanged.</p></div>
+                   <div className="flex gap-2"><Button variant="outline" size="sm" disabled={isProcessingNotes || importMutation.isPending} onClick={() => setPreview(null)}>Cancel</Button><Button size="sm" onClick={() => !noteProcessingLock.current && setImportConfirmOpen(true)} disabled={isProcessingNotes || importMutation.isPending}>Review confirmation</Button></div>
                 </div>
                 <div className="mt-4 max-h-56 space-y-2 overflow-y-auto">
                   {preview.orders.map((order, index) => <div key={`${order.orderNumber}-${index}`} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${order.existing ? "border-amber-300 bg-amber-50" : "border-stone-200 bg-white"}`}><span className="font-semibold">{order.orderNumber}</span><span className="text-stone-600">{order.items.length} personalisation lines · {order.shippingRoute.replace("_", " ")}</span><span className="max-w-full truncate text-stone-500">{order.recipient.name} · {order.recipient.postcode}</span>{order.existing && <span className="font-semibold text-amber-900">Already uploaded — check existing order{order.detailsChanged ? " · Details differ" : ""}</span>}</div>)}
                 </div>
+              </div>}
+              {labelResults.length > 0 && <div role="status" className="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-4">
+                <h3 className="font-semibold">New-order label results</h3>
+                <p className="mt-1 text-xs text-stone-600">Only newly created DPD orders were booked during import. Printing a label does not create another booking.</p>
+                 <ul className="mt-3 space-y-2">{labelResults.map((result, index) => <li key={`${result.jobId}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-3 text-sm">
+                    <span><strong>{result.orderNumber}</strong> · {result.status === "booked" ? "Booked" : result.status === "royal_mail" ? "Royal Mail — book externally" : result.status === "review" ? "Needs booking review — check DPD before retrying" : "Booking failed — check DPD before retrying"}</span>
+                   {result.status === "booked" && !result.warning && <Button size="sm" variant="outline" onClick={() => window.open(`${baseUrl}/orders/${encodeURIComponent(result.jobId)}/label`, "_blank", "noopener,noreferrer")}><Printer className="mr-1.5 h-4 w-4" />Print label</Button>}
+                   {(Boolean(result.warning && result.trackingNumber) || result.status === "review" && Boolean(result.trackingNumber)) && <div className="w-full border-t border-amber-200 pt-2 text-xs text-amber-950"><p>Recovery tracking: <span className="font-mono font-semibold">{result.trackingNumber}</span> · Do not book again.</p>{result.labelHtml && <Button className="mt-2" size="sm" variant="outline" onClick={() => downloadBookedLabel(result.labelHtml!, `booked-label-${result.orderNumber || result.jobId}.html`)}>Save recovered label</Button>}</div>}
+                </li>)}</ul>
               </div>}
               {flaggedOrders.length > 0 && <div role="status" className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
                 <p className="font-semibold">{flaggedOrders.length} repeat order{flaggedOrders.length === 1 ? "" : "s"} — check existing jobs</p>
@@ -312,19 +501,39 @@ export default function AbodeStockings() {
           </Card>
         </div>
 
-        <AbodeDeliveryNotes baseUrl={baseUrl} isStaff={isStaff} onChanged={refresh} />
-
         <section>
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">Order register</p><h2 className="mt-1 text-xl font-semibold">Stockings in motion</h2></div>
-            <div className="relative w-full sm:w-64"><Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search order or name" className="bg-white pl-9" /></div>
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+              <Button variant="outline" size="sm" onClick={() => trackingRefresh.mutate()} disabled={trackingRefresh.isPending}>{trackingRefresh.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Refresh tracking</Button>
+              <Button variant="outline" size="sm" onClick={() => void downloadRegister()}><ArrowDownToLine className="mr-2 h-4 w-4" />Download XLSX</Button>
+              <Button variant="outline" size="sm" onClick={() => setView(view === "cards" ? "list" : "cards")}>{view === "cards" ? "Spreadsheet list" : "Order cards"}</Button>
+              <div className="relative w-full sm:w-64"><Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search order or name" className="bg-white pl-9" /></div>
+            </div>
           </div>
           <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-            {(["all", "in-work", "ready", "dispatched"] as const).map((key) => <button key={key} onClick={() => setFilter(key)} className={`whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition ${filter === key ? "bg-[#344e43] text-white" : "border border-stone-300 bg-white text-stone-600 hover:bg-stone-100"}`}>{key === "all" ? "All orders" : key === "in-work" ? "In work" : key === "ready" ? "Ready for dispatch" : "Dispatched"}</button>)}
+            {(["all", "in-work", "ready", "dispatched", "delivered"] as const).map((key) => <button key={key} onClick={() => setFilter(key)} className={`whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition ${filter === key ? "bg-[#344e43] text-white" : "border border-stone-300 bg-white text-stone-600 hover:bg-stone-100"}`}>{key === "all" ? "All orders" : key === "in-work" ? "In work" : key === "ready" ? "Ready for dispatch" : key === "delivered" ? "Delivered" : "Dispatched"}</button>)}
           </div>
-          {shownOrders.length === 0 ? <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center"><PackageCheck className="mx-auto h-8 w-8 text-stone-400" /><h3 className="mt-3 font-semibold">{orders.length ? "No orders match this view" : "Your order register is clear"}</h3><p className="mt-1 text-sm text-stone-500">{orders.length ? "Try another filter or search term." : "Import an order sheet above to start tracking fulfilment."}</p></div> : <div className="space-y-3">
+          {view === "list" && <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white shadow-sm">
+            <table className="w-full min-w-[1050px] border-collapse text-left text-sm">
+              <thead className="bg-[#eee8de] text-[11px] uppercase tracking-wide text-stone-600"><tr>{["Order", "Personalisation / qty", "Production", "Label", "Despatch", "Despatch date", "Delivery", "Delivered date", "Tracking"].map(title => <th key={title} className="px-3 py-3 font-semibold">{title}</th>)}</tr></thead>
+              <tbody>{shownOrders.map(order => <tr key={order.id} className="border-t border-stone-100 align-top">
+                <td className="px-3 py-3 font-semibold">{order.orderNumber || `#${order.jobNumber}`}</td>
+                <td className="max-w-64 px-3 py-3"><span className="block whitespace-pre-wrap">{order.items.map(item => `${item.stockingDetails.name || "Unnamed"} × ${item.quantity}`).join(", ") || "—"}</span></td>
+                <td className="px-3 py-3">{order.completed ? "Complete" : "In production"}</td>
+                <td className="px-3 py-3">{order.labelAvailable ? "Available" : order.shipmentState === "review" ? "Review" : order.shipmentState === "booking" ? "Booking" : "Not booked"}</td>
+                <td className="px-3 py-3">{order.dispatchedAt ? "Dispatched" : "Not dispatched"}</td>
+                <td className="px-3 py-3">{formatDate(order.dispatchedAt)}</td>
+                <td className="px-3 py-3">{order.trackingError ? "Tracking check failed" : order.deliveredAt ? "Delivered" : order.trackingStatus || "Not confirmed"}</td>
+                <td className="px-3 py-3">{formatDate(order.deliveredAt)}</td>
+                <td className="px-3 py-3">{order.dhlTrackingNumber ? <a className="inline-flex items-center gap-1 break-all text-[#344e43] underline" href={trackingUrl(order)} target="_blank" rel="noreferrer">{order.dhlTrackingNumber}<ExternalLink className="h-3 w-3 shrink-0" /></a> : "—"}</td>
+              </tr>)}</tbody>
+            </table>
+            {!shownOrders.length && <p className="p-6 text-center text-sm text-stone-500">{orders.length ? "No orders match this view." : "No orders to display yet."}</p>}
+          </div>}
+          {view === "cards" && (shownOrders.length === 0 ? <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center"><PackageCheck className="mx-auto h-8 w-8 text-stone-400" /><h3 className="mt-3 font-semibold">{orders.length ? "No orders match this view" : "Your order register is clear"}</h3><p className="mt-1 text-sm text-stone-500">{orders.length ? "Try another filter or search term." : "Import an order sheet above to start tracking fulfilment."}</p></div> : <div className="space-y-3">
             {shownOrders.map((order) => {
-              const state = order.dhlTrackingNumber ? "dispatched" : order.completed ? "ready" : !order.sampleApprovalReady ? "approval" : "in-work";
+              const state = order.deliveredAt ? "delivered" : order.dispatchedAt ? "dispatched" : order.completed ? "ready" : "in-work";
               const count = order.items.reduce((sum, item) => sum + item.quantity, 0);
               const estimated = order.items.reduce((sum, item) => sum + item.quantity * (item.agreedUnitPrice ?? data.currentRate), 0);
               return <Card key={order.id} className="overflow-hidden border-stone-200 bg-white shadow-sm">
@@ -335,18 +544,15 @@ export default function AbodeStockings() {
                       <p className="mt-1 text-sm text-stone-600">{count} personalised stocking{count === 1 ? "" : "s"} <span className="px-1 text-stone-300">/</span> estimated {MONEY(estimated)} + {MONEY(5.5)} carriage excl. VAT</p>
                     </div>
                     {isStaff && <div className="flex flex-wrap gap-2">
-                      {!order.completed && <Button size="sm" disabled={!order.sampleApprovalReady} title={!order.sampleApprovalReady ? "Every stocking awaiting approval needs its latest digital sample approved first." : undefined} onClick={() => { setActiveOrder(order); setDialog("complete"); }}><Check className="mr-1.5 h-4 w-4" />Complete work</Button>}
-                      {order.completed && !order.dhlTrackingNumber && order.shippingRoute === "dpd" && order.shipmentState !== "booking" && order.shipmentState !== "review" && <Button size="sm" onClick={() => { setActiveOrder(order); setWeight(""); setDialog("book"); }}><Truck className="mr-1.5 h-4 w-4" />Book DPD</Button>}
+                      {!order.completed && <Button size="sm" onClick={() => { setActiveOrder(order); setDialog("complete"); }}><Check className="mr-1.5 h-4 w-4" />Complete work</Button>}
+                      {!order.labelAvailable && !order.dhlTrackingNumber && order.shippingRoute === "dpd" && order.shipmentState === "unbooked" && <Button size="sm" onClick={() => { setActiveOrder(order); setDialog("book"); }}><Truck className="mr-1.5 h-4 w-4" />Book DPD</Button>}
                       {order.completed && !order.dhlTrackingNumber && order.shippingRoute === "royal_mail" && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setDialog("royal-mail"); }}><Send className="mr-1.5 h-4 w-4" />Add tracking</Button>}
                       {(order.shipmentState === "review" || order.shipmentState === "booking") && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setTrackingNumber(""); setDialog("recover"); }}><ShieldAlert className="mr-1.5 h-4 w-4" />Recover booking</Button>}
-                      {order.labelAvailable && <Button variant="outline" size="sm" onClick={() => openDocument(order, "label")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Label</Button>}
-                    </div>}
-                    {!isStaff && Boolean(order.deliveryNotes?.length) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Delivery note PDF</Button>}
+                      {order.labelAvailable && !(order.shipmentState === "review" && !order.dhlTrackingNumber) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "label")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Label</Button>}
+                      <Button size="sm" disabled={!order.completed || !order.deliveryNotes?.length || !order.dhlTrackingNumber || Boolean(order.dispatchedAt)} title={!order.completed ? "Complete production first" : !order.deliveryNotes?.length ? "Save the delivery note first" : !order.dhlTrackingNumber ? "Add tracking before despatch" : undefined} onClick={() => { setActiveOrder(order); setDialog("dispatch"); }}>Mark dispatched</Button>
+                      </div>}
+                      {!isStaff && Boolean(order.deliveryNotes?.length) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Delivery note PDF</Button>}
                   </div>
-                  {isStaff && !order.completed && !order.sampleApprovalReady && <div role="status" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-950 md:px-5">
-                    <p className="font-semibold">Production completion is waiting on individual sample approvals.</p>
-                    <p className="mt-0.5">Each stocking that needs approval must have its latest digital sample approved by the customer before this order can be completed. Staff cannot approve on their behalf.</p>
-                  </div>}
                   <div className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_240px] md:px-5">
                     <div className="space-y-2">
                       {order.items.map((item) => <div key={item.id}>
@@ -357,19 +563,6 @@ export default function AbodeStockings() {
                         <Spec label="Thread" value={item.stockingDetails.thread} />
                         <div className="col-span-2 self-start text-right sm:col-span-1"><span className={`inline-flex items-center gap-1 text-xs font-medium ${item.completed ? "text-emerald-800" : "text-stone-500"}`}>{item.completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}{item.completed ? "Done" : "In work"}</span></div>
                         </div>
-                        <AbodeStockingSample
-                          jobId={order.id}
-                          itemId={item.id}
-                          name={item.stockingDetails.name}
-                          font={item.stockingDetails.font}
-                          colour={item.stockingDetails.colour}
-                          thread={item.stockingDetails.thread}
-                          samples={item.digitalSamples}
-                          isStaff={isStaff}
-                          canApprove={!isStaff && data.canApproveSamples === true}
-                          canUpload={isStaff && !item.completed && !order.completed && !order.dhlTrackingNumber && !/^(invoiced|invoice[_ -]?sent|sent|paid|issued)$/i.test(order.invoiceStatus || "")}
-                          onChanged={refresh}
-                        />
                         <AbodeFinishedPhotos
                           jobId={order.id}
                           photos={order.finishedPhotos}
@@ -381,8 +574,8 @@ export default function AbodeStockings() {
                       </div>)}
                     </div>
                     <div className="rounded-lg border border-stone-200 p-3">
-                      {isStaff ? <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Recipient</p><p className="mt-1 font-medium">{order.recipient.name}</p><p className="mt-1 text-sm leading-5 text-stone-600">{[order.recipient.line1, order.recipient.line2, order.recipient.town, order.recipient.county, order.recipient.postcode].filter(Boolean).join(", ")}</p></> : <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Delivery</p>{order.dhlTrackingNumber ? <><a className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-[#344e43] underline underline-offset-2" href={trackingUrl(order)} target="_blank" rel="noreferrer">Track parcel <ExternalLink className="h-3.5 w-3.5" /></a><p className="mt-1 break-all font-mono text-xs text-stone-600">{order.dhlTrackingNumber}</p></> : <p className="mt-2 text-sm text-stone-600">{order.completed ? "Ready for dispatch" : "In production"}</p>}</>}
-                      {isStaff && order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Parcel tracking</p><a href={trackingUrl(order)} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 break-all text-sm font-medium text-[#344e43] underline underline-offset-2">{order.dhlTrackingNumber}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a></div>}
+                       {isStaff ? <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Recipient</p><p className="mt-1 font-medium">{order.recipient.name}</p><p className="mt-1 text-sm leading-5 text-stone-600">{[order.recipient.line1, order.recipient.line2, order.recipient.town, order.recipient.county, order.recipient.postcode].filter(Boolean).join(", ")}</p></> : <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Delivery</p>{order.dhlTrackingNumber ? <><a className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-[#344e43] underline underline-offset-2" href={trackingUrl(order)} target="_blank" rel="noreferrer">Track parcel <ExternalLink className="h-3.5 w-3.5" /></a><p className="mt-1 break-all font-mono text-xs text-stone-600">{order.dhlTrackingNumber}</p><p className="mt-1 text-xs text-stone-600">Status: {order.trackingError ? "Tracking check failed" : order.deliveredAt ? "Delivered" : order.trackingStatus || "Awaiting carrier confirmation"}</p><p className="text-xs text-stone-600">Despatched {formatDate(order.dispatchedAt)} · Delivered {formatDate(order.deliveredAt)}</p>{order.trackingError && <p className="mt-1 text-xs text-amber-900">Latest tracking check did not complete. Refresh tracking to try again.</p>}</> : <p className="mt-2 text-sm text-stone-600">{order.dispatchedAt ? `Dispatched ${formatDate(order.dispatchedAt)}` : order.completed ? "Ready for dispatch" : "In production"}</p>}</>}
+                       {isStaff && order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Parcel tracking</p><a href={trackingUrl(order)} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 break-all text-sm font-medium text-[#344e43] underline underline-offset-2">{order.dhlTrackingNumber}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a><p className="mt-1 text-xs text-stone-600">Despatch: {formatDate(order.dispatchedAt)} · Delivered: {formatDate(order.deliveredAt)}</p><p className="mt-1 text-xs text-stone-600">Tracking status: {order.deliveredAt ? "Delivered" : order.trackingStatus || "Awaiting carrier confirmation"}</p>{order.trackingError && <p className="mt-1 text-xs text-amber-900">Latest tracking check did not complete. Refresh to try again.</p>}</div>}
                       {isStaff && order.shippingRoute === "royal_mail" && !order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-xs text-stone-600">Royal Mail route: book externally, then save its tracking number here.</p><a className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3 w-3" /></a></div>}
                       {isStaff && order.shipmentState === "booking" && <div className="mt-3 rounded-md bg-amber-50 p-2 text-xs leading-5 text-amber-900"><AlertCircle className="mr-1 inline h-3.5 w-3.5" />DPD booking is still processing. Do not book again. Use recovery only after checking the original booking.</div>}
                       {isStaff && order.shipmentState === "review" && <div className="mt-3 rounded-md bg-rose-50 p-2 text-xs leading-5 text-rose-900">Booking needs review. Check the DPD portal before recording recovered tracking.</div>}
@@ -402,34 +595,41 @@ export default function AbodeStockings() {
                 </CardContent>
               </Card>;
             })}
-          </div>}
+          </div>)}
         </section>
       </div>
 
+      <Dialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>
+        <DialogContent><DialogHeader><DialogTitle>Confirm order import</DialogTitle><DialogDescription>This will add only new order numbers. Each new DPD-eligible order creates a real shipment booking using the agreed 4 kg Expresspak 5 Next Day default. Existing orders are not booked again. Printing a label does not create a second booking; despatch is recorded separately, and import does not send despatch emails.</DialogDescription></DialogHeader>
+          {noteFiles.length > 0 && <p className="rounded-lg bg-[#f8f6f2] p-3 text-sm">{noteFiles.length} delivery-note PDF{noteFiles.length === 1 ? "" : "s"} will be matched and uploaded after import. Note upload failures can be retried without importing again.</p>}
+          <DialogFooter><Button variant="outline" disabled={isProcessingNotes || importMutation.isPending} onClick={() => setImportConfirmOpen(false)}>Go back</Button><Button disabled={isProcessingNotes || importMutation.isPending} onClick={() => { if (!noteProcessingLock.current) importMutation.mutate(); }}>{importMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm import and booking</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={dialog === "complete"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Confirm production is complete</DialogTitle><DialogDescription>This will mark every remaining stocking on <strong>{activeOrder?.jobName}</strong> as complete. Confirm the pieces have been checked and finished before proceeding.</DialogDescription></DialogHeader><div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><AlertCircle className="mr-2 inline h-4 w-4" />This is a production confirmation, not a dispatch action.</div>{activeOrder && !activeOrder.sampleApprovalReady && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Every stocking awaiting approval needs its latest digital sample approved by the customer first.</p>}<DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Go back</Button><Button disabled={operationMutation.isPending || !activeOrder?.sampleApprovalReady} onClick={() => activeOrder?.sampleApprovalReady && operationMutation.mutate({ order: activeOrder, action: "complete", payload: {} })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm completion</Button></DialogFooter></DialogContent>
+        <DialogContent><DialogHeader><DialogTitle>Confirm production is complete</DialogTitle><DialogDescription>This will mark every remaining stocking on <strong>{activeOrder?.jobName}</strong> as complete. Confirm the pieces have been checked and finished before proceeding.</DialogDescription></DialogHeader><div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><AlertCircle className="mr-2 inline h-4 w-4" />This is a production confirmation, not a dispatch action.</div><DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Go back</Button><Button disabled={operationMutation.isPending} onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "complete", payload: {} })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm completion</Button></DialogFooter></DialogContent>
       </Dialog>
       <Dialog open={dialog === "book"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Book one DPD bag</DialogTitle>
-            <DialogDescription>A real Expresspak bag label will be purchased when you confirm.</DialogDescription>
+            <DialogTitle>Book DPD shipment</DialogTitle>
+            <DialogDescription>This creates a real DPD Expresspak 5 Next Day shipment at the agreed fixed default of 4,000 g.</DialogDescription>
           </DialogHeader>
-          <label className="space-y-2 text-sm font-medium">Measured packed weight in grams
-            <Input type="number" min="100" max="5000" step="1" value={weight} onChange={(e) => setWeight(e.target.value)} />
-          </label>
           <div className="rounded-lg bg-amber-50 p-3 text-sm leading-5 text-amber-900">
-            Enter the measured packed weight (100–5,000 g). Up to 1 kg uses Expresspak 1; up to 5 kg uses Expresspak 5.
-            Check the bag and address first. If the order exceeds 5 kg, ask a manager to review shipping.
-            Do not retry an uncertain booking; check DPD and use recovery.
+            Check the recipient address and expected parcel first. Labels can be prepared before production is complete. This action does not mark the parcel as despatched. If a booking result is uncertain, check DPD and use recovery instead of booking again.
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button>
-            <Button disabled={!weight.trim() || !Number.isInteger(Number(weight)) || Number(weight) < 100 || Number(weight) > 5000 || operationMutation.isPending}
-              onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "book", payload: { weightGrams: Number(weight) } })}>
-              {operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Buy label & book
+            <Button disabled={operationMutation.isPending}
+              onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "book", payload: {} })}>
+              {operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Book shipment
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={dialog === "dispatch"} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent><DialogHeader><DialogTitle>Confirm actual despatch</DialogTitle><DialogDescription>This records that <strong>{activeOrder?.orderNumber || activeOrder?.jobName}</strong> has physically left fulfilment. Confirm production is complete, the delivery note is saved and tracking is present.</DialogDescription></DialogHeader>
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm leading-5 text-amber-950">A label alone is not despatch. Only continue after handing the parcel to the carrier.</div>
+          <DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button><Button disabled={!activeOrder || !activeOrder.completed || !activeOrder.deliveryNotes?.length || !activeOrder.dhlTrackingNumber || operationMutation.isPending} onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "dispatch", payload: {} })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm despatch</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       <Dialog open={dialog === "royal-mail" || dialog === "recover"} onOpenChange={(open) => !open && setDialog(null)}>
@@ -442,10 +642,17 @@ export default function AbodeStockings() {
 function Metric({ label, value, note }: { label: string; value: string; note: string }) {
   return <div className="rounded-xl border border-stone-200 bg-white px-4 py-4 shadow-sm"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-stone-500">{note}</p></div>;
 }
+function ukDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/London" });
+}
+function formatDate(value: string | null) {
+  return value ? ukDate(value) || "—" : "—";
+}
 function Spec({ label, value }: { label: string; value: string }) {
   return <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p><p className="mt-1 break-words text-sm font-medium leading-5 text-stone-800">{value || "—"}</p></div>;
 }
-function StatusPill({ status }: { status: "in-work" | "ready" | "dispatched" | "approval" }) {
-  const config = status === "dispatched" ? ["bg-emerald-100 text-emerald-900", "Dispatched"] : status === "ready" ? ["bg-[#f5e8d6] text-[#71482e]", "Ready for dispatch"] : status === "approval" ? ["bg-amber-100 text-amber-950", "Awaiting sample approval"] : ["bg-stone-100 text-stone-700", "In work"];
+function StatusPill({ status }: { status: "in-work" | "ready" | "dispatched" | "delivered" }) {
+  const config = status === "delivered" ? ["bg-emerald-100 text-emerald-900", "Delivered"] : status === "dispatched" ? ["bg-[#e5eee8] text-[#344e43]", "Dispatched"] : status === "ready" ? ["bg-[#f5e8d6] text-[#71482e]", "Ready for dispatch"] : ["bg-stone-100 text-stone-700", "In work"];
   return <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${config[0]}`}>{config[1]}</span>;
 }

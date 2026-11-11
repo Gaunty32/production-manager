@@ -77,6 +77,7 @@ class DpdService {
     const credentials = Buffer.from(`${this.username}:${this.password}`).toString("base64");
     const res = await fetch(`${DPD_BASE}/user/?action=login`, {
       method: "POST",
+      signal: AbortSignal.timeout(20_000),
       headers: {
         Authorization: `Basic ${credentials}`,
         "Content-Type": "application/json",
@@ -204,6 +205,7 @@ class DpdService {
 
     const shipRes = await fetch(`${DPD_BASE}/shipping/shipment`, {
       method: "POST",
+      signal: AbortSignal.timeout(30_000),
       headers,
       body: JSON.stringify(shipmentPayload),
     });
@@ -260,6 +262,7 @@ class DpdService {
     try {
       const headers = await this.authHeaders();
       const res = await fetch(`${DPD_BASE}/shipping/shipment/${shipmentJobId}/label/`, {
+        signal: AbortSignal.timeout(20_000),
         headers: { ...headers, Accept: "text/html" },
       });
       if (!res.ok) {
