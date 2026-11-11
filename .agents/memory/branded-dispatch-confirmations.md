@@ -1,13 +1,13 @@
 ---
 name: Branded dispatch confirmations
-description: Merox interim white-label dispatch scope and the distinction from live DPD tracking.
+description: Merox branding and privacy scope, with authorised outbound DPD Local tracking.
 ---
 
-The agreed interim Merox offering is a customer-branded dispatch confirmation, not live tracking. Do not include a DPD tracking link, tracking number, origin/collection details, prices, production information or Select Branding identity on the recipient page.
+The Merox offering is a customer-branded dispatch confirmation with a DPD Local tracking button. Keep origin/collection details, prices, production information and Select Branding identity off the recipient page; live delivery updates remain on DPD Local.
 
-**Why:** The user supplied screenshots showing that DPD's existing recipient pages expose both Select Branding's logo and its company name in the origin history. Forwarding the DPD link defeats the purpose of the white-label offering. DPD tracking access is still unresolved.
+**Why:** The original dispatch-only scope avoided DPD pages exposing Select Branding. The user subsequently confirmed DPD are removing all sender references and authorised adding DPD tracking, saying the change should now be live.
 
-**How to apply:** Keep the trial scoped to Merox unless the user expands it. Only show genuine recorded facts; booking/completion is not evidence of courier collection or delivery. Historical orders may lack a recorded dispatch date, which must stay unknown rather than be inferred from production dates. Do not alter DPD bookings, notifications or account-wide branding as part of this interim feature.
+**How to apply:** Keep the trial scoped to Merox unless the user expands it. Only show genuine recorded facts; booking/completion is not evidence of courier collection or delivery. Historical orders may lack a recorded dispatch date, which must stay unknown rather than be inferred from production dates. Do not alter DPD bookings, notifications or account-wide branding as part of this feature.
 
 A branded page does not conceal the hosting domain or change existing DPD emails, SMS or parcel labels.
 
@@ -19,4 +19,4 @@ The user confirms that DPD are removing all Select Branding sender references, i
 
 **Why:** This planned DPD-side change addresses the original reason for avoiding their tracking page.
 
-**How to apply:** DPD tracking links can be considered for Merox once the change is active and a real tracking page has been checked. The user has confirmed the scope, not that the change is already live; do not replace the interim feature without their request.
+**How to apply:** The user authorised DPD links and said the change should now be live. Do not claim DPD's external branding has been independently verified unless a real recipient tracking page has been checked.
