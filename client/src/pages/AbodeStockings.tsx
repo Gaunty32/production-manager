@@ -100,7 +100,7 @@ export default function AbodeStockings() {
   const [filter, setFilter] = useState<"all" | "in-work" | "ready" | "dispatched" | "delivered">("all");
   const [search, setSearch] = useState("");
   const [activeOrder, setActiveOrder] = useState<StockingOrder | null>(null);
-  const [dialog, setDialog] = useState<"complete" | "book" | "royal-mail" | "recover" | "dispatch" | null>(null);
+  const [dialog, setDialog] = useState<"complete" | "royal-mail" | "recover" | "dispatch" | null>(null);
   const [trackingNumber, setTrackingNumber] = useState("");
   const [bookingRecovery, setBookingRecovery] = useState<BookingRecovery[]>([]);
   const [noteFiles, setNoteFiles] = useState<File[]>([]);
@@ -545,7 +545,7 @@ export default function AbodeStockings() {
                     </div>
                     {isStaff && <div className="flex flex-wrap gap-2">
                       {!order.completed && <Button size="sm" onClick={() => { setActiveOrder(order); setDialog("complete"); }}><Check className="mr-1.5 h-4 w-4" />Complete work</Button>}
-                      {!order.labelAvailable && !order.dhlTrackingNumber && order.shippingRoute === "dpd" && order.shipmentState === "unbooked" && <Button size="sm" onClick={() => { setActiveOrder(order); setDialog("book"); }}><Truck className="mr-1.5 h-4 w-4" />Book DPD</Button>}
+                      {!order.labelAvailable && !order.dhlTrackingNumber && order.shippingRoute === "dpd" && order.shipmentState === "unbooked" && <Button size="sm" disabled={operationMutation.isPending} onClick={() => operationMutation.mutate({ order, action: "book", payload: {} })}>{operationMutation.isPending && operationMutation.variables?.order.id === order.id && operationMutation.variables.action === "book" ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Booking…</> : <><Truck className="mr-1.5 h-4 w-4" />Book DPD label</>}</Button>}
                       {order.completed && !order.dhlTrackingNumber && order.shippingRoute === "royal_mail" && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setDialog("royal-mail"); }}><Send className="mr-1.5 h-4 w-4" />Add tracking</Button>}
                       {(order.shipmentState === "review" || order.shipmentState === "booking") && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setTrackingNumber(""); setDialog("recover"); }}><ShieldAlert className="mr-1.5 h-4 w-4" />Recover booking</Button>}
                       {order.labelAvailable && !(order.shipmentState === "review" && !order.dhlTrackingNumber) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "label")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Label</Button>}
@@ -607,24 +607,6 @@ export default function AbodeStockings() {
       </Dialog>
       <Dialog open={dialog === "complete"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent><DialogHeader><DialogTitle>Confirm production is complete</DialogTitle><DialogDescription>This will mark every remaining stocking on <strong>{activeOrder?.jobName}</strong> as complete. Confirm the pieces have been checked and finished before proceeding.</DialogDescription></DialogHeader><div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><AlertCircle className="mr-2 inline h-4 w-4" />This is a production confirmation, not a dispatch action.</div><DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Go back</Button><Button disabled={operationMutation.isPending} onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "complete", payload: {} })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm completion</Button></DialogFooter></DialogContent>
-      </Dialog>
-      <Dialog open={dialog === "book"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Book DPD shipment</DialogTitle>
-            <DialogDescription>This creates a real DPD Expresspak 5 Next Day shipment at the agreed fixed default of 4,000 g.</DialogDescription>
-          </DialogHeader>
-          <div className="rounded-lg bg-amber-50 p-3 text-sm leading-5 text-amber-900">
-            Check the recipient address and expected parcel first. Labels can be prepared before production is complete. This action does not mark the parcel as despatched. If a booking result is uncertain, check DPD and use recovery instead of booking again.
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button>
-            <Button disabled={operationMutation.isPending}
-              onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "book", payload: {} })}>
-              {operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Book shipment
-            </Button>
-          </DialogFooter>
-        </DialogContent>
       </Dialog>
       <Dialog open={dialog === "dispatch"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent><DialogHeader><DialogTitle>Confirm actual despatch</DialogTitle><DialogDescription>This records that <strong>{activeOrder?.orderNumber || activeOrder?.jobName}</strong> has physically left fulfilment. Confirm production is complete, the delivery note is saved and tracking is present.</DialogDescription></DialogHeader>

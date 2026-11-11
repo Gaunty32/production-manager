@@ -51,6 +51,12 @@ Orders and their delivery-note PDFs should be uploaded together, and DPD labels 
 
 **How to apply:** Treat label creation as a real courier booking, never as actual despatch. Never send a despatch email or count an order as despatched just because it has tracking. Keep imports and note attachment retry-safe, preserve one note per order, and never automatically repeat an uncertain courier purchase.
 
+Manual Abode label booking should book directly, without a warning-filled confirmation.
+
+**Why:** The user said: “we don't need all the warning messages, just book the label.”
+
+**How to apply:** Keep the normal booking action direct; retain genuine failure/recovery messages and duplicate-booking protection.
+
 The customer needs a master spreadsheet list of orders showing despatch dates, delivered dates and tracking numbers, with automatic DPD tracking rather than staff-entered delivered dates.
 
 **Why:** The user requested the master list and selected “Connect automatic DPD tracking”.
