@@ -415,10 +415,6 @@ export default function AbodeStockings() {
             order: existingBookingOrder, action: "recover", payload: { shipmentId: linkedShipmentId, trackingNumber: linkedTracking },
           })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save existing label and update order list</Button>
         </div>}
-        {isStaff && !data.trackingConfigured && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-          <p className="font-semibold">DPD tracking is not connected</p>
-          <p className="mt-1">Confirmed delivery dates will appear after the tracking connection is configured. Creating a DPD label records despatch, not delivery.</p>
-        </div>}
         {isStaff && orders.some(order => order.trackingError) && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="font-semibold">Some tracking checks need attention</p>
           <p className="mt-1">The carrier has not confirmed delivery for every parcel. No estimated delivery date is shown as confirmed.</p>
