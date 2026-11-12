@@ -273,6 +273,12 @@ class DpdService {
         return null;
       }
       const html = await res.text();
+      // DPD also returns application errors with HTTP 200. Never cache those
+      // JSON responses as printable labels.
+      if (!/<(?:!doctype|html|head|body|div|p|table|style|img)\b/i.test(html)) {
+        console.error("[DPD] Label unavailable: courier returned no printable HTML");
+        return null;
+      }
       console.log(`[DPD] Label fetched for jobId ${shipmentJobId} (${html.length} chars)`);
       return html;
     } catch (e: any) {

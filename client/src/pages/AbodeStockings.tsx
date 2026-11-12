@@ -102,6 +102,7 @@ export default function AbodeStockings() {
   const [dialog, setDialog] = useState<"complete" | "royal-mail" | "recover" | "dispatch" | null>(null);
   const [trackingNumber, setTrackingNumber] = useState("");
   const [existingShipmentId, setExistingShipmentId] = useState("");
+  const [recoveryPdf, setRecoveryPdf] = useState<File | null>(null);
   const [bookingRecovery, setBookingRecovery] = useState<BookingRecovery[]>([]);
   const [noteFiles, setNoteFiles] = useState<File[]>([]);
   const [noteRows, setNoteRows] = useState<NoteRow[]>([]);
@@ -162,7 +163,18 @@ export default function AbodeStockings() {
     onError: (err) => toast({ title: "Import failed", description: friendlyError(err), variant: "destructive" }),
   });
   const operationMutation = useMutation({
-    mutationFn: async ({ order, action, payload }: { order: StockingOrder; action: string; payload: Record<string, unknown> }) => {
+    mutationFn: async ({ order, action, payload, labelPdf }: { order: StockingOrder; action: string; payload: Record<string, unknown>; labelPdf?: File }) => {
+      if (labelPdf) {
+        const params = new URLSearchParams({ shipmentId: String(payload.shipmentId), trackingNumber: String(payload.trackingNumber) });
+        const response = await fetch(`${STAFF_URL}/orders/${encodeURIComponent(order.id)}/recover?${params}`, {
+          method: "POST", credentials: "include", headers: { "Content-Type": "application/pdf" }, body: labelPdf,
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.error || "Could not save the existing label PDF.");
+        }
+        return response.json();
+      }
       const response = await apiRequest("POST", `${STAFF_URL}/orders/${encodeURIComponent(order.id)}/${action}`, payload);
       return response.json();
     },
@@ -173,7 +185,7 @@ export default function AbodeStockings() {
       } else {
       toast({ title: "Order updated", description: "The latest status is now reflected below." });
       }
-      setDialog(null); setActiveOrder(null); setTrackingNumber("");
+      setDialog(null); setActiveOrder(null); setTrackingNumber(""); setRecoveryPdf(null);
       refresh();
     },
     onError: (err) => {
@@ -634,7 +646,7 @@ export default function AbodeStockings() {
           <DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button><Button disabled={!activeOrder || !activeOrder.completed || !activeOrder.deliveryNotes?.length || !activeOrder.dhlTrackingNumber || operationMutation.isPending} onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "dispatch", payload: {} })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm despatch</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={dialog === "royal-mail" || dialog === "recover"} onOpenChange={(open) => !open && setDialog(null)}>
+      <Dialog open={dialog === "royal-mail" || dialog === "recover"} onOpenChange={(open) => { if (!open) { setDialog(null); setRecoveryPdf(null); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{dialog === "recover" ? "Get existing DPD label" : "Save Royal Mail tracking"}</DialogTitle>
@@ -642,11 +654,19 @@ export default function AbodeStockings() {
           </DialogHeader>
           {dialog === "recover" && <label className="space-y-2 text-sm font-medium">DPD shipment ID<Input value={existingShipmentId} onChange={event => setExistingShipmentId(event.target.value)} inputMode="numeric" autoComplete="off" /></label>}
           <label className="space-y-2 text-sm font-medium">Tracking number<Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} autoComplete="off" /></label>
+          {dialog === "recover" && <label className="space-y-2 text-sm font-medium">Existing label PDF (if DPD cannot retrieve it)<Input type="file" accept=".pdf,application/pdf" onChange={event => {
+            const file = event.target.files?.[0] || null;
+            if (file && file.size > 1024 * 1024) {
+              toast({ title: "PDF is too large", description: "Choose a label PDF no larger than 1 MB.", variant: "destructive" });
+              event.target.value = ""; setRecoveryPdf(null); return;
+            }
+            setRecoveryPdf(file);
+          }} /><span className="block text-xs font-normal text-stone-500">The PDF's order and tracking numbers are checked before saving. No new shipment is booked.</span></label>}
           {dialog === "royal-mail" && <a className="inline-flex items-center gap-1 text-sm font-medium text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3.5 w-3.5" /></a>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button>
             <Button disabled={!trackingNumber.trim() || operationMutation.isPending || (dialog === "recover" && (!Number.isSafeInteger(Number(existingShipmentId)) || Number(existingShipmentId) <= 0))}
-              onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: dialog === "recover" ? "recover" : "royal-mail", payload: {
+              onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: dialog === "recover" ? "recover" : "royal-mail", labelPdf: dialog === "recover" ? recoveryPdf || undefined : undefined, payload: {
                 trackingNumber: trackingNumber.trim(), ...(dialog === "recover" ? { shipmentId: Number(existingShipmentId) } : {}),
               } })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{dialog === "recover" ? "Save label and tracking" : "Save tracking"}</Button>
           </DialogFooter>

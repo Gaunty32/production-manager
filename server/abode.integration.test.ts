@@ -16,6 +16,29 @@ import { calculateJobPrice } from "../shared/pricing";
 import { ObjectStorageService } from "./objectStorage";
 import { abodeDispatchedAt, hasUndespatchedAbodeOrder } from "./abodeShipping";
 import { confirmedDeliveryDate, lookupAbodeTracking } from "./abodeTracking";
+import PDFDocument from "pdfkit";
+import { verifyRecoveredLabelPdf } from "./abodeLabelRecovery";
+
+async function labelPdf(order: string, tracking: string): Promise<Buffer> {
+  const document = new PDFDocument();
+  const parts: Buffer[] = [];
+  const result = new Promise<Buffer>((resolve, reject) => {
+    document.on("data", part => parts.push(part));
+    document.on("end", () => resolve(Buffer.concat(parts)));
+    document.on("error", reject);
+  });
+  document.text(`Ref ${order}`).text(`Consignment ${tracking}`);
+  document.end();
+  return result;
+}
+
+test("saved PDF recovery verifies both identifiers and rejects wrong or invalid documents", async () => {
+  const pdf = await labelPdf("TEST-PDF", "6895132451");
+  await verifyRecoveredLabelPdf(pdf, "TEST-PDF", "6895132451");
+  await assert.rejects(() => verifyRecoveredLabelPdf(pdf, "OTHER", "6895132451"), /does not match/);
+  await assert.rejects(() => verifyRecoveredLabelPdf(pdf, "TEST-PDF", "WRONG12345"), /does not match/);
+  await assert.rejects(() => verifyRecoveredLabelPdf(Buffer.from("not pdf"), "TEST-PDF", "6895132451"), /existing DPD label/);
+});
 
 test("confirmed delivery dates require actual delivered scans, never a next-day estimate", () => {
   assert.equal(confirmedDeliveryDate({ deliveryDate: "2026-11-12", deliveryStatus: "Data Only" }), null);
@@ -240,10 +263,32 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     assert.ok(recovered.dispatchedAt, "Recovering an existing DPD label also records despatch");
     assert.equal(recovered.trackingStatus, "Despatched");
     assert.equal(bookings, before);
-    const labelPdf = await request(`/orders/${failedId}/label?format=pdf`);
-    assert.equal(labelPdf.headers.get("content-type"), "application/pdf");
-    assert.equal(Buffer.from(await labelPdf.arrayBuffer()).subarray(0,5).toString(), "%PDF-");
+    const labelResponse = await request(`/orders/${failedId}/label?format=pdf`);
+    assert.equal(labelResponse.headers.get("content-type"), "application/pdf");
+    assert.equal(Buffer.from(await labelResponse.arrayBuffer()).subarray(0,5).toString(), "%PDF-");
     assert.equal((await storage.getJob(failedId))?.dispatchEmailQueuedAt, null);
+    const pdfImport = await (await request("/imports", { rows: [{ ...row, "Order number": "TEST-PDF" }] })).json();
+    const pdfJobId = pdfImport.labelResults[0].jobId;
+    const noMoreBookings = bookings;
+    dpdService.fetchLabel = async () => null;
+    const unavailable = await request(`/orders/${pdfJobId}/recover`, { shipmentId: 2689513245121501, trackingNumber: "SAVEDPDF12345" });
+    assert.equal(unavailable.status, 409);
+    assert.match((await unavailable.json()).error, /saved label PDF/);
+    const uploadPdf = (pdf: Buffer) => fetch(`${base}/api/abode/orders/${pdfJobId}/recover?shipmentId=2689513245121501&trackingNumber=SAVEDPDF12345`, {
+      method: "POST", headers: { "x-test-staff": "yes", "content-type": "application/pdf" }, body: new Uint8Array(pdf),
+    });
+    assert.equal((await uploadPdf(await labelPdf("WRONG-ORDER", "SAVEDPDF12345"))).status, 400);
+    bytes = await labelPdf("TEST-PDF", "SAVEDPDF12345");
+    assert.equal((await uploadPdf(bytes)).status, 200);
+    const pdfOrder = (await (await request("")).json()).orders.find((o: any) => o.id === pdfJobId);
+    assert.equal(pdfOrder.labelAvailable, true);
+    assert.ok(pdfOrder.dispatchedAt);
+    assert.equal(pdfOrder.dhlTrackingNumber, "SAVEDPDF12345");
+    assert.equal(pdfOrder.deliveredAt, null);
+    const originalLabel = await request(`/orders/${pdfJobId}/label?format=pdf`);
+    assert.equal(originalLabel.headers.get("content-type"), "application/pdf");
+    assert.deepEqual(Buffer.from(await originalLabel.arrayBuffer()), bytes);
+    assert.equal(bookings, noMoreBookings, "Recovering the saved PDF never purchases another shipment");
   } finally {
     storage.getCustomers = originals.customers; storage.getCustomer = originals.customer; storage.getCustomerUserById = originals.customerUser;
     dpdService.isConfigured = originals.configured; dpdService.createShipment = originals.book; dpdService.fetchLabel = originals.label;

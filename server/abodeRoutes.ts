@@ -19,6 +19,7 @@ import { DELIVERY_NOTE_PREFIX, MAX_DELIVERY_NOTE_BYTES, deliveryNoteOrderNumber,
 import { registerAbodeSampleRoutes, sampleUploadBody } from "./abodeSamples";
 import { abodeDispatchedAt, bookAbodeLabel } from "./abodeShipping";
 import { abodeTrackingConfigured, syncAbodeTracking } from "./abodeTracking";
+import { RECOVERED_LABEL_PREFIX, verifyRecoveredLabelPdf } from "./abodeLabelRecovery";
 
 type CompletionGuard = (req: any, jobId: string, item?: any) => Promise<string | null>;
 const editable = (status: string) => ["pending", "ready", "draft"].includes(status);
@@ -83,7 +84,7 @@ export function registerAbodeRoutes(app: Express, deps: {
         completedCount: count.count, currentRate: stockingRate(count.count),
         orders: orders.map(({ order, job }) => ({
           ...job, orderNumber: order.orderNumber, recipient: order.recipient, shippingRoute: order.shippingRoute,
-          shipmentState: order.shipmentState, labelAvailable: Boolean(order.labelHtml || order.shipmentId),
+          shipmentState: order.shipmentState, labelAvailable: Boolean(order.labelHtml || order.shipmentId || files.some(file => file.jobId === job.id && file.fileName.startsWith(RECOVERED_LABEL_PREFIX))),
           bookedAt: order.bookedAt, dispatchedAt: abodeDispatchedAt(order, job), deliveredAt: order.deliveredAt,
           trackingStatus: stockingTrackingStatus({ ...order, dispatchedAt: abodeDispatchedAt(order, job) }), trackingCheckedAt: order.trackingCheckedAt, trackingError: order.trackingError,
           sampleApprovalReady: true,
@@ -370,20 +371,28 @@ export function registerAbodeRoutes(app: Express, deps: {
       res.json({ success: true });
     }));
     for (const recovery of [false, true]) {
-      app.post(`${base}/orders/:id/${recovery ? "recover" : "royal-mail"}`, auth, wrap(async (req, res, customer) => {
+      app.post(`${base}/orders/:id/${recovery ? "recover" : "royal-mail"}`, auth, readDeliveryNotePdf, wrap(async (req, res, customer) => {
         const { order, job } = await owned(req.params.id, customer);
         if (!recovery && !job.completed) return res.status(409).json({ error: "Complete production first" });
         if (!editable(job.invoiceStatus)) return res.status(409).json({ error: "Invoiced dispatch details cannot be changed here" });
         if (recovery ? order.shippingRoute !== "dpd" || !["booking", "review"].includes(order.shipmentState) : order.shippingRoute !== "royal_mail") {
           return res.status(409).json({ error: "This action does not match this order's shipping route" });
         }
+        const uploadedPdf = recovery && req.is("application/pdf") && Buffer.isBuffer(req.body) ? req.body as Buffer : null;
         const { trackingNumber, shipmentId } = z.object({
           trackingNumber: z.string().trim().min(5).max(80).regex(/^[A-Za-z0-9 -]+$/),
           shipmentId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
-        }).parse(req.body);
+        }).parse(uploadedPdf ? { trackingNumber: req.query.trackingNumber, shipmentId: Number(req.query.shipmentId) } : req.body);
         let existingLabel: string | null = null;
-        if (recovery && shipmentId) {
+        let recoveredPdfKey: string | null = null;
+        if (uploadedPdf) {
+          await verifyRecoveredLabelPdf(uploadedPdf, order.orderNumber, trackingNumber);
+          recoveredPdfKey = await new ObjectStorageService().saveSmallObject(uploadedPdf, "application/pdf");
+        } else if (recovery && shipmentId) {
           existingLabel = await dpdService.fetchLabel(shipmentId);
+          if (!existingLabel) {
+            return res.status(409).json({ error: "DPD cannot return this existing label. Select the saved label PDF below to recover it without another booking." });
+          }
           const labelText = existingLabel?.replace(/<[^>]*>/g, " ") || "";
           const contains = (value: string) => new RegExp(`(^|[^A-Za-z0-9])${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z0-9]|$)`).test(labelText);
           if (!existingLabel || !contains(order.orderNumber) || !contains(trackingNumber)) {
@@ -394,6 +403,15 @@ export function registerAbodeRoutes(app: Express, deps: {
           const [locked] = await tx.select().from(jobs).where(eq(jobs.id, job.id)).for("update");
           if (!editable(locked.invoiceStatus)) throw new Error("This order has already been invoiced");
           if (locked.dhlTrackingNumber && locked.dhlTrackingNumber !== trackingNumber) throw new Error("Tracking already recorded; review the existing shipment");
+          if (recoveredPdfKey) {
+            const [current] = await tx.select().from(stockingOrders).where(eq(stockingOrders.jobId, job.id)).for("update");
+            if (!["booking", "review"].includes(current.shipmentState)) throw new Error("This shipment has already been recovered. Refresh the order list.");
+            await tx.insert(jobFiles).values({
+              jobId: job.id, fileName: `${RECOVERED_LABEL_PREFIX}${order.orderNumber}.pdf`,
+              fileUrl: recoveredPdfKey, fileType: "application/pdf", fileSize: uploadedPdf!.length,
+              uploadedBy: "staff", uploaderId: req.session.userId,
+            });
+          }
           await tx.update(jobs).set({
             dhlTrackingNumber: trackingNumber, shippingCost: String(ABODE_CARRIAGE),
             shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
@@ -401,7 +419,7 @@ export function registerAbodeRoutes(app: Express, deps: {
           await tx.update(stockingOrders).set({
             shipmentState: "booked", bookedAt: order.bookedAt || new Date(),
             ...(recovery ? { dispatchedAt: order.dispatchedAt || order.bookedAt || new Date(), trackingStatus: order.deliveredAt ? "Delivered" : "Despatched" } : {}),
-            ...(recovery && shipmentId ? { shipmentId, labelHtml: existingLabel } : {}),
+            ...(recovery && shipmentId ? { shipmentId, ...(existingLabel ? { labelHtml: existingLabel } : {}) } : {}),
           }).where(eq(stockingOrders.jobId, job.id));
         });
         res.json({ success: true });
@@ -409,6 +427,13 @@ export function registerAbodeRoutes(app: Express, deps: {
     }
     app.get(`${base}/orders/:id/label`, auth, wrap(async (req, res, customer) => {
       const { order } = await owned(req.params.id, customer);
+      const savedPdf = (await storage.getJobFiles(order.jobId)).find(file => file.fileName.startsWith(RECOVERED_LABEL_PREFIX));
+      if (savedPdf) {
+        const file = await new ObjectStorageService().getObjectEntityFile(savedPdf.fileUrl);
+        res.set({ "Content-Disposition": `inline; filename="DPD-label-${order.orderNumber.replace(/[^A-Za-z0-9_-]/g, "_")}.pdf"`, "X-Content-Type-Options": "nosniff" }).type("application/pdf");
+        await pipeline(file.createReadStream(), res);
+        return;
+      }
       let label = order.labelHtml;
       if (!label && order.shipmentId) {
         label = await dpdService.fetchLabel(order.shipmentId);
