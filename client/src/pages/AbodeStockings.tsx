@@ -402,7 +402,7 @@ export default function AbodeStockings() {
         </div>}
         {isStaff && !data.trackingConfigured && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="font-semibold">DPD tracking is not connected</p>
-          <p className="mt-1">Confirmed delivery dates will appear after the tracking connection is configured. Labels and despatch dates remain separate.</p>
+          <p className="mt-1">Confirmed delivery dates will appear after the tracking connection is configured. Creating a DPD label records despatch, not delivery.</p>
         </div>}
         {isStaff && orders.some(order => order.trackingError) && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="font-semibold">Some tracking checks need attention</p>
@@ -419,7 +419,7 @@ export default function AbodeStockings() {
           <Metric label="Labels ready" value={String(orders.filter(order => order.labelAvailable).length)} note="Can print before production is complete" />
           <Metric label="Awaiting delivery note" value={String(orders.filter(order => !order.dispatchedAt && !order.deliveryNotes?.length).length)} note="Undispatched orders missing a PDF" />
           <Metric label="Ready to dispatch" value={String(readyCount)} note="Production complete" />
-          <Metric label="Dispatched" value={String(dispatchedCount)} note="Actual despatch recorded" />
+           <Metric label="Dispatched" value={String(dispatchedCount)} note="DPD labels count as despatched" />
           <Metric label="Delivered" value={String(orders.filter(order => Boolean(order.deliveredAt)).length)} note="Confirmed by tracking" />
           </>}
         </section>
@@ -576,7 +576,7 @@ export default function AbodeStockings() {
                       {order.completed && !order.dhlTrackingNumber && order.shippingRoute === "royal_mail" && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setDialog("royal-mail"); }}><Send className="mr-1.5 h-4 w-4" />Add tracking</Button>}
                       {(order.shipmentState === "review" || order.shipmentState === "booking") && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setTrackingNumber(""); setExistingShipmentId(""); setDialog("recover"); }}><Printer className="mr-1.5 h-4 w-4" />Get existing label</Button>}
                       {order.labelAvailable && !(order.shipmentState === "review" && !order.dhlTrackingNumber) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "label")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Label PDF</Button>}
-                      <Button size="sm" disabled={!order.completed || !order.deliveryNotes?.length || !order.dhlTrackingNumber || Boolean(order.dispatchedAt)} title={!order.completed ? "Complete production first" : !order.deliveryNotes?.length ? "Save the delivery note first" : !order.dhlTrackingNumber ? "Add tracking before despatch" : undefined} onClick={() => { setActiveOrder(order); setDialog("dispatch"); }}>Mark dispatched</Button>
+                      {!order.dispatchedAt && <Button size="sm" disabled={!order.completed || !order.deliveryNotes?.length || !order.dhlTrackingNumber} title={!order.completed ? "Complete production first" : !order.deliveryNotes?.length ? "Save the delivery note first" : !order.dhlTrackingNumber ? "Add tracking before despatch" : undefined} onClick={() => { setActiveOrder(order); setDialog("dispatch"); }}>Mark dispatched</Button>}
                       </div>}
                       {!isStaff && Boolean(order.deliveryNotes?.length) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Delivery note PDF</Button>}
                   </div>

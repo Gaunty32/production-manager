@@ -24,7 +24,10 @@ test("confirmed delivery dates require actual delivered scans, never a next-day 
   assert.equal(confirmedDeliveryDate({ trackingEvents: [{ type: "Not delivered", date: "2026-11-12" }] }), null);
   assert.equal(confirmedDeliveryDate({ trackingEvents: [{ key: "001", date: "2026-11-12" }] })?.toISOString(), "2026-11-12T12:00:00.000Z");
   assert.equal(confirmedDeliveryDate({ deliveryDate: "2026-07-01", deliveryStatus: "Delivered" })?.toISOString(), "2026-07-01T12:00:00.000Z");
-  assert.equal(abodeDispatchedAt({ bookedAt: new Date(), dispatchedAt: null }, { dhlTrackingNumber: "123", dispatchEmailQueuedAt: new Date() }), null);
+  const booked = new Date("2026-11-02");
+  assert.equal(abodeDispatchedAt({ shippingRoute: "dpd", bookedAt: booked, dispatchedAt: null }, { dhlTrackingNumber: "123", dispatchEmailQueuedAt: null }), booked);
+  assert.equal(abodeDispatchedAt({ shippingRoute: "royal_mail", bookedAt: booked, dispatchedAt: null }, { dhlTrackingNumber: "123", dispatchEmailQueuedAt: null }), null);
+  assert.equal(abodeDispatchedAt({ shippingRoute: "dpd", bookedAt: booked, dispatchedAt: null }, { dhlTrackingNumber: null, dispatchEmailQueuedAt: null }), null);
   const historic = new Date("2026-11-01");
   assert.equal(abodeDispatchedAt({ bookedAt: null, dispatchedAt: null }, { dhlTrackingNumber: "123", dispatchEmailQueuedAt: historic }), historic);
 });
@@ -62,7 +65,7 @@ test("DPD tracking paginates reference searches and matches the saved shipment, 
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test("Abode import → early label → no approval → photo → actual despatch, with safe retries", { timeout: 90000 }, async () => {
+test("Abode import → label despatch → completion → photo, with safe retries", { timeout: 90000 }, async () => {
   assert.notEqual(process.env.NODE_ENV, "production", "Never run against production");
   const id = randomUUID();
   const [customer] = await db.insert(customers).values({ name: `Abode integration fixture ${id}` }).returning();
@@ -136,13 +139,20 @@ test("Abode import → early label → no approval → photo → actual despatch
     assert.ok(dpd.bookedAt && dpd.labelAvailable && dpd.dhlTrackingNumber);
     const [savedBooking] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, dpd.id));
     assert.equal(savedBooking.shipmentId, 2689513245121500, "Real-sized DPD IDs must save without integer overflow");
-    assert.equal(dpd.dispatchedAt, null);
+    assert.equal(dpd.dispatchedAt, dpd.bookedAt, "DPD label creation records despatch immediately");
+    assert.equal(dpd.trackingStatus, "Despatched");
     assert.equal(dpd.deliveredAt, null);
-    assert.equal(dpd.dispatchEmailQueuedAt, null, "Booking cannot queue a despatch email");
+    assert.equal(dpd.dispatchEmailQueuedAt, null, "Booking does not change the existing email workflow");
+    await db.update(stockingOrders).set({ dispatchedAt: null, trackingStatus: "Label created — awaiting despatch" }).where(eq(stockingOrders.jobId, dpd.id));
+    const legacyContext = await (await request("", undefined, true)).json();
+    const legacyOrder = legacyContext.orders.find((o: any) => o.id === dpd.id);
+    assert.equal(legacyOrder.dispatchedAt, dpd.bookedAt, "Existing DPD bookings are despatched without a data migration");
+    assert.equal(legacyOrder.trackingStatus, "Despatched", "Existing wording is corrected for customers");
+    assert.equal(legacyOrder.deliveredAt, null);
     assert.equal((await request(`/orders/${dpd.id}/label`)).status, 200, "Label printable before production");
     assert.equal((await request(`/orders/${dpd.id}/book`, {})).status, 400);
     assert.equal(bookings, 1);
-    assert.equal((await request(`/orders/${dpd.id}/dispatch`, {})).status, 400);
+    assert.equal((await request(`/orders/${dpd.id}/dispatch`, {})).status, 200, "Already-despatched labels need no second action");
     assert.equal((await request(`/orders/${dpd.id}/book`, {}, true)).status, 404, "Customer cannot manually book");
     assert.equal((await request(`/orders/${dpd.id}/dispatch`, {}, true)).status, 404, "Customer cannot confirm despatch");
     const historicalSample = (await db.insert(stockingSamples).values({
@@ -168,9 +178,9 @@ test("Abode import → early label → no approval → photo → actual despatch
     assert.equal((await storage.getJob(dpd.id))?.invoiceStatus, "ready", "Completion retries keep the draft invoice ready");
     const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(stockingProduction).where(eq(stockingProduction.customerId, customer.id));
     assert.equal(count.count, 102, "Completion retries preserve lifetime count");
-    assert.equal(await hasUndespatchedAbodeOrder([dpd.id]), true, "Completion plus early tracking must not trigger despatch email");
+    assert.equal(await hasUndespatchedAbodeOrder([dpd.id]), false, "Created DPD labels count as despatched");
     assert.equal((await storage.getJob(dpd.id))?.dispatchEmailQueuedAt, null);
-    assert.equal((await request(`/orders/${dpd.id}/dispatch`, {})).status, 400, "Delivery note must be saved before actual despatch");
+    assert.equal((await request(`/orders/${dpd.id}/dispatch`, {})).status, 200, "Existing label despatch is idempotent");
     objectType = "image/png";
     bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8R8AAAAASUVORK5CYII=", "base64");
     const savedPhoto = await (await request(`/orders/${dpd.id}/photos`, photo)).json();
@@ -227,6 +237,8 @@ test("Abode import → early label → no approval → photo → actual despatch
     assert.equal(recovered.shipmentId, existingPayload.shipmentId);
     assert.equal(recovered.shipmentState, "booked");
     assert.ok(recovered.labelHtml?.includes("TEST-FAILED"));
+    assert.ok(recovered.dispatchedAt, "Recovering an existing DPD label also records despatch");
+    assert.equal(recovered.trackingStatus, "Despatched");
     assert.equal(bookings, before);
     const labelPdf = await request(`/orders/${failedId}/label?format=pdf`);
     assert.equal(labelPdf.headers.get("content-type"), "application/pdf");

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "./db";
 import { storage } from "./storage";
 import { customers, jobs, jobLineItems, jobFiles, stockingOrders, stockingProduction, stockingSamples } from "@shared/schema";
-import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate } from "@shared/abode";
+import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate, stockingTrackingStatus } from "@shared/abode";
 import { parseStockingRows } from "./abodeImport";
 import { completeStockingOrder } from "./abodeProduction";
 import { renderStockingLabel } from "./abodeDocuments";
@@ -85,7 +85,7 @@ export function registerAbodeRoutes(app: Express, deps: {
           ...job, orderNumber: order.orderNumber, recipient: order.recipient, shippingRoute: order.shippingRoute,
           shipmentState: order.shipmentState, labelAvailable: Boolean(order.labelHtml || order.shipmentId),
           bookedAt: order.bookedAt, dispatchedAt: abodeDispatchedAt(order, job), deliveredAt: order.deliveredAt,
-          trackingStatus: order.trackingStatus, trackingCheckedAt: order.trackingCheckedAt, trackingError: order.trackingError,
+          trackingStatus: stockingTrackingStatus({ ...order, dispatchedAt: abodeDispatchedAt(order, job) }), trackingCheckedAt: order.trackingCheckedAt, trackingError: order.trackingError,
           sampleApprovalReady: true,
           items: items.filter(item => item.jobId === job.id).map(item => ({
             ...item, digitalSamples: samples.filter(sample => sample.lineItemId === item.id).map(sample => ({
@@ -350,11 +350,12 @@ export function registerAbodeRoutes(app: Express, deps: {
       res.json(await bookAbodeLabel(job.id));
     }));
     app.post(`${base}/orders/:id/dispatch`, auth, wrap(async (req, res, customer) => {
-      const { job } = await owned(req.params.id, customer);
+      const { job, order: existingOrder } = await owned(req.params.id, customer);
+      if (abodeDispatchedAt(existingOrder, job)) return res.json({ success: true });
       await db.transaction(async tx => {
         const [locked] = await tx.select().from(jobs).where(eq(jobs.id, job.id)).for("update");
         const [order] = await tx.select().from(stockingOrders).where(eq(stockingOrders.jobId, job.id)).for("update");
-        if (abodeDispatchedAt(order, locked)) return;
+         if (abodeDispatchedAt(order, locked)) return;
         if (!locked.completed) throw new Error("Complete production before confirming despatch");
         const items = await tx.select().from(jobLineItems).where(eq(jobLineItems.jobId, job.id));
         if (!items.length || items.some(item => !item.completed)) throw new Error("Complete every stocking before confirming despatch");
@@ -399,7 +400,8 @@ export function registerAbodeRoutes(app: Express, deps: {
           }).where(eq(jobs.id, job.id));
           await tx.update(stockingOrders).set({
             shipmentState: "booked", bookedAt: order.bookedAt || new Date(),
-            ...(recovery && shipmentId ? { shipmentId, labelHtml: existingLabel, trackingStatus: "Label created — awaiting despatch" } : {}),
+            ...(recovery ? { dispatchedAt: order.dispatchedAt || order.bookedAt || new Date(), trackingStatus: order.deliveredAt ? "Delivered" : "Despatched" } : {}),
+            ...(recovery && shipmentId ? { shipmentId, labelHtml: existingLabel } : {}),
           }).where(eq(stockingOrders.jobId, job.id));
         });
         res.json({ success: true });

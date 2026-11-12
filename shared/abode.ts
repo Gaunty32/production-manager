@@ -29,7 +29,7 @@ export function stockingBagNetworkCode(weightGrams: number): string {
   return weightGrams <= 1000 ? "2^68" : "2^32";
 }
 export type StockingDetails = { colour: string; font: string; thread: string; name: string };
-/** Only actual despatch/delivery moves an order out of production. */
+/** Abode counts a created DPD label as despatch; delivery remains separate. */
 export function splitStockingRegister<T extends {
   dispatchedAt?: string | Date | null;
   deliveredAt?: string | Date | null;
@@ -40,6 +40,17 @@ export function splitStockingRegister<T extends {
     (order.dispatchedAt || order.deliveredAt ? despatched : awaitingProduction).push(order);
   }
   return { awaitingProduction, despatched };
+}
+
+/** Replace the obsolete booking-only wording, retaining real carrier updates. */
+export function stockingTrackingStatus(order: {
+  dispatchedAt: unknown;
+  deliveredAt: unknown;
+  trackingStatus: string | null;
+}): string | null {
+  if (order.deliveredAt) return "Delivered";
+  if (order.dispatchedAt && (!order.trackingStatus || order.trackingStatus === "Label created — awaiting despatch")) return "Despatched";
+  return order.trackingStatus;
 }
 
 /** Stocking imports are worked in their own section, not the main queue. */

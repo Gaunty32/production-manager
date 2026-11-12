@@ -1,24 +1,32 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isStockingWorkflowJob, splitStockingRegister } from "../shared/abode";
+import { isStockingWorkflowJob, splitStockingRegister, stockingTrackingStatus } from "../shared/abode";
 
 const stockingDetails = { colour: "Red", font: "Font 1", thread: "Gold", name: "JANE" };
 
-test("register has two exclusive sections, with ready and booked orders still awaiting despatch", () => {
+test("register keeps production separate from label-based despatch", () => {
   const orders = [
     { id: "working", completed: false, dispatchedAt: null, deliveredAt: null },
     { id: "ready", completed: true, dispatchedAt: null, deliveredAt: null },
-    { id: "booked", completed: false, dispatchedAt: null, deliveredAt: null, dhlTrackingNumber: "TEST" },
+    { id: "label-created", completed: false, dispatchedAt: "2026-11-12", deliveredAt: null, dhlTrackingNumber: "TEST" },
     { id: "despatched", completed: true, dispatchedAt: "2026-11-12", deliveredAt: null },
     { id: "delivered", completed: true, dispatchedAt: "2026-11-11", deliveredAt: "2026-11-12" },
     { id: "historic-delivered", completed: true, dispatchedAt: null, deliveredAt: "2026-11-12" },
   ];
   const { awaitingProduction, despatched } = splitStockingRegister(orders);
-  assert.deepEqual(awaitingProduction.map(order => order.id), ["working", "ready", "booked"]);
-  assert.deepEqual(despatched.map(order => order.id), ["despatched", "delivered", "historic-delivered"]);
+  assert.deepEqual(awaitingProduction.map(order => order.id), ["working", "ready"]);
+  assert.deepEqual(despatched.map(order => order.id), ["label-created", "despatched", "delivered", "historic-delivered"]);
   assert.equal(new Set([...awaitingProduction, ...despatched]).size, orders.length);
   const empty = splitStockingRegister([]);
   assert.deepEqual(empty, { awaitingProduction: [], despatched: [] });
+});
+
+test("legacy label wording cannot contradict despatch or confirmed delivery", () => {
+  const order = { dispatchedAt: "2026-11-12", deliveredAt: null as string | null, trackingStatus: "Label created — awaiting despatch" as string | null };
+  assert.equal(stockingTrackingStatus(order), "Despatched");
+  assert.equal(stockingTrackingStatus({ ...order, trackingStatus: null }), "Despatched");
+  assert.equal(stockingTrackingStatus({ ...order, trackingStatus: "Out for delivery" }), "Out for delivery");
+  assert.equal(stockingTrackingStatus({ ...order, deliveredAt: "2026-11-13" }), "Delivered");
 });
 
 test("marking actual despatch moves the order into the Despatched section", () => {

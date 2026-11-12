@@ -4,13 +4,15 @@ import { jobs, stockingOrders } from "@shared/schema";
 import { ABODE_CARRIAGE, ABODE_DEFAULT_WEIGHT_GRAMS, ABODE_NETWORK_CODE } from "@shared/abode";
 import { dpdService } from "./dpd";
 
-// A consignment can exist long before handover to the courier.
-// Old orders used booking as their dispatch action; retain their recorded date.
+// Abode counts DPD label creation as despatch. Derive existing bookings too,
+// without rewriting historical rows or queuing retrospective emails.
 export function abodeDispatchedAt(
-  order: { bookedAt: Date | null; dispatchedAt: Date | null },
+  order: { bookedAt: Date | null; dispatchedAt: Date | null; shippingRoute?: string },
   job: { dhlTrackingNumber: string | null; dispatchEmailQueuedAt: Date | null },
 ): Date | null {
-  return order.dispatchedAt || (!order.bookedAt && job.dhlTrackingNumber ? job.dispatchEmailQueuedAt : null);
+  return order.dispatchedAt
+    || (order.shippingRoute === "dpd" && job.dhlTrackingNumber ? order.bookedAt : null)
+    || (!order.bookedAt && job.dhlTrackingNumber ? job.dispatchEmailQueuedAt : null);
 }
 
 export async function bookAbodeLabel(jobId: string) {
@@ -40,10 +42,11 @@ export async function bookAbodeLabel(jobId: string) {
     throw new Error("DPD booking needs review. Check your DPD account before doing anything else; do not rebook.");
   }
   try {
+    const now = new Date();
     await db.transaction(async tx => {
       await tx.update(stockingOrders).set({
         shipmentState: "booked", labelHtml: result.labelHtml, shipmentId: result.shipmentJobId || null,
-        parcelNumbers: result.parcelNumbers, bookedAt: new Date(), trackingStatus: "Label created — awaiting despatch",
+        parcelNumbers: result.parcelNumbers, bookedAt: now, dispatchedAt: now, trackingStatus: "Despatched",
       }).where(eq(stockingOrders.jobId, jobId));
       await tx.update(jobs).set({
         dhlTrackingNumber: result.trackingNumber, shippingCost: String(ABODE_CARRIAGE),
