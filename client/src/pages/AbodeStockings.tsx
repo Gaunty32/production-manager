@@ -190,10 +190,6 @@ export default function AbodeStockings() {
   const linkedTracking = existingBookingQuery.get("existingDpdTracking") || "";
   const canSyncLinkedBooking = isStaff && existingBookingOrder && ["booking", "review"].includes(existingBookingOrder.shipmentState)
     && Number.isSafeInteger(linkedShipmentId) && linkedShipmentId > 0 && /^[A-Za-z0-9 -]{5,80}$/.test(linkedTracking);
-  const totalStockings = orders.reduce((sum, order) => sum + order.items.reduce((n, item) => n + item.quantity, 0), 0);
-  const inWorkCount = orders.filter((order) => !order.completed).length;
-  const readyCount = orders.filter((order) => order.completed && !order.dispatchedAt).length;
-  const dispatchedCount = orders.filter((order) => Boolean(order.dispatchedAt)).length;
   const shownOrders = useMemo(() => orders.filter((order) => {
     const term = search.trim().toLocaleLowerCase();
     return !term || [order.jobNumber, order.poNumber, order.jobName, order.orderNumber, order.dhlTrackingNumber, order.dispatchedAt, order.deliveredAt, order.trackingStatus, ...order.items.map((item) => item.stockingDetails.name)].some((value) => String(value ?? "").toLocaleLowerCase().includes(term));
@@ -409,19 +405,9 @@ export default function AbodeStockings() {
           <p className="mt-1">The carrier has not confirmed delivery for every parcel. No estimated delivery date is shown as confirmed.</p>
         </div>}
 
-        <section className={`mb-6 grid grid-cols-2 gap-3 ${isStaff ? "lg:grid-cols-3" : ""}`}>
-          {isCustomer ? <>
+        <section className="mb-6 grid grid-cols-2 gap-3">
             <Metric label="In Production" value={String(allGroupedOrders.awaitingProduction.length)} note="Orders not yet despatched" />
             <Metric label="Despatched" value={String(allGroupedOrders.despatched.length)} note="Tracking links on each order" />
-          </> : <>
-          <Metric label="Open orders" value={String(orders.length)} note={`${totalStockings} stockings`} />
-          <Metric label="Outstanding" value={String(inWorkCount)} note="Production outstanding" />
-          <Metric label="Labels ready" value={String(orders.filter(order => order.labelAvailable).length)} note="Can print before production is complete" />
-          <Metric label="Awaiting delivery note" value={String(orders.filter(order => !order.dispatchedAt && !order.deliveryNotes?.length).length)} note="Undispatched orders missing a PDF" />
-          <Metric label="Ready to dispatch" value={String(readyCount)} note="Production complete" />
-           <Metric label="Dispatched" value={String(dispatchedCount)} note="DPD labels count as despatched" />
-          <Metric label="Delivered" value={String(orders.filter(order => Boolean(order.deliveredAt)).length)} note="Confirmed by tracking" />
-          </>}
         </section>
 
         <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_310px]">
