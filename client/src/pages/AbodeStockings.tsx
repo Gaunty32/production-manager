@@ -199,8 +199,9 @@ export default function AbodeStockings() {
     return !term || [order.jobNumber, order.poNumber, order.jobName, order.orderNumber, order.dhlTrackingNumber, order.dispatchedAt, order.deliveredAt, order.trackingStatus, ...order.items.map((item) => item.stockingDetails.name)].some((value) => String(value ?? "").toLocaleLowerCase().includes(term));
   }), [orders, search]);
   const groupedOrders = splitStockingRegister(shownOrders);
+  const allGroupedOrders = splitStockingRegister(orders);
   const orderSections = [
-    { id: "awaiting-production", title: "Awaiting Production", description: "Orders in production or ready for despatch.", orders: groupedOrders.awaitingProduction, empty: "No orders awaiting production or despatch." },
+    { id: "awaiting-production", title: isCustomer ? "In Production" : "Awaiting Production", description: "Orders in production or ready for despatch.", orders: groupedOrders.awaitingProduction, empty: "No orders awaiting production or despatch." },
     { id: "despatched", title: "Despatched", description: "Orders despatched, including delivered orders.", orders: groupedOrders.despatched, empty: "No despatched orders yet." },
   ];
 
@@ -399,16 +400,20 @@ export default function AbodeStockings() {
             order: existingBookingOrder, action: "recover", payload: { shipmentId: linkedShipmentId, trackingNumber: linkedTracking },
           })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save existing label and update order list</Button>
         </div>}
-        {!data.trackingConfigured && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+        {isStaff && !data.trackingConfigured && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="font-semibold">DPD tracking is not connected</p>
           <p className="mt-1">Confirmed delivery dates will appear after the tracking connection is configured. Labels and despatch dates remain separate.</p>
         </div>}
-        {orders.some(order => order.trackingError) && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+        {isStaff && orders.some(order => order.trackingError) && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="font-semibold">Some tracking checks need attention</p>
           <p className="mt-1">The carrier has not confirmed delivery for every parcel. No estimated delivery date is shown as confirmed.</p>
         </div>}
 
-        <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <section className={`mb-6 grid grid-cols-2 gap-3 ${isStaff ? "lg:grid-cols-3" : ""}`}>
+          {isCustomer ? <>
+            <Metric label="In Production" value={String(allGroupedOrders.awaitingProduction.length)} note="Orders not yet despatched" />
+            <Metric label="Despatched" value={String(allGroupedOrders.despatched.length)} note="Tracking links on each order" />
+          </> : <>
           <Metric label="Open orders" value={String(orders.length)} note={`${totalStockings} stockings`} />
           <Metric label="Outstanding" value={String(inWorkCount)} note="Production outstanding" />
           <Metric label="Labels ready" value={String(orders.filter(order => order.labelAvailable).length)} note="Can print before production is complete" />
@@ -416,6 +421,7 @@ export default function AbodeStockings() {
           <Metric label="Ready to dispatch" value={String(readyCount)} note="Production complete" />
           <Metric label="Dispatched" value={String(dispatchedCount)} note="Actual despatch recorded" />
           <Metric label="Delivered" value={String(orders.filter(order => Boolean(order.deliveredAt)).length)} note="Confirmed by tracking" />
+          </>}
         </section>
 
         <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_310px]">
@@ -520,7 +526,7 @@ export default function AbodeStockings() {
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">Order register</p><h2 className="mt-1 text-xl font-semibold">Stockings in motion</h2></div>
             <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-              <Button variant="outline" size="sm" onClick={() => trackingRefresh.mutate()} disabled={trackingRefresh.isPending}>{trackingRefresh.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Refresh tracking</Button>
+              {isStaff && <Button variant="outline" size="sm" onClick={() => trackingRefresh.mutate()} disabled={trackingRefresh.isPending}>{trackingRefresh.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Refresh tracking</Button>}
               <Button variant="outline" size="sm" onClick={() => void downloadRegister()}><ArrowDownToLine className="mr-2 h-4 w-4" />Download XLSX</Button>
               <Button variant="outline" size="sm" onClick={() => setView(view === "cards" ? "list" : "cards")}>{view === "cards" ? "Spreadsheet list" : "Order cards"}</Button>
               <div className="relative w-full sm:w-64"><Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search order or name" className="bg-white pl-9" /></div>
@@ -545,9 +551,9 @@ export default function AbodeStockings() {
                 <td className="px-3 py-3">{order.labelAvailable ? "Available" : order.shipmentState === "review" ? "Review" : order.shipmentState === "booking" ? "Booking" : "Not booked"}</td>
                 <td className="px-3 py-3">{order.dispatchedAt ? "Dispatched" : "Not dispatched"}</td>
                 <td className="px-3 py-3">{formatDate(order.dispatchedAt)}</td>
-                <td className="px-3 py-3">{order.trackingError ? "Tracking check failed" : order.deliveredAt ? "Delivered" : order.trackingStatus || "Not confirmed"}</td>
+                <td className="px-3 py-3">{isStaff ? order.trackingError ? "Tracking check failed" : order.deliveredAt ? "Delivered" : order.trackingStatus || "Not confirmed" : order.deliveredAt ? "Delivered" : order.dispatchedAt ? "Despatched" : "In Production"}</td>
                 <td className="px-3 py-3">{formatDate(order.deliveredAt)}</td>
-                <td className="px-3 py-3">{order.dhlTrackingNumber ? <a className="inline-flex items-center gap-1 break-all text-[#344e43] underline" href={trackingUrl(order)} target="_blank" rel="noreferrer">{order.dhlTrackingNumber}<ExternalLink className="h-3 w-3 shrink-0" /></a> : "—"}</td>
+                <td className="px-3 py-3">{order.dhlTrackingNumber && (isStaff || order.dispatchedAt || order.deliveredAt) ? <a className="inline-flex items-center gap-1 break-all text-[#344e43] underline" href={trackingUrl(order)} target="_blank" rel="noreferrer">{order.dhlTrackingNumber}<ExternalLink className="h-3 w-3 shrink-0" /></a> : "—"}</td>
               </tr>)}</tbody>
             </table>
             {!section.orders.length && <p className="p-6 text-center text-sm text-stone-500">{search.trim() ? "No orders match your search in this section." : section.empty}</p>}
@@ -561,7 +567,7 @@ export default function AbodeStockings() {
                 <CardContent className="p-0">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-4 py-4 md:px-5">
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold">{order.jobName || `Order ${order.jobNumber}`}</h4><StatusPill status={state} /><span className="text-xs text-stone-500">#{order.jobNumber}{order.poNumber ? ` · PO ${order.poNumber}` : ""}</span></div>
+                      <div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold">{order.jobName || `Order ${order.jobNumber}`}</h4><StatusPill status={state} customer={isCustomer} /><span className="text-xs text-stone-500">#{order.jobNumber}{order.poNumber ? ` · PO ${order.poNumber}` : ""}</span></div>
                       <p className="mt-1 text-sm text-stone-600">{count} personalised stocking{count === 1 ? "" : "s"} <span className="px-1 text-stone-300">/</span> estimated {MONEY(estimated)} + {MONEY(5.5)} carriage excl. VAT</p>
                     </div>
                     {isStaff && <div className="flex flex-wrap gap-2">
@@ -574,6 +580,11 @@ export default function AbodeStockings() {
                       </div>}
                       {!isStaff && Boolean(order.deliveryNotes?.length) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Delivery note PDF</Button>}
                   </div>
+                  {isCustomer && (order.dispatchedAt || order.deliveredAt) && <div className="border-b border-stone-100 bg-[#e5eee8] px-4 py-4 md:px-5" data-testid={`customer-tracking-${order.id}`}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#344e43]">Tracking number · {order.shippingRoute === "royal_mail" ? "Royal Mail" : "DPD Local"}</p>
+                    {order.dhlTrackingNumber ? <a href={trackingUrl(order)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-11 max-w-full items-center gap-2 break-all text-lg font-semibold text-[#344e43] underline underline-offset-4">{order.dhlTrackingNumber}<ExternalLink className="h-4 w-4 shrink-0" /></a> : <p className="mt-2 text-sm text-stone-600">Tracking number not yet available.</p>}
+                    <p className="mt-1 text-xs text-stone-600">{order.dispatchedAt ? `Despatched ${formatDate(order.dispatchedAt)}` : ""}{order.deliveredAt ? `${order.dispatchedAt ? " · " : ""}Delivered ${formatDate(order.deliveredAt)}` : ""}</p>
+                  </div>}
                   <div className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_240px] md:px-5">
                     <div className="space-y-2">
                       {order.items.map((item) => <div key={item.id}>
@@ -595,7 +606,7 @@ export default function AbodeStockings() {
                       </div>)}
                     </div>
                     <div className="rounded-lg border border-stone-200 p-3">
-                       {isStaff ? <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Recipient</p><p className="mt-1 font-medium">{order.recipient.name}</p><p className="mt-1 text-sm leading-5 text-stone-600">{[order.recipient.line1, order.recipient.line2, order.recipient.town, order.recipient.county, order.recipient.postcode].filter(Boolean).join(", ")}</p></> : <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Delivery</p>{order.dhlTrackingNumber ? <><a className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-[#344e43] underline underline-offset-2" href={trackingUrl(order)} target="_blank" rel="noreferrer">Track parcel <ExternalLink className="h-3.5 w-3.5" /></a><p className="mt-1 break-all font-mono text-xs text-stone-600">{order.dhlTrackingNumber}</p><p className="mt-1 text-xs text-stone-600">Status: {order.trackingError ? "Tracking check failed" : order.deliveredAt ? "Delivered" : order.trackingStatus || "Awaiting carrier confirmation"}</p><p className="text-xs text-stone-600">Despatched {formatDate(order.dispatchedAt)} · Delivered {formatDate(order.deliveredAt)}</p>{order.trackingError && <p className="mt-1 text-xs text-amber-900">Latest tracking check did not complete. Refresh tracking to try again.</p>}</> : <p className="mt-2 text-sm text-stone-600">{order.dispatchedAt ? `Dispatched ${formatDate(order.dispatchedAt)}` : order.completed ? "Ready for dispatch" : "In production"}</p>}</>}
+                       {isStaff ? <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Recipient</p><p className="mt-1 font-medium">{order.recipient.name}</p><p className="mt-1 text-sm leading-5 text-stone-600">{[order.recipient.line1, order.recipient.line2, order.recipient.town, order.recipient.county, order.recipient.postcode].filter(Boolean).join(", ")}</p></> : <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Order status</p><p className="mt-2 text-sm font-semibold text-[#344e43]">{order.deliveredAt ? "Delivered" : order.dispatchedAt ? "Despatched" : order.completed ? "Ready for despatch" : "In Production"}</p></>}
                        {isStaff && order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Parcel tracking</p><a href={trackingUrl(order)} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 break-all text-sm font-medium text-[#344e43] underline underline-offset-2">{order.dhlTrackingNumber}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a><p className="mt-1 text-xs text-stone-600">Despatch: {formatDate(order.dispatchedAt)} · Delivered: {formatDate(order.deliveredAt)}</p><p className="mt-1 text-xs text-stone-600">Tracking status: {order.deliveredAt ? "Delivered" : order.trackingStatus || "Awaiting carrier confirmation"}</p>{order.trackingError && <p className="mt-1 text-xs text-amber-900">Latest tracking check did not complete. Refresh to try again.</p>}</div>}
                       {isStaff && order.shippingRoute === "royal_mail" && !order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-xs text-stone-600">Royal Mail route: book externally, then save its tracking number here.</p><a className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3 w-3" /></a></div>}
                       {isStaff && order.shipmentState === "booking" && <p className="mt-3 text-xs text-stone-600">Waiting for the booked label and tracking to be saved.</p>}
@@ -672,7 +683,7 @@ function formatDate(value: string | null) {
 function Spec({ label, value }: { label: string; value: string }) {
   return <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p><p className="mt-1 break-words text-sm font-medium leading-5 text-stone-800">{value || "—"}</p></div>;
 }
-function StatusPill({ status }: { status: "in-work" | "ready" | "dispatched" | "delivered" }) {
-  const config = status === "delivered" ? ["bg-emerald-100 text-emerald-900", "Delivered"] : status === "dispatched" ? ["bg-[#e5eee8] text-[#344e43]", "Dispatched"] : status === "ready" ? ["bg-[#f5e8d6] text-[#71482e]", "Ready for dispatch"] : ["bg-stone-100 text-stone-700", "In work"];
+function StatusPill({ status, customer = false }: { status: "in-work" | "ready" | "dispatched" | "delivered"; customer?: boolean }) {
+  const config = status === "delivered" ? ["bg-emerald-100 text-emerald-900", "Delivered"] : status === "dispatched" ? ["bg-[#e5eee8] text-[#344e43]", "Despatched"] : status === "ready" ? ["bg-[#f5e8d6] text-[#71482e]", "Ready for despatch"] : ["bg-stone-100 text-stone-700", customer ? "In Production" : "In work"];
   return <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${config[0]}`}>{config[1]}</span>;
 }
