@@ -23,6 +23,10 @@ test("completed DPD orders needing recovery have an enabled despatch button", ()
         }],
       });
       const html = renderToStaticMarkup(<QueryClientProvider client={client}><AbodeStockings /></QueryClientProvider>);
+      for (const section of ["awaiting-production", "despatched"]) {
+        assert.match(html, new RegExp(`<button[^>]*aria-controls="heading-${section}"`), "Each summary total must be a keyboard-accessible button");
+        assert.match(html, new RegExp(`<h3[^>]*id="heading-${section}"[^>]*tabindex="-1"`), "The matching section heading must accept focus");
+      }
       const button = html.match(/<button\b[^>]*>Mark dispatched<\/button>/)?.[0];
       assert.ok(button, `Despatch action must exist for ${shipmentState}`);
       assert.doesNotMatch(button, /\sdisabled(?:=|[\s>])/, `Recovery must be reachable for ${shipmentState}`);

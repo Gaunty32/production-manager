@@ -381,6 +381,14 @@ export default function AbodeStockings() {
     setRecoveryPdf(null);
     setDialog("recover");
   };
+  const jumpToOrders = (section: "awaiting-production" | "despatched") => {
+    setSearch("");
+    requestAnimationFrame(() => {
+      const heading = document.getElementById(`heading-${section}`);
+      heading?.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+      heading?.focus({ preventScroll: true });
+    });
+  };
 
   if (isLoading) return <div className="h-full overflow-y-auto bg-[#f6f4ef] p-4 md:p-8"><div className="mx-auto max-w-6xl animate-pulse space-y-5"><div className="h-8 w-52 rounded bg-stone-200" /><div className="h-36 rounded-2xl bg-stone-200" /><div className="h-24 rounded-xl bg-stone-200" /><div className="h-64 rounded-xl bg-stone-200" /></div></div>;
   if (isError) return <div className="h-full overflow-y-auto bg-[#f6f4ef] p-6"><div className="mx-auto mt-12 max-w-lg rounded-2xl border border-rose-200 bg-white p-8 text-center"><AlertCircle className="mx-auto mb-3 h-8 w-8 text-rose-700" /><h1 className="text-xl font-semibold text-stone-900">Stockings could not load</h1><p className="mt-2 text-sm text-stone-600">{friendlyError(error)}</p><Button className="mt-5" onClick={() => refetch()}>Try again</Button></div></div>;
@@ -421,8 +429,8 @@ export default function AbodeStockings() {
         </div>}
 
         <section className="mb-6 grid grid-cols-2 gap-3">
-            <Metric label="In Production" value={String(allGroupedOrders.awaitingProduction.length)} note="Orders not yet despatched" />
-            <Metric label="Despatched" value={String(allGroupedOrders.despatched.length)} note="Tracking links on each order" />
+            <Metric label="In Production" value={String(allGroupedOrders.awaitingProduction.length)} note="Orders not yet despatched" section="awaiting-production" onClick={() => jumpToOrders("awaiting-production")} />
+            <Metric label="Despatched" value={String(allGroupedOrders.despatched.length)} note="Tracking links on each order" section="despatched" onClick={() => jumpToOrders("despatched")} />
         </section>
 
         <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_310px]">
@@ -537,7 +545,7 @@ export default function AbodeStockings() {
           {orderSections.map(section => <section key={section.id} aria-labelledby={`heading-${section.id}`} data-testid={`stocking-section-${section.id}`}>
             <div className={`mb-3 rounded-xl border-l-4 px-4 py-4 ${section.id === "awaiting-production" ? "border-[#b48a4c] bg-[#eee8de]" : "border-[#344e43] bg-[#e5eee8]"}`}>
               <div className="flex items-center gap-3">
-                <h3 id={`heading-${section.id}`} className="text-lg font-semibold">{section.title}</h3>
+                <h3 id={`heading-${section.id}`} tabIndex={-1} className="scroll-mt-4 text-lg font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#344e43]">{section.title}</h3>
                 <span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-[#344e43]" aria-label={`${section.orders.length} orders`}>{section.orders.length}</span>
               </div>
               <p className="mt-1 text-sm text-stone-600">{section.description}</p>
@@ -683,8 +691,8 @@ export default function AbodeStockings() {
   );
 }
 
-function Metric({ label, value, note }: { label: string; value: string; note: string }) {
-  return <div className="rounded-xl border border-stone-200 bg-white px-4 py-4 shadow-sm"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-stone-500">{note}</p></div>;
+function Metric({ label, value, note, section, onClick }: { label: string; value: string; note: string; section: string; onClick: () => void }) {
+  return <button type="button" onClick={onClick} aria-controls={`heading-${section}`} className="w-full cursor-pointer rounded-xl border border-stone-200 bg-white px-4 py-4 text-left shadow-sm transition-colors hover:border-[#344e43] hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#344e43] focus-visible:ring-offset-2"><span className="block text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</span><span className="mt-2 block text-2xl font-semibold tracking-tight">{value}</span><span className="mt-1 block text-xs text-stone-500">{note}</span></button>;
 }
 function ukDate(value: string) {
   const date = new Date(value);
