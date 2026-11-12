@@ -171,21 +171,24 @@ export async function sendProductionStartedEmail(
 // All emails share this shell so branding updates happen in one place.
 export function brandedEmail(bodyHtml: string, opts?: { customerLogoUrl?: string | null; customerName?: string | null; noReply?: boolean }): string {
   const sbLogoUrl = `${getBaseUrl()}/logo.png`;
-  const customerLogo = opts?.customerLogoUrl;
-  const customerName = opts?.customerName ?? 'Customer';
+  const rawCustomerLogo = opts?.customerLogoUrl?.trim();
+  const customerLogo = rawCustomerLogo && (/^https?:\/\//i.test(rawCustomerLogo) || /^\/(?!\/)/.test(rawCustomerLogo))
+    ? sanitizeHtml(new URL(rawCustomerLogo, `${getBaseUrl()}/`).href)
+    : null;
+  const customerName = sanitizeHtml(opts?.customerName ?? 'Customer');
 
   const headerContent = customerLogo
     ? `<!-- Dual-logo header: SB logo + customer logo side by side -->
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         <tr>
           <td width="44%" align="right" style="padding-right:12px;vertical-align:middle;">
-            <img src="${sbLogoUrl}" alt="Select Branding Solutions" height="52" style="max-height:52px;max-width:160px;height:auto;display:inline-block;" />
+            <img src="${sbLogoUrl}" alt="Select Branding Solutions" width="160" style="width:100%;max-width:160px;max-height:52px;object-fit:contain;height:auto;display:inline-block;" />
           </td>
           <td width="12%" align="center" style="vertical-align:middle;">
             <span style="font-size:18px;color:#d4d4d8;font-weight:300;">&times;</span>
           </td>
           <td width="44%" align="left" style="padding-left:12px;vertical-align:middle;">
-            <img src="${customerLogo}" alt="${customerName}" height="52" style="max-height:52px;max-width:160px;height:auto;display:inline-block;" />
+            <img src="${customerLogo}" alt="${customerName}" width="160" style="width:100%;max-width:160px;max-height:52px;object-fit:contain;height:auto;display:inline-block;" />
           </td>
         </tr>
       </table>`
@@ -737,6 +740,7 @@ export async function sendTeamInviteEmail(
     firstName: string | null;
     inviterName: string;
     companyName: string;
+    customerLogoUrl?: string | null;
     inviteUrl: string;
     isReset: boolean;
   }
@@ -773,7 +777,7 @@ export async function sendTeamInviteEmail(
     to: email,
     ...(details.isReset ? {} : { cc: ['chris@selectbranding.co.uk', 'james@selectbranding.co.uk'] }),
     subject,
-    html: brandedEmail(body),
+    html: brandedEmail(body, { customerLogoUrl: details.customerLogoUrl, customerName: details.companyName }),
   });
 
   if (error) {

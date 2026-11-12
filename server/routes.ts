@@ -3934,6 +3934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           firstName: data.firstName ?? null,
           inviterName,
           companyName,
+          customerLogoUrl: customer?.logoUrl,
           inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
           isReset: false,
         });
@@ -4421,6 +4422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: user.firstName ?? null,
         inviterName: 'Select Branding Solutions',
         companyName,
+        customerLogoUrl: customer?.logoUrl,
         inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
         isReset: true,
       });
@@ -4595,6 +4597,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: user.firstName ?? null,
         inviterName,
         companyName,
+        customerLogoUrl: customer?.logoUrl,
         inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
         isReset: true,
       });
@@ -4633,6 +4636,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: user.firstName ?? null,
         inviterName,
         companyName,
+        customerLogoUrl: customer?.logoUrl,
         inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
         isReset: false,
       });
@@ -12097,6 +12101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           firstName: firstName || null,
           inviterName,
           companyName,
+          customerLogoUrl: customer?.logoUrl,
           inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
           isReset: false,
         });
@@ -12139,6 +12144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: target.firstName || null,
         inviterName,
         companyName,
+        customerLogoUrl: customer?.logoUrl,
         inviteUrl: `${baseUrl}/customer/invite?token=${token}`,
         isReset: true,
       });
