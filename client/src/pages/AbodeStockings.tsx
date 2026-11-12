@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, Clock3, ExternalLink, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, Search, Send, ShieldAlert, Truck, Upload, Printer } from "lucide-react";
 import { getDpdTrackingUrl } from "@shared/dpd-tracking";
-import { stockingFontLabel } from "@shared/abode";
+import { splitStockingRegister, stockingFontLabel } from "@shared/abode";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -97,7 +97,6 @@ export default function AbodeStockings() {
   const [rows, setRows] = useState<RowRecord[] | null>(null);
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [flaggedOrders, setFlaggedOrders] = useState<{ orderNumber: string; detailsChanged: boolean }[]>([]);
-  const [filter, setFilter] = useState<"all" | "in-work" | "ready" | "dispatched" | "delivered">("all");
   const [search, setSearch] = useState("");
   const [activeOrder, setActiveOrder] = useState<StockingOrder | null>(null);
   const [dialog, setDialog] = useState<"complete" | "royal-mail" | "recover" | "dispatch" | null>(null);
@@ -196,11 +195,14 @@ export default function AbodeStockings() {
   const readyCount = orders.filter((order) => order.completed && !order.dispatchedAt).length;
   const dispatchedCount = orders.filter((order) => Boolean(order.dispatchedAt)).length;
   const shownOrders = useMemo(() => orders.filter((order) => {
-    const status = order.deliveredAt ? "delivered" : order.dispatchedAt ? "dispatched" : order.completed ? "ready" : "in-work";
-    if (filter !== "all" && filter !== status && !(filter === "dispatched" && status === "delivered")) return false;
     const term = search.trim().toLocaleLowerCase();
     return !term || [order.jobNumber, order.poNumber, order.jobName, order.orderNumber, order.dhlTrackingNumber, order.dispatchedAt, order.deliveredAt, order.trackingStatus, ...order.items.map((item) => item.stockingDetails.name)].some((value) => String(value ?? "").toLocaleLowerCase().includes(term));
-  }), [orders, filter, search]);
+  }), [orders, search]);
+  const groupedOrders = splitStockingRegister(shownOrders);
+  const orderSections = [
+    { id: "awaiting-production", title: "Awaiting Production", description: "Orders in production or ready for despatch.", orders: groupedOrders.awaitingProduction, empty: "No orders awaiting production or despatch." },
+    { id: "despatched", title: "Despatched", description: "Orders despatched, including delivered orders.", orders: groupedOrders.despatched, empty: "No despatched orders yet." },
+  ];
 
   async function processImportNotes() {
     if (noteProcessingLock.current || !noteFiles.length) return;
@@ -498,7 +500,7 @@ export default function AbodeStockings() {
                   {flaggedOrders.map(order => <li key={order.orderNumber} className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">{order.orderNumber}</span>
                     {order.detailsChanged && <span>Details differ from the existing order.</span>}
-                    <button type="button" className="font-medium underline underline-offset-2" onClick={() => { setFilter("all"); setSearch(order.orderNumber); }}>Find existing order</button>
+                    <button type="button" className="font-medium underline underline-offset-2" onClick={() => setSearch(order.orderNumber)}>Find existing order</button>
                   </li>)}
                 </ul>
               </div>}
@@ -524,13 +526,19 @@ export default function AbodeStockings() {
               <div className="relative w-full sm:w-64"><Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search order or name" className="bg-white pl-9" /></div>
             </div>
           </div>
-          <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-            {(["all", "in-work", "ready", "dispatched", "delivered"] as const).map((key) => <button key={key} onClick={() => setFilter(key)} className={`whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition ${filter === key ? "bg-[#344e43] text-white" : "border border-stone-300 bg-white text-stone-600 hover:bg-stone-100"}`}>{key === "all" ? "All orders" : key === "in-work" ? "In work" : key === "ready" ? "Ready for dispatch" : key === "delivered" ? "Delivered" : "Dispatched"}</button>)}
-          </div>
+          <div className="space-y-8">
+          {orderSections.map(section => <section key={section.id} aria-labelledby={`heading-${section.id}`} data-testid={`stocking-section-${section.id}`}>
+            <div className={`mb-3 rounded-xl border-l-4 px-4 py-4 ${section.id === "awaiting-production" ? "border-[#b48a4c] bg-[#eee8de]" : "border-[#344e43] bg-[#e5eee8]"}`}>
+              <div className="flex items-center gap-3">
+                <h3 id={`heading-${section.id}`} className="text-lg font-semibold">{section.title}</h3>
+                <span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-[#344e43]" aria-label={`${section.orders.length} orders`}>{section.orders.length}</span>
+              </div>
+              <p className="mt-1 text-sm text-stone-600">{section.description}</p>
+            </div>
           {view === "list" && <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white shadow-sm">
             <table className="w-full min-w-[1050px] border-collapse text-left text-sm">
               <thead className="bg-[#eee8de] text-[11px] uppercase tracking-wide text-stone-600"><tr>{["Order", "Personalisation / qty", "Production", "Label", "Despatch", "Despatch date", "Delivery", "Delivered date", "Tracking"].map(title => <th key={title} className="px-3 py-3 font-semibold">{title}</th>)}</tr></thead>
-              <tbody>{shownOrders.map(order => <tr key={order.id} className="border-t border-stone-100 align-top">
+              <tbody>{section.orders.map(order => <tr key={order.id} className="border-t border-stone-100 align-top">
                 <td className="px-3 py-3 font-semibold">{order.orderNumber || `#${order.jobNumber}`}</td>
                 <td className="max-w-64 px-3 py-3"><span className="block whitespace-pre-wrap">{order.items.map(item => `${item.stockingDetails.name || "Unnamed"} × ${item.quantity}`).join(", ") || "—"}</span></td>
                 <td className="px-3 py-3">{order.completed ? "Complete" : "In production"}</td>
@@ -542,10 +550,10 @@ export default function AbodeStockings() {
                 <td className="px-3 py-3">{order.dhlTrackingNumber ? <a className="inline-flex items-center gap-1 break-all text-[#344e43] underline" href={trackingUrl(order)} target="_blank" rel="noreferrer">{order.dhlTrackingNumber}<ExternalLink className="h-3 w-3 shrink-0" /></a> : "—"}</td>
               </tr>)}</tbody>
             </table>
-            {!shownOrders.length && <p className="p-6 text-center text-sm text-stone-500">{orders.length ? "No orders match this view." : "No orders to display yet."}</p>}
+            {!section.orders.length && <p className="p-6 text-center text-sm text-stone-500">{search.trim() ? "No orders match your search in this section." : section.empty}</p>}
           </div>}
-          {view === "cards" && (shownOrders.length === 0 ? <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center"><PackageCheck className="mx-auto h-8 w-8 text-stone-400" /><h3 className="mt-3 font-semibold">{orders.length ? "No orders match this view" : "Your order register is clear"}</h3><p className="mt-1 text-sm text-stone-500">{orders.length ? "Try another filter or search term." : "Import an order sheet above to start tracking fulfilment."}</p></div> : <div className="space-y-3">
-            {shownOrders.map((order) => {
+          {view === "cards" && (section.orders.length === 0 ? <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-8 text-center"><PackageCheck className="mx-auto h-8 w-8 text-stone-400" /><p className="mt-3 text-sm text-stone-500">{search.trim() ? "No orders match your search in this section." : section.empty}</p></div> : <div className="space-y-3">
+            {section.orders.map((order) => {
               const state = order.deliveredAt ? "delivered" : order.dispatchedAt ? "dispatched" : order.completed ? "ready" : "in-work";
               const count = order.items.reduce((sum, item) => sum + item.quantity, 0);
               const estimated = order.items.reduce((sum, item) => sum + item.quantity * (item.agreedUnitPrice ?? data.currentRate), 0);
@@ -553,7 +561,7 @@ export default function AbodeStockings() {
                 <CardContent className="p-0">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-4 py-4 md:px-5">
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{order.jobName || `Order ${order.jobNumber}`}</h3><StatusPill status={state} /><span className="text-xs text-stone-500">#{order.jobNumber}{order.poNumber ? ` · PO ${order.poNumber}` : ""}</span></div>
+                      <div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold">{order.jobName || `Order ${order.jobNumber}`}</h4><StatusPill status={state} /><span className="text-xs text-stone-500">#{order.jobNumber}{order.poNumber ? ` · PO ${order.poNumber}` : ""}</span></div>
                       <p className="mt-1 text-sm text-stone-600">{count} personalised stocking{count === 1 ? "" : "s"} <span className="px-1 text-stone-300">/</span> estimated {MONEY(estimated)} + {MONEY(5.5)} carriage excl. VAT</p>
                     </div>
                     {isStaff && <div className="flex flex-wrap gap-2">
@@ -609,6 +617,8 @@ export default function AbodeStockings() {
               </Card>;
             })}
           </div>)}
+          </section>)}
+          </div>
         </section>
       </div>
 

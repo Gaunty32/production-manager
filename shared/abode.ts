@@ -29,6 +29,19 @@ export function stockingBagNetworkCode(weightGrams: number): string {
   return weightGrams <= 1000 ? "2^68" : "2^32";
 }
 export type StockingDetails = { colour: string; font: string; thread: string; name: string };
+/** Only actual despatch/delivery moves an order out of production. */
+export function splitStockingRegister<T extends {
+  dispatchedAt?: string | Date | null;
+  deliveredAt?: string | Date | null;
+}>(orders: readonly T[]): { awaitingProduction: T[]; despatched: T[] } {
+  const awaitingProduction: T[] = [];
+  const despatched: T[] = [];
+  for (const order of orders) {
+    (order.dispatchedAt || order.deliveredAt ? despatched : awaitingProduction).push(order);
+  }
+  return { awaitingProduction, despatched };
+}
+
 /** Stocking imports are worked in their own section, not the main queue. */
 export function isStockingWorkflowJob(job: {
   lineItems?: readonly { stockingDetails?: StockingDetails | null }[] | null;

@@ -1,8 +1,33 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isStockingWorkflowJob } from "../shared/abode";
+import { isStockingWorkflowJob, splitStockingRegister } from "../shared/abode";
 
 const stockingDetails = { colour: "Red", font: "Font 1", thread: "Gold", name: "JANE" };
+
+test("register has two exclusive sections, with ready and booked orders still awaiting despatch", () => {
+  const orders = [
+    { id: "working", completed: false, dispatchedAt: null, deliveredAt: null },
+    { id: "ready", completed: true, dispatchedAt: null, deliveredAt: null },
+    { id: "booked", completed: false, dispatchedAt: null, deliveredAt: null, dhlTrackingNumber: "TEST" },
+    { id: "despatched", completed: true, dispatchedAt: "2026-11-12", deliveredAt: null },
+    { id: "delivered", completed: true, dispatchedAt: "2026-11-11", deliveredAt: "2026-11-12" },
+    { id: "historic-delivered", completed: true, dispatchedAt: null, deliveredAt: "2026-11-12" },
+  ];
+  const { awaitingProduction, despatched } = splitStockingRegister(orders);
+  assert.deepEqual(awaitingProduction.map(order => order.id), ["working", "ready", "booked"]);
+  assert.deepEqual(despatched.map(order => order.id), ["despatched", "delivered", "historic-delivered"]);
+  assert.equal(new Set([...awaitingProduction, ...despatched]).size, orders.length);
+  const empty = splitStockingRegister([]);
+  assert.deepEqual(empty, { awaitingProduction: [], despatched: [] });
+});
+
+test("marking actual despatch moves the order into the Despatched section", () => {
+  const order = { dispatchedAt: null as string | null };
+  assert.equal(splitStockingRegister([order]).awaitingProduction.length, 1);
+  order.dispatchedAt = "2026-11-12T12:00:00Z";
+  assert.equal(splitStockingRegister([order]).despatched.length, 1);
+  assert.equal(splitStockingRegister([order]).awaitingProduction.length, 0);
+});
 
 test("stocking imports are excluded from the main queue before and after completion", () => {
   for (const completed of [false, true]) {
