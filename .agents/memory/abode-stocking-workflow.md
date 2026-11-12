@@ -13,6 +13,24 @@ Manage Abode stocking orders only in their dedicated sidebar section, not duplic
 
 **How to apply:** Hide stocking-workflow orders from the main production view, not from the shared jobs data used for invoicing. Do not hide ordinary non-stocking Abode jobs or change other customers' queues.
 
+The staff Abode order register must show two clear sections: “Awaiting Production” and “Despatched”. The customer screen uses “In Production” and “Despatched”.
+
+**Why:** The user requested these exact two sections instead of the previous status-filter pills.
+
+**How to apply:** Creating a DPD label moves the order into Despatched, even before production completion. Existing DPD bookings use their booking date when no separate despatch date exists. Delivered orders remain there. Production completion and draft invoicing remain separate.
+
+For Abode, label creation means despatched.
+
+**Why:** The user explicitly confirmed “Yes, label creation means despatched”, superseding the earlier early-label-is-not-despatch policy.
+
+**How to apply:** Apply this to new and recovered DPD labels and existing saved DPD bookings. Remove conflicting “Label created — awaiting despatch” wording. Never infer delivery or send retrospective emails just to reclassify existing bookings.
+
+Do not show DPD connection/setup warnings on the customer screen. Despatched customer orders must clearly show the tracking number as a clickable carrier link.
+
+**Why:** The user explicitly requested removal of the customer DPD warning and clear production/despatched status with linked tracking.
+
+**How to apply:** Keep setup and tracking-check warnings available to staff. Customers should see truthful production/despatch/delivery facts and external carrier links, without needing the automatic tracking API connection.
+
 Abode's font details are Font 1: Sad Night Script Regular; Font 2: Tabac G3 Semibold; Font 3: Stolen Times Italic.
 
 **Why:** The user supplied these names for display in the production planner.
@@ -55,7 +73,7 @@ Orders and their delivery-note PDFs should be uploaded together, and DPD labels 
 
 **Why:** The user requested delivery notes and printable labels at order upload, then specified: “We are using the product expresspak 5 on a next day service, default weight 4 kgs.”
 
-**How to apply:** Treat label creation as a real courier booking, never as actual despatch. Never send a despatch email or count an order as despatched just because it has tracking. Keep imports and note attachment retry-safe, preserve one note per order, and never automatically repeat an uncertain courier purchase.
+**How to apply:** Treat label creation as a real courier booking and, under the user's superseding rule, as despatch. Keep imports and note attachment retry-safe, preserve one note per order, and never automatically repeat an uncertain courier purchase.
 
 Manual Abode label booking should book directly, without a warning-filled confirmation.
 
@@ -69,11 +87,17 @@ Abode needs the courier label as a PDF, its tracking code, and the master order 
 
 **How to apply:** Save booking details before label rendering. For a shipment already booked in DPD, retrieve and verify that same shipment rather than buying a replacement.
 
+DPD can return HTTP 200 containing a JSON application error instead of label HTML, including “requested resource is not available for updating” for an existing shipment.
+
+**Why:** A saved, previously printable label could no longer be retrieved, and treating the response as HTML produced a misleading order-verification error.
+
+**How to apply:** Reject non-HTML courier responses as unavailable labels. Allow staff to recover using the original saved PDF, checking its order reference and tracking number before saving it; never repurchase the shipment. Retain the original PDF in private storage.
+
 The customer needs a master spreadsheet list of orders showing despatch dates, delivered dates and tracking numbers, with automatic DPD tracking rather than staff-entered delivered dates.
 
 **Why:** The user requested the master list and selected “Connect automatic DPD tracking”.
 
-**How to apply:** Show only the customer's own orders and provide an Excel download. Delivered dates must come from confirmed courier delivery, not booking dates, next-day estimates or completion dates. Separate tracking API access is required; absent access must be visible rather than silently inventing dates.
+**How to apply:** Show only the customer's own orders and provide an Excel download. Delivered dates must come from confirmed courier delivery, not booking dates, next-day estimates or completion dates. Separate tracking API access is required; absent access must be visible to staff rather than silently inventing dates.
 
 Abode supplies its own delivery-note PDFs for staff to print and enclose; either staff or the customer may upload them, and the filename identifies the order.
 
@@ -99,8 +123,8 @@ Bulk delivery-note selection should match automatically and accept multiple PDFs
 
 **How to apply:** Start filename matching on selection/drop; keep the explicit upload step separate from matching so unmatched PDFs are never saved.
 
-Keep the “Awaiting delivery note” order total in the stocking-room summary. The earlier “Awaiting approval” total is superseded by removal of sample approval.
+Show only “In Production” and “Despatched” totals in the stocking-room summary, for staff and customers.
 
-**Why:** The user requested both statuses alongside the existing summary totals.
+**Why:** The user said the seven summary cards were too much: “In Production and Despatched is all we need.” This supersedes earlier requests for additional totals.
 
-**How to apply:** Count orders, not stockings. Missing-note totals include undispatched orders even when production is complete or a label has already been created.
+**How to apply:** Count orders, not stockings, using the same two groups as the register. Keep delivery-note and production details on individual orders, not extra summary cards.
