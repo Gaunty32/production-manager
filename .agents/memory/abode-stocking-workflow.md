@@ -25,11 +25,11 @@ For Abode, label creation means despatched.
 
 **How to apply:** Apply this to new and recovered DPD labels and existing saved DPD bookings. Remove conflicting “Label created — awaiting despatch” wording. Never infer delivery or send retrospective emails just to reclassify existing bookings.
 
-Do not show DPD connection/setup warnings on the customer screen. Despatched customer orders must clearly show the tracking number as a clickable carrier link.
+Do not show the “DPD tracking is not connected” banner on either staff or customer screens. Despatched customer orders must clearly show the tracking number as a clickable carrier link.
 
-**Why:** The user explicitly requested removal of the customer DPD warning and clear production/despatched status with linked tracking.
+**Why:** The user requested removal of the customer DPD warning, then explicitly requested removal of the remaining staff connection banner as well.
 
-**How to apply:** Keep setup and tracking-check warnings available to staff. Customers should see truthful production/despatch/delivery facts and external carrier links, without needing the automatic tracking API connection.
+**How to apply:** Remove the connection banner, retaining actual tracking-check errors for staff. Customers should see truthful production/despatch/delivery facts and external carrier links, without needing the automatic tracking API connection.
 
 Abode's font details are Font 1: Sad Night Script Regular; Font 2: Tabac G3 Semibold; Font 3: Stolen Times Italic.
 
@@ -97,7 +97,7 @@ The customer needs a master spreadsheet list of orders showing despatch dates, d
 
 **Why:** The user requested the master list and selected “Connect automatic DPD tracking”.
 
-**How to apply:** Show only the customer's own orders and provide an Excel download. Delivered dates must come from confirmed courier delivery, not booking dates, next-day estimates or completion dates. Separate tracking API access is required; absent access must be visible to staff rather than silently inventing dates.
+**How to apply:** Show only the customer's own orders and provide an Excel download. Delivered dates must come from confirmed courier delivery, not booking dates, next-day estimates or completion dates. Separate tracking API access is required; never invent delivery dates when it is absent. Do not restore the removed connection banner.
 
 Abode supplies its own delivery-note PDFs for staff to print and enclose; either staff or the customer may upload them, and the filename identifies the order.
 
