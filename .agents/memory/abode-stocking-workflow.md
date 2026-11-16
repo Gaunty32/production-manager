@@ -25,6 +25,12 @@ For Abode, label creation means despatched.
 
 **How to apply:** Apply this to new and recovered DPD labels and existing saved DPD bookings. Remove conflicting “Label created — awaiting despatch” wording. Never infer delivery or send retrospective emails just to reclassify existing bookings.
 
+Abode must receive a despatch email for each order, to its active customer portal contacts with despatch emails enabled, not the individual stocking recipient.
+
+**Why:** The user explicitly requested an email for every order.
+
+**How to apply:** New label-created despatches and new manual despatch confirmations queue per-order emails, including manual despatch without tracking. Do not wait for production completion after label creation, invent tracking, or automatically catch up historical orders.
+
 Staff may also confirm an already-sent, completed order as despatched without supplying a label or tracking.
 
 **Why:** The user clarified “i don't need the labels, they have been sent” when four completed orders lacked saved DPD booking details.

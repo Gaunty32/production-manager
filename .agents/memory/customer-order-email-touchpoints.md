@@ -26,6 +26,19 @@ job sharing the same consignment.
 **How to apply:** Any new dispatch trigger must call the shared grouping helper;
 never send directly from a single-job DPD or completion route.
 
+Abode stocking orders are an explicit exception: send one despatch email per
+order to Abode's active opted-in portal contacts, not to the stocking recipients.
+For Abode, label creation is despatch even before production completion, and a
+new manual despatch must email even if tracking is missing.
+
+**Why:** The user required Abode to receive a despatch email for each order.
+
+**How to apply:** Queue atomically at the new despatch event, preserve the
+per-order idempotency key across retries, and never mark an email sent when no
+eligible contact exists. Do not apply generic consolidated-shipment grouping or
+production-completed wording to Abode. Historical catch-up requires a separate
+explicit decision; adding historical tracking alone must not send another email.
+
 The customer approved both the production-started and dispatch email designs,
 including the consolidated multi-job dispatch format.
 

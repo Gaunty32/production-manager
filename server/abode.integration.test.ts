@@ -18,6 +18,8 @@ import { abodeDispatchedAt, hasUndespatchedAbodeOrder } from "./abodeShipping";
 import { confirmedDeliveryDate, lookupAbodeTracking } from "./abodeTracking";
 import PDFDocument from "pdfkit";
 import { verifyRecoveredLabelPdf } from "./abodeLabelRecovery";
+import { maybeSendAbodeDispatchNotification } from "./abodeDispatchNotifications";
+import { maybeSendDispatchNotification } from "./customerOrderNotifications";
 
 async function labelPdf(order: string, tracking: string): Promise<Buffer> {
   const document = new PDFDocument();
@@ -94,6 +96,7 @@ test("Abode import → label despatch → completion → photo, with safe retrie
   const [customer] = await db.insert(customers).values({ name: `Abode integration fixture ${id}` }).returning();
   const originals = {
     customers: storage.getCustomers, customer: storage.getCustomer, customerUser: storage.getCustomerUserById,
+    customerUsers: storage.getCustomerUsersByCustomerId,
     configured: dpdService.isConfigured, book: dpdService.createShipment, label: dpdService.fetchLabel,
     file: ObjectStorageService.prototype.getObjectEntityFile, small: ObjectStorageService.prototype.saveSmallObject,
   };
@@ -101,6 +104,8 @@ test("Abode import → label despatch → completion → photo, with safe retrie
   storage.getCustomer = async customerId => customerId === customer.id
     ? { ...customer, name: "Abode Home & Gifts" } : originals.customer.call(storage, customerId);
   storage.getCustomerUserById = async () => ({ customerId: customer.id } as any);
+  // No real customer contact or email-provider calls from these fixtures.
+  storage.getCustomerUsersByCustomerId = async () => [];
   dpdService.isConfigured = () => true;
   let bookings = 0, failBooking = false, objectType = "application/pdf";
   let bytes = Buffer.from("%PDF-1.7\nOriginal retail delivery note\n%%EOF");
@@ -165,7 +170,26 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     assert.equal(dpd.dispatchedAt, dpd.bookedAt, "DPD label creation records despatch immediately");
     assert.equal(dpd.trackingStatus, "Despatched");
     assert.equal(dpd.deliveredAt, null);
-    assert.equal(dpd.dispatchEmailQueuedAt, null, "Booking does not change the existing email workflow");
+    assert.ok(dpd.dispatchEmailQueuedAt, "Label creation queues the Abode despatch email atomically");
+    assert.equal(dpd.dispatchEmailSentAt, null, "No recipients must not be marked as sent");
+    const contacts: any[] = [
+      { id: "eligible", active: true, emailNotificationsDispatch: true, email: "abode@example.invalid", firstName: "Abode" },
+      { id: "duplicate", active: true, emailNotificationsDispatch: true, email: "ABODE@example.invalid" },
+      { id: "disabled", active: false, emailNotificationsDispatch: true, email: "disabled@example.invalid" },
+      { id: "opted-out", active: true, emailNotificationsDispatch: false, email: "opted-out@example.invalid" },
+    ];
+    const messages: { email: string; details: any }[] = [];
+    const capture = async (email: string, details: any) => { messages.push({ email, details }); };
+    storage.getCustomerUsersByCustomerId = async () => contacts;
+    await maybeSendAbodeDispatchNotification(dpd.id, capture);
+    await maybeSendAbodeDispatchNotification(dpd.id, capture);
+    assert.equal(messages.length, 1, "Each order sends once per eligible contact, not per stocking or duplicate address");
+    assert.equal(messages[0].email, "abode@example.invalid");
+    assert.equal(messages[0].details.orderNumber, dpd.orderNumber);
+    assert.equal(messages[0].details.trackingNumber, dpd.dhlTrackingNumber);
+    assert.ok(messages[0].details.trackingUrl.includes("postcode="));
+    assert.ok((await storage.getJob(dpd.id))?.dispatchEmailSentAt, "Sending is not blocked by unfinished production");
+    storage.getCustomerUsersByCustomerId = async () => [];
     await db.update(stockingOrders).set({ dispatchedAt: null, trackingStatus: "Label created — awaiting despatch" }).where(eq(stockingOrders.jobId, dpd.id));
     const legacyContext = await (await request("", undefined, true)).json();
     const legacyOrder = legacyContext.orders.find((o: any) => o.id === dpd.id);
@@ -202,7 +226,7 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(stockingProduction).where(eq(stockingProduction.customerId, customer.id));
     assert.equal(count.count, 102, "Completion retries preserve lifetime count");
     assert.equal(await hasUndespatchedAbodeOrder([dpd.id]), false, "Created DPD labels count as despatched");
-    assert.equal((await storage.getJob(dpd.id))?.dispatchEmailQueuedAt, null);
+    assert.equal((await storage.getJob(dpd.id))?.dispatchEmailQueuedAt?.toISOString(), dpd.dispatchEmailQueuedAt);
     assert.equal((await request(`/orders/${dpd.id}/dispatch`, {})).status, 200, "Existing label despatch is idempotent");
     objectType = "image/png";
     bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8R8AAAAASUVORK5CYII=", "base64");
@@ -266,7 +290,7 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     const labelResponse = await request(`/orders/${failedId}/label?format=pdf`);
     assert.equal(labelResponse.headers.get("content-type"), "application/pdf");
     assert.equal(Buffer.from(await labelResponse.arrayBuffer()).subarray(0,5).toString(), "%PDF-");
-    assert.equal((await storage.getJob(failedId))?.dispatchEmailQueuedAt, null);
+    assert.ok((await storage.getJob(failedId))?.dispatchEmailQueuedAt, "Newly recovered despatches queue their own email");
     const pdfImport = await (await request("/imports", { rows: [{ ...row, "Order number": "TEST-PDF" }] })).json();
     const pdfJobId = pdfImport.labelResults[0].jobId;
     const noMoreBookings = bookings;
@@ -306,7 +330,17 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     assert.equal(confirmed.deliveredAt, null, "Despatch must never imply delivery");
     assert.equal(confirmed.shipmentState, "review", "Do not claim the uncertain booking was recovered");
     assert.equal(confirmed.trackingStatus, "Despatched");
-    assert.equal((await storage.getJob(manualId))?.dispatchEmailQueuedAt, null, "No retrospective email is queued without tracking");
+    assert.ok((await storage.getJob(manualId))?.dispatchEmailQueuedAt, "A new confirmed despatch queues an email even without tracking");
+    const queuedManual = (await storage.getJob(manualId))!.dispatchEmailQueuedAt!.toISOString();
+    storage.getCustomerUsersByCustomerId = async () => contacts;
+    await maybeSendAbodeDispatchNotification(manualId, async () => { throw new Error("Simulated provider failure"); });
+    assert.equal((await storage.getJob(manualId))?.dispatchEmailSentAt, null, "Provider failures remain pending");
+    await maybeSendAbodeDispatchNotification(manualId, capture);
+    assert.equal(messages.length, 2, "A second order gets its own email");
+    assert.equal(messages[1].details.trackingNumber, null);
+    assert.equal(messages[1].details.trackingUrl, null);
+    assert.notEqual(messages[0].details.idempotencyKey, messages[1].details.idempotencyKey);
+    storage.getCustomerUsersByCustomerId = async () => [];
     assert.equal(bookings, bookingsBeforeConfirmation, "Manual confirmation never buys a shipment");
     assert.equal(await hasUndespatchedAbodeOrder([manualId]), false);
     const trackingEntries = [{ orderNumber: confirmed.orderNumber, trackingNumber: "6895132451" }];
@@ -330,10 +364,14 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     assert.equal(tracked.dispatchedAt, confirmed.dispatchedAt);
     assert.equal(tracked.deliveredAt, null);
     assert.equal(tracked.shipmentState, "review", "Adding tracking does not claim the label was recovered");
-    assert.equal((await storage.getJob(manualId))?.dispatchEmailQueuedAt, null, "Adding historical tracking never queues an email");
+    assert.equal((await storage.getJob(manualId))?.dispatchEmailQueuedAt?.toISOString(), queuedManual, "Adding historical tracking never queues another email");
     assert.equal(bookings, bookingsBeforeConfirmation, "Tracking import never buys a shipment");
+    await db.update(jobs).set({ dispatchEmailQueuedAt: null, dispatchEmailSentAt: null }).where(eq(jobs.id, failedId));
+    await maybeSendDispatchNotification(failedId);
+    assert.equal((await storage.getJob(failedId))?.dispatchEmailQueuedAt, null, "Generic completion calls never catch up old Abode orders automatically");
   } finally {
     storage.getCustomers = originals.customers; storage.getCustomer = originals.customer; storage.getCustomerUserById = originals.customerUser;
+    storage.getCustomerUsersByCustomerId = originals.customerUsers;
     dpdService.isConfigured = originals.configured; dpdService.createShipment = originals.book; dpdService.fetchLabel = originals.label;
     ObjectStorageService.prototype.getObjectEntityFile = originals.file; ObjectStorageService.prototype.saveSmallObject = originals.small;
     const fixtures = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.customerId, customer.id));

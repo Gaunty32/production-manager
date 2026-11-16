@@ -3,6 +3,7 @@ import { db } from "./db";
 import { jobs, stockingOrders } from "@shared/schema";
 import { ABODE_CARRIAGE, ABODE_DEFAULT_WEIGHT_GRAMS, ABODE_NETWORK_CODE } from "@shared/abode";
 import { dpdService } from "./dpd";
+import { maybeSendAbodeDispatchNotification } from "./abodeDispatchNotifications";
 
 // Abode counts DPD label creation as despatch. Derive existing bookings too,
 // without rewriting historical rows or queuing retrospective emails.
@@ -51,6 +52,7 @@ export async function bookAbodeLabel(jobId: string) {
       await tx.update(jobs).set({
         dhlTrackingNumber: result.trackingNumber, shippingCost: String(ABODE_CARRIAGE),
         shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
+        dispatchEmailQueuedAt: job.dispatchEmailQueuedAt || now,
       }).where(eq(jobs.id, jobId));
     });
   } catch (error) {
@@ -58,6 +60,7 @@ export async function bookAbodeLabel(jobId: string) {
     // Never buy another shipment when the remote purchase may have succeeded.
     return { ...result, warning: "DPD booked this parcel but saving failed. Keep this tracking number and label, then recover the booking. Do not book again." };
   }
+  await maybeSendAbodeDispatchNotification(jobId);
   // Tracking and the shipment ID are already durable if label retrieval is slow
   // or interrupted. Fetching/printing can safely be retried without repurchasing.
   if (!result.labelHtml && result.shipmentJobId) {

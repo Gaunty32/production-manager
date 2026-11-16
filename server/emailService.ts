@@ -1552,6 +1552,33 @@ export async function sendPaymentReceiptEmail(params: {
   }
 }
 
+export async function sendAbodeDispatchEmail(email: string, details: {
+  customerName: string; customerFirstName: string; customerLogoUrl?: string | null;
+  orderNumber: string; trackingNumber: string | null; carrier: string;
+  trackingUrl: string | null; portalUrl: string; idempotencyKey: string;
+}) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const orderNumber = sanitizeHtml(details.orderNumber);
+  const tracking = details.trackingNumber
+    ? `<p style="font-size:15px;color:#3f3f46;">${sanitizeHtml(details.carrier)} tracking number: <strong>${sanitizeHtml(details.trackingNumber)}</strong></p>
+       ${details.trackingUrl ? ctaButton(details.trackingUrl, "Track this order") : ""}`
+    : `<p style="font-size:14px;color:#71717a;">A tracking number is not currently available. Any tracking added later will appear in your customer portal.</p>`;
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;color:#18181b;">Order ${orderNumber} has been despatched</h2>
+    <p style="font-size:15px;color:#3f3f46;">Hi ${sanitizeHtml(details.customerFirstName)},</p>
+    <p style="font-size:15px;color:#3f3f46;">Your Abode stocking order <strong>${orderNumber}</strong> has been despatched.</p>
+    ${tracking}
+    ${ctaButton(details.portalUrl, "View your stocking orders")}
+    ${muted("Despatch confirms the order has been sent; delivery is confirmed separately by the courier.")}
+  `;
+  const { error } = await sendEmail(client, {
+    from: fromEmail || "info@selectbranding.co.uk", to: [email],
+    subject: `Abode order ${details.orderNumber} has been despatched`,
+    html: brandedEmail(body, { customerLogoUrl: details.customerLogoUrl, customerName: details.customerName }),
+  }, { idempotencyKey: details.idempotencyKey });
+  if (error) throw new Error(`Failed to send Abode despatch email: ${error.message}`);
+}
+
 export async function sendDispatchNotificationEmail(
   customerEmails: string[],
   details: {

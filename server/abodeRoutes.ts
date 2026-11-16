@@ -366,7 +366,7 @@ export function registerAbodeRoutes(app: Express, deps: {
         // Do not invent tracking or mark an uncertain courier booking as booked.
         const now = new Date();
         await tx.update(stockingOrders).set({ dispatchedAt: now, trackingStatus: order.deliveredAt ? "Delivered" : "Despatched" }).where(eq(stockingOrders.jobId, job.id));
-        if (locked.dhlTrackingNumber) {
+        if (!locked.dispatchEmailQueuedAt && !locked.dispatchEmailSentAt) {
           await tx.update(jobs).set({ dispatchEmailQueuedAt: now }).where(eq(jobs.id, job.id));
         }
       });
@@ -404,6 +404,7 @@ export function registerAbodeRoutes(app: Express, deps: {
         }
         await db.transaction(async tx => {
           const [locked] = await tx.select().from(jobs).where(eq(jobs.id, job.id)).for("update");
+          const [currentOrder] = await tx.select().from(stockingOrders).where(eq(stockingOrders.jobId, job.id)).for("update");
           if (!editable(locked.invoiceStatus)) throw new Error("This order has already been invoiced");
           if (locked.dhlTrackingNumber && locked.dhlTrackingNumber !== trackingNumber) throw new Error("Tracking already recorded; review the existing shipment");
           if (recoveredPdfKey) {
@@ -418,6 +419,8 @@ export function registerAbodeRoutes(app: Express, deps: {
           await tx.update(jobs).set({
             dhlTrackingNumber: trackingNumber, shippingCost: String(ABODE_CARRIAGE),
             shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
+            ...(recovery && !abodeDispatchedAt(currentOrder, locked) && !locked.dispatchEmailQueuedAt && !locked.dispatchEmailSentAt
+              ? { dispatchEmailQueuedAt: new Date() } : {}),
           }).where(eq(jobs.id, job.id));
           await tx.update(stockingOrders).set({
             shipmentState: "booked", bookedAt: order.bookedAt || new Date(),
@@ -425,6 +428,7 @@ export function registerAbodeRoutes(app: Express, deps: {
             ...(recovery && shipmentId ? { shipmentId, ...(existingLabel ? { labelHtml: existingLabel } : {}) } : {}),
           }).where(eq(stockingOrders.jobId, job.id));
         });
+        await maybeSendDispatchNotification(job.id);
         res.json({ success: true });
       }));
     }

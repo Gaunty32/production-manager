@@ -1,9 +1,10 @@
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
-import { jobs } from "@shared/schema";
+import { jobs, stockingOrders } from "@shared/schema";
 import { db } from "./db";
 import { storage } from "./storage";
 import { hasUndespatchedAbodeOrder } from "./abodeShipping";
 import { buildEmailDispatchConfirmations } from "./dispatchConfirmationEmail";
+import { maybeSendAbodeDispatchNotification } from "./abodeDispatchNotifications";
 import {
   getBaseUrl,
   sendDispatchNotificationEmail,
@@ -79,6 +80,9 @@ export async function maybeSendProductionStartedNotification(jobId: string): Pro
 }
 
 export async function maybeSendDispatchNotification(jobId: string): Promise<void> {
+  const [stockingOrder] = await db.select({ id: stockingOrders.jobId }).from(stockingOrders)
+    .where(eq(stockingOrders.jobId, jobId));
+  if (stockingOrder) return maybeSendAbodeDispatchNotification(jobId);
   const job = await storage.getJob(jobId);
   const trackingNumber = job?.dhlTrackingNumber?.trim();
   if (!job || !job.completed || !trackingNumber || job.dispatchEmailSentAt) return;
@@ -153,8 +157,6 @@ export function startCustomerOrderNotificationRetryWorker(): void {
       const dispatchJobs = await db.select({ id: jobs.id }).from(jobs).where(and(
         isNotNull(jobs.dispatchEmailQueuedAt),
         isNull(jobs.dispatchEmailSentAt),
-        eq(jobs.completed, true),
-        isNotNull(jobs.dhlTrackingNumber),
       ));
       await Promise.all([
         ...productionJobs.map(({ id }) => maybeSendProductionStartedNotification(id)),
