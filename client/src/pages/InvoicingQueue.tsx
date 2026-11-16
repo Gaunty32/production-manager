@@ -55,6 +55,11 @@ interface LineItem {
   agreedUnitPrice?: number | null;
 }
 
+type ExistingInvoicePreview = {
+  invoiceNumber: string; subTotal: number; total: number; previewHash: string; linked: boolean;
+  jobs: { id: string; jobName: string; jobNumber: number | null; total: number; alreadyLinked: boolean }[];
+};
+
 interface EditShippingState {
   jobId: string;
   customerId: string;
@@ -788,6 +793,33 @@ export default function InvoicingQueue() {
   const [approvedJobs, setApprovedJobs] = useState<Set<string>>(new Set());
   const [jobOrders, setJobOrders] = useState<Record<string, string[]>>({});
   const [creatingInvoice, setCreatingInvoice] = useState<string | null>(null);
+  const [existingInvoice, setExistingInvoice] = useState<{
+    customerId: string; jobIds: string[]; invoiceNumber: string; preview?: ExistingInvoicePreview;
+  } | null>(null);
+  const linkExistingInvoice = useMutation({
+    mutationFn: async (confirm: boolean) => {
+      if (!existingInvoice) throw new Error("Select the orders and invoice first");
+      const response = await apiRequest("POST", "/api/xero/link-existing-invoice", {
+        customerId: existingInvoice.customerId, jobIds: existingInvoice.jobIds,
+        invoiceNumber: existingInvoice.invoiceNumber, confirm,
+        ...(confirm ? { previewHash: existingInvoice.preview?.previewHash } : {}),
+      });
+      return response.json() as Promise<ExistingInvoicePreview>;
+    },
+    onSuccess: (result) => {
+      if (result.linked) {
+        toast({ title: "Existing invoice linked", description: `The verified orders are linked to ${result.invoiceNumber}. No new invoice or payment was created.` });
+        setExistingInvoice(null);
+        void queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      } else {
+        setExistingInvoice(previous => previous ? { ...previous, preview: result } : null);
+      }
+    },
+    onError: (error) => {
+      setExistingInvoice(previous => previous ? { ...previous, preview: undefined } : null);
+      toast({ title: "Invoice not linked", description: error.message, variant: "destructive" });
+    },
+  });
   const [connectingXero, setConnectingXero] = useState(false);
   const [manualPrices, setManualPrices] = useState<Record<string, string>>({});
   const [quantityEdits, setQuantityEdits] = useState<Record<string, string>>({});
@@ -980,7 +1012,7 @@ export default function InvoicingQueue() {
   useEffect(() => {
     const readyIds = new Set(jobs.filter(job => job.invoiceStatus === "ready").map(job => job.id));
     setSelectedJobs(previous => {
-      const remaining = new Set([...previous].filter(id => readyIds.has(id)));
+      const remaining = new Set(Array.from(previous).filter(id => readyIds.has(id)));
       return remaining.size === previous.size ? previous : remaining;
     });
   }, [jobs]);
@@ -1841,6 +1873,15 @@ export default function InvoicingQueue() {
                           <FileText className="h-4 w-4 mr-2" />
                           {creatingInvoice === customerId ? "Creating..." : "Create Invoice"}
                         </Button>
+                        {canViewPrices(user?.role) && selectedCount > 0 && <Button
+                          variant="outline"
+                          disabled={creatingInvoice !== null || linkExistingInvoice.isPending}
+                          onClick={() => setExistingInvoice({
+                            customerId, jobIds: customerJobs.filter(job => selectedJobs.has(job.id)).map(job => job.id),
+                            invoiceNumber: "",
+                          })}
+                          data-testid={`button-link-existing-invoice-${customerId}`}
+                        ><LinkIcon className="mr-2 h-4 w-4" />Link existing invoice</Button>}
                       </div>
                     </div>
                   </CardHeader>
@@ -2641,6 +2682,37 @@ export default function InvoicingQueue() {
               {mergeShippingMutation.isPending ? "Merging..." : "Merge shipping"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!existingInvoice} onOpenChange={(open) => { if (!open && !linkExistingInvoice.isPending) setExistingInvoice(null); }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Link jobs to an existing invoice</DialogTitle>
+            <DialogDescription>Checks the existing invoice in Xero before updating this app. No new invoice, payment or email will be created. Jobs already linked to this invoice are included in the checks.</DialogDescription>
+          </DialogHeader>
+          {existingInvoice && <>
+            <div className="space-y-2">
+              <Label htmlFor="existing-invoice-number">Invoice number</Label>
+              <Input id="existing-invoice-number" placeholder="INV-1362" value={existingInvoice.invoiceNumber}
+                disabled={linkExistingInvoice.isPending}
+                onChange={event => setExistingInvoice({ ...existingInvoice, invoiceNumber: event.target.value, preview: undefined })} />
+            </div>
+            {existingInvoice.preview && <div className="space-y-3 rounded-lg border p-3 text-sm">
+              <p className="font-semibold">{existingInvoice.preview.invoiceNumber} — {formatPrice(existingInvoice.preview.subTotal)} before VAT · {formatPrice(existingInvoice.preview.total)} total</p>
+              <ul className="space-y-2">{existingInvoice.preview.jobs.map(job => <li key={job.id} className="flex flex-wrap justify-between gap-2">
+                <span>{job.jobName} #{job.jobNumber}{job.alreadyLinked ? " (already linked)" : ""}</span><span>{formatPrice(job.total)}</span>
+              </li>)}</ul>
+              <p className="text-muted-foreground">All invoice lines, quantities, unit prices and carriage have been matched. Linking removes the remaining jobs from the draft queue.</p>
+            </div>}
+            <DialogFooter>
+              <Button variant="outline" disabled={linkExistingInvoice.isPending} onClick={() => setExistingInvoice(null)}>Cancel</Button>
+              <Button disabled={linkExistingInvoice.isPending || !existingInvoice.invoiceNumber.trim()}
+                onClick={() => linkExistingInvoice.mutate(!!existingInvoice.preview)}>
+                {linkExistingInvoice.isPending ? "Checking…" : existingInvoice.preview ? "Confirm link to existing invoice" : "Check existing invoice"}
+              </Button>
+            </DialogFooter>
+          </>}
         </DialogContent>
       </Dialog>
 

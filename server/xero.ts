@@ -1105,6 +1105,23 @@ export class XeroService {
     return response.json();
   }
 
+  /** Read an existing invoice in full; never creates or changes anything in Xero. */
+  async getInvoiceByNumber(invoiceNumber: string): Promise<any> {
+    if (!this.isConfigured() || !this.isConnected()) throw new Error("Xero is not connected");
+    const token = await this.getAccessToken();
+    const headers = { Authorization: `Bearer ${token}`, "xero-tenant-id": this.getTenantId(), Accept: "application/json" };
+    const params = new URLSearchParams({ InvoiceNumbers: invoiceNumber });
+    const search = await fetch(`${this.apiUrl}/Invoices?${params}`, { headers });
+    if (!search.ok) throw new Error("Could not look up the existing invoice in Xero");
+    const found = (await search.json()).Invoices?.find((invoice: any) => invoice.InvoiceNumber === invoiceNumber);
+    if (!found?.InvoiceID) throw new Error("Invoice number not found in Xero");
+    const detail = await fetch(`${this.apiUrl}/Invoices/${encodeURIComponent(found.InvoiceID)}`, { headers });
+    if (!detail.ok) throw new Error("Could not read the existing invoice lines from Xero");
+    const invoice = (await detail.json()).Invoices?.[0];
+    if (invoice?.InvoiceNumber !== invoiceNumber) throw new Error("Xero returned a different invoice");
+    return invoice;
+  }
+
   // Fetch specific invoices by their invoice numbers (batched)
   async getInvoicesByNumbers(invoiceNumbers: string[]): Promise<Array<{ InvoiceNumber: string; SubTotal: number; Total: number; Status: string }>> {
     if (!this.isConfigured()) {

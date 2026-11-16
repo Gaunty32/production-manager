@@ -62,6 +62,7 @@ import { xeroService } from "./xero";
 import { dpdService } from "./dpd";
 import { registerDispatchConfirmationRoutes } from "./dispatchConfirmationRoutes";
 import { registerAbodeRoutes } from "./abodeRoutes";
+import { registerExistingInvoiceRoutes } from "./existingInvoiceRoutes";
 import { canShareDispatchConfirmation } from "../shared/dispatch-confirmation";
 import { calculateJobPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantity, billedQuantityForMatchingLine, isMinOrderQtyActive, MIN_ORDER_QTY } from "@shared/pricing";
 import { loginCustomer, registerCustomer, resetCustomerPassword, isCustomerAuthenticated, attachCustomerUser } from "./customerAuth";
@@ -497,6 +498,7 @@ function computeBuildVersion(): string {
 const SERVER_START_VERSION = computeBuildVersion();
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerExistingInvoiceRoutes(app, isStaffAuthenticated);
   registerAbodeRoutes(app, {
     staffAuth: isStaffAuthenticated, customerAuth: isCustomerAuthenticated,
     completionGuard: checkOwnJobCompletion,
