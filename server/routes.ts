@@ -10,6 +10,7 @@ import { buildBookedDpdDetails, saveBookedDpdDetails } from "./dpdShipmentDetail
 import { resolveSelectedStaffMentions } from "@shared/staff-mentions";
 import { getInvoiceQuantities, saveInvoiceQuantity, clearInvoiceQuantities } from "./invoiceQuantities";
 import { applyInvoiceQuantities, invoiceQuantitySchema, invoiceQuantitiesSchema } from "@shared/invoice-quantities";
+import { invoiceSelectionError } from "@shared/invoice-readiness";
 import { withSuppliedThreadColours } from "./threadColourCatalog";
 import { getThreadSheetSnapshot } from "./threadSheetSync";
 import { buildListedThreadColours, filterListedThreadColours } from "@shared/thread-sheet";
@@ -10737,12 +10738,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        // Verify all selected jobs are in 'ready' status
-        const jobsNotReady = selectedJobs.filter(j => j.invoiceStatus !== 'ready');
-        if (jobsNotReady.length > 0) {
-          return res.status(400).json({ 
-            error: "All selected jobs must be in 'ready' status for invoicing" 
-          });
+        // Keep the duplicate-invoice guard, but explain which rows are stale.
+        const selectionError = invoiceSelectionError(jobIds, selectedJobs);
+        if (selectionError) {
+          return res.status(409).json({ error: selectionError });
         }
         const shippingIssues = getShippingIssues(selectedJobs, allJobs, manualShippingCosts || {});
         if (shippingIssues.length && req.body.acknowledgeIncompleteShipping !== true) {

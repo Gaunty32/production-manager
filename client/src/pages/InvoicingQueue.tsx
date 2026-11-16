@@ -10,6 +10,7 @@ import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Pale
 import { CustomerPickingSlip } from "@/components/CustomerPickingSlip";
 import type { JobLineItem } from "@shared/schema";
 import { applyInvoiceQuantities, invoiceQuantitySchema } from "@shared/invoice-quantities";
+import { invoiceSelectionError } from "@shared/invoice-readiness";
 import { getShippingIssues, type ShippingIssue } from "@shared/shipping-details";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantityForMatchingLine } from "@shared/pricing";
@@ -927,6 +928,9 @@ export default function InvoicingQueue() {
   
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   });
 
   const { data: customersData = [], isLoading: customersLoading } = useQuery<Customer[]>({
@@ -972,6 +976,14 @@ export default function InvoicingQueue() {
 
   // Filter jobs ready for invoicing
   const readyJobs = jobs.filter(job => job.invoiceStatus === 'ready');
+
+  useEffect(() => {
+    const readyIds = new Set(jobs.filter(job => job.invoiceStatus === "ready").map(job => job.id));
+    setSelectedJobs(previous => {
+      const remaining = new Set([...previous].filter(id => readyIds.has(id)));
+      return remaining.size === previous.size ? previous : remaining;
+    });
+  }, [jobs]);
 
   // Group jobs by customer
   const jobsByCustomer = readyJobs.reduce((acc, job) => {
@@ -1526,6 +1538,11 @@ export default function InvoicingQueue() {
     
     try {
       const jobIds = selectedCustomerJobs.map(job => job.id);
+      if (!invoicingLogoSetupsOnly) {
+        const freshJobs = await queryClient.fetchQuery<Job[]>({ queryKey: ["/api/jobs"], staleTime: 0 });
+        const selectionError = invoiceSelectionError(jobIds, freshJobs);
+        if (selectionError) throw new Error(selectionError);
+      }
       
       // For logo-only invoices, skip manual prices and shipping entirely
       let manualPricesForAPI: Record<string, number> = {};
@@ -1626,6 +1643,9 @@ export default function InvoicingQueue() {
       await queryClient.invalidateQueries({ queryKey: ["/api/xero/invoice-quantities"] });
     } catch (error) {
       console.error("Error creating invoice:", error);
+      // A different tab or staff member may have invoiced these orders.
+      // Keep saved price/quantity edits, but remove stale ready rows.
+      void queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       toast({
         title: "Invoice Creation Failed",
         description: error instanceof Error ? error.message : "Failed to create invoice in Xero",
