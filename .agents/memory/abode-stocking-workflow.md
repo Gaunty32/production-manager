@@ -99,6 +99,12 @@ DPD can return HTTP 200 containing a JSON application error instead of label HTM
 
 **How to apply:** Reject non-HTML courier responses as unavailable labels. Allow staff to recover using the original saved PDF, checking its order reference and tracking number before saving it; never repurchase the shipment. Retain the original PDF in private storage.
 
+Missing tracking and label attachments in the live database do not mean the original courier label is unavailable. Check previously generated label assets and uploaded screenshots before asking the user for the numbers again.
+
+**Why:** The user pointed out that the numbers were already on labels; an original saved PDF was available outside the job's attachments.
+
+**How to apply:** Search generated assets as well as uploads, verify the order reference against the label's consignment number, and distinguish finding a number from saving it to the live portal.
+
 The customer needs a master spreadsheet list of orders showing despatch dates, delivered dates and tracking numbers, with automatic DPD tracking rather than staff-entered delivered dates.
 
 **Why:** The user requested the master list and selected “Connect automatic DPD tracking”.
