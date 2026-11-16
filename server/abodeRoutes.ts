@@ -20,6 +20,7 @@ import { registerAbodeSampleRoutes, sampleUploadBody } from "./abodeSamples";
 import { abodeDispatchedAt, bookAbodeLabel } from "./abodeShipping";
 import { abodeTrackingConfigured, syncAbodeTracking } from "./abodeTracking";
 import { RECOVERED_LABEL_PREFIX, verifyRecoveredLabelPdf } from "./abodeLabelRecovery";
+import { registerAbodeTrackingImport } from "./abodeTrackingImport";
 
 type CompletionGuard = (req: any, jobId: string, item?: any) => Promise<string | null>;
 const editable = (status: string) => ["pending", "ready", "draft"].includes(status);
@@ -36,6 +37,7 @@ const readDeliveryNotePdf: RequestHandler = (req, res, next) => {
 export function registerAbodeRoutes(app: Express, deps: {
   staffAuth: RequestHandler; customerAuth: RequestHandler; completionGuard: CompletionGuard;
 }) {
+  registerAbodeTrackingImport(app, deps.staffAuth);
   for (const customerMode of [false, true]) {
     const base = customerMode ? "/api/customer-portal/abode" : "/api/abode";
     const auth = customerMode ? deps.customerAuth : deps.staffAuth;

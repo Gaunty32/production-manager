@@ -401,6 +401,8 @@ export default function CustomerDashboard() {
       return sortDirection === "desc" ? -comparison : comparison;
     });
 
+  const showProductionDate = filteredJobs.some(job => Boolean(job.requiredDispatchDate));
+
   const logoutMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest("POST", "/api/customer-auth/logout", {});
@@ -1159,20 +1161,14 @@ export default function CustomerDashboard() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {/* Job-level info */}
-                      <div className="pb-3 border-b">
+                      {job.requiredDispatchDate && lineItems.length > 0 && <div className="pb-3 border-b">
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Production Date</p>
-                          {job.requiredDispatchDate && lineItems.length > 0 ? (
-                            <p className="text-sm font-medium">
-                              {format(new Date(job.requiredDispatchDate), "MMM d, yyyy")}
-                            </p>
-                          ) : (
-                            <p className="text-sm font-medium text-amber-600" data-testid={`text-not-booked-mobile-${job.id}`}>
-                              Not yet booked in
-                            </p>
-                          )}
+                          <p className="text-sm font-medium">
+                            {format(new Date(job.requiredDispatchDate), "MMM d, yyyy")}
+                          </p>
                         </div>
-                      </div>
+                      </div>}
 
                       {/* Tracking Info for Completed Jobs */}
                       {job.completed && job.dhlTrackingNumber && (
@@ -1313,7 +1309,7 @@ export default function CustomerDashboard() {
                         <span className="text-[10px] font-normal text-muted-foreground">(inc. VAT, exc. carriage)</span>
                       </div>
                     </TableHead>
-                    <TableHead 
+                    {showProductionDate && <TableHead
                       className="cursor-pointer hover:bg-muted/50 select-none"
                       onClick={() => handleColumnSort("date")}
                       data-testid="header-date"
@@ -1322,7 +1318,7 @@ export default function CustomerDashboard() {
                         Production Date
                         <SortIndicator column="date" />
                       </div>
-                    </TableHead>
+                    </TableHead>}
                     <TableHead 
                       className="cursor-pointer hover:bg-muted/50 select-none"
                       onClick={() => handleColumnSort("status")}
@@ -1370,11 +1366,9 @@ export default function CustomerDashboard() {
                           <TableCell className="text-muted-foreground">—</TableCell>
                           <TableCell className="text-right">{job.quantity}</TableCell>
                           <TableCell className="text-right"><EstimatedCostCell price={null} /></TableCell>
-                          <TableCell data-testid={`text-dispatch-${job.id}`}>
-                            <span className="text-amber-600 font-medium" data-testid={`text-not-booked-${job.id}`}>
-                              Not yet booked in
-                            </span>
-                          </TableCell>
+                          {showProductionDate && <TableCell data-testid={`text-dispatch-${job.id}`}>
+                            {job.requiredDispatchDate ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy") : "—"}
+                          </TableCell>}
                           <TableCell>{getStatusBadge(job)}</TableCell>
                           <TableCell>
                             {job.completed && job.dhlTrackingNumber ? (
@@ -1445,12 +1439,12 @@ export default function CustomerDashboard() {
                         <TableCell className="text-right" data-testid={`text-cost-${lineItem.id}`}>
                           <EstimatedCostCell price={lineItem.estimatedPrice} />
                         </TableCell>
-                        <TableCell data-testid={`text-dispatch-${job.id}-${index}`}>
+                        {showProductionDate && <TableCell data-testid={`text-dispatch-${job.id}-${index}`}>
                           {job.requiredDispatchDate
                             ? format(new Date(job.requiredDispatchDate), "MMM d, yyyy")
-                            : <span className="text-amber-600 font-medium" data-testid={`text-not-booked-${job.id}-${index}`}>Not yet booked in</span>
+                            : "—"
                           }
-                        </TableCell>
+                        </TableCell>}
                         <TableCell>
                           {getStatusBadge(job)}
                         </TableCell>

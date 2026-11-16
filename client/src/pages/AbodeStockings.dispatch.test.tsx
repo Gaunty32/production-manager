@@ -31,9 +31,40 @@ test("completed DPD orders needing recovery have an enabled despatch button", ()
       assert.ok(button, `Despatch action must exist for ${shipmentState}`);
       assert.doesNotMatch(button, /\sdisabled(?:=|[\s>])/, `Recovery must be reachable for ${shipmentState}`);
       assert.match(button, /no label or tracking required/);
+      assert.match(html, /Save existing tracking/, "Staff can save tracking without recovering a label");
       client.clear();
     }
   } finally {
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
+test("customer card and spreadsheet views expose all supplied DPD numbers without staff controls", () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { pathname: "/customer/stockings", search: "" } } });
+  const client = new QueryClient({ defaultOptions: { queries: { queryFn: async () => null, retry: false, gcTime: 0 } } });
+  try {
+    const numbers = ["6895132451", "6895318162", "6895387834", "6895515169"];
+    client.setQueryData(["/api/customer-portal/abode"], {
+      enabled: true, customer: { id: "fixture", name: "Abode", logoUrl: null },
+      currentRate: 7, completedCount: 4, trackingConfigured: false,
+      orders: numbers.map((number, index) => ({
+        id: `fixture-${index}`, jobNumber: index, orderNumber: `TEST-${index}`, jobName: "Test stockings",
+        completed: true, shipmentState: "review", shippingRoute: "dpd", labelAvailable: false,
+        dhlTrackingNumber: number, dispatchedAt: "2026-11-13T12:00:00Z", deliveredAt: null, trackingStatus: "Despatched",
+        recipient: { name: "Test", line1: "", town: "", postcode: "SW1A 1AA" },
+        items: [], deliveryNotes: [],
+      })),
+    });
+    const html = renderToStaticMarkup(<QueryClientProvider client={client}><AbodeStockings /></QueryClientProvider>);
+    for (const number of numbers) {
+      assert.match(html, new RegExp(`href="https://track.dpdlocal.co.uk/search\\?reference=${number}&amp;postcode=SW1A\\+1AA"`));
+      assert.match(html, new RegExp(`>${number}<`));
+    }
+    assert.doesNotMatch(html, /Save existing tracking|DPD tracking is not connected/);
+  } finally {
+    client.clear();
     if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
     else Reflect.deleteProperty(globalThis, "window");
   }

@@ -52,6 +52,7 @@
 
 ## Customer Portal
 - Read-only order status with search/sort/filter, DHL tracking; mobile-optimised card layouts.
+- Do not show customers “Not yet booked in” production-date messages. Omit empty date details on mobile and hide the date column when no displayed orders have dates.
 - Job submission form with Logo Type selector (Repeat/New); "New Logo" emails chris@selectuniforms.co.uk + james@selectuniforms.co.uk (`sendNewLogoSetupEmail`).
 - Multi-user logins per customer, customer team management, password generation/reset, staff impersonation.
 - Invoice history with line-item breakdowns; "View Pricing" button; express-service surcharge warning.

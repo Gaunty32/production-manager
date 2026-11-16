@@ -309,6 +309,29 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     assert.equal((await storage.getJob(manualId))?.dispatchEmailQueuedAt, null, "No retrospective email is queued without tracking");
     assert.equal(bookings, bookingsBeforeConfirmation, "Manual confirmation never buys a shipment");
     assert.equal(await hasUndespatchedAbodeOrder([manualId]), false);
+    const trackingEntries = [{ orderNumber: confirmed.orderNumber, trackingNumber: "6895132451" }];
+    assert.equal((await fetch(`${base}/api/abode/tracking/import`, {
+      method: "POST", headers: { "content-type": "application/json", "x-test-customer": "yes" },
+      body: JSON.stringify({ entries: trackingEntries }),
+    })).status, 401, "Customers cannot change shipment tracking");
+    assert.equal((await request("/tracking/import", { entries: [
+      ...trackingEntries, { orderNumber: "999999999999", trackingNumber: "6895132452" },
+    ] })).status, 409);
+    assert.equal((await storage.getJob(manualId))?.dhlTrackingNumber, null, "A bad batch saves nothing");
+    assert.equal((await request("/tracking/import", { entries: [
+      ...trackingEntries, { orderNumber: "999999999999", trackingNumber: "6895132451" },
+    ] })).status, 409, "A consignment cannot be reused across orders");
+    assert.equal((await request("/tracking/import", { entries: [{ ...trackingEntries[0], trackingNumber: "123" }] })).status, 409);
+    assert.equal((await request("/tracking/import", { entries: trackingEntries })).status, 200);
+    assert.equal((await request("/tracking/import", { entries: trackingEntries })).status, 200, "Retrying is safe");
+    assert.equal((await request("/tracking/import", { entries: [{ ...trackingEntries[0], trackingNumber: "6895132452" }] })).status, 409, "Existing tracking cannot be replaced");
+    const tracked = (await (await request("", undefined, true)).json()).orders.find((order: any) => order.id === manualId);
+    assert.equal(tracked.dhlTrackingNumber, "6895132451", "Tracking is exposed by the customer's own API");
+    assert.equal(tracked.dispatchedAt, confirmed.dispatchedAt);
+    assert.equal(tracked.deliveredAt, null);
+    assert.equal(tracked.shipmentState, "review", "Adding tracking does not claim the label was recovered");
+    assert.equal((await storage.getJob(manualId))?.dispatchEmailQueuedAt, null, "Adding historical tracking never queues an email");
+    assert.equal(bookings, bookingsBeforeConfirmation, "Tracking import never buys a shipment");
   } finally {
     storage.getCustomers = originals.customers; storage.getCustomer = originals.customer; storage.getCustomerUserById = originals.customerUser;
     dpdService.isConfigured = originals.configured; dpdService.createShipment = originals.book; dpdService.fetchLabel = originals.label;

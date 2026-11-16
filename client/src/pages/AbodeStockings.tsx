@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AbodeFinishedPhotos, type AbodeFinishedPhoto } from "@/components/AbodeFinishedPhotos";
 import { AbodeOrderDeliveryNotes, type AbodeDeliveryNote } from "@/components/AbodeDeliveryNotes";
 import { uploadAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
+import { AbodeTrackingImport } from "@/components/AbodeTrackingImport";
 
 type StockingItem = {
   id: string;
@@ -535,6 +536,7 @@ export default function AbodeStockings() {
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">Order register</p><h2 className="mt-1 text-xl font-semibold">Stockings in motion</h2></div>
             <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+              {isStaff && <AbodeTrackingImport onSaved={refresh} />}
               {isStaff && <Button variant="outline" size="sm" onClick={() => trackingRefresh.mutate()} disabled={trackingRefresh.isPending}>{trackingRefresh.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Refresh tracking</Button>}
               <Button variant="outline" size="sm" onClick={() => void downloadRegister()}><ArrowDownToLine className="mr-2 h-4 w-4" />Download XLSX</Button>
               <Button variant="outline" size="sm" onClick={() => setView(view === "cards" ? "list" : "cards")}>{view === "cards" ? "Spreadsheet list" : "Order cards"}</Button>
