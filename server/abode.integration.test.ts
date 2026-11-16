@@ -289,6 +289,26 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     assert.equal(originalLabel.headers.get("content-type"), "application/pdf");
     assert.deepEqual(Buffer.from(await originalLabel.arrayBuffer()), bytes);
     assert.equal(bookings, noMoreBookings, "Recovering the saved PDF never purchases another shipment");
+    const manualImport = await (await request("/imports", { rows: [{ ...row, "Order number": "TEST-ALREADY-SENT" }] })).json();
+    const manualId = manualImport.labelResults[0].jobId;
+    const bookingsBeforeConfirmation = bookings;
+    assert.equal((await request(`/orders/${manualId}/dispatch`, {}, true)).status, 404, "No customer despatch route is exposed");
+    assert.equal((await request(`/orders/${manualId}/dispatch`, {})).status, 400, "Unfinished production must remain blocked");
+    assert.equal((await request(`/orders/${manualId}/complete`, {})).status, 200);
+    const confirmations = await Promise.all([
+      request(`/orders/${manualId}/dispatch`, {}), request(`/orders/${manualId}/dispatch`, {}),
+    ]);
+    assert.ok(confirmations.every(response => response.status === 200), "Repeated confirmations are safe");
+    const confirmed = (await (await request("", undefined, true)).json()).orders.find((o: any) => o.id === manualId);
+    assert.ok(confirmed.dispatchedAt, "Staff confirmation moves the order into Despatched");
+    assert.equal(confirmed.labelAvailable, false);
+    assert.equal(confirmed.dhlTrackingNumber, null);
+    assert.equal(confirmed.deliveredAt, null, "Despatch must never imply delivery");
+    assert.equal(confirmed.shipmentState, "review", "Do not claim the uncertain booking was recovered");
+    assert.equal(confirmed.trackingStatus, "Despatched");
+    assert.equal((await storage.getJob(manualId))?.dispatchEmailQueuedAt, null, "No retrospective email is queued without tracking");
+    assert.equal(bookings, bookingsBeforeConfirmation, "Manual confirmation never buys a shipment");
+    assert.equal(await hasUndespatchedAbodeOrder([manualId]), false);
   } finally {
     storage.getCustomers = originals.customers; storage.getCustomer = originals.customer; storage.getCustomerUserById = originals.customerUser;
     dpdService.isConfigured = originals.configured; dpdService.createShipment = originals.book; dpdService.fetchLabel = originals.label;

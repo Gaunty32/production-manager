@@ -25,6 +25,12 @@ For Abode, label creation means despatched.
 
 **How to apply:** Apply this to new and recovered DPD labels and existing saved DPD bookings. Remove conflicting “Label created — awaiting despatch” wording. Never infer delivery or send retrospective emails just to reclassify existing bookings.
 
+Staff may also confirm an already-sent, completed order as despatched without supplying a label or tracking.
+
+**Why:** The user clarified “i don't need the labels, they have been sent” when four completed orders lacked saved DPD booking details.
+
+**How to apply:** Keep manual despatch separate from label recovery and shipment purchases. Record the confirmation date explicitly, leave missing tracking and uncertain booking details untouched, and never infer delivery.
+
 Do not show the “DPD tracking is not connected” banner on either staff or customer screens. Despatched customer orders must clearly show the tracking number as a clickable carrier link.
 
 **Why:** The user requested removal of the customer DPD warning, then explicitly requested removal of the remaining staff connection banner as well.

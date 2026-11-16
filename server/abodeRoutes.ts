@@ -360,12 +360,13 @@ export function registerAbodeRoutes(app: Express, deps: {
         if (!locked.completed) throw new Error("Complete production before confirming despatch");
         const items = await tx.select().from(jobLineItems).where(eq(jobLineItems.jobId, job.id));
         if (!items.length || items.some(item => !item.completed)) throw new Error("Complete every stocking before confirming despatch");
-        if (!locked.dhlTrackingNumber || order.shipmentState !== "booked") throw new Error("Save the shipment tracking before confirming despatch");
-        const files = await tx.select().from(jobFiles).where(eq(jobFiles.jobId, job.id));
-        if (!files.some(isSuppliedDeliveryNote)) throw new Error("Attach the customer's delivery note before confirming despatch");
+        // Staff can confirm an already-sent order without recovering its label.
+        // Do not invent tracking or mark an uncertain courier booking as booked.
         const now = new Date();
-        await tx.update(stockingOrders).set({ dispatchedAt: now }).where(eq(stockingOrders.jobId, job.id));
-        await tx.update(jobs).set({ dispatchEmailQueuedAt: now }).where(eq(jobs.id, job.id));
+        await tx.update(stockingOrders).set({ dispatchedAt: now, trackingStatus: order.deliveredAt ? "Delivered" : "Despatched" }).where(eq(stockingOrders.jobId, job.id));
+        if (locked.dhlTrackingNumber) {
+          await tx.update(jobs).set({ dispatchEmailQueuedAt: now }).where(eq(jobs.id, job.id));
+        }
       });
       await maybeSendDispatchNotification(job.id).catch(() => console.error("[Abode] Dispatch email deferred"));
       res.json({ success: true });

@@ -9,7 +9,7 @@ test("completed DPD orders needing recovery have an enabled despatch button", ()
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { pathname: "/abode-stockings", search: "" } } });
   try {
-    for (const shipmentState of ["review", "booking"]) {
+    for (const shipmentState of ["review", "booking", "unbooked", "booked"]) {
       const client = new QueryClient({ defaultOptions: { queries: { queryFn: async () => null, retry: false, gcTime: 0 } } });
       client.setQueryData(["/api/abode"], {
         enabled: true, customer: { id: "fixture", name: "Abode", logoUrl: null },
@@ -30,7 +30,7 @@ test("completed DPD orders needing recovery have an enabled despatch button", ()
       const button = html.match(/<button\b[^>]*>Mark dispatched<\/button>/)?.[0];
       assert.ok(button, `Despatch action must exist for ${shipmentState}`);
       assert.doesNotMatch(button, /\sdisabled(?:=|[\s>])/, `Recovery must be reachable for ${shipmentState}`);
-      assert.match(button, /Save the existing label and tracking/);
+      assert.match(button, /no label or tracking required/);
       client.clear();
     }
   } finally {
