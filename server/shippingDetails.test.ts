@@ -5,7 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { z } from "zod";
 import { calculateShippingCost } from "../shared/pricing";
-import { dpdParcelSchema, getShippingIssues } from "../shared/shipping-details";
+import { dpdParcelSchema, getShippingIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "../shared/shipping-details";
 import { updateJobSchema } from "../shared/schema";
 
 const base = {
@@ -29,6 +29,40 @@ test("complete parcels, collection and free local delivery do not produce false 
     ...base, shippingMethod: "direct_delivery", packageCount: 1, packageType: "boxes",
     dhlTrackingNumber: "tracking", shippingCost: "7.5",
   }]).length, 0);
+});
+
+test("supplied labels override automatic tariffs but preserve tracking and parcel information", () => {
+  const job = { ...base, requestedShippingMethod: "courier_label_provided" };
+  const updates = customerLabelShippingUpdates(job, {
+    shippingMethod: "direct_delivery", shippingCost: "7.5",
+    dhlTrackingNumber: "CUSTOMER-TRACKING", packageType: "boxes", packageCount: 1,
+  });
+  assert.equal(updates.shippingCost, "0");
+  assert.equal(updates.shippingMethod, "courier_label_provided");
+  assert.equal(updates.dhlTrackingNumber, "CUSTOMER-TRACKING");
+  assert.equal(updates.packageCount, 1);
+  assert.equal(updates.consolidatedShipmentId, null);
+  assert.equal(getShippingIssues([job]).length, 0, "Customer label tracking and parcel details are optional");
+  assert.equal(customerLabelShippingUpdates(base, { shippingMethod: "courier_label_provided", shippingCost: "99" }).shippingCost, "0");
+  assert.equal(customerLabelShippingUpdates(base, { shippingMethod: "direct_delivery", shippingCost: "7.5" }).shippingCost, "7.5");
+});
+
+test("the staff completion form accepts supplied labels without tracking or parcel details", () => {
+  const formSource = ts.createSourceFile("ShippingInfoDialog.tsx",
+    readFileSync(new URL("../client/src/components/ShippingInfoDialog.tsx", import.meta.url), "utf8"),
+    ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let schemaText = "";
+  function visit(node: ts.Node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(formSource) === "shippingSchema") schemaText = node.getText(formSource);
+    ts.forEachChild(node, visit);
+  }
+  visit(formSource);
+  assert.ok(schemaText);
+  const schema = vm.runInNewContext(ts.transpileModule(`const ${schemaText}; shippingSchema;`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2020 },
+  }).outputText, { z });
+  assert.equal(schema.safeParse({ shippingMethod: "courier_label_provided" }).success, true);
+  assert.equal(schema.safeParse({ shippingMethod: "direct_delivery" }).success, false);
 });
 
 test("consolidation uses one charge and respects carriage already invoiced", () => {
@@ -74,13 +108,63 @@ function extractFunctions(file: string, names: string[]) {
 const savedFunctions = extractFunctions("./dpdShipmentDetails.ts", ["buildBookedDpdDetails", "saveBookedDpdDetails"]);
 const routes = ts.createSourceFile("routes.ts", readFileSync(new URL("./routes.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
 let bookingHandler = "";
+let patchHandler = "";
 function visitRoutes(node: ts.Node) {
   if (ts.isCallExpression(node) && node.arguments[0] && ts.isStringLiteral(node.arguments[0])
     && node.arguments[0].text === "/api/dpd/book-shipment") bookingHandler = node.arguments[node.arguments.length - 1].getText(routes);
+  if (ts.isCallExpression(node) && node.expression.getText(routes) === "app.patch"
+    && node.arguments[0] && ts.isStringLiteral(node.arguments[0])
+    && node.arguments[0].text === "/api/jobs/:id") patchHandler = node.arguments[node.arguments.length - 1].getText(routes);
   ts.forEachChild(node, visitRoutes);
 }
 visitRoutes(routes);
 assert.ok(bookingHandler);
+assert.ok(patchHandler);
+
+async function patchShipping(job: any, body: any) {
+  const changes: any[] = [];
+  let status = 200;
+  const context = vm.createContext({
+    z, updateJobSchema, calculateShippingCost, isCustomerProvidedLabel, customerLabelShippingUpdates,
+    console: { error() {} },
+    stockingOrders: { jobId: "jobId" }, eq: () => true,
+    db: { select: () => ({ from: () => ({ where: async () => [] }) }) },
+    storage: {
+      getJob: async () => job,
+      updateJob: async (_id: string, updates: any) => { changes.push(updates); return { ...job, ...updates }; },
+    },
+    maybeSendDispatchNotification: async () => {},
+  });
+  const handler = vm.runInContext(ts.transpileModule(`const handler = ${patchHandler}; handler;`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2020 },
+  }).outputText, context);
+  await handler({ params: { id: job.id }, body }, {
+    status(code: number) { status = code; return this; }, json() {},
+  });
+  return { status, changes };
+}
+
+test("the real shipping-save endpoint zeros supplied-label carriage before saving", async () => {
+  const result = await patchShipping({ ...base, requestedShippingMethod: "courier_label_provided" }, {
+    shippingMethod: "direct_delivery", packageCount: 1, packageType: "boxes",
+    shippingCost: "7.5", dhlTrackingNumber: "CUSTOMER-TRACKING", completed: true,
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.changes[0].shippingCost, "0");
+  assert.equal(result.changes[0].shippingMethod, "courier_label_provided");
+  assert.equal(result.changes[0].dhlTrackingNumber, "CUSTOMER-TRACKING");
+});
+
+test("unrelated edits leave issued supplied-label invoice charges unchanged", async () => {
+  const job = { ...base, requestedShippingMethod: "courier_label_provided", invoiceStatus: "invoiced", shippingCost: "7.5" };
+  const result = await patchShipping(job, { notes: "New note" });
+  assert.equal(result.status, 200);
+  assert.equal(result.changes[0].shippingCost, undefined);
+  assert.equal(result.changes[0].shippingMethod, undefined);
+  const rejected = await patchShipping(job, { shippingCost: "0" });
+  assert.equal(rejected.status, 409);
+  assert.equal(rejected.changes.length, 0);
+});
 
 async function book(options: { jobs?: any[]; ids?: string[]; count?: number; type?: string; failProvider?: boolean; failSave?: boolean; stocking?: boolean } = {}) {
   const members: any[] = options.jobs || [{ ...base }];
@@ -90,7 +174,7 @@ async function book(options: { jobs?: any[]; ids?: string[]; count?: number; typ
   let response: any;
   let status = 200;
   const context: any = vm.createContext({
-    console: { error() {} }, z, dpdParcelSchema, calculateShippingCost,
+    console: { error() {} }, z, dpdParcelSchema, calculateShippingCost, isCustomerProvidedLabel,
     crypto: { randomUUID: () => "shipment-group" },
     storage: { getJob: async (id: string) => members.find(member => member.id === id) },
     dpdService: {
@@ -192,6 +276,15 @@ test("missing/cross-customer/mixed-invoice orders and invalid parcels never book
   ]) {
     const result = await book(options);
     assert.ok(result.status >= 400);
+    assert.equal(result.providerCalls, 0);
+    assert.equal(result.changes.length, 0);
+  }
+});
+
+test("supplied labels cannot accidentally purchase another courier label", async () => {
+  for (const field of ["requestedShippingMethod", "shippingMethod"]) {
+    const result = await book({ jobs: [{ ...base, [field]: "courier_label_provided" }] });
+    assert.equal(result.status, 409);
     assert.equal(result.providerCalls, 0);
     assert.equal(result.changes.length, 0);
   }

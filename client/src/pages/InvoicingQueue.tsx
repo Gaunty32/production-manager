@@ -11,7 +11,7 @@ import { CustomerPickingSlip } from "@/components/CustomerPickingSlip";
 import type { JobLineItem } from "@shared/schema";
 import { applyInvoiceQuantities, invoiceQuantitySchema } from "@shared/invoice-quantities";
 import { invoiceSelectionError } from "@shared/invoice-readiness";
-import { getShippingIssues, type ShippingIssue } from "@shared/shipping-details";
+import { getShippingIssues, isCustomerProvidedLabel, type ShippingIssue } from "@shared/shipping-details";
 import { format } from "date-fns";
 import { calculateJobPrice, formatPrice, calculateShippingCost, CODE_TO_PRINT_SIZE, billedQuantityForMatchingLine } from "@shared/pricing";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -60,6 +60,8 @@ type ExistingInvoicePreview = {
   jobs: { id: string; jobName: string; jobNumber: number | null; total: number; alreadyLinked: boolean }[];
 };
 
+type InvoicingQueueJob = Job;
+
 interface EditShippingState {
   jobId: string;
   customerId: string;
@@ -72,7 +74,7 @@ interface EditShippingState {
 
 interface MergeShippingState {
   customerId: string;
-  shippingJobs: Job[];
+  shippingJobs: InvoicingQueueJob[];
 }
 
 interface EditLineItemsState {
@@ -917,13 +919,18 @@ export default function InvoicingQueue() {
   const updateShippingMutation = useMutation({
     mutationFn: async (data: { jobId: string; dhlTrackingNumber?: string | null; packageCount?: number | null; packageType?: string | null; shippingMethod?: string; shippingCost?: string | null; consolidatedShipmentId?: string | null; consolidatedJobIds?: string[] }) => {
       const { jobId, consolidatedJobIds, ...updates } = data;
+      const currentJob = (queryClient.getQueryData<InvoicingQueueJob[]>(["/api/jobs"]) || []).find(job => job.id === jobId);
+      const customerProvidedLabel = updates.shippingMethod === "courier_label_provided" ||
+        (!!currentJob && isCustomerProvidedLabel(currentJob));
       if (consolidatedJobIds && consolidatedJobIds.length > 0) {
         return apiRequest("PATCH", `/api/jobs/${jobId}`, { ...updates, consolidatedJobIds });
       }
-      const shippingCostResult = updates.packageType && updates.packageCount 
+      const shippingCostResult = !customerProvidedLabel && updates.packageType && updates.packageCount
         ? calculateShippingCost(updates.packageType as "boxes" | "bags", updates.packageCount)
         : undefined;
-      const shippingCost = shippingCostResult?.cost !== undefined 
+      const shippingCost = customerProvidedLabel
+        ? "0"
+        : shippingCostResult?.cost !== undefined
         ? (typeof shippingCostResult.cost === 'number' ? shippingCostResult.cost.toString() : shippingCostResult.cost)
         : updates.shippingCost;
       return apiRequest("PATCH", `/api/jobs/${jobId}`, { ...updates, shippingCost });
@@ -958,7 +965,7 @@ export default function InvoicingQueue() {
     },
   });
   
-  const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({
+  const { data: jobs = [], isLoading: jobsLoading } = useQuery<InvoicingQueueJob[]>({
     queryKey: ["/api/jobs"],
     staleTime: 0,
     refetchOnMount: "always",
@@ -1024,7 +1031,7 @@ export default function InvoicingQueue() {
     }
     acc[job.customerId].push(job);
     return acc;
-  }, {} as Record<string, Job[]>);
+  }, {} as Record<string, InvoicingQueueJob[]>);
 
   // Get customers with only approved logo setups (no jobs)
   const approvedLogoSetups = logoSetups.filter(ls => ls.approved && ls.approvedAt);
@@ -1049,7 +1056,7 @@ export default function InvoicingQueue() {
         acc[customerId] = customerJobs;
       }
       return acc;
-    }, {} as Record<string, Job[]>);
+    }, {} as Record<string, InvoicingQueueJob[]>);
   
   // Sort customer IDs alphabetically by customer name
   const sortedCustomerIds = Object.keys(filteredJobsByCustomer).sort((a, b) => {
@@ -1113,7 +1120,7 @@ export default function InvoicingQueue() {
     return lineItem.quantity >= 2501 || lineItem.stitchCount >= 50000;
   };
 
-  const buildInvoicePreviewLines = (customerJobs: Job[], customerId: string, includeUnselected = false) => {
+  const buildInvoicePreviewLines = (customerJobs: InvoicingQueueJob[], customerId: string, includeUnselected = false) => {
     const customer = customers.find(c => c.id === customerId);
     if (!customer) return [];
     
@@ -1149,7 +1156,7 @@ export default function InvoicingQueue() {
       }
     }
 
-    const shipmentJobsMap = new Map<string, Job[]>();
+    const shipmentJobsMap = new Map<string, InvoicingQueueJob[]>();
     
     for (let i = 0; i < sortedJobs.length; i++) {
       const job = sortedJobs[i];
@@ -1266,6 +1273,7 @@ export default function InvoicingQueue() {
           let hasShipping = false;
 
           for (const sJob of allDeliveryJobs) {
+            if (isCustomerProvidedLabel(sJob)) continue;
             let shippingCost: number | null = null;
 
             if (sJob.shippingCost === "TBA") {
@@ -1375,7 +1383,7 @@ export default function InvoicingQueue() {
     }
   };
 
-  const getTotalPrice = (customerJobs: Job[]): number | "POA" | "TBA" | null => {
+  const getTotalPrice = (customerJobs: InvoicingQueueJob[]): number | "POA" | "TBA" | null => {
     const selectedCustomerJobs = customerJobs.filter(job => selectedJobs.has(job.id));
     if (selectedCustomerJobs.length === 0) return null;
     
@@ -1392,7 +1400,7 @@ export default function InvoicingQueue() {
       }
       
       // Add shipping cost if available
-      if (job.shippingCost) {
+      if (!isCustomerProvidedLabel(job) && job.shippingCost) {
         if (job.shippingCost === "TBA") {
           hasTBA = true;
         } else {
@@ -1492,7 +1500,11 @@ export default function InvoicingQueue() {
     if (selectedCustomerJobs.length === 0 && customerLogoSetups.length === 0) {
       return;
     }
-    const shippingIssues = getShippingIssues(selectedCustomerJobs, jobs, manualShippingCosts);
+    const shippingIssues = getShippingIssues(
+      selectedCustomerJobs.filter(job => !isCustomerProvidedLabel(job)),
+      jobs,
+      manualShippingCosts,
+    );
     if (!invoicingLogoSetupsOnly && shippingIssues.length && !acknowledgeIncompleteShipping) {
       setShippingWarning({ customerId, issues: shippingIssues });
       return;
@@ -1525,13 +1537,13 @@ export default function InvoicingQueue() {
     const checkedTrackingGroups = new Set<string>();
     const checkedConsolidatedGroups = new Set<string>();
     for (const job of selectedCustomerJobs) {
-      if (job.shippingCost === "TBA") {
+      if (!isCustomerProvidedLabel(job) && job.shippingCost === "TBA") {
         if (job.dhlTrackingNumber) {
           // All TBA jobs sharing a tracking number are one delivery — only require one cost
           if (!checkedTrackingGroups.has(job.dhlTrackingNumber)) {
             checkedTrackingGroups.add(job.dhlTrackingNumber);
             const groupHasCost = selectedCustomerJobs.some(
-              j => j.shippingCost === "TBA" && j.dhlTrackingNumber === job.dhlTrackingNumber && manualShippingCosts[j.id]
+              j => !isCustomerProvidedLabel(j) && j.shippingCost === "TBA" && j.dhlTrackingNumber === job.dhlTrackingNumber && manualShippingCosts[j.id]
             );
             if (!groupHasCost) {
               jobsNeedingShippingCosts.push(job.id);
@@ -1542,7 +1554,7 @@ export default function InvoicingQueue() {
           if (!checkedConsolidatedGroups.has(job.consolidatedShipmentId)) {
             checkedConsolidatedGroups.add(job.consolidatedShipmentId);
             const groupHasCost = selectedCustomerJobs.some(
-              j => j.shippingCost === "TBA" && j.consolidatedShipmentId === job.consolidatedShipmentId && manualShippingCosts[j.id]
+              j => !isCustomerProvidedLabel(j) && j.shippingCost === "TBA" && j.consolidatedShipmentId === job.consolidatedShipmentId && manualShippingCosts[j.id]
             );
             if (!groupHasCost) {
               jobsNeedingShippingCosts.push(job.id);
@@ -1571,7 +1583,7 @@ export default function InvoicingQueue() {
     try {
       const jobIds = selectedCustomerJobs.map(job => job.id);
       if (!invoicingLogoSetupsOnly) {
-        const freshJobs = await queryClient.fetchQuery<Job[]>({ queryKey: ["/api/jobs"], staleTime: 0 });
+        const freshJobs = await queryClient.fetchQuery<InvoicingQueueJob[]>({ queryKey: ["/api/jobs"], staleTime: 0 });
         const selectionError = invoiceSelectionError(jobIds, freshJobs);
         if (selectionError) throw new Error(selectionError);
       }
@@ -1595,6 +1607,8 @@ export default function InvoicingQueue() {
         
         // Build manual shipping costs object, filtering to only include selected jobs
         Object.entries(manualShippingCosts).forEach(([jobId, cost]) => {
+          const job = selectedCustomerJobs.find(selected => selected.id === jobId);
+          if (job && isCustomerProvidedLabel(job)) return;
           if (cost && jobIds.includes(jobId)) {
             manualShippingForAPI[jobId] = parseFloat(cost);
           }
@@ -1895,7 +1909,7 @@ export default function InvoicingQueue() {
                         const trackingTbaRepresentative = new Map<string, string>(); // trackingNumber -> first TBA jobId
                         const consolidatedTbaRepresentative = new Map<string, string>(); // shipmentId -> first TBA jobId
                         for (const j of customerJobs) {
-                          if (j.shippingCost === 'TBA') {
+                          if (!isCustomerProvidedLabel(j) && j.shippingCost === 'TBA') {
                             if (j.dhlTrackingNumber && !trackingTbaRepresentative.has(j.dhlTrackingNumber)) {
                               trackingTbaRepresentative.set(j.dhlTrackingNumber, j.id);
                             } else if (!j.dhlTrackingNumber && j.consolidatedShipmentId && !consolidatedTbaRepresentative.has(j.consolidatedShipmentId)) {
@@ -1906,7 +1920,7 @@ export default function InvoicingQueue() {
                         const orderedJobIds = jobOrders[customerId] || customerJobs.map(j => j.id);
                         const orderedJobs = orderedJobIds
                           .map(id => customerJobs.find(j => j.id === id))
-                          .filter(Boolean) as Job[];
+                          .filter(Boolean) as InvoicingQueueJob[];
                         return (
                           <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd(customerId, orderedJobIds)}>
                             <SortableContext items={orderedJobIds} strategy={verticalListSortingStrategy}>
@@ -1915,7 +1929,7 @@ export default function InvoicingQueue() {
                         const lineItems = getJobLineItems(job.id);
                         
                         // Determine if this job should show the TBA shipping cost input.
-                        const isShippingRepresentative = job.shippingCost !== 'TBA' ? true
+                        const isShippingRepresentative = isCustomerProvidedLabel(job) || job.shippingCost !== 'TBA' ? true
                           : job.dhlTrackingNumber ? trackingTbaRepresentative.get(job.dhlTrackingNumber) === job.id
                           : job.consolidatedShipmentId ? consolidatedTbaRepresentative.get(job.consolidatedShipmentId) === job.id
                           : true; // standalone TBA job
@@ -2059,7 +2073,9 @@ export default function InvoicingQueue() {
                                     );
                                   })()}
                                   {(() => {
-                                    const issue = getShippingIssues(customerJobs, jobs, manualShippingCosts).find(issue => issue.jobId === job.id);
+                                    const issue = isCustomerProvidedLabel(job)
+                                      ? undefined
+                                      : getShippingIssues(customerJobs, jobs, manualShippingCosts).find(issue => issue.jobId === job.id);
                                     if (!issue) return null;
                                     return (
                                       <Alert className="mt-3 border-amber-300 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100" data-testid={`alert-missing-shipping-${job.id}`}>
@@ -2072,11 +2088,11 @@ export default function InvoicingQueue() {
                                             variant="outline" size="sm" className="mt-2"
                                             onClick={() => setEditingShipping({
                                               jobId: job.id, customerId: job.customerId,
-                                              shippingMethod: job.shippingMethod || "",
+                                              shippingMethod: isCustomerProvidedLabel(job) ? "courier_label_provided" : job.shippingMethod || "",
                                               dhlTrackingNumber: job.dhlTrackingNumber || "",
                                               packageCount: job.packageCount || undefined,
                                               packageType: job.packageType as "boxes" | "bags" | undefined,
-                                              consolidateWithJobIds: consolidatedJobs.map(other => other.id),
+                                              consolidateWithJobIds: isCustomerProvidedLabel(job) ? [] : consolidatedJobs.map(other => other.id),
                                             })}
                                             data-testid={`button-add-shipping-${job.id}`}
                                           >Review shipping</Button>
@@ -2084,22 +2100,28 @@ export default function InvoicingQueue() {
                                       </Alert>
                                     );
                                   })()}
-                                  {job.shippingMethod && (
+                                  {(job.shippingMethod || isCustomerProvidedLabel(job)) && (
                                     <div className="flex flex-col gap-1 mt-2 text-sm">
                                       <div className="flex flex-wrap items-center gap-2">
                                         <Truck className="h-3 w-3 text-muted-foreground shrink-0" />
                                         <span className="text-muted-foreground">
+                                          {isCustomerProvidedLabel(job) && 'Courier label provided by customer'}
                                           {job.shippingMethod === 'free_local' && 'Free local delivery — Tim delivers Tuesdays & Fridays before lunchtime'}
                                           {job.shippingMethod === 'customer_collection' && 'Customer Collection'}
                                           {job.shippingMethod === 'consolidated' && 'Consolidated Back to Customer'}
                                           {job.shippingMethod === 'direct_delivery' && 'Direct Delivery'}
                                         </span>
+                                        {isCustomerProvidedLabel(job) && (
+                                          <Badge variant="secondary" className="border border-primary/20">
+                                            £0 carriage · supplied label
+                                          </Badge>
+                                        )}
                                         {job.dhlTrackingNumber && (
                                           <Badge variant="outline" className="ml-1">
                                             Tracking: {job.dhlTrackingNumber}
                                           </Badge>
                                         )}
-                                        {(job.shippingMethod === 'consolidated' || job.shippingMethod === 'direct_delivery') && (
+                                        {(isCustomerProvidedLabel(job) || job.shippingMethod === 'consolidated' || job.shippingMethod === 'direct_delivery') && (
                                           <Button
                                             variant="ghost"
                                             size="icon"
@@ -2109,10 +2131,11 @@ export default function InvoicingQueue() {
                                               setEditingShipping({
                                                 jobId: job.id,
                                                 customerId: job.customerId,
+                                                shippingMethod: isCustomerProvidedLabel(job) ? "courier_label_provided" : job.shippingMethod || "",
                                                 dhlTrackingNumber: job.dhlTrackingNumber || "",
                                                 packageCount: job.packageCount || undefined,
                                                 packageType: job.packageType as "boxes" | "bags" | undefined,
-                                                consolidateWithJobIds: consolidatedJobs.map(cj => cj.id),
+                                                consolidateWithJobIds: isCustomerProvidedLabel(job) ? [] : consolidatedJobs.map(cj => cj.id),
                                               });
                                             }}
                                             data-testid={`button-edit-shipping-${job.id}`}
@@ -2121,14 +2144,14 @@ export default function InvoicingQueue() {
                                           </Button>
                                         )}
                                       </div>
-                                      {consolidatedJobs.length > 0 && (
+                                      {!isCustomerProvidedLabel(job) && consolidatedJobs.length > 0 && (
                                         <div className="flex flex-wrap items-center gap-2 ml-5 min-w-0">
                                           <span className="text-muted-foreground break-words">
                                             Consolidated with: {consolidatedJobs.map(cj => cj.jobName).join(', ')}
                                           </span>
                                         </div>
                                       )}
-                                      {job.packageCount && job.packageType && (
+                                      {!isCustomerProvidedLabel(job) && job.packageCount && job.packageType && (
                                         <div className="flex flex-wrap items-center gap-2 ml-5">
                                           <Package className="h-3 w-3 text-muted-foreground" />
                                           <span className="text-muted-foreground">
@@ -2162,7 +2185,7 @@ export default function InvoicingQueue() {
                                         </div>
                                       )}
                                       {/* TBA shipping without package info - only show input for the representative */}
-                                      {job.shippingCost === 'TBA' && !(job.packageCount && job.packageType) && isShippingRepresentative && (
+                                      {!isCustomerProvidedLabel(job) && job.shippingCost === 'TBA' && !(job.packageCount && job.packageType) && isShippingRepresentative && (
                                         <div className="flex items-center gap-2 ml-5">
                                           <Badge variant="secondary">Shipping: TBA</Badge>
                                           <span className="text-sm text-muted-foreground">£</span>
@@ -2181,7 +2204,7 @@ export default function InvoicingQueue() {
                                           />
                                         </div>
                                       )}
-                                      {job.shippingCost === 'TBA' && !(job.packageCount && job.packageType) && !isShippingRepresentative && (
+                                      {!isCustomerProvidedLabel(job) && job.shippingCost === 'TBA' && !(job.packageCount && job.packageType) && !isShippingRepresentative && (
                                         <div className="flex items-center gap-2 ml-5">
                                           <Badge variant="outline" className="text-muted-foreground">Shipping: see above</Badge>
                                         </div>
@@ -2341,7 +2364,7 @@ export default function InvoicingQueue() {
                         
                         const carriageLines = previewLines.filter(l => l.itemCode === "Carriage");
                         const jobsWithShipping = customerJobs.filter(j =>
-                          selectedJobs.has(j.id) && j.shippingCost && j.shippingCost !== "TBA" && parseFloat(j.shippingCost) > 0
+                          selectedJobs.has(j.id) && !isCustomerProvidedLabel(j) && j.shippingCost && j.shippingCost !== "TBA" && parseFloat(j.shippingCost) > 0
                         );
 
                         return (
@@ -2726,11 +2749,16 @@ export default function InvoicingQueue() {
             </DialogDescription>
           </DialogHeader>
           {editingShipping && (() => {
-            const shippingMethod = editingShipping.shippingMethod ?? jobs.find(job => job.id === editingShipping.jobId)?.shippingMethod ?? "";
-            const needsParcels = !["customer_collection", "free_local"].includes(shippingMethod);
+            const editingJob = jobs.find(job => job.id === editingShipping.jobId);
+            const shippingMethod = editingShipping.shippingMethod ??
+              (editingJob && isCustomerProvidedLabel(editingJob) ? "courier_label_provided" : editingJob?.shippingMethod) ?? "";
+            const isCourierLabel = shippingMethod === "courier_label_provided" ||
+              (!!editingJob && isCustomerProvidedLabel(editingJob));
+            const needsParcels = !["customer_collection", "free_local", "courier_label_provided"].includes(shippingMethod);
             const otherCustomerJobs = jobs.filter(j =>
               j.customerId === editingShipping.customerId &&
               j.id !== editingShipping.jobId &&
+              !isCustomerProvidedLabel(j) &&
               (j.invoiceStatus === 'ready' || j.invoiceStatus === 'draft')
             );
             return (
@@ -2739,7 +2767,7 @@ export default function InvoicingQueue() {
                   <Label>Dispatch method</Label>
                   <Select value={shippingMethod} onValueChange={value => setEditingShipping({
                     ...editingShipping, shippingMethod: value,
-                    consolidateWithJobIds: ["customer_collection", "free_local"].includes(value) ? [] : editingShipping.consolidateWithJobIds,
+                    consolidateWithJobIds: ["customer_collection", "free_local", "courier_label_provided"].includes(value) ? [] : editingShipping.consolidateWithJobIds,
                   })}>
                     <SelectTrigger data-testid="select-edit-shipping-method"><SelectValue placeholder="Select dispatch method" /></SelectTrigger>
                     <SelectContent>
@@ -2747,9 +2775,26 @@ export default function InvoicingQueue() {
                       <SelectItem value="consolidated">Consolidated back to customer</SelectItem>
                       <SelectItem value="customer_collection">Customer collection</SelectItem>
                       <SelectItem value="free_local">Free local delivery</SelectItem>
+                      <SelectItem value="courier_label_provided">Courier label provided</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {isCourierLabel && (
+                  <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+                    <p className="text-sm font-medium">Customer-supplied courier label · £0 carriage</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Tracking is optional. No parcel details or consolidation are required.</p>
+                    <div className="mt-3 space-y-2">
+                      <Label htmlFor="tracking">Tracking number <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                      <Input
+                        id="tracking"
+                        value={editingShipping.dhlTrackingNumber}
+                        onChange={(e) => setEditingShipping({ ...editingShipping, dhlTrackingNumber: e.target.value })}
+                        placeholder="Enter customer-provided tracking number"
+                        data-testid="input-edit-tracking"
+                      />
+                    </div>
+                  </div>
+                )}
                 {needsParcels && <>
                 <div className="space-y-2">
                   <Label htmlFor="tracking">DPD Local Tracking Number</Label>
@@ -2850,6 +2895,18 @@ export default function InvoicingQueue() {
                 if (editingShipping) {
                   const shippingMethod = editingShipping.shippingMethod ?? jobs.find(job => job.id === editingShipping.jobId)?.shippingMethod;
                   if (!shippingMethod) return;
+                  if (shippingMethod === "courier_label_provided") {
+                    updateShippingMutation.mutate({
+                      jobId: editingShipping.jobId,
+                      shippingMethod,
+                      shippingCost: "0",
+                      dhlTrackingNumber: editingShipping.dhlTrackingNumber.trim() || null,
+                      packageCount: null,
+                      packageType: null,
+                      consolidatedShipmentId: null,
+                    });
+                    return;
+                  }
                   if (["customer_collection", "free_local"].includes(shippingMethod)) {
                     updateShippingMutation.mutate({
                       jobId: editingShipping.jobId, shippingMethod, shippingCost: "0",
@@ -2879,7 +2936,7 @@ export default function InvoicingQueue() {
               }}
               disabled={updateShippingMutation.isPending || !(
                 editingShipping?.shippingMethod || jobs.find(job => job.id === editingShipping?.jobId)?.shippingMethod
-              ) || (!!editingShipping && !["customer_collection", "free_local"].includes(
+              ) || (!!editingShipping && !["customer_collection", "free_local", "courier_label_provided"].includes(
                 editingShipping.shippingMethod ?? jobs.find(job => job.id === editingShipping.jobId)?.shippingMethod ?? ""
               ) && (!Number.isInteger(editingShipping.packageCount) || (editingShipping.packageCount ?? 0) < 1 || !editingShipping.packageType))}
               data-testid="button-save-shipping"
@@ -3011,14 +3068,14 @@ export default function InvoicingQueue() {
 
       {pickingSlipCustomerId && (() => {
         const slipCustomer = customers.find(c => c.id === pickingSlipCustomerId);
-        const allCustomerJobs = (jobsByCustomer[pickingSlipCustomerId] ?? []) as Job[];
+        const allCustomerJobs = (jobsByCustomer[pickingSlipCustomerId] ?? []) as InvoicingQueueJob[];
         const anySelected = allCustomerJobs.some(j => selectedJobs.has(j.id));
         const slipJobs = anySelected
           ? allCustomerJobs.filter(j => selectedJobs.has(j.id))
           : allCustomerJobs;
         const ordered = (jobOrders[pickingSlipCustomerId] || slipJobs.map(j => j.id))
           .map(id => slipJobs.find(j => j.id === id))
-          .filter(Boolean) as Job[];
+          .filter(Boolean) as InvoicingQueueJob[];
         const lineItemsByJob: Record<string, JobLineItem[]> = {};
         ordered.forEach(j => {
           lineItemsByJob[j.id] = getJobLineItems(j.id) as unknown as JobLineItem[];

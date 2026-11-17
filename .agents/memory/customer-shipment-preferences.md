@@ -26,3 +26,9 @@ Customer accounts can ship orders directly to end customers at a different postc
 **Why:** DPD validates the tracking reference against the delivery postcode; an account postcode can produce an unhelpful blank error despite a valid stored tracking number.
 
 **How to apply:** Preserve per-order delivery addresses when generating tracking links. If a custom address has no postcode, omit the postcode rather than guessing the account postcode.
+
+Customer-provided courier labels must incur no carriage on future orders or invoices, including Bang On Branding. The user will correct the two previously issued invoices themselves.
+
+**Why:** The customer selected “Courier Label Provided” but automatic parcel tariffs were still charged. The user explicitly requested prevention for future orders, not historical invoice changes.
+
+**How to apply:** Treat a supplied-label request as a billing exemption even when actual dispatch details contain an older automatic tariff. Preserve optional customer tracking; do not purchase a replacement courier label or rewrite issued invoices.

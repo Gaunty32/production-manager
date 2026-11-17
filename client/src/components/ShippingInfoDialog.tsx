@@ -35,15 +35,17 @@ import { Truck, Package, Coins, PackageCheck } from "lucide-react";
 import { calculateShippingCost, formatPrice } from "@shared/pricing";
 import type { Job } from "@shared/schema";
 import { DpdBookingDialog } from "@/components/DpdBookingDialog";
+import { isCustomerProvidedLabel } from "@shared/shipping-details";
 
 const shippingSchema = z.object({
-  shippingMethod: z.enum(["customer_collection", "consolidated", "direct_delivery"], {
+  shippingMethod: z.enum(["customer_collection", "consolidated", "direct_delivery", "courier_label_provided"], {
     required_error: "Please select a shipping method",
   }),
   dhlTrackingNumber: z.string().optional(),
   packageCount: z.coerce.number().int().min(1).optional(),
   packageType: z.enum(["boxes", "bags"]).optional(),
   consolidatedJobIds: z.array(z.string()).optional(),
+  shippingCost: z.string().optional(),
 }).refine((data) => {
   if (data.shippingMethod === "consolidated" || data.shippingMethod === "direct_delivery") {
     return data.dhlTrackingNumber && data.dhlTrackingNumber.trim().length > 0;
@@ -123,6 +125,7 @@ export function ShippingInfoDialog({
       packageCount: undefined,
       packageType: undefined,
       consolidatedJobIds: [],
+      shippingCost: undefined,
     },
   });
 
@@ -131,11 +134,29 @@ export function ShippingInfoDialog({
   const packageCount = form.watch("packageCount");
   const needsTracking = selectedMethod === "consolidated" || selectedMethod === "direct_delivery";
 
-  // Fetch completed jobs for the same customer (excluding the current job)
+  // The current job's request determines the sensible default dispatch method.
   const { data: jobs = [] } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
-    enabled: open && selectedMethod === "consolidated",
+    enabled: open,
   });
+  const currentJob = jobs.find(job => job.id === currentJobId);
+  const customerProvidesLabel = !!currentJob && isCustomerProvidedLabel(currentJob);
+
+  useEffect(() => {
+    if (open && customerProvidesLabel) {
+      form.setValue("shippingMethod", "courier_label_provided");
+      form.setValue("shippingCost", "0");
+    }
+  }, [open, currentJobId, customerProvidesLabel, form]);
+
+  useEffect(() => {
+    if (selectedMethod === "courier_label_provided") {
+      form.setValue("packageCount", undefined);
+      form.setValue("packageType", undefined);
+      setSelectedExistingShipment(null);
+      setSelectedConsolidatedJobs([]);
+    }
+  }, [selectedMethod, form]);
 
   // Find existing consolidated shipments for this customer
   const existingShipments = useMemo(() => {
@@ -205,6 +226,9 @@ export function ShippingInfoDialog({
       await onSubmit({
         ...data,
         consolidatedJobIds: selectedMethod === "consolidated" ? selectedConsolidatedJobs : [],
+        ...(selectedMethod === "courier_label_provided"
+          ? { shippingCost: "0", packageCount: undefined, packageType: undefined, consolidatedJobIds: [] }
+          : {}),
         // Pass the existing shipment ID if joining one
         existingShipmentId: selectedExistingShipment || undefined,
       } as any);
@@ -261,7 +285,7 @@ export function ShippingInfoDialog({
                   <FormLabel>Shipping Method</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    value={field.value}
                     disabled={isPending || isSubmitting}
                   >
                     <FormControl>
@@ -286,6 +310,12 @@ export function ShippingInfoDialog({
                         <div className="flex items-center gap-2">
                           <Truck className="h-4 w-4" />
                           Direct Delivery
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="courier_label_provided" data-testid="option-courier-label-provided">
+                        <div className="flex items-center gap-2">
+                          <PackageCheck className="h-4 w-4" />
+                          Courier label provided
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -507,6 +537,42 @@ export function ShippingInfoDialog({
                   </Alert>
                 )}
               </>
+            )}
+
+            {selectedMethod === "courier_label_provided" && (
+              <div className="space-y-3 rounded-md border border-primary/20 bg-primary/5 p-4">
+                <div>
+                  <p className="font-medium">Customer-supplied courier label</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    No carriage charge will be added. No parcel details or DPD booking are needed.
+                  </p>
+                </div>
+                <FormField
+                  control={form.control}
+                  name="dhlTrackingNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tracking number <span className="font-normal text-muted-foreground">(optional)</span></FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Enter customer-provided tracking number"
+                          disabled={isPending || isSubmitting}
+                          data-testid="input-customer-label-tracking"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Alert>
+                  <Coins className="h-4 w-4" />
+                  <AlertDescription className="flex items-center justify-between">
+                    <span className="font-medium">Carriage — customer supplied label</span>
+                    <span className="text-lg font-semibold">{formatPrice(0)}</span>
+                  </AlertDescription>
+                </Alert>
+              </div>
             )}
 
             {onHold && (

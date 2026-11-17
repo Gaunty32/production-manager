@@ -5,7 +5,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { storage } from "./storage";
-import { dpdParcelSchema, getShippingIssues } from "@shared/shipping-details";
+import { dpdParcelSchema, getShippingIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "@shared/shipping-details";
 import { buildBookedDpdDetails, saveBookedDpdDetails } from "./dpdShipmentDetails";
 import { resolveSelectedStaffMentions } from "@shared/staff-mentions";
 import { getInvoiceQuantities, saveInvoiceQuantity, clearInvoiceQuantities } from "./invoiceQuantities";
@@ -7221,6 +7221,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (data.consolidatedJobIds?.length) {
         const others = await Promise.all(data.consolidatedJobIds.map(jobId => storage.getJob(jobId)));
+        if (isCustomerProvidedLabel({ ...existingJob, ...data }) || others.some(job => job && isCustomerProvidedLabel(job))) {
+          return res.status(400).json({ error: "Customer-provided labels have £0 carriage and cannot be added to a chargeable consolidated shipment" });
+        }
         if (others.some(job => !job || job.customerId !== existingJob.customerId)) {
           return res.status(400).json({ error: "Consolidated orders must exist and belong to the same customer" });
         }
@@ -7239,9 +7242,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existingShipmentId = (req.body as any).existingShipmentId;
       
       // Remove undefined keys and consolidatedJobIds (not a database field) from updates
-      const updates = Object.fromEntries(
+      let updates = Object.fromEntries(
         Object.entries(data).filter(([key, value]) => value !== undefined && key !== 'consolidatedJobIds')
       );
+      const saveCustomerLabel = ["pending", "ready", "draft"].includes(existingJob.invoiceStatus)
+        && (data.completed === true || billingFields.some(key => data[key] !== undefined)
+          || data.dhlTrackingNumber !== undefined);
+      if (saveCustomerLabel) {
+        updates = customerLabelShippingUpdates(existingJob, updates);
+      }
       
       // Handle consolidated shipments
       if (updates.shippingMethod === "consolidated") {
@@ -7307,7 +7316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } else {
         // For non-consolidated shipments, calculate shipping cost if applicable
-        if (updates.packageType && updates.packageCount) {
+        if (!isCustomerProvidedLabel({ ...existingJob, ...updates }) && updates.packageType && updates.packageCount) {
           const shippingCost = calculateShippingCost(
             updates.packageType as "boxes" | "bags",
             updates.packageCount as number
@@ -10873,7 +10882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobInvoiceTotals[job.id] = billedLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
         lineItemsWithPricing.push(...billedLines);
 
-        if (job.shippingCost === "TBA") {
+        if (!isCustomerProvidedLabel(job) && job.shippingCost === "TBA") {
           // A TBA job is covered if ANY job in the same tracking-number group
           // (or consolidated group, or itself if standalone) has a manual cost.
           let groupHasCost = false;
@@ -10920,6 +10929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             let hasShipping = false;
 
             for (const shipmentJob of allDeliveryJobs) {
+              if (isCustomerProvidedLabel(shipmentJob)) continue;
               let shippingCost: number | null = null;
 
               if (shipmentJob.shippingCost === "TBA") {
@@ -12389,6 +12399,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validJobs = jobs.filter(Boolean);
       if (validJobs.length !== allJobIds.length) {
         return res.status(404).json({ error: "Jobs not found" });
+      }
+      if (validJobs.some(job => job && isCustomerProvidedLabel(job))) {
+        return res.status(409).json({ error: "The customer is providing the courier label. Record their tracking number under Courier label provided; do not buy another label." });
       }
       for (const job of validJobs) {
         const [stockingOrder] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, job!.id));

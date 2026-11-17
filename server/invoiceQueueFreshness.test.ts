@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { invoiceSelectionError } from "../shared/invoice-readiness";
+import { isCustomerProvidedLabel } from "../shared/shipping-details";
 
 const source = ts.createSourceFile("InvoicingQueue.tsx", readFileSync(new URL("../client/src/pages/InvoicingQueue.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 let handler: ts.VariableDeclaration | undefined;
@@ -27,7 +28,7 @@ test("the real invoice handler refreshes and stops stale selections before conta
     jobsByCustomer: { customer: [staleJob] }, selectedJobs: new Set(["frog"]),
     getCustomerApprovedLogos: () => [], getShippingIssues: () => [],
     getJobLineItems: () => [], jobs: [staleJob], manualShippingCosts: {}, manualPrices: {},
-    invoiceSelectionError, setCreatingInvoice: () => {},
+    invoiceSelectionError, isCustomerProvidedLabel, setCreatingInvoice: () => {},
     queryClient: {
       fetchQuery: async () => [{ ...staleJob, invoiceStatus: "invoiced", invoiceReference: "INV-1362" }],
       invalidateQueries: async (key: unknown) => { refreshed.push(key); },

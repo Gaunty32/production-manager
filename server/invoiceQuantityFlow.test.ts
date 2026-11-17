@@ -5,7 +5,8 @@ import vm from "node:vm";
 import ts from "typescript";
 import { applyInvoiceQuantities, invoiceQuantitiesSchema } from "../shared/invoice-quantities";
 import { billedQuantityForMatchingLine, calculateJobPrice, CODE_TO_PRINT_SIZE, MIN_ORDER_QTY } from "../shared/pricing";
-import { getShippingIssues } from "../shared/shipping-details";
+import { getShippingIssues, isCustomerProvidedLabel } from "../shared/shipping-details";
+import { invoiceSelectionError } from "../shared/invoice-readiness";
 
 // Exercise the real route handler with isolated storage/Xero dependencies:
 // no real invoices, payments, customer emails or database writes.
@@ -23,13 +24,13 @@ function visit(node: ts.Node) {
 visit(source);
 assert.ok(handlerText && mergeText);
 
-async function run(options: { failXero?: boolean; expected?: Record<string, number>; reset?: boolean; acknowledgeShipping?: boolean } = {}) {
+async function run(options: { failXero?: boolean; expected?: Record<string, number>; reset?: boolean; acknowledgeShipping?: boolean; shipping?: Record<string, unknown>; manualShippingCosts?: Record<string, string> } = {}) {
   const quantities: Record<string, number> = options.reset ? {} : { first: 9 };
   const items = [
     { id: "first", jobId: "job", jobType: "Embroidery", quantity: 6, stitchCount: 4000 },
     { id: "second", jobId: "job", jobType: "Embroidery", quantity: 6, stitchCount: 4000 },
   ];
-  const jobs = [{ id: "job", customerId: "customer", jobName: "Test order", invoiceStatus: "ready" }];
+  const jobs = [{ id: "job", customerId: "customer", jobName: "Test order", invoiceStatus: "ready", ...options.shipping }];
   const customer = { id: "customer", name: "Test customer", pricingTable2025: false, pricingTable2026: false };
   const updates: any[] = [];
   const cleanup: string[][] = [];
@@ -49,7 +50,7 @@ async function run(options: { failXero?: boolean; expected?: Record<string, numb
     getInvoiceQuantities: async () => ({ ...quantities }),
     clearInvoiceQuantities: async (ids: string[]) => { cleanup.push(ids); },
     applyInvoiceQuantities, invoiceQuantitiesSchema,
-    getShippingIssues,
+    getShippingIssues, isCustomerProvidedLabel, invoiceSelectionError,
     billedQuantityForMatchingLine, calculateJobPrice, CODE_TO_PRINT_SIZE, MIN_ORDER_QTY,
     xeroService: { createConsolidatedInvoice: async (_jobs: any, _customer: any, lines: any[]) => {
       sentLines = lines;
@@ -63,6 +64,7 @@ async function run(options: { failXero?: boolean; expected?: Record<string, numb
   const handler = vm.runInContext(compiled, context);
   await handler({ body: {
     jobIds: ["job"], customerId: "customer", manualPrices: { first: 2.3, second: 2.3 },
+    manualShippingCosts: options.manualShippingCosts,
     acknowledgeIncompleteShipping: options.acknowledgeShipping !== false,
     ...(options.expected === undefined ? {} : { invoiceQuantities: options.expected }),
   } }, {
@@ -81,6 +83,32 @@ test("Xero receives the saved merged quantity and recorded invoice total matches
   assert.equal(result.updates[0].invoiceStatus, "invoiced");
   assert.deepEqual(Array.from(result.cleanup[0]), ["first", "second"]);
   assert.equal(result.items[0].quantity, 6);
+});
+
+test("new invoices omit supplied-label carriage even with a stale automatic or manual charge", async () => {
+  for (const cost of ["7.5", "TBA"]) {
+    const result = await run({
+      acknowledgeShipping: false,
+      shipping: {
+        requestedShippingMethod: "courier_label_provided", shippingMethod: "direct_delivery",
+        shippingCost: cost, packageCount: 1, packageType: "boxes", dhlTrackingNumber: "CUSTOMER-TRACKING",
+      },
+      manualShippingCosts: { job: "99" },
+    });
+    assert.equal(result.status, 200);
+    assert.equal(result.sentLines.length, 1, "Only production is billed");
+    assert.ok(Math.abs(result.updates[0].invoiceTotal - 20.7) < 0.001);
+    assert.equal(result.updates[0].shippingCost, undefined, "Invoice creation must not rewrite historical dispatch data");
+  }
+});
+
+test("ordinary delivery still adds its normal carriage to new invoices", async () => {
+  const result = await run({
+    acknowledgeShipping: false,
+    shipping: { shippingMethod: "direct_delivery", shippingCost: "7.5", packageCount: 1, packageType: "boxes", dhlTrackingNumber: "TRACKING" },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.sentLines.length, 2);
 });
 
 test("a failed Xero request retains the draft and never marks jobs invoiced", async () => {

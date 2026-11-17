@@ -20,6 +20,7 @@ type ShippingJob = {
   customerId: string;
   invoiceStatus: string;
   shippingMethod?: string | null;
+  requestedShippingMethod?: string | null;
   shippingCost?: string | null;
   dhlTrackingNumber?: string | null;
   packageCount?: number | null;
@@ -29,6 +30,26 @@ type ShippingJob = {
 
 export type ShippingIssue = { jobId: string; jobName: string; reasons: string[] };
 
+// A customer-supplied label is not our courier service, even if an older
+// dispatch screen recorded it as direct delivery with an automatic tariff.
+export function isCustomerProvidedLabel(job: {
+  requestedShippingMethod?: string | null;
+  shippingMethod?: string | null;
+}): boolean {
+  return job.requestedShippingMethod === "courier_label_provided"
+    || job.shippingMethod === "courier_label_provided";
+}
+
+export function customerLabelShippingUpdates(
+  job: ShippingJob, updates: Partial<ShippingJob>,
+): Partial<ShippingJob> {
+  if (!isCustomerProvidedLabel({ ...job, ...updates })) return updates;
+  return {
+    ...updates, shippingMethod: "courier_label_provided",
+    shippingCost: "0", consolidatedShipmentId: null,
+  };
+}
+
 // Check the actual shipment, not the customer's requested delivery option.
 // A charge on an already-invoiced sibling must not be billed a second time.
 export function getShippingIssues(
@@ -36,6 +57,9 @@ export function getShippingIssues(
 ): ShippingIssue[] {
   const selectedIds = new Set(selected.map(job => job.id));
   return selected.flatMap(job => {
+    // Tracking may be recorded, but is not required to bill our production.
+    // Carriage generation separately excludes these orders, including TBA.
+    if (isCustomerProvidedLabel(job)) return [];
     const delivery = allJobs.filter(other => other.customerId === job.customerId && (
       other.id === job.id ||
       (!!job.dhlTrackingNumber && other.dhlTrackingNumber === job.dhlTrackingNumber) ||
@@ -50,7 +74,8 @@ export function getShippingIssues(
         && ["boxes", "bags", "box", "bag"].includes(other.packageType || ""))) {
         reasons.push("Parcel count and type are missing.");
       }
-      const billedOrSelected = delivery.filter(other => selectedIds.has(other.id) || ["invoiced", "paid"].includes(other.invoiceStatus));
+      const billedOrSelected = delivery.filter(other => !isCustomerProvidedLabel(other)
+        && (selectedIds.has(other.id) || ["invoiced", "paid"].includes(other.invoiceStatus)));
       const hasCost = billedOrSelected.some(other => {
         const cost = other.shippingCost === "TBA" ? manualCosts[other.id] : other.shippingCost;
         return cost !== null && cost !== undefined && String(cost).trim() !== "" && Number.isFinite(Number(cost)) && Number(cost) >= 0;
