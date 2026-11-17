@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import {
   Dialog,
   DialogContent,
@@ -130,8 +130,13 @@ export default function CustomerInbox() {
     toast({ title: `Reminder: ${reminder.label}`, description: "You asked to be reminded about this conversation." });
   });
   const { isImpersonating } = usePermissions();
+  const search = useSearch();
+  const linkedJobId = new URLSearchParams(search).get("jobId");
+  const appliedJobLink = useRef<string | null>(null);
   const [tab, setTab] = useState<Tab>("job");
-  const [selected, setSelected] = useState<Selected>(null);
+  const [selected, setSelected] = useState<Selected>(() =>
+    linkedJobId ? { type: "job", jobId: linkedJobId } : null
+  );
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevStaffMsgCount = useRef(0);
@@ -247,6 +252,12 @@ export default function CustomerInbox() {
   const jobId = selected?.type === "job" ? selected.jobId : null;
   const directId = selected?.type === "direct" ? selected.conversationId : null;
 
+  // Jobs with no messages are not necessarily in the conversation list yet.
+  const { data: selectedJob } = useQuery<{ jobName: string; completed: boolean }>({
+    queryKey: [`/api/customer-portal/jobs/${jobId}`],
+    enabled: !!jobId && !jobConversations.some(conversation => conversation.jobId === jobId),
+  });
+
   const { data: jobMessages = [], isLoading: isLoadingJobMsgs } = useQuery<ChatMessage[]>({
     queryKey: [`/api/customer-portal/jobs/${jobId}/messages`],
     enabled: !!jobId,
@@ -267,7 +278,7 @@ export default function CustomerInbox() {
   const messages = selected?.type === "job" ? jobMessages : directMessages;
   const isLoadingMessages = selected?.type === "job" ? isLoadingJobMsgs : isLoadingDirectMsgs;
 
-  const selectedJobConvo = jobConversations.find(c => c.jobId === jobId) ?? null;
+  const selectedJobConvo = jobConversations.find(c => c.jobId === jobId) ?? selectedJob ?? null;
   const selectedDirectConvo = directConversations.find(c => c.id === directId) ?? null;
   const convKey = jobId ? `job:${jobId}` : directId ? `direct:${directId}` : null;
 
@@ -294,6 +305,19 @@ export default function CustomerInbox() {
 
   // Auto-select first conversation per tab (desktop two-pane only — on mobile
   // the list must stay visible so the back button can return to it).
+  useEffect(() => {
+    if (!linkedJobId) {
+      appliedJobLink.current = null;
+      return;
+    }
+    if (appliedJobLink.current === linkedJobId) return;
+    appliedJobLink.current = linkedJobId;
+    setTab("job");
+    setSelected({ type: "job", jobId: linkedJobId });
+    setNewMessage("");
+    setChatImage(null);
+  }, [linkedJobId]);
+
   useEffect(() => {
     if (emailConversationApplied.current || !emailConversationId || directConversations.length === 0) return;
     if (directConversations.some(c => c.id === emailConversationId)) {

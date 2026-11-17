@@ -1148,7 +1148,19 @@ export default function CustomerDashboard() {
                 return (
                   <Card key={job.id} className="overflow-hidden">
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base">{job.jobName}</CardTitle>
+                      <div className="flex items-start justify-between gap-3">
+                        <CardTitle className="text-base">{job.jobName}</CardTitle>
+                        <Button asChild variant="outline" size="sm" className="h-10 shrink-0 gap-2 px-3">
+                          <Link
+                            href={`/customer/messages?jobId=${encodeURIComponent(job.id)}`}
+                            aria-label={`Open chat for ${job.jobName}`}
+                            data-testid={`link-job-chat-mobile-${job.id}`}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                            Job chat
+                          </Link>
+                        </Button>
+                      </div>
                       {job.poNumber && (
                         <p className="text-sm text-muted-foreground">PO: {job.poNumber}</p>
                       )}
@@ -1351,7 +1363,19 @@ export default function CustomerDashboard() {
                         <TableRow key={job.id} data-testid={`row-job-${job.id}`}>
                           <TableCell className="w-10" />
                           <TableCell className="font-medium" data-testid={`text-jobname-${job.id}`}>
-                            {job.jobName}
+                            <div className="flex items-center justify-between gap-3">
+                              <span>{job.jobName}</span>
+                              <Button asChild variant="outline" size="sm" className="h-9 shrink-0 gap-2">
+                                <Link
+                                  href={`/customer/messages?jobId=${encodeURIComponent(job.id)}`}
+                                  aria-label={`Open chat for ${job.jobName}`}
+                                  data-testid={`link-job-chat-${job.id}`}
+                                >
+                                  <MessageSquare className="h-4 w-4" />
+                                  Job chat
+                                </Link>
+                              </Button>
+                            </div>
                             {job.poNumber && (
                               <span className="text-xs text-muted-foreground ml-2">
                                 (PO: {job.poNumber})
@@ -1408,7 +1432,21 @@ export default function CustomerDashboard() {
                           )}
                         </TableCell>
                         <TableCell className="font-medium">
-                          <span data-testid={`text-jobname-${job.id}-${index}`}>{job.jobName}</span>
+                          <div className="flex items-center justify-between gap-3">
+                            <span data-testid={`text-jobname-${job.id}-${index}`}>{job.jobName}</span>
+                            {index === 0 && (
+                              <Button asChild variant="outline" size="sm" className="h-9 shrink-0 gap-2">
+                                <Link
+                                  href={`/customer/messages?jobId=${encodeURIComponent(job.id)}`}
+                                  aria-label={`Open chat for ${job.jobName}`}
+                                  data-testid={`link-job-chat-${job.id}`}
+                                >
+                                  <MessageSquare className="h-4 w-4" />
+                                  Job chat
+                                </Link>
+                              </Button>
+                            )}
+                          </div>
                           {index === 0 && job.poNumber && (
                             <span className="text-xs text-muted-foreground ml-2">
                               (PO: {job.poNumber})
