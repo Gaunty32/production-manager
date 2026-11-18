@@ -141,6 +141,12 @@ Bulk delivery-note selection should match automatically and accept multiple PDFs
 
 **How to apply:** Start filename matching on selection/drop; keep the explicit upload step separate from matching so unmatched PDFs are never saved.
 
+Customers may supply delivery-note PDFs at the same time as their order sheet, rather than importing orders and notes as separate tasks.
+
+**Why:** The user asked for delivery-note drag and drop and asked, “Can i import a delivery note at the same time as an order sheet.”
+
+**How to apply:** Allow a mixed selection of one spreadsheet and multiple PDFs; create the orders before matching and saving notes. Keep failed attachments retryable without repeating the order import or courier booking.
+
 Show only “In Production” and “Despatched” totals in the stocking-room summary, for staff and customers.
 
 **Why:** The user said the seven summary cards were too much: “In Production and Despatched is all we need.” This supersedes earlier requests for additional totals.

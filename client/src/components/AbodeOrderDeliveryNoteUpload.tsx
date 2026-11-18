@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
-import { Loader2, Upload } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { uploadAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
 import { useToast } from "@/hooks/use-toast";
+import { AbodeFileDropZone } from "@/components/AbodeFileDropZone";
 
 export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isStaff, onChanged }: {
   baseUrl: string;
@@ -12,7 +13,6 @@ export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isSt
   isStaff: boolean;
   onChanged: () => void;
 }) {
-  const input = useRef<HTMLInputElement>(null);
   const lock = useRef(false);
   const savedKey = useRef<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -43,7 +43,6 @@ export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isSt
       const savedResult = await saved.json();
       savedKey.current = null;
       setFile(null);
-      if (input.current) input.current.value = "";
       toast({ title: savedResult.skipped ? "Delivery note already attached" : "Delivery note saved", description: savedResult.skipped ? "The existing PDF has been kept." : `The PDF is attached to order ${orderNumber}.` });
       onChanged();
     } catch (reason) {
@@ -55,23 +54,24 @@ export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isSt
   };
 
   return <div className="mt-3 space-y-2">
-    <input ref={input} className="sr-only" type="file" accept=".pdf,application/pdf"
-      aria-label={`Choose delivery note for order ${orderNumber}`} disabled={busy}
-      onChange={event => {
-        const next = event.target.files?.[0];
+    <AbodeFileDropZone label={`Drag and drop delivery note for order ${orderNumber}`} accept=".pdf,application/pdf" disabled={busy}
+      onFiles={files => {
+        if (lock.current) return;
+        if (files.length !== 1) {
+          setError("Choose one delivery-note PDF for this order.");
+          return;
+        }
+        const next = files[0];
         savedKey.current = null;
         setError("");
         setFile(null);
         if (!next) return;
         if (!/\.pdf$/i.test(next.name) || !next.size || next.size > 10 * 1024 * 1024) {
           setError("Choose a PDF delivery note up to 10 MB.");
-          event.target.value = "";
           return;
         }
         setFile(next);
       }} />
-    <Button type="button" size="sm" variant="outline" className="min-h-10 w-full sm:w-auto" disabled={busy}
-      onClick={() => input.current?.click()}><Upload className="mr-1.5 h-4 w-4" />Choose delivery note PDF</Button>
     <p className="break-words text-xs leading-5 text-stone-500">Name the file dispatch-note-{orderNumber}.pdf. Maximum 10 MB. One delivery note per order.</p>
     {file && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white p-2">
       <span className="min-w-0 flex-1 break-all text-xs text-stone-700">{file.name}</span>

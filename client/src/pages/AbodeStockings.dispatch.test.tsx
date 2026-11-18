@@ -23,6 +23,9 @@ test("completed DPD orders needing recovery have an enabled despatch button", ()
         }],
       });
       const html = renderToStaticMarkup(<QueryClientProvider client={client}><AbodeStockings /></QueryClientProvider>);
+      assert.match(html, /aria-label="Choose an order sheet and delivery-note PDFs"[^>]*multiple=""/);
+      assert.match(html, /Drag and drop delivery-note PDFs here/);
+      assert.match(html, /Drag and drop delivery note for order TEST-ORDER/);
       for (const section of ["awaiting-production", "despatched"]) {
         assert.match(html, new RegExp(`<button[^>]*aria-controls="heading-${section}"`), "Each summary total must be a keyboard-accessible button");
         assert.match(html, new RegExp(`<h3[^>]*id="heading-${section}"[^>]*tabindex="-1"`), "The matching section heading must accept focus");
@@ -58,6 +61,8 @@ test("customer card and spreadsheet views expose all supplied DPD numbers withou
       })),
     });
     const html = renderToStaticMarkup(<QueryClientProvider client={client}><AbodeStockings /></QueryClientProvider>);
+    assert.match(html, /aria-label="Choose an order sheet and delivery-note PDFs"[^>]*multiple=""/);
+    assert.match(html, /Drag and drop delivery-note PDFs here/);
     for (const number of numbers) {
       assert.match(html, new RegExp(`href="https://track.dpdlocal.co.uk/search\\?reference=${number}&amp;postcode=SW1A\\+1AA"`));
       assert.match(html, new RegExp(`>${number}<`));

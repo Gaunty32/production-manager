@@ -14,6 +14,8 @@ import { AbodeFinishedPhotos, type AbodeFinishedPhoto } from "@/components/Abode
 import { AbodeOrderDeliveryNotes, type AbodeDeliveryNote } from "@/components/AbodeDeliveryNotes";
 import { uploadAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
 import { AbodeTrackingImport } from "@/components/AbodeTrackingImport";
+import { AbodeFileDropZone } from "@/components/AbodeFileDropZone";
+import { splitAbodeImportFiles } from "@/lib/abodeImportFiles";
 
 type StockingItem = {
   id: string;
@@ -307,6 +309,17 @@ export default function AbodeStockings() {
     setNoteFiles(next);
   }
 
+  function addImportFiles(files: File[]) {
+    if (noteProcessingLock.current || isProcessingNotes || importMutation.isPending) return;
+    try {
+      const { sheet, notes } = splitAbodeImportFiles(files);
+      if (notes.length) addNoteFiles(notes);
+      if (sheet) void onFileChange(sheet);
+    } catch (error) {
+      toast({ title: "Files not added", description: friendlyError(error), variant: "destructive" });
+    }
+  }
+
   async function downloadRegister() {
     const safe = (value: unknown) => String(value ?? "").replace(/^[\s]*[=+\-@]/, "'$&");
     const rows = orders.map(order => ({
@@ -465,27 +478,23 @@ export default function AbodeStockings() {
                 onDrop={(event) => {
                   event.preventDefault(); event.stopPropagation();
                   dragDepth.current = 0; setIsDraggingFile(false);
-                  if (noteProcessingLock.current || isProcessingNotes) return;
-                  if (event.dataTransfer.files.length !== 1) {
-                    toast({ title: "Drop one file at a time", description: "Choose one Excel or CSV order sheet.", variant: "destructive" });
-                    return;
-                  }
+                  if (noteProcessingLock.current || isProcessingNotes || importMutation.isPending) return;
                   if (fileRef.current) fileRef.current.value = "";
-                  void onFileChange(event.dataTransfer.files[0]);
+                  addImportFiles(Array.from(event.dataTransfer.files));
                 }}
               >
                 <Upload aria-hidden="true" className="h-6 w-6 text-[#344e43]" />
-                <span className="text-sm font-semibold">{isDraggingFile ? "Drop your order sheet here" : "Drag and drop your order sheet here"}</span>
-                <span className="text-sm text-stone-600">or <span className="font-medium underline underline-offset-2">choose a file</span></span>
-                <input ref={fileRef} aria-label="Choose an Excel or CSV order sheet" className="sr-only" type="file" accept=".xlsx,.xls,.csv" disabled={isProcessingNotes || importMutation.isPending} onChange={(event) => onFileChange(event.target.files?.[0])} />
+                <span className="text-sm font-semibold">{isDraggingFile ? "Drop your order sheet and PDFs here" : "Drag and drop your order sheet and delivery notes here"}</span>
+                <span className="text-sm text-stone-600">or <span className="font-medium underline underline-offset-2">choose files</span></span>
+                <input ref={fileRef} aria-label="Choose an order sheet and delivery-note PDFs" className="sr-only" type="file" accept=".xlsx,.xls,.csv,.pdf,application/pdf" multiple disabled={isProcessingNotes || importMutation.isPending} onChange={event => { addImportFiles(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = ""; }} />
               </label>
-              <p className="mt-4 text-xs text-stone-500">Excel or CSV · first worksheet · maximum 5,000 rows / 5 MB</p>
+              <p className="mt-4 text-xs text-stone-500">One Excel or CSV sheet · first worksheet · maximum 5,000 rows / 5 MB. Add up to 50 delivery-note PDFs, 10 MB each, in the same drop or separately.</p>
               {selectedFile && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-stone-50 p-3 text-sm"><span className="min-w-0 truncate font-medium">{selectedFile} <span className="font-normal text-stone-500">({rows?.length ?? 0} rows)</span></span><Button size="sm" onClick={() => !noteProcessingLock.current && rows && previewMutation.mutate(rows)} disabled={isProcessingNotes || importMutation.isPending || previewMutation.isPending || !rows}>{previewMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Preview sheet</Button></div>}
               <div className="mt-5 border-t border-stone-100 pt-4">
                 <h3 className="text-sm font-semibold">Delivery note PDFs</h3>
                 <p className="mt-1 text-xs leading-5 text-stone-600">Select PDFs now; after the order import, matching notes are attached automatically. Add multiple files before confirming.</p>
-                <input className="sr-only" id="import-note-files" type="file" accept="application/pdf,.pdf" multiple disabled={isProcessingNotes || importMutation.isPending} onChange={event => { if (event.target.files) addNoteFiles(event.target.files); event.currentTarget.value = ""; }} />
-                <label htmlFor="import-note-files" aria-disabled={isProcessingNotes || importMutation.isPending} className={`mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium ${isProcessingNotes || importMutation.isPending ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-stone-50"}`}><Upload className="h-4 w-4" />Choose PDFs</label>
+                <AbodeFileDropZone label="Drag and drop delivery-note PDFs here" accept="application/pdf,.pdf" multiple disabled={isProcessingNotes || importMutation.isPending} onFiles={addNoteFiles} />
+                <p className="mt-2 break-words text-xs text-stone-500">Name each PDF dispatch-note-ORDERNUMBER.pdf so it matches the right order. Add more batches without replacing your selection.</p>
                 {noteFiles.length > 0 && <ul className="mt-3 space-y-1 text-xs text-stone-700">{noteFiles.map((file, index) => <li className="flex items-start justify-between gap-2" key={`${file.name}-${index}`}><span className="break-all">{file.name} <span className="text-stone-500">({Math.ceil(file.size / 1024)} KB)</span></span><Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 px-2" disabled={isProcessingNotes || importMutation.isPending} onClick={() => { setNoteFiles(current => current.filter(item => item !== file)); setNoteRows(current => current.filter(row => row.file !== file)); }}>Remove</Button></li>)}</ul>}
                 {noteRows.length > 0 && <div className="mt-3 space-y-1" aria-live="polite">{noteRows.map((row, index) => <p key={`${row.file.name}-${index}`} className={`break-words text-xs ${row.status === "error" || row.status === "unmatched" ? "text-rose-800" : "text-stone-600"}`}><span className="font-medium">{row.file.name}:</span> {row.progress ? `${row.progress} ` : ""}{row.message ?? row.status}</p>)}</div>}
                 <p className="mt-2 text-xs text-stone-500">Retry matching and note uploads here without importing orders or purchasing labels.</p>
