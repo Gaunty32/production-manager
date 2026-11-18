@@ -69,9 +69,9 @@ Identify repeat uploads by order number and flag them for checking, including re
 
 **How to apply:** Do not create a duplicate or overwrite the existing job. Flag repeat order numbers visibly for review while allowing new orders from the same sheet to be imported.
 
-Staff should be able to attach finished-item photos to an Abode order for the customer to refer back to.
+Staff should be able to attach finished-item photos to an Abode order for the customer to refer back to, using drag and drop as well as file selection.
 
-**Why:** The user requested a picture of the finished item on the order card for customer reference.
+**Why:** The user requested a picture of the finished item on the order card for customer reference, then explicitly requested drag-and-drop photo uploads.
 
 **How to apply:** Keep final photos separate from digital samples, linked to the matching individual stocking in both staff and customer views; customer access is read-only. Keep older order-level photos visible. Photos are optional reference material, not a production-completion or dispatch requirement.
 
