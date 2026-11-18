@@ -7,7 +7,7 @@ import { db } from "./db";
 import { storage } from "./storage";
 import { getBaseUrl, sendAbodeDispatchEmail } from "./emailService";
 
-/** Abode sends one email per order, including label-first and untracked despatches. */
+/** Only staff-confirmed despatch after production may send an order email. */
 export async function maybeSendAbodeDispatchNotification(
   jobId: string,
   send: typeof sendAbodeDispatchEmail = sendAbodeDispatchEmail,
@@ -16,8 +16,8 @@ export async function maybeSendAbodeDispatchNotification(
     const [row] = await db.select({ job: jobs, order: stockingOrders }).from(stockingOrders)
       .innerJoin(jobs, eq(jobs.id, stockingOrders.jobId)).where(eq(jobs.id, jobId));
     // Only explicit durable queue entries are eligible. Never sweep historical orders.
-    if (!row || !row.job.dispatchEmailQueuedAt || row.job.dispatchEmailSentAt ||
-        !(row.order.dispatchedAt || row.order.shippingRoute === "dpd" && row.order.bookedAt && row.job.dhlTrackingNumber)) return;
+    if (!row || !row.job.completed || !row.job.dispatchEmailQueuedAt || row.job.dispatchEmailSentAt ||
+        !row.order.dispatchedAt) return;
     const customer = await storage.getCustomer(row.job.customerId);
     if (!isAbodeCustomer(customer)) return;
     const contacts = (await storage.getCustomerUsersByCustomerId(row.job.customerId))

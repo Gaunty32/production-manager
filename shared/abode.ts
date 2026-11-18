@@ -29,7 +29,17 @@ export function stockingBagNetworkCode(weightGrams: number): string {
   return weightGrams <= 1000 ? "2^68" : "2^32";
 }
 export type StockingDetails = { colour: string; font: string; thread: string; name: string };
-/** Abode counts a created DPD label as despatch; delivery remains separate. */
+/** A label is not despatch. Preserve historical sent orders, but never let an
+ * unfinished, undelivered order's old label-created timestamp bypass production. */
+export function stockingDispatchedAt(
+  order: { dispatchedAt: Date | null; deliveredAt?: Date | null },
+  job: { completed: boolean },
+): Date | null {
+  if (order.deliveredAt) return order.dispatchedAt || order.deliveredAt;
+  return job.completed ? order.dispatchedAt : null;
+}
+
+/** Staff-confirmed despatch and confirmed delivery leave the production register. */
 export function splitStockingRegister<T extends {
   dispatchedAt?: string | Date | null;
   deliveredAt?: string | Date | null;
@@ -49,6 +59,7 @@ export function stockingTrackingStatus(order: {
   trackingStatus: string | null;
 }): string | null {
   if (order.deliveredAt) return "Delivered";
+  if (!order.dispatchedAt && order.trackingStatus === "Despatched") return "Label created — awaiting despatch";
   if (order.dispatchedAt && (!order.trackingStatus || order.trackingStatus === "Label created — awaiting despatch")) return "Despatched";
   return order.trackingStatus;
 }

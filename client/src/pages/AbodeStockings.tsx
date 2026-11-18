@@ -657,7 +657,7 @@ export default function AbodeStockings() {
       </div>
 
       <Dialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>
-        <DialogContent><DialogHeader><DialogTitle>Confirm order import</DialogTitle><DialogDescription>This will add only new order numbers. Each new DPD-eligible order creates a real shipment booking using the agreed 4 kg Expresspak 5 Next Day default. Existing orders are not booked again. Creating a DPD label marks the order despatched. Printing a label does not create a second booking, and import does not send despatch emails.</DialogDescription></DialogHeader>
+        <DialogContent><DialogHeader><DialogTitle>Confirm order import</DialogTitle><DialogDescription>This will add only new order numbers. Each new DPD-eligible order creates a real shipment booking using the agreed 4 kg Expresspak 5 Next Day default. Existing orders are not booked again. Labels are available to print, but orders stay in production until staff complete the work and confirm despatch. Import and label printing do not send despatch emails or create a second booking.</DialogDescription></DialogHeader>
           {noteFiles.length > 0 && <p className="rounded-lg bg-[#f8f6f2] p-3 text-sm">{noteFiles.length} delivery-note PDF{noteFiles.length === 1 ? "" : "s"} will be matched and uploaded after import. Note upload failures can be retried without importing again.</p>}
           <DialogFooter><Button variant="outline" disabled={isProcessingNotes || importMutation.isPending} onClick={() => setImportConfirmOpen(false)}>Go back</Button><Button disabled={isProcessingNotes || importMutation.isPending} onClick={() => { if (!noteProcessingLock.current) importMutation.mutate(); }}>{importMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm import and booking</Button></DialogFooter>
         </DialogContent>
@@ -666,7 +666,7 @@ export default function AbodeStockings() {
         <DialogContent><DialogHeader><DialogTitle>Confirm production is complete</DialogTitle><DialogDescription>This will mark every remaining stocking on <strong>{activeOrder?.jobName}</strong> as complete. Confirm the pieces have been checked and finished before proceeding.</DialogDescription></DialogHeader><div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><AlertCircle className="mr-2 inline h-4 w-4" />This is a production confirmation, not a dispatch action.</div><DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Go back</Button><Button disabled={operationMutation.isPending} onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "complete", payload: {} })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm completion</Button></DialogFooter></DialogContent>
       </Dialog>
       <Dialog open={dialog === "dispatch"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Confirm order has been sent</DialogTitle><DialogDescription>This records your confirmation that <strong>{activeOrder?.orderNumber || activeOrder?.jobName}</strong> has already been despatched and moves it into Despatched. Today's date will be recorded.</DialogDescription></DialogHeader>
+        <DialogContent><DialogHeader><DialogTitle>Confirm order has been sent</DialogTitle><DialogDescription>This records your confirmation that <strong>{activeOrder?.orderNumber || activeOrder?.jobName}</strong> has already been despatched and moves it into Despatched. Today's date will be recorded. Abode's despatch email is sent at this step, not when a label is created. An email already sent for this order will not be sent again.</DialogDescription></DialogHeader>
           <p className="text-sm text-stone-600">No label or tracking number is required. This does not book a shipment or confirm delivery.</p>
           <DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button><Button disabled={!activeOrder || !activeOrder.completed || operationMutation.isPending} onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "dispatch", payload: {} })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm despatch</Button></DialogFooter>
         </DialogContent>
@@ -675,7 +675,7 @@ export default function AbodeStockings() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{dialog === "recover" ? "Get existing DPD label" : "Save Royal Mail tracking"}</DialogTitle>
-            <DialogDescription>{dialog === "recover" ? "Save the existing shipment's label and tracking to mark this order despatched. If DPD cannot retrieve it, select your saved label PDF below. This does not book another shipment." : "Book the parcel externally, then record the tracking number here."}</DialogDescription>
+            <DialogDescription>{dialog === "recover" ? "Save the existing shipment's label and tracking. If DPD cannot retrieve it, select your saved label PDF below. This does not book another shipment or confirm despatch." : "Book the parcel externally, then record the tracking number here. Confirm despatch separately once the order has been sent."}</DialogDescription>
           </DialogHeader>
           {dialog === "recover" && <label className="space-y-2 text-sm font-medium">DPD shipment ID<Input value={existingShipmentId} onChange={event => setExistingShipmentId(event.target.value)} inputMode="numeric" autoComplete="off" /></label>}
           <label className="space-y-2 text-sm font-medium">Tracking number<Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} autoComplete="off" /></label>
@@ -693,7 +693,7 @@ export default function AbodeStockings() {
             <Button disabled={!trackingNumber.trim() || operationMutation.isPending || (dialog === "recover" && (!Number.isSafeInteger(Number(existingShipmentId)) || Number(existingShipmentId) <= 0))}
               onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: dialog === "recover" ? "recover" : "royal-mail", labelPdf: dialog === "recover" ? recoveryPdf || undefined : undefined, payload: {
                 trackingNumber: trackingNumber.trim(), ...(dialog === "recover" ? { shipmentId: Number(existingShipmentId) } : {}),
-              } })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{dialog === "recover" ? "Save and mark despatched" : "Save tracking"}</Button>
+              } })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{dialog === "recover" ? "Save label and tracking" : "Save tracking"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

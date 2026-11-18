@@ -5,6 +5,48 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AbodeStockings from "./AbodeStockings";
 
+test("pre-booked orders stay in production and staff can despatch only after completion", () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  try {
+    for (const customer of [false, true]) for (const completed of [false, true]) {
+      Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { pathname: customer ? "/customer/stockings" : "/abode-stockings", search: "" } } });
+      const client = new QueryClient({ defaultOptions: { queries: { queryFn: async () => null, retry: false, gcTime: 0 } } });
+      try {
+        client.setQueryData([customer ? "/api/customer-portal/abode" : "/api/abode"], {
+          enabled: true, customer: { id: "fixture", name: "Abode", logoUrl: null },
+          currentRate: 7, completedCount: 0, trackingConfigured: true,
+          orders: [{
+            id: "fixture", jobNumber: 1, orderNumber: "PREBOOKED", jobName: "Early label order",
+            completed, shipmentState: "booked", shippingRoute: "dpd", labelAvailable: true,
+            dhlTrackingNumber: "1234567890", bookedAt: "2026-11-18T07:00:00Z", dispatchedAt: null, deliveredAt: null,
+            recipient: { name: "Test", line1: "", town: "", postcode: "SW1A 1AA" },
+            items: [], deliveryNotes: [],
+          }],
+        });
+        const html = renderToStaticMarkup(<QueryClientProvider client={client}><AbodeStockings /></QueryClientProvider>);
+        assert.match(html, /Early label order/);
+        assert.match(html, /No despatched orders yet/);
+        if (customer) {
+          assert.doesNotMatch(html, /Mark dispatched|Complete work/);
+          assert.match(html, completed ? /Ready for despatch/ : /In Production/);
+        } else {
+          assert.match(html, /Label PDF/, "A label is printable before completion and confirmation");
+          const button = html.match(/<button\b[^>]*>Mark dispatched<\/button>/)?.[0];
+          assert.ok(button);
+          if (completed) assert.doesNotMatch(button, /\sdisabled=/);
+          else {
+            assert.match(button, /\sdisabled=/);
+            assert.match(html, /Complete work/);
+          }
+        }
+      } finally { client.clear(); }
+    }
+  } finally {
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
 test("completed DPD orders needing recovery have an enabled despatch button", () => {
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { pathname: "/abode-stockings", search: "" } } });

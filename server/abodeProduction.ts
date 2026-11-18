@@ -59,6 +59,17 @@ export async function completeStockingOrder(jobId: string, staffId: string | nul
     await tx.execute(sql`SELECT pg_advisory_xact_lock(71024002)`);
     const [job] = await tx.select().from(jobs).where(eq(jobs.id, jobId)).for("update");
     if (!job || !["pending", "ready", "draft"].includes(job.invoiceStatus)) throw new Error("This order cannot be completed");
+    const [order] = await tx.select().from(stockingOrders).where(eq(stockingOrders.jobId, jobId)).for("update");
+    // Earlier imports incorrectly recorded label booking as despatch. Clear that
+    // marker before completion, or it would reappear as soon as completed=true.
+    // Never rewrite completed historical orders, delivery scans, labels or email audit.
+    const prematureDespatch = !job.completed && order?.dispatchedAt && !order.deliveredAt;
+    if (prematureDespatch) {
+      await tx.update(stockingOrders).set({
+        dispatchedAt: null,
+        ...(order.trackingStatus === "Despatched" ? { trackingStatus: "Label created — awaiting despatch" } : {}),
+      }).where(eq(stockingOrders.jobId, jobId));
+    }
     const items = await tx.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId));
     if (!items.length || items.some(item => !item.stockingDetails || item.quantity !== 1)) throw new Error("Review this imported order's stocking items before completing it");
     for (const item of items.filter(item => item.stockingDetails && !item.completed)) {
@@ -70,6 +81,7 @@ export async function completeStockingOrder(jobId: string, staffId: string | nul
     await tx.update(jobs).set({
       completed: true, status: "completed", invoiceStatus: "ready",
       conversationArchivedByStaff: true,
+      ...(prematureDespatch && !job.dispatchEmailSentAt ? { dispatchEmailQueuedAt: null } : {}),
     }).where(and(eq(jobs.id, jobId), eq(jobs.customerId, job.customerId)));
   });
 }

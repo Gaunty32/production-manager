@@ -1,20 +1,9 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "./db";
 import { jobs, stockingOrders } from "@shared/schema";
-import { ABODE_CARRIAGE, ABODE_DEFAULT_WEIGHT_GRAMS, ABODE_NETWORK_CODE } from "@shared/abode";
+import { ABODE_CARRIAGE, ABODE_DEFAULT_WEIGHT_GRAMS, ABODE_NETWORK_CODE, stockingDispatchedAt } from "@shared/abode";
 import { dpdService } from "./dpd";
-import { maybeSendAbodeDispatchNotification } from "./abodeDispatchNotifications";
-
-// Abode counts DPD label creation as despatch. Derive existing bookings too,
-// without rewriting historical rows or queuing retrospective emails.
-export function abodeDispatchedAt(
-  order: { bookedAt: Date | null; dispatchedAt: Date | null; shippingRoute?: string },
-  job: { dhlTrackingNumber: string | null; dispatchEmailQueuedAt: Date | null },
-): Date | null {
-  return order.dispatchedAt
-    || (order.shippingRoute === "dpd" && job.dhlTrackingNumber ? order.bookedAt : null)
-    || (!order.bookedAt && job.dhlTrackingNumber ? job.dispatchEmailQueuedAt : null);
-}
+export const abodeDispatchedAt = stockingDispatchedAt;
 
 export async function bookAbodeLabel(jobId: string) {
   const [order] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, jobId));
@@ -47,12 +36,11 @@ export async function bookAbodeLabel(jobId: string) {
     await db.transaction(async tx => {
       await tx.update(stockingOrders).set({
         shipmentState: "booked", labelHtml: result.labelHtml, shipmentId: result.shipmentJobId || null,
-        parcelNumbers: result.parcelNumbers, bookedAt: now, dispatchedAt: now, trackingStatus: "Despatched",
+        parcelNumbers: result.parcelNumbers, bookedAt: now, trackingStatus: "Label created — awaiting despatch",
       }).where(eq(stockingOrders.jobId, jobId));
       await tx.update(jobs).set({
         dhlTrackingNumber: result.trackingNumber, shippingCost: String(ABODE_CARRIAGE),
         shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
-        dispatchEmailQueuedAt: job.dispatchEmailQueuedAt || now,
       }).where(eq(jobs.id, jobId));
     });
   } catch (error) {
@@ -60,7 +48,6 @@ export async function bookAbodeLabel(jobId: string) {
     // Never buy another shipment when the remote purchase may have succeeded.
     return { ...result, warning: "DPD booked this parcel but saving failed. Keep this tracking number and label, then recover the booking. Do not book again." };
   }
-  await maybeSendAbodeDispatchNotification(jobId);
   // Tracking and the shipment ID are already durable if label retrieval is slow
   // or interrupted. Fetching/printing can safely be retried without repurchasing.
   if (!result.labelHtml && result.shipmentJobId) {
@@ -82,6 +69,6 @@ export async function hasUndespatchedAbodeOrder(jobIds: string[]): Promise<boole
   if (!jobIds.length) return false;
   const rows = await db.select({ order: stockingOrders, job: jobs }).from(stockingOrders)
     .innerJoin(jobs, eq(jobs.id, stockingOrders.jobId))
-    .where(and(inArray(stockingOrders.jobId, jobIds), isNull(stockingOrders.dispatchedAt)));
+    .where(inArray(stockingOrders.jobId, jobIds));
   return rows.some(({ order, job }) => !abodeDispatchedAt(order, job));
 }

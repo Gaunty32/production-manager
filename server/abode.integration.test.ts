@@ -50,11 +50,11 @@ test("confirmed delivery dates require actual delivered scans, never a next-day 
   assert.equal(confirmedDeliveryDate({ trackingEvents: [{ key: "001", date: "2026-11-12" }] })?.toISOString(), "2026-11-12T12:00:00.000Z");
   assert.equal(confirmedDeliveryDate({ deliveryDate: "2026-07-01", deliveryStatus: "Delivered" })?.toISOString(), "2026-07-01T12:00:00.000Z");
   const booked = new Date("2026-11-02");
-  assert.equal(abodeDispatchedAt({ shippingRoute: "dpd", bookedAt: booked, dispatchedAt: null }, { dhlTrackingNumber: "123", dispatchEmailQueuedAt: null }), booked);
-  assert.equal(abodeDispatchedAt({ shippingRoute: "royal_mail", bookedAt: booked, dispatchedAt: null }, { dhlTrackingNumber: "123", dispatchEmailQueuedAt: null }), null);
-  assert.equal(abodeDispatchedAt({ shippingRoute: "dpd", bookedAt: booked, dispatchedAt: null }, { dhlTrackingNumber: null, dispatchEmailQueuedAt: null }), null);
-  const historic = new Date("2026-11-01");
-  assert.equal(abodeDispatchedAt({ bookedAt: null, dispatchedAt: null }, { dhlTrackingNumber: "123", dispatchEmailQueuedAt: historic }), historic);
+  assert.equal(abodeDispatchedAt({ dispatchedAt: null }, { completed: false }), null);
+  assert.equal(abodeDispatchedAt({ dispatchedAt: null }, { completed: true }), null, "Completion never infers despatch from booking or tracking");
+  assert.equal(abodeDispatchedAt({ dispatchedAt: booked }, { completed: false }), null, "Old auto-despatch markers cannot hide unfinished work");
+  assert.equal(abodeDispatchedAt({ dispatchedAt: booked }, { completed: true }), booked, "Historical completed despatches stay intact");
+  assert.equal(abodeDispatchedAt({ dispatchedAt: null, deliveredAt: booked }, { completed: false }), booked, "Confirmed delivery is never reversed");
 });
 
 test("DPD tracking paginates reference searches and matches the saved shipment, not another order", async () => {
@@ -90,7 +90,7 @@ test("DPD tracking paginates reference searches and matches the saved shipment, 
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test("Abode import → label despatch → completion → photo, with safe retries", { timeout: 90000 }, async () => {
+test("Abode import → early label → completion → staff despatch, with safe retries", { timeout: 90000 }, async () => {
   assert.notEqual(process.env.NODE_ENV, "production", "Never run against production");
   const id = randomUUID();
   const [customer] = await db.insert(customers).values({ name: `Abode integration fixture ${id}` }).returning();
@@ -167,10 +167,10 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     assert.ok(dpd.bookedAt && dpd.labelAvailable && dpd.dhlTrackingNumber);
     const [savedBooking] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, dpd.id));
     assert.equal(savedBooking.shipmentId, 2689513245121500, "Real-sized DPD IDs must save without integer overflow");
-    assert.equal(dpd.dispatchedAt, dpd.bookedAt, "DPD label creation records despatch immediately");
-    assert.equal(dpd.trackingStatus, "Despatched");
+    assert.equal(dpd.dispatchedAt, null, "DPD labels must not bypass production");
+    assert.equal(dpd.trackingStatus, "Label created — awaiting despatch");
     assert.equal(dpd.deliveredAt, null);
-    assert.ok(dpd.dispatchEmailQueuedAt, "Label creation queues the Abode despatch email atomically");
+    assert.equal(dpd.dispatchEmailQueuedAt, null, "Label creation must not queue despatch email");
     assert.equal(dpd.dispatchEmailSentAt, null, "No recipients must not be marked as sent");
     const contacts: any[] = [
       { id: "eligible", active: true, emailNotificationsDispatch: true, email: "abode@example.invalid", firstName: "Abode" },
@@ -183,23 +183,29 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     storage.getCustomerUsersByCustomerId = async () => contacts;
     await maybeSendAbodeDispatchNotification(dpd.id, capture);
     await maybeSendAbodeDispatchNotification(dpd.id, capture);
-    assert.equal(messages.length, 1, "Each order sends once per eligible contact, not per stocking or duplicate address");
-    assert.equal(messages[0].email, "abode@example.invalid");
-    assert.equal(messages[0].details.orderNumber, dpd.orderNumber);
-    assert.equal(messages[0].details.trackingNumber, dpd.dhlTrackingNumber);
-    assert.ok(messages[0].details.trackingUrl.includes("postcode="));
-    assert.ok((await storage.getJob(dpd.id))?.dispatchEmailSentAt, "Sending is not blocked by unfinished production");
+    assert.equal(messages.length, 0, "Early labels must not send despatch emails");
+    assert.equal((await storage.getJob(dpd.id))?.dispatchEmailSentAt, null);
     storage.getCustomerUsersByCustomerId = async () => [];
-    await db.update(stockingOrders).set({ dispatchedAt: null, trackingStatus: "Label created — awaiting despatch" }).where(eq(stockingOrders.jobId, dpd.id));
+    // Reproduce the reported production data: an old import set both timestamps
+    // at label creation even though all stockings were still unfinished.
+    await db.update(stockingOrders).set({ dispatchedAt: savedBooking.bookedAt, trackingStatus: "Despatched" }).where(eq(stockingOrders.jobId, dpd.id));
+    await db.update(jobs).set({ dispatchEmailQueuedAt: savedBooking.bookedAt }).where(eq(jobs.id, dpd.id));
+    storage.getCustomerUsersByCustomerId = async () => contacts;
+    await maybeSendAbodeDispatchNotification(dpd.id, capture);
+    assert.equal(messages.length, 0, "Old queued emails are blocked while production is unfinished");
+    storage.getCustomerUsersByCustomerId = async () => [];
     const legacyContext = await (await request("", undefined, true)).json();
     const legacyOrder = legacyContext.orders.find((o: any) => o.id === dpd.id);
-    assert.equal(legacyOrder.dispatchedAt, dpd.bookedAt, "Existing DPD bookings are despatched without a data migration");
-    assert.equal(legacyOrder.trackingStatus, "Despatched", "Existing wording is corrected for customers");
+    assert.equal(legacyOrder.dispatchedAt, null, "Existing unfinished orders return to production without a live database write");
+    assert.equal(legacyOrder.trackingStatus, "Label created — awaiting despatch");
+    const legacyStaffOrder = (await (await request("")).json()).orders.find((o: any) => o.id === dpd.id);
+    assert.equal(legacyStaffOrder.dispatchedAt, null, "Staff and customers see the same corrected status");
+    assert.equal(await hasUndespatchedAbodeOrder([dpd.id]), true, "Legacy non-null timestamps cannot fool the despatch guard");
     assert.equal(legacyOrder.deliveredAt, null);
     assert.equal((await request(`/orders/${dpd.id}/label`)).status, 200, "Label printable before production");
     assert.equal((await request(`/orders/${dpd.id}/book`, {})).status, 400);
     assert.equal(bookings, 1);
-    assert.equal((await request(`/orders/${dpd.id}/dispatch`, {})).status, 200, "Already-despatched labels need no second action");
+    assert.equal((await request(`/orders/${dpd.id}/dispatch`, {})).status, 400, "A pre-booked label cannot bypass unfinished production");
     assert.equal((await request(`/orders/${dpd.id}/book`, {}, true)).status, 404, "Customer cannot manually book");
     assert.equal((await request(`/orders/${dpd.id}/dispatch`, {}, true)).status, 404, "Customer cannot confirm despatch");
     const historicalSample = (await db.insert(stockingSamples).values({
@@ -225,9 +231,27 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     assert.equal((await storage.getJob(dpd.id))?.invoiceStatus, "ready", "Completion retries keep the draft invoice ready");
     const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(stockingProduction).where(eq(stockingProduction.customerId, customer.id));
     assert.equal(count.count, 102, "Completion retries preserve lifetime count");
-    assert.equal(await hasUndespatchedAbodeOrder([dpd.id]), false, "Created DPD labels count as despatched");
-    assert.equal((await storage.getJob(dpd.id))?.dispatchEmailQueuedAt?.toISOString(), dpd.dispatchEmailQueuedAt);
-    assert.equal((await request(`/orders/${dpd.id}/dispatch`, {})).status, 200, "Existing label despatch is idempotent");
+    assert.equal(await hasUndespatchedAbodeOrder([dpd.id]), true, "Completing work must still await explicit despatch");
+    assert.equal((await storage.getJob(dpd.id))?.dispatchEmailQueuedAt, null, "Obsolete unsent queues are cleared, not retried on completion");
+    const readyOrder = (await (await request("")).json()).orders.find((o: any) => o.id === dpd.id);
+    assert.equal(readyOrder.dispatchedAt, null, "The old auto-despatch marker must not reappear after completion");
+    assert.equal(readyOrder.labelAvailable, true, "The original label survives the correction");
+    assert.equal(readyOrder.dhlTrackingNumber, dpd.dhlTrackingNumber);
+    storage.getCustomerUsersByCustomerId = async () => contacts;
+    await maybeSendAbodeDispatchNotification(dpd.id, capture);
+    assert.equal(messages.length, 0, "Production completion alone sends nothing");
+    storage.getCustomerUsersByCustomerId = async () => [];
+    assert.equal((await request(`/orders/${dpd.id}/dispatch`, {})).status, 200, "Staff explicitly confirm despatch after production");
+    assert.equal(await hasUndespatchedAbodeOrder([dpd.id]), false);
+    storage.getCustomerUsersByCustomerId = async () => contacts;
+    await maybeSendAbodeDispatchNotification(dpd.id, capture);
+    await maybeSendAbodeDispatchNotification(dpd.id, capture);
+    assert.equal(messages.length, 1, "Only staff-confirmed despatch sends once per eligible contact");
+    assert.equal(messages[0].email, "abode@example.invalid");
+    assert.equal(messages[0].details.orderNumber, dpd.orderNumber);
+    assert.equal(messages[0].details.trackingNumber, dpd.dhlTrackingNumber);
+    assert.ok(messages[0].details.trackingUrl.includes("postcode="));
+    storage.getCustomerUsersByCustomerId = async () => [];
     objectType = "image/png";
     bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8R8AAAAASUVORK5CYII=", "base64");
     const savedPhoto = await (await request(`/orders/${dpd.id}/photos`, photo)).json();
@@ -284,13 +308,13 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     assert.equal(recovered.shipmentId, existingPayload.shipmentId);
     assert.equal(recovered.shipmentState, "booked");
     assert.ok(recovered.labelHtml?.includes("TEST-FAILED"));
-    assert.ok(recovered.dispatchedAt, "Recovering an existing DPD label also records despatch");
-    assert.equal(recovered.trackingStatus, "Despatched");
+    assert.equal(recovered.dispatchedAt, null, "Label recovery does not confirm despatch");
+    assert.equal(recovered.trackingStatus, "Label created — awaiting despatch");
     assert.equal(bookings, before);
     const labelResponse = await request(`/orders/${failedId}/label?format=pdf`);
     assert.equal(labelResponse.headers.get("content-type"), "application/pdf");
     assert.equal(Buffer.from(await labelResponse.arrayBuffer()).subarray(0,5).toString(), "%PDF-");
-    assert.ok((await storage.getJob(failedId))?.dispatchEmailQueuedAt, "Newly recovered despatches queue their own email");
+    assert.equal((await storage.getJob(failedId))?.dispatchEmailQueuedAt, null, "Recovery must not queue email");
     const pdfImport = await (await request("/imports", { rows: [{ ...row, "Order number": "TEST-PDF" }] })).json();
     const pdfJobId = pdfImport.labelResults[0].jobId;
     const noMoreBookings = bookings;
@@ -306,9 +330,25 @@ test("Abode import → label despatch → completion → photo, with safe retrie
     assert.equal((await uploadPdf(bytes)).status, 200);
     const pdfOrder = (await (await request("")).json()).orders.find((o: any) => o.id === pdfJobId);
     assert.equal(pdfOrder.labelAvailable, true);
-    assert.ok(pdfOrder.dispatchedAt);
+    assert.equal(pdfOrder.dispatchedAt, null, "Saved-PDF recovery must also await staff confirmation");
     assert.equal(pdfOrder.dhlTrackingNumber, "SAVEDPDF12345");
     assert.equal(pdfOrder.deliveredAt, null);
+    // The reported orders already received an email under the old policy.
+    // Correct their production state without destroying that audit or resending.
+    const wronglySentAt = new Date("2026-11-18T07:46:59.347Z");
+    await db.update(stockingOrders).set({ dispatchedAt: new Date(), trackingStatus: "Despatched" }).where(eq(stockingOrders.jobId, pdfJobId));
+    await db.update(jobs).set({ dispatchEmailQueuedAt: wronglySentAt, dispatchEmailSentAt: wronglySentAt }).where(eq(jobs.id, pdfJobId));
+    await storage.updateJob(pdfJobId, { completed: true });
+    const correctedPdfOrder = (await (await request("")).json()).orders.find((o: any) => o.id === pdfJobId);
+    assert.equal(correctedPdfOrder.dispatchedAt, null, "Generic completion also clears legacy false despatch");
+    assert.equal(correctedPdfOrder.dhlTrackingNumber, pdfOrder.dhlTrackingNumber);
+    assert.equal(correctedPdfOrder.labelAvailable, true);
+    assert.equal((await storage.getJob(pdfJobId))?.dispatchEmailSentAt?.toISOString(), wronglySentAt.toISOString(), "The original email audit is preserved");
+    assert.equal((await request(`/orders/${pdfJobId}/dispatch`, {})).status, 200);
+    storage.getCustomerUsersByCustomerId = async () => contacts;
+    await maybeSendAbodeDispatchNotification(pdfJobId, capture);
+    assert.equal(messages.length, 1, "Orders already emailed under the old policy do not send a duplicate");
+    storage.getCustomerUsersByCustomerId = async () => [];
     const originalLabel = await request(`/orders/${pdfJobId}/label?format=pdf`);
     assert.equal(originalLabel.headers.get("content-type"), "application/pdf");
     assert.deepEqual(Buffer.from(await originalLabel.arrayBuffer()), bytes);

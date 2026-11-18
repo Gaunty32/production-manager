@@ -17,19 +17,19 @@ The staff Abode order register must show two clear sections: “Awaiting Product
 
 **Why:** The user requested these exact two sections instead of the previous status-filter pills.
 
-**How to apply:** Creating a DPD label moves the order into Despatched, even before production completion. Existing DPD bookings use their booking date when no separate despatch date exists. Delivered orders remain there. Production completion and draft invoicing remain separate.
+**How to apply:** Labels and tracking may be prepared at import, but orders stay in production until work is completed and staff explicitly confirm despatch. Delivered orders remain despatched. Draft invoicing follows production completion, independently of despatch.
 
-For Abode, label creation means despatched.
+For Abode, staff must confirm despatch after production; creating a label is not despatch.
 
-**Why:** The user explicitly confirmed “Yes, label creation means despatched”, superseding the earlier early-label-is-not-despatch policy.
+**Why:** After new uploads bypassed production, the user selected “Staff confirms after production”. This supersedes their earlier “label creation means despatched” instruction.
 
-**How to apply:** Apply this to new and recovered DPD labels and existing saved DPD bookings. Remove conflicting “Label created — awaiting despatch” wording. Never infer delivery or send retrospective emails just to reclassify existing bookings.
+**How to apply:** Neither a new booking nor recovering an existing label may mark despatch or queue its email. Do not infer despatch from booking dates or tracking. Show unfinished legacy auto-despatched orders in production; ensure their old markers cannot return merely on completion. Preserve historical completed despatches, confirmed deliveries, booked labels and sent-email audit records.
 
 Abode must receive a despatch email for each order, to its active customer portal contacts with despatch emails enabled, not the individual stocking recipient.
 
 **Why:** The user explicitly requested an email for every order.
 
-**How to apply:** New label-created despatches and new manual despatch confirmations queue per-order emails, including manual despatch without tracking. Do not wait for production completion after label creation, invent tracking, or automatically catch up historical orders.
+**How to apply:** Only staff confirmation after completed production queues a per-order email, including confirmations without tracking. Early labels, recovery and completion alone must send nothing. Do not invent tracking, automatically catch up historical orders, or resend an email already sent prematurely.
 
 Staff may also confirm an already-sent, completed order as despatched without supplying a label or tracking.
 
@@ -85,7 +85,7 @@ Orders and their delivery-note PDFs should be uploaded together, and DPD labels 
 
 **Why:** The user requested delivery notes and printable labels at order upload, then specified: “We are using the product expresspak 5 on a next day service, default weight 4 kgs.”
 
-**How to apply:** Treat label creation as a real courier booking and, under the user's superseding rule, as despatch. Keep imports and note attachment retry-safe, preserve one note per order, and never automatically repeat an uncertain courier purchase.
+**How to apply:** Treat label creation as a real courier booking, but not as despatch. Keep imports and note attachment retry-safe, preserve one note per order, and never automatically repeat an uncertain courier purchase.
 
 Manual Abode label booking should book directly, without a warning-filled confirmation.
 

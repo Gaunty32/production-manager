@@ -358,7 +358,7 @@ export function registerAbodeRoutes(app: Express, deps: {
       await db.transaction(async tx => {
         const [locked] = await tx.select().from(jobs).where(eq(jobs.id, job.id)).for("update");
         const [order] = await tx.select().from(stockingOrders).where(eq(stockingOrders.jobId, job.id)).for("update");
-         if (abodeDispatchedAt(order, locked)) return;
+        if (abodeDispatchedAt(order, locked)) return;
         if (!locked.completed) throw new Error("Complete production before confirming despatch");
         const items = await tx.select().from(jobLineItems).where(eq(jobLineItems.jobId, job.id));
         if (!items.length || items.some(item => !item.completed)) throw new Error("Complete every stocking before confirming despatch");
@@ -419,16 +419,13 @@ export function registerAbodeRoutes(app: Express, deps: {
           await tx.update(jobs).set({
             dhlTrackingNumber: trackingNumber, shippingCost: String(ABODE_CARRIAGE),
             shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
-            ...(recovery && !abodeDispatchedAt(currentOrder, locked) && !locked.dispatchEmailQueuedAt && !locked.dispatchEmailSentAt
-              ? { dispatchEmailQueuedAt: new Date() } : {}),
           }).where(eq(jobs.id, job.id));
           await tx.update(stockingOrders).set({
             shipmentState: "booked", bookedAt: order.bookedAt || new Date(),
-            ...(recovery ? { dispatchedAt: order.dispatchedAt || order.bookedAt || new Date(), trackingStatus: order.deliveredAt ? "Delivered" : "Despatched" } : {}),
+            ...(recovery && !abodeDispatchedAt(currentOrder, locked) ? { trackingStatus: "Label created — awaiting despatch" } : {}),
             ...(recovery && shipmentId ? { shipmentId, ...(existingLabel ? { labelHtml: existingLabel } : {}) } : {}),
           }).where(eq(stockingOrders.jobId, job.id));
         });
-        await maybeSendDispatchNotification(job.id);
         res.json({ success: true });
       }));
     }
