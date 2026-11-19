@@ -25,6 +25,12 @@ For Abode, staff must confirm despatch after production; creating a label is not
 
 **How to apply:** Neither a new booking nor recovering an existing label may mark despatch or queue its email. Do not infer despatch from booking dates or tracking. Show unfinished legacy auto-despatched orders in production; ensure their old markers cannot return merely on completion. Preserve historical completed despatches, confirmed deliveries, booked labels and sent-email audit records.
 
+Enforce production eligibility at both server and customer-display boundaries, including individual stocking completion, rather than trusting a despatch timestamp alone.
+
+**Why:** The user reported the same all-despatched customer total after the earlier server-side correction. Legacy label-created dates and an inconsistent parent completion flag must not hide unfinished stockings.
+
+**How to apply:** Keep summary counts, register groups, order badges and exported dates consistent. Confirmed courier delivery remains authoritative; do not erase genuine deliveries or repurchase labels.
+
 Abode must receive a despatch email for each order, to its active customer portal contacts with despatch emails enabled, not the individual stocking recipient.
 
 **Why:** The user explicitly requested an email for every order.

@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, Clock3, ExternalLink, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, Search, Send, ShieldAlert, Truck, Upload, Printer } from "lucide-react";
 import { getDpdTrackingUrl } from "@shared/dpd-tracking";
-import { splitStockingRegister, stockingFontLabel } from "@shared/abode";
+import { splitStockingRegister, stockingFontLabel, stockingOrderForDisplay } from "@shared/abode";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -198,7 +198,7 @@ export default function AbodeStockings() {
   });
 
   const isStaff = !isCustomer;
-  const orders = data?.orders ?? [];
+  const orders = useMemo(() => (data?.orders ?? []).map(stockingOrderForDisplay), [data?.orders]);
   const existingBookingQuery = new URLSearchParams(window.location.search);
   const existingBookingOrder = orders.find(order => order.orderNumber === existingBookingQuery.get("existingDpdOrder"));
   const linkedShipmentId = Number(existingBookingQuery.get("existingDpdShipment"));

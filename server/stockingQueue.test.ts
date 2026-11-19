@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isStockingWorkflowJob, splitStockingRegister, stockingTrackingStatus } from "../shared/abode";
+import { isStockingWorkflowJob, splitStockingRegister, stockingTrackingStatus, stockingOrderForDisplay, stockingDispatchedAt } from "../shared/abode";
 
 const stockingDetails = { colour: "Red", font: "Font 1", thread: "Gold", name: "JANE" };
 
@@ -14,11 +14,46 @@ test("register keeps production separate from label-based despatch", () => {
     { id: "historic-delivered", completed: true, dispatchedAt: null, deliveredAt: "2026-11-12" },
   ];
   const { awaitingProduction, despatched } = splitStockingRegister(orders);
-  assert.deepEqual(awaitingProduction.map(order => order.id), ["working", "ready"]);
-  assert.deepEqual(despatched.map(order => order.id), ["label-created", "despatched", "delivered", "historic-delivered"]);
+  assert.deepEqual(awaitingProduction.map(order => order.id), ["working", "ready", "label-created"]);
+  assert.deepEqual(despatched.map(order => order.id), ["despatched", "delivered", "historic-delivered"]);
   assert.equal(new Set([...awaitingProduction, ...despatched]).size, orders.length);
   const empty = splitStockingRegister([]);
   assert.deepEqual(empty, { awaitingProduction: [], despatched: [] });
+});
+
+test("unfinished stockings override stale despatch dates at both display boundaries", () => {
+  for (const completed of [false, true]) {
+    const original = {
+      id: "unfinished", completed, items: [{ completed: true }, { completed: false }],
+      dispatchedAt: "2026-11-18", deliveredAt: null, trackingStatus: "Despatched",
+      dhlTrackingNumber: "KEEP", labelAvailable: true,
+    };
+    const displayed = stockingOrderForDisplay(original);
+    assert.equal(displayed.completed, false);
+    assert.equal(displayed.dispatchedAt, null);
+    assert.equal(displayed.trackingStatus, "Label created — awaiting despatch");
+    assert.equal(displayed.dhlTrackingNumber, "KEEP");
+    assert.equal(displayed.labelAvailable, true);
+    assert.equal(original.dispatchedAt, "2026-11-18", "Do not mutate persisted or cached records");
+    assert.deepEqual(splitStockingRegister([original]).awaitingProduction, [original]);
+    assert.deepEqual(stockingOrderForDisplay(displayed), displayed, "Server and client normalization is idempotent");
+    const booked = new Date("2026-11-18");
+    assert.equal(stockingDispatchedAt({ dispatchedAt: booked }, original), null);
+    const delivered = { ...original, deliveredAt: "2026-11-19" };
+    assert.equal(stockingOrderForDisplay(delivered), delivered);
+    assert.deepEqual(splitStockingRegister([delivered]).despatched, [delivered]);
+  }
+});
+
+test("live-shaped register counts unfinished and unconfirmed orders in production", () => {
+  const orders = Array.from({ length: 30 }, (_, index) => ({
+    id: String(index), completed: index >= 4, items: [{ completed: index >= 4 }],
+    dispatchedAt: index < 28 ? "2026-11-18" : null, deliveredAt: null,
+  }));
+  const displayed = orders.map(stockingOrderForDisplay);
+  const grouped = splitStockingRegister(displayed);
+  assert.equal(grouped.awaitingProduction.length, 6);
+  assert.equal(grouped.despatched.length, 24);
 });
 
 test("legacy label wording cannot contradict despatch or confirmed delivery", () => {

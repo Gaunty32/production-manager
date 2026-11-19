@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "./db";
 import { storage } from "./storage";
 import { customers, jobs, jobLineItems, jobFiles, stockingOrders, stockingProduction, stockingSamples } from "@shared/schema";
-import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate, stockingTrackingStatus } from "@shared/abode";
+import { ABODE_CARRIAGE, ABODE_CUSTOMER_NAME, isAbodeCustomer, stockingRate, stockingTrackingStatus, stockingOrderForDisplay } from "@shared/abode";
 import { parseStockingRows } from "./abodeImport";
 import { completeStockingOrder } from "./abodeProduction";
 import { renderStockingLabel } from "./abodeDocuments";
@@ -84,7 +84,7 @@ export function registerAbodeRoutes(app: Express, deps: {
         enabled: true, customer: { id: customer.id, name: customer.name, logoUrl: customer.logoUrl },
         canApproveSamples: false, trackingConfigured: abodeTrackingConfigured(),
         completedCount: count.count, currentRate: stockingRate(count.count),
-        orders: orders.map(({ order, job }) => ({
+        orders: orders.map(({ order, job }) => stockingOrderForDisplay({
           ...job, orderNumber: order.orderNumber, recipient: order.recipient, shippingRoute: order.shippingRoute,
           shipmentState: order.shipmentState, labelAvailable: Boolean(order.labelHtml || order.shipmentId || files.some(file => file.jobId === job.id && file.fileName.startsWith(RECOVERED_LABEL_PREFIX))),
           bookedAt: order.bookedAt, dispatchedAt: abodeDispatchedAt(order, job), deliveredAt: order.deliveredAt,

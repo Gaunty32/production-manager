@@ -29,25 +29,53 @@ export function stockingBagNetworkCode(weightGrams: number): string {
   return weightGrams <= 1000 ? "2^68" : "2^32";
 }
 export type StockingDetails = { colour: string; font: string; thread: string; name: string };
+type StockingProductionState = {
+  completed?: boolean;
+  items?: readonly { completed: boolean }[];
+};
+
+export function stockingProductionComplete(order: StockingProductionState): boolean {
+  return order.completed !== false &&
+    (!order.items || (order.items.length > 0 && order.items.every(item => item.completed)));
+}
+
+/** Apply at both API and UI boundaries: old servers/data may still supply
+ * label-created despatch dates. Confirmed carrier delivery remains authoritative. */
+export function stockingOrderForDisplay<T extends StockingProductionState & {
+  dispatchedAt?: string | Date | null;
+  deliveredAt?: string | Date | null;
+  trackingStatus?: string | null;
+}>(order: T): T {
+  if (order.deliveredAt || stockingProductionComplete(order)) return order;
+  return {
+    ...order,
+    completed: false,
+    dispatchedAt: null,
+    trackingStatus: order.dispatchedAt ? "Label created — awaiting despatch" : order.trackingStatus,
+  };
+}
+
 /** A label is not despatch. Preserve historical sent orders, but never let an
  * unfinished, undelivered order's old label-created timestamp bypass production. */
 export function stockingDispatchedAt(
   order: { dispatchedAt: Date | null; deliveredAt?: Date | null },
-  job: { completed: boolean },
+  job: { completed: boolean; items?: readonly { completed: boolean }[] },
 ): Date | null {
   if (order.deliveredAt) return order.dispatchedAt || order.deliveredAt;
-  return job.completed ? order.dispatchedAt : null;
+  return stockingProductionComplete(job) ? order.dispatchedAt : null;
 }
 
 /** Staff-confirmed despatch and confirmed delivery leave the production register. */
 export function splitStockingRegister<T extends {
+  completed?: boolean;
+  items?: readonly { completed: boolean }[];
   dispatchedAt?: string | Date | null;
   deliveredAt?: string | Date | null;
 }>(orders: readonly T[]): { awaitingProduction: T[]; despatched: T[] } {
   const awaitingProduction: T[] = [];
   const despatched: T[] = [];
   for (const order of orders) {
-    (order.dispatchedAt || order.deliveredAt ? despatched : awaitingProduction).push(order);
+    (order.deliveredAt || (stockingProductionComplete(order) && order.dispatchedAt) ? despatched : awaitingProduction).push(order);
   }
   return { awaitingProduction, despatched };
 }
