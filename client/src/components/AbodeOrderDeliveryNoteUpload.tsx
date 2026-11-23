@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
-import { uploadAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
+import { uploadAbodeDeliveryNote, prepareAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
 import { useToast } from "@/hooks/use-toast";
 import { AbodeFileDropZone } from "@/components/AbodeFileDropZone";
 
@@ -15,6 +15,7 @@ export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isSt
 }) {
   const lock = useRef(false);
   const savedKey = useRef<string | null>(null);
+  const selectionVersion = useRef(0);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -57,6 +58,7 @@ export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isSt
     <AbodeFileDropZone label={`Drag and drop delivery note for order ${orderNumber}`} accept=".pdf,application/pdf" disabled={busy}
       onFiles={files => {
         if (lock.current) return;
+        const version = ++selectionVersion.current;
         if (files.length !== 1) {
           setError("Choose one delivery-note PDF for this order.");
           return;
@@ -70,6 +72,11 @@ export function AbodeOrderDeliveryNoteUpload({ baseUrl, jobId, orderNumber, isSt
           setError("Choose a PDF delivery note up to 10 MB.");
           return;
         }
+        void prepareAbodeDeliveryNote(next).catch(reason => {
+          if (version === selectionVersion.current) {
+            setError(reason instanceof Error ? reason.message : "The PDF could not be read. Choose it again.");
+          }
+        });
         setFile(next);
       }} />
     <p className="break-words text-xs leading-5 text-stone-500">Name the file dispatch-note-{orderNumber}.pdf. Maximum 10 MB. One delivery note per order.</p>

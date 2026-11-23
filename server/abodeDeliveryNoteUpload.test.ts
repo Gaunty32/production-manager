@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { uploadAbodeDeliveryNote } from "../client/src/lib/abodeDeliveryNoteUpload";
+import { uploadAbodeDeliveryNote, prepareAbodeDeliveryNote } from "../client/src/lib/abodeDeliveryNoteUpload";
 
 const pdf = () => new File(["%PDF-1.7\noriginal pages\n%%EOF"], "dispatch-note-12345678.pdf", { type: "application/pdf" });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -34,7 +34,8 @@ for (const isStaff of [true, false]) {
       assert.equal(String(url), `${baseUrl}/delivery-notes/upload`);
       assert.equal(init?.credentials, "include");
       assert.equal((init?.headers as Record<string, string>)["x-job-id"], "job-id");
-      assert.equal(init?.body, file);
+      assert.equal(await (init?.body as File).text(), await file.text());
+      assert.equal((init?.body as File).name, file.name);
       return json({ key: "/objects/uploads/backup" });
     });
     assert.equal(key, "/objects/uploads/backup");
@@ -69,4 +70,60 @@ test("empty or oversized PDFs never start an upload", async () => {
       assert.fail("Invalid files must not reach the network");
     }), /up to 10 MB/);
   }
+});
+
+test("selection snapshots the entire PDF before the original device file becomes unavailable", async () => {
+  const file = pdf();
+  const originalBytes = await file.text();
+  let reads = 0;
+  const read = file.arrayBuffer.bind(file);
+  file.arrayBuffer = async () => {
+    reads++;
+    if (reads > 1) throw new DOMException("File no longer exists", "NotFoundError");
+    return read();
+  };
+  const preparing = prepareAbodeDeliveryNote(file);
+  assert.equal(reads, 1, "Read starts immediately on selection, not after import");
+  const snapshot = await preparing;
+  assert.notEqual(snapshot, file);
+  assert.equal(snapshot.name, file.name);
+  assert.equal(snapshot.lastModified, file.lastModified);
+  assert.equal(await snapshot.text(), originalBytes);
+  assert.equal(await prepareAbodeDeliveryNote(file), snapshot, "Retries use retained bytes");
+  let requests = 0;
+  await uploadAbodeDeliveryNote(file, options, async (_url, init) => {
+    requests++;
+    if (requests === 1) return json({ url: "https://storage.example.test/pdf", key: "saved" });
+    assert.equal(await (init?.body as File).text(), originalBytes);
+    return new Response(null, { status: 200 });
+  });
+  assert.equal(reads, 1);
+});
+
+test("unreadable PDFs explain reselection and make no upload requests", async () => {
+  for (const name of ["NotFoundError", "NotReadableError"]) {
+    const file = pdf();
+    file.arrayBuffer = async () => { throw new DOMException("A requested file could not be found", name); };
+    await assert.rejects(() => uploadAbodeDeliveryNote(file, options, async () => {
+      assert.fail("An unreadable device file must not request storage or attachment");
+    }), /drop or choose it again.*orders and labels are unchanged/);
+  }
+});
+
+test("reselecting the same file metadata can recover from an unreadable handle", async () => {
+  const broken = pdf();
+  broken.arrayBuffer = async () => { throw new DOMException("Missing", "NotFoundError"); };
+  await assert.rejects(prepareAbodeDeliveryNote(broken), /read from your device/);
+  const replacement = new File(["%PDF-1.7\noriginal pages\n%%EOF"], broken.name, {
+    type: broken.type, lastModified: broken.lastModified,
+  });
+  assert.equal(replacement.size, broken.size);
+  assert.equal((await prepareAbodeDeliveryNote(replacement)).name, broken.name);
+});
+
+test("invalid PDF content is rejected before storage is contacted", async () => {
+  const file = new File(["not a PDF"], "dispatch-note-12345678.pdf", { type: "application/pdf" });
+  await assert.rejects(() => uploadAbodeDeliveryNote(file, options, async () => {
+    assert.fail("Invalid PDF content must not be uploaded");
+  }), /not a valid PDF/);
 });

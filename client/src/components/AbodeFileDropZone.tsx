@@ -42,8 +42,8 @@ export function AbodeFileDropZone({ label, accept, multiple = false, disabled = 
     <input className="sr-only" type="file" aria-label={label} accept={accept} multiple={multiple} disabled={disabled}
       onChange={event => {
         const files = Array.from(event.currentTarget.files ?? []);
-        event.currentTarget.value = "";
         if (!disabled && files.length) onFiles(files);
+        event.currentTarget.value = "";
       }} />
   </label>;
 }

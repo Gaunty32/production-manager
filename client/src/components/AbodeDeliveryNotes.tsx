@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, ExternalLink, FileText, Loader2, Printer, Up
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { uploadAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
+import { uploadAbodeDeliveryNote, prepareAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
 import { AbodeOrderDeliveryNoteUpload } from "@/components/AbodeOrderDeliveryNoteUpload";
 
 export type AbodeDeliveryNote = {
@@ -71,7 +71,6 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
     const incoming = Array.from(fileList);
     if (!incoming.length) return;
     setPreviewError("");
-    if (inputRef.current) inputRef.current.value = "";
     const invalid = incoming.find((file) => !/\.pdf$/i.test(file.name) || (file.type && file.type !== "application/pdf"));
     if (invalid) {
       setPreviewError(`${invalid.name} is not a PDF. Choose PDF files only.`);
@@ -94,9 +93,23 @@ export function AbodeDeliveryNotes({ baseUrl, isStaff, onChanged }: AbodeDeliver
       setPreviewError("Keep no more than 50 PDFs in the list. Your existing selection has been kept.");
       return;
     }
-    if (!additions.length) return;
+    // Selecting the same filename again must replace a stale device handle,
+    // rather than silently keeping the failed selection.
+    for (const file of incoming) {
+      if (rows.some(row => identity(row.file) === identity(file) && row.state === "success")) continue;
+      void prepareAbodeDeliveryNote(file).catch(error => {
+        toast({ title: "Delivery note needs selecting again", description: `${file.name}: ${friendlyError(error)}`, variant: "destructive" });
+      });
+    }
+    if (inputRef.current) inputRef.current.value = "";
     setHasPreview(false);
-    setRows(current => [...current, ...additions.map((file): UploadRow => ({
+    setMatchAttempt(attempt => attempt + 1);
+    setRows(current => [...current.map(row => {
+      const replacement = incoming.find(file => identity(file) === identity(row.file));
+      return replacement && row.state !== "success"
+        ? { ...row, file: replacement, state: "queued" as const, message: undefined }
+        : row;
+    }), ...additions.map((file): UploadRow => ({
       file,
       fileName: file.name,
       orderNumber: null,

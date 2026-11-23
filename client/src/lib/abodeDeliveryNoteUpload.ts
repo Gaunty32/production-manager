@@ -1,5 +1,33 @@
 type UploadOptions = { baseUrl: string; isStaff: boolean; jobId: string };
 
+const preparedPdfs = new WeakMap<File, Promise<File>>();
+
+/** Read while the drop/selection is fresh, not after a slow order import.
+ * A File from Downloads/cloud storage can otherwise become unreadable later. */
+export function prepareAbodeDeliveryNote(file: File): Promise<File> {
+  const existing = preparedPdfs.get(file);
+  if (existing) return existing;
+  const prepared = (async () => {
+    if (!file.size || file.size > 10 * 1024 * 1024 || !/\.pdf$/i.test(file.name)) {
+      throw new Error("Choose a PDF delivery note up to 10 MB.");
+    }
+    let bytes: ArrayBuffer;
+    try {
+      bytes = await file.arrayBuffer();
+    } catch {
+      throw new Error("This PDF can no longer be read from your device. Download or save it locally, then drop or choose it again. Retrying alone cannot restore access. Your imported orders and labels are unchanged.");
+    }
+    if (bytes.byteLength !== file.size || new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-") {
+      throw new Error("File content is not a valid PDF. Choose the original delivery-note PDF again.");
+    }
+    const snapshot = new File([bytes], file.name, { type: "application/pdf", lastModified: file.lastModified });
+    preparedPdfs.set(snapshot, Promise.resolve(snapshot));
+    return snapshot;
+  })();
+  preparedPdfs.set(file, prepared);
+  return prepared;
+}
+
 async function responseError(response: Response): Promise<Error> {
   if (response.status === 401) return new Error("Your session has expired. Sign in again before retrying the upload.");
   if (response.status === 413) return new Error("The PDF is too large. Choose a file up to 10 MB.");
@@ -14,9 +42,7 @@ async function responseError(response: Response): Promise<Error> {
 export async function uploadAbodeDeliveryNote(
   file: File, { baseUrl, isStaff, jobId }: UploadOptions, request: typeof fetch = fetch,
 ): Promise<string> {
-  if (!file.size || file.size > 10 * 1024 * 1024 || !/\.pdf$/i.test(file.name)) {
-    throw new Error("Choose a PDF delivery note up to 10 MB.");
-  }
+  file = await prepareAbodeDeliveryNote(file);
   const signedResponse = await request(isStaff ? "/api/staff/objects/upload" : "/api/customer-portal/objects/upload", {
     method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: "{}",
   });

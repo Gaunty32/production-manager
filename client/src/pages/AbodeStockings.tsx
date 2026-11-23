@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AbodeFinishedPhotos, type AbodeFinishedPhoto } from "@/components/AbodeFinishedPhotos";
 import { AbodeOrderDeliveryNotes, type AbodeDeliveryNote } from "@/components/AbodeDeliveryNotes";
-import { uploadAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
+import { uploadAbodeDeliveryNote, prepareAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
 import { AbodeTrackingImport } from "@/components/AbodeTrackingImport";
 import { AbodeFileDropZone } from "@/components/AbodeFileDropZone";
 import { splitAbodeImportFiles } from "@/lib/abodeImportFiles";
@@ -252,8 +252,6 @@ export default function AbodeStockings() {
         let currentObjectKey = old?.objectKey;
         try {
           putRow({ file, status: old?.status ?? "queued", jobId: match.jobId, objectKey: currentObjectKey, message: old?.message, progress: "Checking PDF…" });
-          const signature = new Uint8Array(await file.slice(0, 5).arrayBuffer());
-          if (new TextDecoder().decode(signature) !== "%PDF-") throw new Error("File content is not a valid PDF.");
           if (!currentObjectKey) {
             putRow({ file, status: old?.status ?? "queued", jobId: match.jobId, message: old?.message, progress: "Uploading PDF…" });
             currentObjectKey = await uploadAbodeDeliveryNote(file, { baseUrl, isStaff, jobId: match.jobId });
@@ -295,16 +293,21 @@ export default function AbodeStockings() {
       return true;
     });
     const next = [...noteFiles];
-    const seen = new Set(next.map(file => JSON.stringify([file.name, file.size, file.lastModified])));
     for (const file of valid) {
       const key = JSON.stringify([file.name, file.size, file.lastModified]);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      next.push(file);
+      const index = next.findIndex(item => JSON.stringify([item.name, item.size, item.lastModified]) === key);
+      if (index >= 0) next[index] = file; // Reselection replaces an unreadable handle.
+      else next.push(file);
     }
     if (next.length > 50) {
       toast({ title: "Delivery note limit reached", description: "Select no more than 50 PDFs across this import and retry queue.", variant: "destructive" });
       return;
+    }
+    // Read immediately, but only after enforcing the batch limit.
+    for (const file of valid) {
+      void prepareAbodeDeliveryNote(file).catch(error => {
+        toast({ title: "Delivery note needs selecting again", description: `${file.name}: ${friendlyError(error)}`, variant: "destructive" });
+      });
     }
     setNoteFiles(next);
   }
@@ -497,7 +500,7 @@ export default function AbodeStockings() {
                 <p className="mt-2 break-words text-xs text-stone-500">Name each PDF dispatch-note-ORDERNUMBER.pdf so it matches the right order. Add more batches without replacing your selection.</p>
                 {noteFiles.length > 0 && <ul className="mt-3 space-y-1 text-xs text-stone-700">{noteFiles.map((file, index) => <li className="flex items-start justify-between gap-2" key={`${file.name}-${index}`}><span className="break-all">{file.name} <span className="text-stone-500">({Math.ceil(file.size / 1024)} KB)</span></span><Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 px-2" disabled={isProcessingNotes || importMutation.isPending} onClick={() => { setNoteFiles(current => current.filter(item => item !== file)); setNoteRows(current => current.filter(row => row.file !== file)); }}>Remove</Button></li>)}</ul>}
                 {noteRows.length > 0 && <div className="mt-3 space-y-1" aria-live="polite">{noteRows.map((row, index) => <p key={`${row.file.name}-${index}`} className={`break-words text-xs ${row.status === "error" || row.status === "unmatched" ? "text-rose-800" : "text-stone-600"}`}><span className="font-medium">{row.file.name}:</span> {row.progress ? `${row.progress} ` : ""}{row.message ?? row.status}</p>)}</div>}
-                <p className="mt-2 text-xs text-stone-500">Retry matching and note uploads here without importing orders or purchasing labels.</p>
+                <p className="mt-2 text-xs text-stone-500">Retry matching and note uploads here without importing orders or purchasing labels. If a PDF cannot be read from your device, save it locally and drop or choose it again above to replace the failed selection.</p>
                 {noteFiles.length > 0 && <Button size="sm" variant="outline" className="mt-3" disabled={isProcessingNotes || importMutation.isPending} onClick={() => void processImportNotes()}>{isProcessingNotes && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isProcessingNotes ? "Matching & saving…" : "Retry matching & notes"}</Button>}
               </div>
               {preview && <div className="mt-4 rounded-xl border border-[#d6c3ae] bg-[#fbf8f3] p-4">

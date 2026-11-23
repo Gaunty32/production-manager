@@ -153,6 +153,12 @@ Customers may supply delivery-note PDFs at the same time as their order sheet, r
 
 **How to apply:** Allow a mixed selection of one spreadsheet and multiple PDFs; create the orders before matching and saving notes. Keep failed attachments retryable without repeating the order import or courier booking.
 
+Retain an independent in-memory PDF as soon as a delivery note is selected, before waiting for imports or label bookings. Reselecting the same file must replace a failed device handle.
+
+**Why:** The browser reported “A requested file or directory could not be found” for some selected PDFs after import, while others uploaded. Retrying the same inaccessible device file cannot restore its bytes.
+
+**How to apply:** Use the retained PDF for upload retries across mixed import, bulk and per-order controls. If the initial read fails, explicitly ask for a locally saved file to be selected again; preserve successful notes, saved object keys and all booking results.
+
 Show only “In Production” and “Despatched” totals in the stocking-room summary, for staff and customers.
 
 **Why:** The user said the seven summary cards were too much: “In Production and Despatched is all we need.” This supersedes earlier requests for additional totals.
