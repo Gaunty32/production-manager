@@ -1,20 +1,24 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "./db";
 import { jobs, stockingOrders } from "@shared/schema";
 import { ABODE_CARRIAGE, ABODE_DEFAULT_WEIGHT_GRAMS, ABODE_NETWORK_CODE, stockingDispatchedAt } from "@shared/abode";
 import { dpdService } from "./dpd";
 export const abodeDispatchedAt = stockingDispatchedAt;
 
-export async function bookAbodeLabel(jobId: string) {
+export async function bookAbodeLabel(jobId: string, confirmNoExistingBooking = false) {
   const [order] = await db.select().from(stockingOrders).where(eq(stockingOrders.jobId, jobId));
   const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
   if (!order || !job) throw new Error("Order not found");
   if (order.shippingRoute !== "dpd") throw new Error("Book this address through Parcel2Go using Royal Mail");
   if (job.dhlTrackingNumber) throw new Error("This order already has tracking. Print its saved label; do not book twice.");
+  if (order.shipmentId || order.labelHtml || order.bookedAt || order.parcelNumbers?.length) {
+    throw new Error("This order has saved booking details. Recover its existing label; do not book twice.");
+  }
   if (!["pending", "ready", "draft"].includes(job.invoiceStatus)) throw new Error("This order has already been invoiced");
   if (!dpdService.isConfigured()) throw new Error("DPD booking is not configured");
   const claimed = await db.update(stockingOrders).set({ shipmentState: "booking" }).where(and(
-    eq(stockingOrders.jobId, jobId), eq(stockingOrders.shipmentState, "unbooked"),
+    eq(stockingOrders.jobId, jobId), eq(stockingOrders.shipmentState, confirmNoExistingBooking ? "review" : "unbooked"),
+    isNull(stockingOrders.shipmentId), isNull(stockingOrders.labelHtml), isNull(stockingOrders.bookedAt),
   )).returning();
   if (!claimed.length) throw new Error("A booking has already been attempted. Check DPD and recover the existing shipment; do not rebook.");
   let result;
@@ -22,7 +26,7 @@ export async function bookAbodeLabel(jobId: string) {
     const r = order.recipient;
     result = await dpdService.createShipment({
       deferLabelFetch: true,
-      recipient: { name: r.name, street: [r.line1, r.line2].filter(Boolean).join(", "), city: r.town, zipCode: r.postcode, country: "GB" },
+      recipient: { name: r.name, street: r.line1, locality: r.line2, city: r.town, zipCode: r.postcode, country: "GB" },
       parcels: [{ weight: ABODE_DEFAULT_WEIGHT_GRAMS, customerReference: order.orderNumber }],
       reference: order.orderNumber, networkCode: ABODE_NETWORK_CODE,
     });

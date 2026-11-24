@@ -350,7 +350,10 @@ export function registerAbodeRoutes(app: Express, deps: {
     }));
     app.post(`${base}/orders/:id/book`, auth, wrap(async (req, res, customer) => {
       const { job } = await owned(req.params.id, customer);
-      res.json(await bookAbodeLabel(job.id));
+      const { confirmNoExistingBooking } = z.object({
+        confirmNoExistingBooking: z.boolean().optional(),
+      }).parse(req.body ?? {});
+      res.json(await bookAbodeLabel(job.id, confirmNoExistingBooking === true));
     }));
     app.post(`${base}/orders/:id/dispatch`, auth, wrap(async (req, res, customer) => {
       const { job, order: existingOrder } = await owned(req.params.id, customer);

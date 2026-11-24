@@ -99,6 +99,12 @@ Manual Abode label booking should book directly, without a warning-filled confir
 
 **How to apply:** Keep the normal booking action direct; retain genuine failure/recovery messages and duplicate-booking protection.
 
+Retrying a reviewed DPD booking requires staff to check the carrier account and explicitly confirm no shipment exists; ordinary retries must remain blocked.
+
+**Why:** DPD has rejected Abode imports with “Maximum length exceeded”, leaving no saved tracking, but missing local tracking alone cannot rule out a remote purchase. An uncertain purchase must never be repeated automatically.
+
+**How to apply:** Keep normal new bookings direct. Reviewed orders need the explicit no-existing-booking confirmation, must have no saved shipment evidence, and still need an atomic single-flight claim. Recover an existing shipment instead whenever DPD has already booked it.
+
 Abode needs the courier label as a PDF, its tracking code, and the master order spreadsheet updated from the booking.
 
 **Why:** The user said: “i just need a label as a PDF and the tracking code and the spreadsheet updated.”

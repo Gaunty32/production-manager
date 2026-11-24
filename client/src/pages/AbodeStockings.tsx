@@ -636,7 +636,18 @@ export default function AbodeStockings() {
                        {isStaff && order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Parcel tracking</p><a href={trackingUrl(order)} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 break-all text-sm font-medium text-[#344e43] underline underline-offset-2">{order.dhlTrackingNumber}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a><p className="mt-1 text-xs text-stone-600">Despatch: {formatDate(order.dispatchedAt)} · Delivered: {formatDate(order.deliveredAt)}</p><p className="mt-1 text-xs text-stone-600">Tracking status: {order.deliveredAt ? "Delivered" : order.trackingStatus || "Awaiting carrier confirmation"}</p>{order.trackingError && <p className="mt-1 text-xs text-amber-900">Latest tracking check did not complete. Refresh to try again.</p>}</div>}
                       {isStaff && order.shippingRoute === "royal_mail" && !order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-xs text-stone-600">Royal Mail route: book externally, then save its tracking number here.</p><a className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3 w-3" /></a></div>}
                       {isStaff && order.shipmentState === "booking" && <p className="mt-3 text-xs text-stone-600">Waiting for the booked label and tracking to be saved.</p>}
-                      {isStaff && order.shipmentState === "review" && <div className="mt-3 rounded-md bg-rose-50 p-2 text-xs leading-5 text-rose-900">Booking needs review. Check the DPD portal before recording recovered tracking.</div>}
+                      {isStaff && order.shipmentState === "review" && <div className="mt-3 rounded-md bg-rose-50 p-2 text-xs leading-5 text-rose-900">
+                        <p>Booking needs review. If DPD has a shipment for this order, recover its existing label instead of booking again.</p>
+                        {order.shippingRoute === "dpd" && !order.dhlTrackingNumber && !order.labelAvailable && <Button
+                          className="mt-2 min-h-10 w-full whitespace-normal sm:w-auto" variant="outline" size="sm"
+                          disabled={operationMutation.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Have you checked your DPD account for order ${order.orderNumber} and confirmed that NO shipment exists? Continue only if no booking exists. This will create a real, chargeable DPD booking.`)) {
+                              operationMutation.mutate({ order, action: "book", payload: { confirmNoExistingBooking: true } });
+                            }
+                          }}
+                        >{operationMutation.isPending && operationMutation.variables?.order.id === order.id ? "Booking…" : "No booking in DPD — retry"}</Button>}
+                      </div>}
                       {isStaff && order.shippingCost != null && <p className="mt-3 border-t border-stone-100 pt-2 text-xs text-stone-500">Carriage recorded: {MONEY(Number(order.shippingCost))} ex. VAT</p>}
                     </div>
                   </div>

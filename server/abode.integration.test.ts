@@ -119,6 +119,10 @@ test("Abode import → early label → completion → staff despatch, with safe 
     assert.equal(request.networkCode, "2^32", "Expresspak 5 Next Day");
     assert.equal(request.parcels[0].weight, 4000, "Agreed default 4 kg");
     assert.equal(request.parcels.length, 1);
+    if (request.reference === "TEST-RETRY") {
+      assert.equal(request.recipient.street, "26 Example Residential Way");
+      assert.equal(request.recipient.locality, "Example Place");
+    }
     await new Promise(resolve => setTimeout(resolve, 30));
     if (failBooking) throw new Error("Simulated uncertain courier response");
     assert.equal(request.deferLabelFetch, true, "Persist tracking before fetching the label");
@@ -409,6 +413,30 @@ test("Abode import → early label → completion → staff despatch, with safe 
     await db.update(jobs).set({ dispatchEmailQueuedAt: null, dispatchEmailSentAt: null }).where(eq(jobs.id, failedId));
     await maybeSendDispatchNotification(failedId);
     assert.equal((await storage.getJob(failedId))?.dispatchEmailQueuedAt, null, "Generic completion calls never catch up old Abode orders automatically");
+    failBooking = true;
+    const retryImport = await (await request("/imports", { rows: [{
+      ...row, "Order number": "TEST-RETRY", "Address line 1": "26 Example Residential Way",
+      "Address line 2": "Example Place",
+    }] })).json();
+    const retryId = retryImport.labelResults[0].jobId;
+    assert.equal(retryImport.labelResults[0].status, "review");
+    const beforeRetry = bookings;
+    assert.equal((await request(`/orders/${retryId}/book`, { confirmNoExistingBooking: "yes" })).status, 400);
+    await request(`/orders/${retryId}/book`, {});
+    assert.equal(bookings, beforeRetry, "Review still blocks ordinary booking attempts");
+    assert.equal((await request(`/orders/${retryId}/book`, { confirmNoExistingBooking: true }, true)).status, 404);
+    failBooking = false;
+    const attempts = await Promise.all([
+      request(`/orders/${retryId}/book`, { confirmNoExistingBooking: true }),
+      request(`/orders/${retryId}/book`, { confirmNoExistingBooking: true }),
+    ]);
+    assert.equal(attempts.filter(response => response.ok).length, 1);
+    assert.equal(bookings, beforeRetry + 1, "Explicitly confirmed retries still allow only one concurrent purchase");
+    assert.equal((await storage.getJob(retryId))?.dispatchEmailQueuedAt, null);
+    await db.update(stockingOrders).set({ shipmentState: "review" }).where(eq(stockingOrders.jobId, retryId));
+    await db.update(jobs).set({ dhlTrackingNumber: null }).where(eq(jobs.id, retryId));
+    assert.equal((await request(`/orders/${retryId}/book`, { confirmNoExistingBooking: true })).ok, false);
+    assert.equal(bookings, beforeRetry + 1, "Saved shipment details block retry even when tracking is absent");
   } finally {
     storage.getCustomers = originals.customers; storage.getCustomer = originals.customer; storage.getCustomerUserById = originals.customerUser;
     storage.getCustomerUsersByCustomerId = originals.customerUsers;

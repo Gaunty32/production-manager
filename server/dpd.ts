@@ -14,6 +14,7 @@ export interface DpdShipmentRequest {
   recipient: {
     name: string;
     street: string;
+    locality?: string;
     houseNo?: string;
     city: string;
     zipCode: string;
@@ -181,7 +182,7 @@ class DpdService {
               countryCode: request.recipient.country || "GB",
               postcode: request.recipient.zipCode,
               street,
-              locality: "",
+              locality: request.recipient.locality || "",
               town: request.recipient.city,
               county: "",
             },
