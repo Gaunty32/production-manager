@@ -147,6 +147,12 @@ Missing tracking and label attachments in the live database do not mean the orig
 
 **How to apply:** Search generated assets as well as uploads, verify the order reference against the label's consignment number, and distinguish finding a number from saving it to the live portal.
 
+When the labels are already saved, staff must be able to update tracking alone, without retrieving or uploading a label again.
+
+**Why:** The user said, “just update the tracking info. the labels are saved.”
+
+**How to apply:** Recording existing tracking must not purchase shipping, alter saved labels, infer despatch or send a despatch email.
+
 The customer needs a master spreadsheet list of orders showing despatch dates, delivered dates and tracking numbers, with automatic DPD tracking rather than staff-entered delivered dates.
 
 **Why:** The user requested the master list and selected “Connect automatic DPD tracking”.

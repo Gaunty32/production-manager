@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { saveExistingAbodeTracking } from "@/lib/abodeTracking";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, ChevronDown, Clock3, ExternalLink, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, Search, Send, ShieldAlert, Truck, Upload, Printer } from "lucide-react";
@@ -109,8 +110,6 @@ export default function AbodeStockings() {
   const [activeOrder, setActiveOrder] = useState<StockingOrder | null>(null);
   const [dialog, setDialog] = useState<"complete" | "royal-mail" | "recover" | "dispatch" | null>(null);
   const [trackingNumber, setTrackingNumber] = useState("");
-  const [existingShipmentId, setExistingShipmentId] = useState("");
-  const [recoveryPdf, setRecoveryPdf] = useState<File | null>(null);
   const [bookingRecovery, setBookingRecovery] = useState<BookingRecovery[]>([]);
   const [noteFiles, setNoteFiles] = useState<File[]>([]);
   const [noteRows, setNoteRows] = useState<NoteRow[]>([]);
@@ -171,18 +170,8 @@ export default function AbodeStockings() {
     onError: (err) => toast({ title: "Import failed", description: friendlyError(err), variant: "destructive" }),
   });
   const operationMutation = useMutation({
-    mutationFn: async ({ order, action, payload, labelPdf }: { order: StockingOrder; action: string; payload: Record<string, unknown>; labelPdf?: File }) => {
-      if (labelPdf) {
-        const params = new URLSearchParams({ shipmentId: String(payload.shipmentId), trackingNumber: String(payload.trackingNumber) });
-        const response = await fetch(`${STAFF_URL}/orders/${encodeURIComponent(order.id)}/recover?${params}`, {
-          method: "POST", credentials: "include", headers: { "Content-Type": "application/pdf" }, body: labelPdf,
-        });
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({}));
-          throw new Error(error.error || "Could not save the existing label PDF.");
-        }
-        return response.json();
-      }
+    mutationFn: async ({ order, action, payload }: { order: StockingOrder; action: string; payload: Record<string, unknown> }) => {
+      if (action === "tracking") return saveExistingAbodeTracking(order.orderNumber, String(payload.trackingNumber));
       const response = await apiRequest("POST", `${STAFF_URL}/orders/${encodeURIComponent(order.id)}/${action}`, payload);
       return response.json();
     },
@@ -193,7 +182,7 @@ export default function AbodeStockings() {
       } else {
       toast({ title: "Order updated", description: "The latest status is now reflected below." });
       }
-      setDialog(null); setActiveOrder(null); setTrackingNumber(""); setRecoveryPdf(null);
+      setDialog(null); setActiveOrder(null); setTrackingNumber("");
       refresh();
     },
     onError: (err) => {
@@ -206,10 +195,9 @@ export default function AbodeStockings() {
   const orders = useMemo(() => (data?.orders ?? []).map(stockingOrderForDisplay), [data?.orders]);
   const existingBookingQuery = new URLSearchParams(window.location.search);
   const existingBookingOrder = orders.find(order => order.orderNumber === existingBookingQuery.get("existingDpdOrder"));
-  const linkedShipmentId = Number(existingBookingQuery.get("existingDpdShipment"));
   const linkedTracking = existingBookingQuery.get("existingDpdTracking") || "";
   const canSyncLinkedBooking = isStaff && existingBookingOrder && ["booking", "review"].includes(existingBookingOrder.shipmentState)
-    && Number.isSafeInteger(linkedShipmentId) && linkedShipmentId > 0 && /^[A-Za-z0-9 -]{5,80}$/.test(linkedTracking);
+    && /^\d{10}$/.test(linkedTracking);
   const shownOrders = useMemo(() => orders.filter((order) => {
     const term = search.trim().toLocaleLowerCase();
     return !term || [order.jobNumber, order.poNumber, order.jobName, order.orderNumber, order.dhlTrackingNumber, order.dispatchedAt, order.deliveredAt, order.trackingStatus, ...order.items.map((item) => item.stockingDetails.name)].some((value) => String(value ?? "").toLocaleLowerCase().includes(term));
@@ -400,8 +388,6 @@ export default function AbodeStockings() {
   const openLabelRecovery = (order: StockingOrder) => {
     setActiveOrder(order);
     setTrackingNumber(order.dhlTrackingNumber || (existingBookingOrder?.id === order.id ? linkedTracking : ""));
-    setExistingShipmentId(existingBookingOrder?.id === order.id && linkedShipmentId > 0 ? String(linkedShipmentId) : "");
-    setRecoveryPdf(null);
     setDialog("recover");
   };
   const jumpToOrders = (section: "awaiting-production" | "despatched") => {
@@ -444,8 +430,8 @@ export default function AbodeStockings() {
         {canSyncLinkedBooking && <div className="mb-5 rounded-xl border border-stone-200 bg-white p-4 text-sm">
           <p>Existing DPD booking for order <strong>{existingBookingOrder.orderNumber}</strong> · tracking <strong>{linkedTracking}</strong></p>
           <Button className="mt-3" disabled={operationMutation.isPending} onClick={() => operationMutation.mutate({
-            order: existingBookingOrder, action: "recover", payload: { shipmentId: linkedShipmentId, trackingNumber: linkedTracking },
-          })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save existing label and update order list</Button>
+            order: existingBookingOrder, action: "tracking", payload: { trackingNumber: linkedTracking },
+          })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save tracking and update order list</Button>
         </div>}
         {isStaff && orders.some(order => order.trackingError) && <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="font-semibold">Some tracking checks need attention</p>
@@ -613,7 +599,7 @@ export default function AbodeStockings() {
                       {!order.completed && <Button size="sm" onClick={() => { setActiveOrder(order); setDialog("complete"); }}><Check className="mr-1.5 h-4 w-4" />Complete work</Button>}
                       {!order.labelAvailable && !order.dhlTrackingNumber && order.shippingRoute === "dpd" && order.shipmentState === "unbooked" && <Button size="sm" disabled={operationMutation.isPending} onClick={() => operationMutation.mutate({ order, action: "book", payload: {} })}>{operationMutation.isPending && operationMutation.variables?.order.id === order.id && operationMutation.variables.action === "book" ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Booking…</> : <><Truck className="mr-1.5 h-4 w-4" />Book DPD label</>}</Button>}
                       {order.completed && !order.dhlTrackingNumber && order.shippingRoute === "royal_mail" && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setDialog("royal-mail"); }}><Send className="mr-1.5 h-4 w-4" />Add tracking</Button>}
-                      {needsLabelRecovery && <Button variant="outline" size="sm" onClick={() => openLabelRecovery(order)}><Printer className="mr-1.5 h-4 w-4" />Get existing label</Button>}
+                      {needsLabelRecovery && <Button variant="outline" size="sm" onClick={() => openLabelRecovery(order)}><Truck className="mr-1.5 h-4 w-4" />Save tracking</Button>}
                       {order.labelAvailable && !(order.shipmentState === "review" && !order.dhlTrackingNumber) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "label")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Label PDF</Button>}
                       {!order.dispatchedAt && <Button size="sm" disabled={!order.completed} title={!order.completed ? "Complete production first" : "Confirm this order has already been sent; no label or tracking required"} onClick={() => {
                         setActiveOrder(order); setDialog("dispatch");
@@ -705,29 +691,20 @@ export default function AbodeStockings() {
           <DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button><Button disabled={!activeOrder || !activeOrder.completed || operationMutation.isPending} onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "dispatch", payload: {} })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirm despatch</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={dialog === "royal-mail" || dialog === "recover"} onOpenChange={(open) => { if (!open) { setDialog(null); setRecoveryPdf(null); } }}>
+      <Dialog open={dialog === "royal-mail" || dialog === "recover"} onOpenChange={(open) => { if (!open) setDialog(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{dialog === "recover" ? "Get existing DPD label" : "Save Royal Mail tracking"}</DialogTitle>
-            <DialogDescription>{dialog === "recover" ? "Save the existing shipment's label and tracking. If DPD cannot retrieve it, select your saved label PDF below. This does not book another shipment or confirm despatch." : "Book the parcel externally, then record the tracking number here. Confirm despatch separately once the order has been sent."}</DialogDescription>
+            <DialogTitle>{dialog === "recover" ? "Save DPD tracking" : "Save Royal Mail tracking"}</DialogTitle>
+            <DialogDescription>{dialog === "recover" ? "Record the existing shipment's 10-digit DPD consignment number. Saved labels are left unchanged. No label upload, label retrieval or new booking is needed. This does not confirm despatch." : "Book the parcel externally, then record the tracking number here. Confirm despatch separately once the order has been sent."}</DialogDescription>
           </DialogHeader>
-          {dialog === "recover" && <label className="space-y-2 text-sm font-medium">DPD shipment ID<Input value={existingShipmentId} onChange={event => setExistingShipmentId(event.target.value)} inputMode="numeric" autoComplete="off" /></label>}
           <label className="space-y-2 text-sm font-medium">Tracking number<Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} autoComplete="off" /></label>
-          {dialog === "recover" && <label className="space-y-2 text-sm font-medium">Existing label PDF (if DPD cannot retrieve it)<Input type="file" accept=".pdf,application/pdf" onChange={event => {
-            const file = event.target.files?.[0] || null;
-            if (file && file.size > 1024 * 1024) {
-              toast({ title: "PDF is too large", description: "Choose a label PDF no larger than 1 MB.", variant: "destructive" });
-              event.target.value = ""; setRecoveryPdf(null); return;
-            }
-            setRecoveryPdf(file);
-          }} /><span className="block text-xs font-normal text-stone-500">The PDF's order and tracking numbers are checked before saving. No new shipment is booked.</span></label>}
           {dialog === "royal-mail" && <a className="inline-flex items-center gap-1 text-sm font-medium text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3.5 w-3.5" /></a>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button>
-            <Button disabled={!trackingNumber.trim() || operationMutation.isPending || (dialog === "recover" && (!Number.isSafeInteger(Number(existingShipmentId)) || Number(existingShipmentId) <= 0))}
-              onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: dialog === "recover" ? "recover" : "royal-mail", labelPdf: dialog === "recover" ? recoveryPdf || undefined : undefined, payload: {
-                trackingNumber: trackingNumber.trim(), ...(dialog === "recover" ? { shipmentId: Number(existingShipmentId) } : {}),
-              } })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{dialog === "recover" ? "Save label and tracking" : "Save tracking"}</Button>
+            <Button disabled={!trackingNumber.trim() || operationMutation.isPending || (dialog === "recover" && !/^\d{10}$/.test(trackingNumber.trim()))}
+              onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: dialog === "recover" ? "tracking" : "royal-mail", payload: {
+                trackingNumber: trackingNumber.trim(),
+              } })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save tracking</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
