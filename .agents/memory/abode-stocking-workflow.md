@@ -105,6 +105,12 @@ Retrying a reviewed DPD booking requires staff to check the carrier account and 
 
 **How to apply:** Keep normal new bookings direct. Reviewed orders need the explicit no-existing-booking confirmation, must have no saved shipment evidence, and still need an atomic single-flight claim. Recover an existing shipment instead whenever DPD has already booked it.
 
+A DPD rejection log does not prove that no booking exists for the order; staff's carrier screenshot may show an existing shipment despite missing planner data.
+
+**Why:** The user supplied carrier evidence of a real booking after the planner had recorded a length-validation failure. Requiring a label PDF or despatch confirmation just to save its known consignment number added unnecessary barriers.
+
+**How to apply:** Let staff save verified existing tracking for reviewed bookings without a label PDF. Preserve production, despatch and delivery states and unknown booking dates; do not send email or repurchase. Treat saving tracking and recovering a printable label as separate operations.
+
 Abode needs the courier label as a PDF, its tracking code, and the master order spreadsheet updated from the booking.
 
 **Why:** The user said: “i just need a label as a PDF and the tracking code and the spreadsheet updated.”

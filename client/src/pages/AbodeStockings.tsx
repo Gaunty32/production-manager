@@ -637,7 +637,9 @@ export default function AbodeStockings() {
                       {isStaff && order.shippingRoute === "royal_mail" && !order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-xs text-stone-600">Royal Mail route: book externally, then save its tracking number here.</p><a className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3 w-3" /></a></div>}
                       {isStaff && order.shipmentState === "booking" && <p className="mt-3 text-xs text-stone-600">Waiting for the booked label and tracking to be saved.</p>}
                       {isStaff && order.shipmentState === "review" && <div className="mt-3 rounded-md bg-rose-50 p-2 text-xs leading-5 text-rose-900">
-                        <p>Booking needs review. If DPD has a shipment for this order, recover its existing label instead of booking again.</p>
+                        <p>{order.dhlTrackingNumber
+                          ? "Existing DPD tracking is saved. The label is not yet recovered; use the existing shipment in DPD to print it. Do not book again."
+                          : "Booking needs review. If DPD already has this shipment, use Save existing tracking above to record its consignment number without a label PDF. Do not book again."}</p>
                         {order.shippingRoute === "dpd" && !order.dhlTrackingNumber && !order.labelAvailable && <Button
                           className="mt-2 min-h-10 w-full whitespace-normal sm:w-auto" variant="outline" size="sm"
                           disabled={operationMutation.isPending}

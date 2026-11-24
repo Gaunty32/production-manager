@@ -437,6 +437,23 @@ test("Abode import → early label → completion → staff despatch, with safe 
     await db.update(jobs).set({ dhlTrackingNumber: null }).where(eq(jobs.id, retryId));
     assert.equal((await request(`/orders/${retryId}/book`, { confirmNoExistingBooking: true })).ok, false);
     assert.equal(bookings, beforeRetry + 1, "Saved shipment details block retry even when tracking is absent");
+    failBooking = true;
+    const missingImport = await (await request("/imports", { rows: [{ ...row, "Order number": "TEST-TRACKING-REVIEW" }] })).json();
+    const missingId = missingImport.labelResults[0].jobId;
+    const beforeTrackingSave = bookings;
+    const existingTracking = { entries: [{ orderNumber: "TEST-TRACKING-REVIEW", trackingNumber: "6565279532" }] };
+    assert.equal((await request("/tracking/import", existingTracking)).status, 200, "Staff can save an existing booking's tracking before despatch without its PDF");
+    assert.equal((await request("/tracking/import", existingTracking)).status, 200, "Repeated tracking saves are idempotent");
+    const missingOrder = (await (await request("", undefined, true)).json()).orders.find((order: any) => order.id === missingId);
+    assert.equal(missingOrder.dhlTrackingNumber, "6565279532");
+    assert.equal(missingOrder.completed, false);
+    assert.equal(missingOrder.dispatchedAt, null);
+    assert.equal(missingOrder.bookedAt, null, "Do not invent a booking date");
+    assert.equal(missingOrder.deliveredAt, null);
+    assert.equal(missingOrder.labelAvailable, false, "Tracking alone does not create a saved label");
+    assert.equal((await storage.getJob(missingId))?.dispatchEmailQueuedAt, null);
+    assert.equal((await request(`/orders/${missingId}/book`, { confirmNoExistingBooking: true })).ok, false);
+    assert.equal(bookings, beforeTrackingSave, "Saving tracking blocks rebooking and never buys a shipment");
   } finally {
     storage.getCustomers = originals.customers; storage.getCustomer = originals.customer; storage.getCustomerUserById = originals.customerUser;
     storage.getCustomerUsersByCustomerId = originals.customerUsers;

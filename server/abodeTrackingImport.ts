@@ -31,8 +31,8 @@ export function registerAbodeTrackingImport(app: Express, staffAuth: RequestHand
         for (const entry of input.entries) {
           const target = existing.find(row => row.order.orderNumber === entry.orderNumber);
           if (!target || target.order.shippingRoute !== "dpd") throw new Error(`DPD order ${entry.orderNumber} not found`);
-          if (!target.order.dispatchedAt && !target.order.bookedAt && !target.order.deliveredAt) {
-            throw new Error(`Confirm despatch for order ${entry.orderNumber} before adding tracking`);
+          if (!target.order.dispatchedAt && !target.order.bookedAt && !target.order.deliveredAt && target.order.shipmentState !== "review") {
+            throw new Error(`Check the existing DPD booking for order ${entry.orderNumber} before adding tracking`);
           }
           if (target.job.dhlTrackingNumber && target.job.dhlTrackingNumber !== entry.trackingNumber) {
             throw new Error(`Order ${entry.orderNumber} already has a different tracking number; nothing was changed`);
