@@ -51,6 +51,7 @@ async function run(options: { failXero?: boolean; expected?: Record<string, numb
     clearInvoiceQuantities: async (ids: string[]) => { cleanup.push(ids); },
     applyInvoiceQuantities, invoiceQuantitiesSchema,
     getShippingIssues, isCustomerProvidedLabel, invoiceSelectionError,
+    addConfirmedAbodeLabels: async (jobs: unknown[]) => jobs,
     billedQuantityForMatchingLine, calculateJobPrice, CODE_TO_PRINT_SIZE, MIN_ORDER_QTY,
     xeroService: { createConsolidatedInvoice: async (_jobs: any, _customer: any, lines: any[]) => {
       sentLines = lines;

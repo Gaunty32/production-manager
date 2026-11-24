@@ -75,6 +75,12 @@ Keep Royal Mail as the default remote-address recommendation, but staff may use 
 
 **How to apply:** Retain the original private PDF, verify its recipient and postcode, and display InPost accurately. A masked InPost number is not full tracking; do not guess it or substitute the parcel barcode. Saving a label does not confirm production, despatch or delivery, and must not send an email.
 
+For invoicing, a verified saved InPost label is sufficient shipping evidence when its full tracking number is unavailable; it does not waive Abode's agreed carriage charge.
+
+**Why:** The user requested resolution of the invoice shipping warnings after supplying an InPost label with masked tracking. Requiring an invented tracking number would be incorrect, while treating this as a free customer-supplied courier service would remove agreed carriage.
+
+**How to apply:** Derive label evidence from the saved order attachment on the server, never an invoice request flag. Keep parcel/count and carriage validation, and retain tracking warnings for DPD or unverified shipments.
+
 VAT was not expressly clarified. The implementation follows the existing app's VAT-exclusive invoicing convention.
 
 **Why:** The user answered the production threshold and delivery-exception questions but not the VAT question; preserving existing invoicing behaviour avoids introducing a separate tax convention.

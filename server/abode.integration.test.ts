@@ -21,6 +21,8 @@ import { verifyRecoveredLabelPdf } from "./abodeLabelRecovery";
 import { maybeSendAbodeDispatchNotification } from "./abodeDispatchNotifications";
 import { maybeSendDispatchNotification } from "./customerOrderNotifications";
 import { verifyInpostLabelPdf } from "./abodeInpostLabel";
+import { addConfirmedAbodeLabels } from "./abodeInvoiceShipping";
+import { getShippingIssues } from "../shared/shipping-details";
 
 async function labelPdf(order: string, tracking: string): Promise<Buffer> {
   const document = new PDFDocument();
@@ -487,6 +489,11 @@ test("Abode import → early label → completion → staff despatch, with safe 
     assert.equal(inpostSaved.deliveredAt, null);
     assert.equal(inpostSaved.completed, false);
     assert.equal((await storage.getJob(inpostId))?.shippingCarrier, "inpost");
+    const [invoiceReady] = await addConfirmedAbodeLabels([(await storage.getJob(inpostId))!]);
+    assert.equal(invoiceReady.confirmedExternalShippingLabel, true);
+    assert.deepEqual(getShippingIssues([invoiceReady]), [], "A verified saved InPost label clears only its missing-tracking warning");
+    const [withoutEvidence] = await addConfirmedAbodeLabels([{ id: "not-a-saved-label", shippingCarrier: "inpost" }]);
+    assert.equal(withoutEvidence.confirmedExternalShippingLabel, false);
     assert.equal((await storage.getJob(inpostId))?.dispatchEmailQueuedAt, null);
     bytes = inpostPdf; downloadWhole = true;
     const label = await request(`/orders/${inpostId}/label?format=pdf`);

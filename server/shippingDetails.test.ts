@@ -31,6 +31,18 @@ test("complete parcels, collection and free local delivery do not produce false 
   }]).length, 0);
 });
 
+test("only a verified saved InPost label makes its missing tracking optional", () => {
+  const inpost = {
+    ...base, shippingMethod: "direct_delivery", packageCount: 1, packageType: "bags",
+    shippingCost: "5.50", shippingCarrier: "inpost", confirmedExternalShippingLabel: true,
+  };
+  assert.deepEqual(getShippingIssues([inpost]), []);
+  assert.match(getShippingIssues([{ ...inpost, confirmedExternalShippingLabel: false }])[0].reasons.join(" "), /No tracking/);
+  assert.match(getShippingIssues([{ ...inpost, shippingCarrier: "dpd" }])[0].reasons.join(" "), /No tracking/);
+  assert.match(getShippingIssues([{ ...inpost, shippingCost: null }])[0].reasons.join(" "), /Carriage/);
+  assert.match(getShippingIssues([{ ...inpost, packageCount: null }])[0].reasons.join(" "), /Parcel/);
+});
+
 test("supplied labels override automatic tariffs but preserve tracking and parcel information", () => {
   const job = { ...base, requestedShippingMethod: "courier_label_provided" };
   const updates = customerLabelShippingUpdates(job, {

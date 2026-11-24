@@ -26,6 +26,8 @@ type ShippingJob = {
   packageCount?: number | null;
   packageType?: string | null;
   consolidatedShipmentId?: string | null;
+  shippingCarrier?: string | null;
+  confirmedExternalShippingLabel?: boolean;
 };
 
 export type ShippingIssue = { jobId: string; jobName: string; reasons: string[] };
@@ -69,7 +71,10 @@ export function getShippingIssues(
     const reasons: string[] = [];
     if (!method) reasons.push("Dispatch method has not been recorded.");
     if (method !== "customer_collection" && method !== "free_local") {
-      if (!delivery.some(other => other.dhlTrackingNumber?.trim())) reasons.push("No tracking number is recorded.");
+      // InPost labels may mask the full tracking number. A verified label saved
+      // to this Abode order is sufficient; carriage and parcel checks still apply.
+      const verifiedInpostLabel = job.shippingCarrier === "inpost" && job.confirmedExternalShippingLabel === true;
+      if (!verifiedInpostLabel && !delivery.some(other => other.dhlTrackingNumber?.trim())) reasons.push("No tracking number is recorded.");
       if (!delivery.some(other => Number.isInteger(other.packageCount) && (other.packageCount ?? 0) > 0
         && ["boxes", "bags", "box", "bag"].includes(other.packageType || ""))) {
         reasons.push("Parcel count and type are missing.");

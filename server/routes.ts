@@ -7,6 +7,7 @@ import path from "path";
 import { storage } from "./storage";
 import { dpdParcelSchema, getShippingIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "@shared/shipping-details";
 import { buildBookedDpdDetails, saveBookedDpdDetails } from "./dpdShipmentDetails";
+import { addConfirmedAbodeLabels } from "./abodeInvoiceShipping";
 import { resolveSelectedStaffMentions } from "@shared/staff-mentions";
 import { getInvoiceQuantities, saveInvoiceQuantity, clearInvoiceQuantities } from "./invoiceQuantities";
 import { applyInvoiceQuantities, invoiceQuantitySchema, invoiceQuantitiesSchema } from "@shared/invoice-quantities";
@@ -7024,7 +7025,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
       
-      res.json(jobsWithLineItems);
+      res.json(await addConfirmedAbodeLabels(jobsWithLineItems));
     } catch (error) {
       console.error("[ERROR] Failed to fetch jobs:", error);
       res.status(500).json({ error: "Failed to fetch jobs" });
@@ -10754,7 +10755,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (selectionError) {
           return res.status(409).json({ error: selectionError });
         }
-        const shippingIssues = getShippingIssues(selectedJobs, allJobs, manualShippingCosts || {});
+        const shippingIssues = getShippingIssues(await addConfirmedAbodeLabels(selectedJobs), allJobs, manualShippingCosts || {});
         if (shippingIssues.length && req.body.acknowledgeIncompleteShipping !== true) {
           return res.status(409).json({
             error: "Shipping information is incomplete. Review the shipping warning before creating this invoice.",

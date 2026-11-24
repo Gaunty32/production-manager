@@ -60,7 +60,7 @@ type ExistingInvoicePreview = {
   jobs: { id: string; jobName: string; jobNumber: number | null; total: number; alreadyLinked: boolean }[];
 };
 
-type InvoicingQueueJob = Job;
+type InvoicingQueueJob = Job & { confirmedExternalShippingLabel?: boolean };
 
 interface EditShippingState {
   jobId: string;
@@ -2119,6 +2119,11 @@ export default function InvoicingQueue() {
                                         {job.dhlTrackingNumber && (
                                           <Badge variant="outline" className="ml-1">
                                             Tracking: {job.dhlTrackingNumber}
+                                          </Badge>
+                                        )}
+                                        {job.confirmedExternalShippingLabel && job.shippingCarrier === "inpost" && (
+                                          <Badge variant="outline" className="max-w-full whitespace-normal">
+                                            InPost label saved{!job.dhlTrackingNumber ? " · full tracking not supplied" : ""}
                                           </Badge>
                                         )}
                                         {(isCustomerProvidedLabel(job) || job.shippingMethod === 'consolidated' || job.shippingMethod === 'direct_delivery') && (
