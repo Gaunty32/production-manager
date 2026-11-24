@@ -63,6 +63,12 @@ The stated prices are £7 per stocking, reducing to £5 once 100 have been produ
 
 **How to apply:** Charge the first 100 produced stockings at £7 and stocking 101 onward at £5, including when the boundary falls inside one order. Fix each item's price when it is completed, not when the spreadsheet is uploaded or invoiced. Retain a lifetime count across reopening/deletion so historical production does not disappear or count twice. Royal Mail is booked externally and staff record its tracking number; do not imply Parcel2Go automatically sends tracking back.
 
+Keep Royal Mail as the default remote-address recommendation, but staff may use an already-purchased InPost Direct label for an individual Abode order.
+
+**Why:** The user explicitly confirmed using their supplied InPost label for a Northern Ireland order rather than buying another Royal Mail shipment.
+
+**How to apply:** Retain the original private PDF, verify its recipient and postcode, and display InPost accurately. A masked InPost number is not full tracking; do not guess it or substitute the parcel barcode. Saving a label does not confirm production, despatch or delivery, and must not send an email.
+
 VAT was not expressly clarified. The implementation follows the existing app's VAT-exclusive invoicing convention.
 
 **Why:** The user answered the production threshold and delivery-exception questions but not the VAT question; preserving existing invoicing behaviour avoids introducing a separate tax convention.

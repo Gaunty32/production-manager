@@ -20,6 +20,7 @@ import PDFDocument from "pdfkit";
 import { verifyRecoveredLabelPdf } from "./abodeLabelRecovery";
 import { maybeSendAbodeDispatchNotification } from "./abodeDispatchNotifications";
 import { maybeSendDispatchNotification } from "./customerOrderNotifications";
+import { verifyInpostLabelPdf } from "./abodeInpostLabel";
 
 async function labelPdf(order: string, tracking: string): Promise<Buffer> {
   const document = new PDFDocument();
@@ -40,6 +41,14 @@ test("saved PDF recovery verifies both identifiers and rejects wrong or invalid 
   await assert.rejects(() => verifyRecoveredLabelPdf(pdf, "OTHER", "6895132451"), /does not match/);
   await assert.rejects(() => verifyRecoveredLabelPdf(pdf, "TEST-PDF", "WRONG12345"), /does not match/);
   await assert.rejects(() => verifyRecoveredLabelPdf(Buffer.from("not pdf"), "TEST-PDF", "6895132451"), /existing DPD label/);
+});
+
+test("InPost labels require the correct carrier, recipient and postcode, not a guessed tracking number", async () => {
+  const pdf = await labelPdf("InPost Test Recipient", "BT52 1JR");
+  await verifyInpostLabelPdf(pdf, { name: "Test Recipient", postcode: "BT52 1JR" });
+  await assert.rejects(() => verifyInpostLabelPdf(pdf, { name: "Other Recipient", postcode: "BT52 1JR" }), /does not match/);
+  await assert.rejects(() => verifyInpostLabelPdf(pdf, { name: "Test Recipient", postcode: "GU1 3PH" }), /does not match/);
+  await assert.rejects(() => verifyInpostLabelPdf(Buffer.from("not pdf"), { name: "Test Recipient", postcode: "BT52 1JR" }), /label PDF/);
 });
 
 test("confirmed delivery dates require actual delivered scans, never a next-day estimate", () => {
@@ -107,11 +116,11 @@ test("Abode import → early label → completion → staff despatch, with safe 
   // No real customer contact or email-provider calls from these fixtures.
   storage.getCustomerUsersByCustomerId = async () => [];
   dpdService.isConfigured = () => true;
-  let bookings = 0, failBooking = false, objectType = "application/pdf";
+  let bookings = 0, failBooking = false, objectType = "application/pdf", downloadWhole = false;
   let bytes = Buffer.from("%PDF-1.7\nOriginal retail delivery note\n%%EOF");
   ObjectStorageService.prototype.getObjectEntityFile = async () => ({
     getMetadata: async () => [{ contentType: objectType, size: bytes.length }],
-    download: async () => [bytes.subarray(0, 12)], createReadStream: () => Readable.from(bytes),
+    download: async () => [downloadWhole ? bytes : bytes.subarray(0, 12)], createReadStream: () => Readable.from(bytes),
   } as any);
   ObjectStorageService.prototype.saveSmallObject = async () => `/objects/uploads/${randomUUID()}`;
   dpdService.createShipment = async request => {
@@ -454,6 +463,37 @@ test("Abode import → early label → completion → staff despatch, with safe 
     assert.equal((await storage.getJob(missingId))?.dispatchEmailQueuedAt, null);
     assert.equal((await request(`/orders/${missingId}/book`, { confirmNoExistingBooking: true })).ok, false);
     assert.equal(bookings, beforeTrackingSave, "Saving tracking blocks rebooking and never buys a shipment");
+    const inpostImport = await (await request("/imports", { rows: [{
+      ...row, "Order number": "TEST-INPOST", Postcode: "BT52 1JR",
+    }, { ...row, "Order number": "TEST-INPOST-STAGED", Postcode: "BT52 1JR" }] })).json();
+    const inpostId = inpostImport.labelResults.find((entry: any) => entry.orderNumber === "TEST-INPOST").jobId;
+    const stagedId = inpostImport.labelResults.find((entry: any) => entry.orderNumber === "TEST-INPOST-STAGED").jobId;
+    const inpostPdf = await labelPdf("InPost Test Recipient", "BT52 1JR");
+    const uploadInpost = (id: string, pdf: Buffer, customerMode = false) => fetch(`${base}/api/${customerMode ? "customer-portal/" : ""}abode/orders/${id}/inpost-label`, {
+      method: "POST", headers: { "content-type": "application/pdf", [customerMode ? "x-test-customer" : "x-test-staff"]: "yes" }, body: pdf,
+    });
+    assert.equal((await uploadInpost(inpostId, inpostPdf, true)).status, 404, "Customer cannot change a carrier");
+    assert.equal((await uploadInpost(inpostId, await labelPdf("InPost Different Person", "BT52 1JR"))).status, 400);
+    assert.equal((await uploadInpost(dpd.id, inpostPdf)).status, 400, "Never replace a DPD booking");
+    assert.equal((await uploadInpost(inpostId, inpostPdf)).status, 200);
+    assert.equal((await uploadInpost(inpostId, inpostPdf)).status, 400, "Keep the original label rather than duplicate it");
+    const inpostSaved = (await (await request("", undefined, true)).json()).orders.find((order: any) => order.id === inpostId);
+    assert.equal(inpostSaved.shippingRoute, "inpost");
+    assert.equal(inpostSaved.shipmentState, "booked");
+    assert.equal(inpostSaved.labelAvailable, true);
+    assert.equal(inpostSaved.dhlTrackingNumber, null, "Masked numbers are never guessed");
+    assert.equal(inpostSaved.bookedAt, null, "An upload does not establish the carrier's booking time");
+    assert.equal(inpostSaved.dispatchedAt, null);
+    assert.equal(inpostSaved.deliveredAt, null);
+    assert.equal(inpostSaved.completed, false);
+    assert.equal((await storage.getJob(inpostId))?.shippingCarrier, "inpost");
+    assert.equal((await storage.getJob(inpostId))?.dispatchEmailQueuedAt, null);
+    bytes = inpostPdf; downloadWhole = true;
+    const label = await request(`/orders/${inpostId}/label?format=pdf`);
+    assert.match(label.headers.get("content-disposition") || "", /InPost-label/);
+    assert.deepEqual(Buffer.from(await label.arrayBuffer()), inpostPdf, "Return every byte of the original supplied label");
+    assert.equal((await request(`/orders/${stagedId}/inpost-label`, { objectKey: "/objects/uploads/test-staged-label" })).status, 200);
+    assert.equal(bookings, beforeTrackingSave, "Saving an external label never purchases a shipment");
   } finally {
     storage.getCustomers = originals.customers; storage.getCustomer = originals.customer; storage.getCustomerUserById = originals.customerUser;
     storage.getCustomerUsersByCustomerId = originals.customerUsers;

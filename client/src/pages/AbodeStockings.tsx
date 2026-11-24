@@ -14,6 +14,7 @@ import { AbodeFinishedPhotos, type AbodeFinishedPhoto } from "@/components/Abode
 import { AbodeOrderDeliveryNotes, type AbodeDeliveryNote } from "@/components/AbodeDeliveryNotes";
 import { uploadAbodeDeliveryNote, prepareAbodeDeliveryNote } from "@/lib/abodeDeliveryNoteUpload";
 import { AbodeTrackingImport } from "@/components/AbodeTrackingImport";
+import { AbodeInpostLabel } from "@/components/AbodeInpostLabel";
 import { AbodeFileDropZone } from "@/components/AbodeFileDropZone";
 import { splitAbodeImportFiles } from "@/lib/abodeImportFiles";
 
@@ -37,7 +38,7 @@ type StockingOrder = {
   shippingCost: string | null;
   dispatchEmailQueuedAt: string | null;
   recipient: { name: string; line1: string; line2: string; town: string; county: string; postcode: string };
-  shippingRoute: "dpd" | "royal_mail";
+  shippingRoute: "dpd" | "royal_mail" | "inpost";
   shipmentState: "unbooked" | "booking" | "booked" | "review";
   labelAvailable: boolean;
   bookedAt: string | null;
@@ -390,6 +391,7 @@ export default function AbodeStockings() {
   };
   const trackingUrl = (order: StockingOrder) => order.shippingRoute === "royal_mail"
     ? `https://www.royalmail.com/track-your-item#/tracking-results/${encodeURIComponent(order.dhlTrackingNumber || "")}`
+    : order.shippingRoute === "inpost" ? "https://inpost.co.uk/track"
     : getDpdTrackingUrl({ dhlTrackingNumber: order.dhlTrackingNumber, deliveryAddressType: "custom", deliveryAddress: order.recipient.postcode });
   const openLabelRecovery = (order: StockingOrder) => {
     setActiveOrder(order);
@@ -607,7 +609,7 @@ export default function AbodeStockings() {
                       {!isStaff && Boolean(order.deliveryNotes?.length) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "delivery-note")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Delivery note PDF</Button>}
                   </div>
                   {isCustomer && (order.dispatchedAt || order.deliveredAt) && <div className="border-b border-stone-100 bg-[#e5eee8] px-4 py-4 md:px-5" data-testid={`customer-tracking-${order.id}`}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#344e43]">Tracking number · {order.shippingRoute === "royal_mail" ? "Royal Mail" : "DPD Local"}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#344e43]">Tracking number · {order.shippingRoute === "inpost" ? "InPost Direct" : order.shippingRoute === "royal_mail" ? "Royal Mail" : "DPD Local"}</p>
                     {order.dhlTrackingNumber ? <a href={trackingUrl(order)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-11 max-w-full items-center gap-2 break-all text-lg font-semibold text-[#344e43] underline underline-offset-4">{order.dhlTrackingNumber}<ExternalLink className="h-4 w-4 shrink-0" /></a> : <p className="mt-2 text-sm text-stone-600">Tracking number not yet available.</p>}
                     <p className="mt-1 text-xs text-stone-600">{order.dispatchedAt ? `Despatched ${formatDate(order.dispatchedAt)}` : ""}{order.deliveredAt ? `${order.dispatchedAt ? " · " : ""}Delivered ${formatDate(order.deliveredAt)}` : ""}</p>
                   </div>}
@@ -635,6 +637,8 @@ export default function AbodeStockings() {
                        {isStaff ? <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Recipient</p><p className="mt-1 font-medium">{order.recipient.name}</p><p className="mt-1 text-sm leading-5 text-stone-600">{[order.recipient.line1, order.recipient.line2, order.recipient.town, order.recipient.county, order.recipient.postcode].filter(Boolean).join(", ")}</p></> : <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Order status</p><p className="mt-2 text-sm font-semibold text-[#344e43]">{order.deliveredAt ? "Delivered" : order.dispatchedAt ? "Despatched" : order.completed ? "Ready for despatch" : "In Production"}</p></>}
                        {isStaff && order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Parcel tracking</p><a href={trackingUrl(order)} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 break-all text-sm font-medium text-[#344e43] underline underline-offset-2">{order.dhlTrackingNumber}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a><p className="mt-1 text-xs text-stone-600">Despatch: {formatDate(order.dispatchedAt)} · Delivered: {formatDate(order.deliveredAt)}</p><p className="mt-1 text-xs text-stone-600">Tracking status: {order.deliveredAt ? "Delivered" : order.trackingStatus || "Awaiting carrier confirmation"}</p>{order.trackingError && <p className="mt-1 text-xs text-amber-900">Latest tracking check did not complete. Refresh to try again.</p>}</div>}
                       {isStaff && order.shippingRoute === "royal_mail" && !order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-xs text-stone-600">Royal Mail route: book externally, then save its tracking number here.</p><a className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3 w-3" /></a></div>}
+                      {isStaff && order.shippingRoute === "royal_mail" && !order.dhlTrackingNumber && !order.labelAvailable && <AbodeInpostLabel jobId={order.id} orderNumber={order.orderNumber} onChanged={refresh} />}
+                      {order.shippingRoute === "inpost" && <p className="mt-3 text-xs font-medium text-stone-700">Carrier: InPost Direct{!order.dhlTrackingNumber ? " · full tracking number not supplied" : ""}</p>}
                       {isStaff && order.shipmentState === "booking" && <p className="mt-3 text-xs text-stone-600">Waiting for the booked label and tracking to be saved.</p>}
                       {isStaff && order.shipmentState === "review" && <div className="mt-3 rounded-md bg-rose-50 p-2 text-xs leading-5 text-rose-900">
                         <p>{order.dhlTrackingNumber

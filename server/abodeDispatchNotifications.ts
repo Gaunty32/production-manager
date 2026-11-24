@@ -33,8 +33,8 @@ export async function maybeSendAbodeDispatchNotification(
       customerLogoUrl: customer!.logoUrl,
       orderNumber: row.order.orderNumber,
       trackingNumber,
-      carrier: row.order.shippingRoute === "royal_mail" ? "Royal Mail" : "DPD Local",
-      trackingUrl: trackingNumber ? getDpdTrackingUrl({
+      carrier: row.order.shippingRoute === "inpost" ? "InPost Direct" : row.order.shippingRoute === "royal_mail" ? "Royal Mail" : "DPD Local",
+      trackingUrl: trackingNumber ? row.order.shippingRoute === "inpost" ? "https://inpost.co.uk/track" : getDpdTrackingUrl({
         ...row.job, shippingCarrier: row.order.shippingRoute,
         deliveryAddressType: "custom", deliveryAddress: row.order.recipient.postcode,
       }) : null,
