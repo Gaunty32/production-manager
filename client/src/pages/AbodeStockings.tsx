@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
-import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, Clock3, ExternalLink, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, Search, Send, ShieldAlert, Truck, Upload, Printer } from "lucide-react";
+import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, ChevronDown, Clock3, ExternalLink, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, Search, Send, ShieldAlert, Truck, Upload, Printer } from "lucide-react";
 import { getDpdTrackingUrl } from "@shared/dpd-tracking";
 import { splitStockingRegister, stockingFontLabel, stockingOrderForDisplay } from "@shared/abode";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -102,6 +102,10 @@ export default function AbodeStockings() {
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [flaggedOrders, setFlaggedOrders] = useState<{ orderNumber: string; detailsChanged: boolean }[]>([]);
   const [search, setSearch] = useState("");
+  const [despatchedExpanded, setDespatchedExpanded] = useState(false);
+  useEffect(() => {
+    if (search.trim()) setDespatchedExpanded(true);
+  }, [search]);
   const [activeOrder, setActiveOrder] = useState<StockingOrder | null>(null);
   const [dialog, setDialog] = useState<"complete" | "royal-mail" | "recover" | "dispatch" | null>(null);
   const [trackingNumber, setTrackingNumber] = useState("");
@@ -402,6 +406,7 @@ export default function AbodeStockings() {
   };
   const jumpToOrders = (section: "awaiting-production" | "despatched") => {
     setSearch("");
+    if (section === "despatched") setDespatchedExpanded(true);
     requestAnimationFrame(() => {
       const heading = document.getElementById(`heading-${section}`);
       heading?.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
@@ -560,12 +565,20 @@ export default function AbodeStockings() {
           <div className="space-y-8">
           {orderSections.map(section => <section key={section.id} aria-labelledby={`heading-${section.id}`} data-testid={`stocking-section-${section.id}`}>
             <div className={`mb-3 rounded-xl border-l-4 px-4 py-4 ${section.id === "awaiting-production" ? "border-[#b48a4c] bg-[#eee8de]" : "border-[#344e43] bg-[#e5eee8]"}`}>
-              <div className="flex items-center gap-3">
-                <h3 id={`heading-${section.id}`} tabIndex={-1} className="scroll-mt-4 text-lg font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#344e43]">{section.title}</h3>
-                <span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-[#344e43]" aria-label={`${section.orders.length} orders`}>{section.orders.length}</span>
-              </div>
+              <h3 id={`heading-${section.id}`} tabIndex={-1} className="scroll-mt-4 text-lg font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#344e43]">
+                {section.id === "despatched" ? <button type="button"
+                  className="flex min-h-11 w-full items-center gap-3 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#344e43]"
+                  aria-expanded={despatchedExpanded} aria-controls={`orders-${section.id}`}
+                  onClick={() => setDespatchedExpanded(open => !open)}>
+                  <span>{section.title}</span>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-[#344e43]" aria-label={`${section.orders.length} orders`}>{section.orders.length}</span>
+                  <span className="ml-auto text-xs font-medium text-[#344e43]">{despatchedExpanded ? "Hide" : "Show"}</span>
+                  <ChevronDown aria-hidden="true" className={`h-5 w-5 shrink-0 transition-transform ${despatchedExpanded ? "rotate-180" : ""}`} />
+                </button> : <span className="flex items-center gap-3">{section.title}<span className="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-[#344e43]" aria-label={`${section.orders.length} orders`}>{section.orders.length}</span></span>}
+              </h3>
               <p className="mt-1 text-sm text-stone-600">{section.description}</p>
             </div>
+          <div id={`orders-${section.id}`} hidden={section.id === "despatched" && !despatchedExpanded}>
           {view === "list" && <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white shadow-sm">
             <table className="w-full min-w-[1050px] border-collapse text-left text-sm">
               <thead className="bg-[#eee8de] text-[11px] uppercase tracking-wide text-stone-600"><tr>{["Order", "Personalisation / qty", "Production", "Label", "Despatch", "Despatch date", "Delivery", "Delivered date", "Tracking"].map(title => <th key={title} className="px-3 py-3 font-semibold">{title}</th>)}</tr></thead>
@@ -671,6 +684,7 @@ export default function AbodeStockings() {
               </Card>;
             })}
           </div>)}
+          </div>
           </section>)}
           </div>
         </section>

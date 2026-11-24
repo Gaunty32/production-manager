@@ -19,6 +19,12 @@ The staff Abode order register must show two clear sections: “Awaiting Product
 
 **How to apply:** Labels and tracking may be prepared at import, but orders stay in production until work is completed and staff explicitly confirm despatch. Delivered orders remain despatched. Draft invoicing follows production completion, independently of despatch.
 
+Keep the Despatched section collapsed by default, with its count visible and a Show/Hide control. Searching or selecting the Despatched summary opens it.
+
+**Why:** The user asked to minimise despatched orders so the long completed register does not dominate the page.
+
+**How to apply:** Apply this on staff and customer stocking screens, in both card and list views. Keep order details and tracking available when expanded.
+
 For Abode, staff must confirm despatch after production; creating a label is not despatch.
 
 **Why:** After new uploads bypassed production, the user selected “Staff confirms after production”. This supersedes their earlier “label creation means despatched” instruction.
