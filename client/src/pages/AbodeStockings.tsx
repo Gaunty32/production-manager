@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { saveExistingAbodeTracking } from "@/lib/abodeTracking";
+import { saveExistingAbodeTracking, type AbodeTrackingCarrier } from "@/lib/abodeTracking";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, ChevronDown, Clock3, ExternalLink, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, Search, Send, ShieldAlert, Truck, Upload, Printer } from "lucide-react";
@@ -110,6 +110,7 @@ export default function AbodeStockings() {
   const [activeOrder, setActiveOrder] = useState<StockingOrder | null>(null);
   const [dialog, setDialog] = useState<"complete" | "royal-mail" | "recover" | "dispatch" | null>(null);
   const [trackingNumber, setTrackingNumber] = useState("");
+  const [trackingCarrier, setTrackingCarrier] = useState<AbodeTrackingCarrier>("dpd");
   const [bookingRecovery, setBookingRecovery] = useState<BookingRecovery[]>([]);
   const [noteFiles, setNoteFiles] = useState<File[]>([]);
   const [noteRows, setNoteRows] = useState<NoteRow[]>([]);
@@ -171,7 +172,8 @@ export default function AbodeStockings() {
   });
   const operationMutation = useMutation({
     mutationFn: async ({ order, action, payload }: { order: StockingOrder; action: string; payload: Record<string, unknown> }) => {
-      if (action === "tracking") return saveExistingAbodeTracking(order.orderNumber, String(payload.trackingNumber));
+      if (action === "tracking") return saveExistingAbodeTracking(order.orderNumber, String(payload.trackingNumber),
+        payload.carrier === "inpost" ? "inpost" : payload.carrier === "royal_mail" ? "royal_mail" : "dpd");
       const response = await apiRequest("POST", `${STAFF_URL}/orders/${encodeURIComponent(order.id)}/${action}`, payload);
       return response.json();
     },
@@ -387,6 +389,7 @@ export default function AbodeStockings() {
     : getDpdTrackingUrl({ dhlTrackingNumber: order.dhlTrackingNumber, deliveryAddressType: "custom", deliveryAddress: order.recipient.postcode });
   const openLabelRecovery = (order: StockingOrder) => {
     setActiveOrder(order);
+    setTrackingCarrier("dpd");
     setTrackingNumber(order.dhlTrackingNumber || (existingBookingOrder?.id === order.id ? linkedTracking : ""));
     setDialog("recover");
   };
@@ -598,7 +601,11 @@ export default function AbodeStockings() {
                     {isStaff && <div className="flex flex-wrap gap-2">
                       {!order.completed && <Button size="sm" onClick={() => { setActiveOrder(order); setDialog("complete"); }}><Check className="mr-1.5 h-4 w-4" />Complete work</Button>}
                       {!order.labelAvailable && !order.dhlTrackingNumber && order.shippingRoute === "dpd" && order.shipmentState === "unbooked" && <Button size="sm" disabled={operationMutation.isPending} onClick={() => operationMutation.mutate({ order, action: "book", payload: {} })}>{operationMutation.isPending && operationMutation.variables?.order.id === order.id && operationMutation.variables.action === "book" ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Booking…</> : <><Truck className="mr-1.5 h-4 w-4" />Book DPD label</>}</Button>}
-                      {order.completed && !order.dhlTrackingNumber && order.shippingRoute === "royal_mail" && <Button variant="outline" size="sm" onClick={() => { setActiveOrder(order); setDialog("royal-mail"); }}><Send className="mr-1.5 h-4 w-4" />Add tracking</Button>}
+                      {["royal_mail", "inpost"].includes(order.shippingRoute) && <Button variant="outline" size="sm" onClick={() => {
+                        setActiveOrder(order); setTrackingNumber(order.dhlTrackingNumber || "");
+                        setTrackingCarrier(order.shippingRoute === "inpost" ? "inpost" : "royal_mail");
+                        setDialog("royal-mail");
+                      }}><Send className="mr-1.5 h-4 w-4" />{order.dhlTrackingNumber ? "Edit tracking" : "Save tracking"}</Button>}
                       {needsLabelRecovery && <Button variant="outline" size="sm" onClick={() => openLabelRecovery(order)}><Truck className="mr-1.5 h-4 w-4" />Save tracking</Button>}
                       {order.labelAvailable && !(order.shipmentState === "review" && !order.dhlTrackingNumber) && <Button variant="outline" size="sm" onClick={() => openDocument(order, "label")}><ArrowDownToLine className="mr-1.5 h-4 w-4" />Label PDF</Button>}
                       {!order.dispatchedAt && <Button size="sm" disabled={!order.completed} title={!order.completed ? "Complete production first" : "Confirm this order has already been sent; no label or tracking required"} onClick={() => {
@@ -694,16 +701,21 @@ export default function AbodeStockings() {
       <Dialog open={dialog === "royal-mail" || dialog === "recover"} onOpenChange={(open) => { if (!open) setDialog(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{dialog === "recover" ? "Save DPD tracking" : "Save Royal Mail tracking"}</DialogTitle>
-            <DialogDescription>{dialog === "recover" ? "Record the existing shipment's 10-digit DPD consignment number. Saved labels are left unchanged. No label upload, label retrieval or new booking is needed. This does not confirm despatch." : "Book the parcel externally, then record the tracking number here. Confirm despatch separately once the order has been sent."}</DialogDescription>
+            <DialogTitle>Save {trackingCarrier === "dpd" ? "DPD" : trackingCarrier === "inpost" ? "InPost" : "Royal Mail"} tracking</DialogTitle>
+            <DialogDescription>Record the existing shipment's carrier and tracking number. Saved labels, carriage charges and despatch status are left unchanged. No label upload, label retrieval or new booking is needed.</DialogDescription>
           </DialogHeader>
-          <label className="space-y-2 text-sm font-medium">Tracking number<Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} autoComplete="off" /></label>
-          {dialog === "royal-mail" && <a className="inline-flex items-center gap-1 text-sm font-medium text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3.5 w-3.5" /></a>}
+          {dialog === "royal-mail" && <label className="space-y-2 text-sm font-medium">Carrier
+            <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={trackingCarrier}
+              onChange={event => setTrackingCarrier(event.target.value as AbodeTrackingCarrier)}>
+              <option value="royal_mail">Royal Mail</option><option value="inpost">InPost</option>
+            </select>
+          </label>}
+          <label className="space-y-2 text-sm font-medium">Tracking number<Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} autoComplete="off" inputMode={trackingCarrier === "dpd" ? "numeric" : "text"} /></label>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Cancel</Button>
-            <Button disabled={!trackingNumber.trim() || operationMutation.isPending || (dialog === "recover" && !/^\d{10}$/.test(trackingNumber.trim()))}
-              onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: dialog === "recover" ? "tracking" : "royal-mail", payload: {
-                trackingNumber: trackingNumber.trim(),
+            <Button disabled={operationMutation.isPending || (trackingCarrier === "dpd" ? !/^\d{10}$/.test(trackingNumber.trim()) : !/^[A-Za-z0-9 -]{5,80}$/.test(trackingNumber.trim()))}
+              onClick={() => activeOrder && operationMutation.mutate({ order: activeOrder, action: "tracking", payload: {
+                trackingNumber: trackingNumber.trim(), carrier: trackingCarrier,
               } })}>{operationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save tracking</Button>
           </DialogFooter>
         </DialogContent>

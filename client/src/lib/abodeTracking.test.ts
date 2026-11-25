@@ -37,3 +37,22 @@ test("conflicting tracking is reported rather than silently replaced or retried 
     globalThis.fetch = originalFetch;
   }
 });
+
+test("InPost tracking includes the explicit carrier without requiring a label or shipment ID", async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = (async (url, init) => {
+    requests++;
+    assert.equal(String(url), "/api/abode/tracking/import");
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      entries: [{ orderNumber: "TEST-INPOST", trackingNumber: "87NXM0311772A032", carrier: "inpost" }],
+    });
+    return Response.json({ saved: 1 });
+  }) as typeof fetch;
+  try {
+    await saveExistingAbodeTracking("TEST-INPOST", "87NXM0311772A032", "inpost");
+    assert.equal(requests, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
