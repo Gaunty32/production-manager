@@ -26,3 +26,9 @@ Soro is already connected to Select Branding Solutions and is publishing to it.
 **Why:** The user confirmed this and supplied screenshots of Soro's connection and Facebook's published content.
 
 **How to apply:** Preserve the working Soro connection while troubleshooting this app's separate authorisation. Before enabling another article publisher, resolve the risk of both systems posting the same articles.
+
+Use a Page-scoped token derived from the extended User token; extending a User token separately does not extend a Page token already derived from the original temporary token.
+
+**Why:** Correct Page identity and publishing permissions were not sufficient: the first Page token still inherited the temporary token's short lifetime. A newly derived Page token was required.
+
+**How to apply:** On reconnection, validate Page identity, token type, publishing permissions and token lifetime independently. Treat Meta's token expiry and data-access expiry as separate checks; no scheduled token expiry does not guarantee irrevocable access.
