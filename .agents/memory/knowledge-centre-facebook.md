@@ -15,8 +15,14 @@ Keep the integration on Facebook rather than switching to HighLevel.
 
 **How to apply:** Continue with a Facebook connection unless the user chooses another approach. Do not silently substitute a different publishing provider.
 
-The intended Facebook destination is https://www.facebook.com/profile.php?id=61589820736319. Do not publish these articles to Select Uniforms.
+The intended Facebook destination is Select Branding Solutions: https://www.facebook.com/profile.php?id=61589820736319. Do not publish these articles to Select Uniforms.
 
 **Why:** The user explicitly rejected Select Uniforms when it appeared during token validation and supplied this destination instead.
 
 **How to apply:** Verify the authorised Page matches the supplied destination before enabling or testing publication. Access to a different Page is not permission to substitute it.
+
+Soro is already connected to Select Branding Solutions and is publishing to it.
+
+**Why:** The user confirmed this and supplied screenshots of Soro's connection and Facebook's published content.
+
+**How to apply:** Preserve the working Soro connection while troubleshooting this app's separate authorisation. Before enabling another article publisher, resolve the risk of both systems posting the same articles.
