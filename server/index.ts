@@ -18,6 +18,7 @@ import { startCustomerOrderNotificationRetryWorker } from "./customerOrderNotifi
 import { startAbodeTrackingWorker } from "./abodeTracking";
 import { scheduleAwaitingGarmentsReminders } from "./awaitingGarmentsReminders";
 import { scheduleThreadSheetSync } from "./threadSheetSync";
+import { scheduleFacebookArticleChecks } from "./facebookArticleSharing";
 
 const app = express();
 // Allow the HighLevel landing page to use the public callback API.
@@ -138,6 +139,7 @@ app.use((req, res, next) => {
   scheduleAwaitingGarmentsReminders();
   scheduleThreadSheetSync();
   scheduleWeeklyArticleCampaign();
+  scheduleFacebookArticleChecks();
   startCustomerOrderNotificationRetryWorker();
   startAbodeTrackingWorker();
   const server = await registerRoutes(app);

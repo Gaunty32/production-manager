@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import type { KnowledgeCentreArticle } from "@shared/knowledgeCentre";
+import { firstProseParagraph } from "./facebookArticleRules";
 
 export const EXTERNAL_KNOWLEDGE_FEED_URL =
   "https://app.trysoro.com/api/rss/1ebbb826-bfa1-41de-854c-6dbf82125bf4";
@@ -10,7 +11,7 @@ const parser = new XMLParser({
   textNodeName: "#text",
 });
 
-let cache: { expiresAt: number; articles: KnowledgeCentreArticle[] } | undefined;
+let cache: { expiresAt: number; articles: KnowledgeCentreArticle[]; error?: Error } | undefined;
 
 function textValue(value: unknown): string {
   if (typeof value === "string" || typeof value === "number") return String(value).trim();
@@ -82,14 +83,18 @@ function toArticle(item: Record<string, unknown>): KnowledgeCentreArticle | unde
     publishedAt,
     readTime: wordCount ? `${Math.max(1, Math.ceil(wordCount / 200))} min read` : "Read article",
     paragraphs,
+    firstParagraph: firstProseParagraph(fullContent, textValue(item.description)),
     url,
     imageUrl: textValue(item["media:content"]) || textValue(item.enclosure),
     source: "external",
   };
 }
 
-export async function getExternalKnowledgeCentreArticles(): Promise<KnowledgeCentreArticle[]> {
-  if (cache && cache.expiresAt > Date.now()) return cache.articles;
+export async function getExternalKnowledgeCentreArticles(options: { strict?: boolean; force?: boolean } = {}): Promise<KnowledgeCentreArticle[]> {
+  if (!options.force && cache && cache.expiresAt > Date.now()) {
+    if (options.strict && cache.error) throw cache.error;
+    return cache.articles;
+  }
 
   try {
     const refreshUrl = new URL(EXTERNAL_KNOWLEDGE_FEED_URL);
@@ -109,12 +114,15 @@ export async function getExternalKnowledgeCentreArticles(): Promise<KnowledgeCen
     const articles = items
       .map(toArticle)
       .filter((article): article is KnowledgeCentreArticle => Boolean(article));
+    if (options.strict && !articles.length) throw new Error("The Knowledge Centre feed contained no articles; no baseline or posts were saved.");
 
     cache = { expiresAt: Date.now() + 60 * 1000, articles };
     return articles;
   } catch (error) {
     console.error("[KnowledgeCentre] External RSS import failed:", error);
-    cache = { expiresAt: Date.now() + 60 * 1000, articles: [] };
+    const failure = error instanceof Error ? error : new Error("The Knowledge Centre feed is unavailable");
+    cache = { expiresAt: Date.now() + 60 * 1000, articles: [], error: failure };
+    if (options.strict) throw failure;
     return [];
   }
 }

@@ -26,6 +26,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Mail, Send, Users, Loader2, ChevronDown, FlaskConical, Eye, CalendarClock, BookOpen, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { isSuperAdmin } from "@shared/schema";
+import FacebookArticleSharing from "@/components/FacebookArticleSharing";
 
 interface Recipient {
   email: string;
@@ -324,6 +325,8 @@ export default function EmailCustomers() {
           </p>
         </div>
       </div>
+
+      <FacebookArticleSharing />
 
       <Card data-testid="card-weekly-article-campaign">
         <CardHeader>

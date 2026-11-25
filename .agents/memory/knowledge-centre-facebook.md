@@ -21,11 +21,17 @@ The confirmed Facebook destination is Select Branding Solutions: https://www.fac
 
 **How to apply:** Use the verified API Page ID `1133182819878646`, not the ID from the earlier supplied `profile.php` link. Verify the authorised Page before enabling or testing publication; access to other Pages is not permission to substitute them.
 
-Soro is already connected to Select Branding Solutions and is publishing to it.
+Soro was already connected to Select Branding Solutions and publishing article-related posts when this app's publisher was requested.
 
 **Why:** The user confirmed this and supplied screenshots of Soro's connection and Facebook's published content.
 
-**How to apply:** Preserve the working Soro connection while troubleshooting this app's separate authorisation. Before enabling another article publisher, resolve the risk of both systems posting the same articles.
+**How to apply:** Preserve Soro's article source and connection; do not assume its rewritten, homepage-only Facebook captions can reliably identify the underlying articles.
+
+Use this app instead of Soro to publish the Knowledge Centre article posts.
+
+**Why:** The user selected “Use this app instead of Soro.”
+
+**How to apply:** Before activating this app's publisher, require confirmation that Soro's article auto-sharing has actually been stopped. Choosing the replacement is not proof that Soro has been switched off. Never enable two competing article publishers.
 
 Use a Page-scoped token derived from the extended User token; extending a User token separately does not extend a Page token already derived from the original temporary token.
 

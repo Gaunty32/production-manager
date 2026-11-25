@@ -6,6 +6,8 @@ export type KnowledgeCentreArticle = {
   publishedAt: string;
   readTime: string;
   paragraphs: string[];
+  /** First actual prose paragraph, excluding headings, for article sharing. */
+  firstParagraph?: string;
   url?: string;
   imageUrl?: string;
   source?: "first-party" | "external";

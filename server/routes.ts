@@ -82,6 +82,7 @@ import { shouldSendStaffNotification } from "./notificationThrottle";
 import { KNOWLEDGE_CENTRE_ARTICLES } from "@shared/knowledgeCentre";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { EXTERNAL_KNOWLEDGE_FEED_URL, getExternalKnowledgeCentreArticles } from "./knowledgeCentreFeed";
+import { registerFacebookArticleSharing } from "./facebookArticleSharing";
 import {
   getStaffAvailableSlots,
   getStaffMachineAllocationSlots,
@@ -2133,6 +2134,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(502).json({ error: error?.message || "Failed to sync customers to HighLevel" });
     }
   });
+
+  registerFacebookArticleSharing(app, isStaffAuthenticated, requireSuperAdmin);
 
   app.get("/api/admin/highlevel-campaign/articles", isStaffAuthenticated, requireSuperAdmin, async (_req, res) => {
     const articles = await getCampaignArticleAvailability();
