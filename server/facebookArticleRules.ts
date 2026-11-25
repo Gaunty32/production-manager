@@ -19,15 +19,20 @@ export function articlePlainText(value: string) {
     }).replace(/\s+/g, " ").trim();
 }
 
-/** A heading is never a substitute for the first prose paragraph. */
+/** Extract opening prose, never counting headings or image-only blocks. */
+export function openingProseParagraphs(content: string, description = ""): string[] {
+  const source = (content.trim() || description.trim())
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "");
+  const paragraphs = Array.from(source.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi))
+    .map(match => articlePlainText(match[1])).filter(Boolean).slice(0, 2);
+  if (paragraphs.length) return paragraphs;
+  if (/<[a-z][^>]*>/i.test(source)) return [];
+  return source.split(/\n\s*\n/).map(articlePlainText).filter(Boolean).slice(0, 2);
+}
+
 export function firstProseParagraph(content: string, description = ""): string | undefined {
-  const source = content.trim() || description.trim();
-  for (const match of Array.from(source.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi))) {
-    const text = articlePlainText(match[1]);
-    if (text) return text;
-  }
-  if (/<[a-z][^>]*>/i.test(source)) return undefined;
-  return articlePlainText(source.split(/\n\s*\n/)[0] || "") || undefined;
+  return openingProseParagraphs(content, description)[0];
 }
 
 export function canonicalArticleLink(article: KnowledgeCentreArticle) {
@@ -54,17 +59,19 @@ export function articleKey(article: KnowledgeCentreArticle) {
 }
 
 export function buildFacebookArticlePreview(article: KnowledgeCentreArticle): FacebookArticlePreview {
-  const paragraph = article.source === "external" ? article.firstParagraph : (article.firstParagraph || article.paragraphs[0]);
-  if (!paragraph?.trim()) throw new Error("The article has no first prose paragraph; nothing was posted.");
+  const paragraphs = (article.openingParagraphs ?? (article.source === "external"
+    ? [article.firstParagraph || ""]
+    : article.paragraphs)).map(articlePlainText).filter(Boolean).slice(0, 2);
+  if (!paragraphs.length) throw new Error("The article has no first prose paragraph; nothing was posted.");
   let image: URL;
   try { image = new URL(article.imageUrl || ""); } catch { throw new Error("The article image is missing; nothing was posted."); }
   if (image.protocol !== "https:" || image.username || image.password) throw new Error("The article needs a public HTTPS image; nothing was posted.");
   const articleUrl = canonicalArticleLink(article);
   const title = articlePlainText(article.title);
-  const prose = articlePlainText(paragraph);
+  const prose = paragraphs.join("\n\n");
   if (!title || !prose) throw new Error("The article title or paragraph is empty; nothing was posted.");
   const message = `${title}\n\n${prose}\n\nRead more: ${articleUrl}`;
-  if (message.length > 60_000) throw new Error("The article's first paragraph is too long for a Facebook caption.");
+  if (message.length > 60_000) throw new Error("The article's opening paragraphs are too long for a Facebook caption.");
   return { title, paragraph: prose, articleUrl, imageUrl: image.toString(), message };
 }
 

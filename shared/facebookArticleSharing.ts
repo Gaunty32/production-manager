@@ -14,6 +14,7 @@ export interface FacebookArticlePreview {
   title: string;
   articleUrl: string;
   imageUrl: string;
+  /** Opening prose, with a blank line between the first two paragraphs. */
   paragraph: string;
   message: string;
 }

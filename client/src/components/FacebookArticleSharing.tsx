@@ -279,8 +279,8 @@ export default function FacebookArticleSharing() {
                     <div className="min-w-0 p-4">
                       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Article preview</p>
                       <h4 className="mt-1 text-base font-semibold leading-snug text-slate-900">{status.preview.title}</h4>
-                      <p className="mt-2 line-clamp-3 text-sm leading-5 text-slate-600">{status.preview.paragraph}</p>
-                      <p className="mt-3 break-words text-xs text-slate-500">{status.preview.message}</p>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-5 text-slate-600">{status.preview.paragraph}</p>
+                      <p className="mt-3 whitespace-pre-line break-words text-xs text-slate-500">{status.preview.message}</p>
                       <a
                         href={status.preview.articleUrl}
                         target="_blank"

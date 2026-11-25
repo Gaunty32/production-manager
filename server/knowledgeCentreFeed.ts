@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import type { KnowledgeCentreArticle } from "@shared/knowledgeCentre";
-import { firstProseParagraph } from "./facebookArticleRules";
+import { openingProseParagraphs } from "./facebookArticleRules";
 
 export const EXTERNAL_KNOWLEDGE_FEED_URL =
   "https://app.trysoro.com/api/rss/1ebbb826-bfa1-41de-854c-6dbf82125bf4";
@@ -66,6 +66,7 @@ function toArticle(item: Record<string, unknown>): KnowledgeCentreArticle | unde
       textValue(item.content),
   );
   const fullContent = textValue(item["content:encoded"]) || textValue(item.content);
+  const openingParagraphs = openingProseParagraphs(fullContent, textValue(item.description));
   const paragraphs = fullContent ? extractArticleParagraphs(fullContent) : [description].filter(Boolean);
   const pubDate = textValue(item.pubDate) || textValue(item.published);
   const parsedDate = Date.parse(pubDate);
@@ -83,7 +84,8 @@ function toArticle(item: Record<string, unknown>): KnowledgeCentreArticle | unde
     publishedAt,
     readTime: wordCount ? `${Math.max(1, Math.ceil(wordCount / 200))} min read` : "Read article",
     paragraphs,
-    firstParagraph: firstProseParagraph(fullContent, textValue(item.description)),
+    firstParagraph: openingParagraphs[0],
+    openingParagraphs,
     url,
     imageUrl: textValue(item["media:content"]) || textValue(item.enclosure),
     source: "external",

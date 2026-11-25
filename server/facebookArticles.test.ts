@@ -4,7 +4,7 @@ import type { KnowledgeCentreArticle } from "@shared/knowledgeCentre";
 import type { FacebookArticleRecord, FacebookArticlePreview } from "@shared/facebookArticleSharing";
 import {
   articleKey, buildFacebookArticlePreview, canonicalArticleLink, findExistingArticlePost,
-  firstProseParagraph, londonClock, type ExistingFacebookPost,
+  firstProseParagraph, openingProseParagraphs, londonClock, type ExistingFacebookPost,
 } from "./facebookArticleRules";
 import { FacebookPageClient, FacebookRequestError } from "./facebookPageClient";
 import {
@@ -16,6 +16,7 @@ const article = (changes: Partial<KnowledgeCentreArticle> = {}): KnowledgeCentre
   slug: "external-example-guide", title: "A practical embroidery production guide",
   excerpt: "This is not the first paragraph.", category: "Knowledge Centre", source: "external",
   paragraphs: ["A heading", "The first actual paragraph."], firstParagraph: "The first actual paragraph.",
+  openingParagraphs: ["The first actual paragraph.", "The second actual paragraph."],
   imageUrl: "https://images.example.com/article.webp", publishedAt: "2026-11-26T03:00:00Z",
   readTime: "3 min read", url: "https://www.selectbranding.co.uk/example-guide", ...changes,
 });
@@ -76,15 +77,25 @@ test("sharing extracts the first actual paragraph, skipping headings and decodin
   assert.equal(firstProseParagraph("First prose.\n\nSecond prose."), "First prose.");
 });
 
-test("the Facebook caption has the image, full first paragraph and direct company Knowledge Centre link", () => {
+test("sharing extracts exactly two prose paragraphs without headings, scripts or image-only blocks", () => {
+  assert.deepEqual(openingProseParagraphs("<h2>Heading</h2><p><img src='x'></p><script><p>Not prose</p></script><p>First &amp; complete.</p><h3>Another heading</h3><p>Second complete.</p><p>Third excluded.</p>"),
+    ["First & complete.", "Second complete."]);
+  assert.deepEqual(openingProseParagraphs("First.\n\nSecond.\n\nThird."), ["First.", "Second."]);
+  assert.deepEqual(openingProseParagraphs("<p>Only one available.</p>"), ["Only one available."]);
+  assert.deepEqual(openingProseParagraphs("<h2>No prose.</h2>"), []);
+});
+
+test("the Facebook caption has the image, first two full paragraphs and direct company Knowledge Centre link", () => {
   const preview = buildFacebookArticlePreview(article());
-  assert.equal(preview.paragraph, "The first actual paragraph.");
+  assert.equal(preview.paragraph, "The first actual paragraph.\n\nThe second actual paragraph.");
+  assert.ok(preview.message.includes(`${preview.title}\n\n${preview.paragraph}\n\nRead more:`));
   assert.equal(preview.articleUrl, "https://www.selectbranding.co.uk/knowledge-centre/external-example-guide");
   assert.equal(preview.imageUrl, article().imageUrl);
   assert.ok(preview.message.endsWith(`Read more: ${preview.articleUrl}`));
   assert.ok(!preview.message.includes(article().excerpt));
   assert.ok(!preview.message.includes("A heading"));
-  assert.throws(() => buildFacebookArticlePreview(article({ firstParagraph: undefined })), /first prose/);
+  assert.throws(() => buildFacebookArticlePreview(article({ firstParagraph: undefined, openingParagraphs: undefined })), /first prose/);
+  assert.equal(buildFacebookArticlePreview(article({ openingParagraphs: ["Only one available."] })).paragraph, "Only one available.");
   assert.throws(() => buildFacebookArticlePreview(article({ imageUrl: undefined })), /image/);
   assert.throws(() => buildFacebookArticlePreview(article({ imageUrl: "http://example.com/image.jpg" })), /HTTPS/);
 });
@@ -191,7 +202,7 @@ test("rejected publications wait for explicit retry authorisation", async () => 
 });
 
 test("missing images and missing paragraphs are held without text-only fallback", async () => {
-  for (const missing of [{ imageUrl: undefined }, { firstParagraph: undefined }]) {
+  for (const missing of [{ imageUrl: undefined }, { firstParagraph: undefined, openingParagraphs: undefined }]) {
     const f = fixture();
     f.setFeed([article({ ...missing, url: "https://example.com/new", slug: "new" })]);
     await checkFacebookArticles(f.deps, { allowPublish: true });

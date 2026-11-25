@@ -5,9 +5,9 @@ description: User requirements for daily sharing of new Knowledge Centre article
 
 Check the Knowledge Centre daily for new articles and publish new articles to the company's Facebook page.
 
-**Why:** The user explicitly requested this recurring workflow.
+**Why:** The user explicitly requested this recurring workflow, confirmed the one-off Facebook test worked, then asked for the first two article paragraphs.
 
-**How to apply:** Each post must include the article image, its first paragraph, and a Read more link directly to that article on the company's Knowledge Centre, not the external source feed. Avoid duplicate posts. Do not describe the automation as active until the page is connected and scheduling is actually enabled.
+**How to apply:** Each post must include the article image, its first two actual prose paragraphs (not headings), and a Read more link directly to that article on the company's Knowledge Centre, not the external source feed. Preserve the paragraph break in captions and previews. Avoid duplicate posts. Do not describe the automation as active until the page is connected and scheduling is actually enabled.
 
 Keep the integration on Facebook rather than switching to HighLevel.
 

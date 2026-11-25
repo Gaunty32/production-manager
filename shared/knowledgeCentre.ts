@@ -8,6 +8,8 @@ export type KnowledgeCentreArticle = {
   paragraphs: string[];
   /** First actual prose paragraph, excluding headings, for article sharing. */
   firstParagraph?: string;
+  /** First two actual prose paragraphs, excluding headings and empty blocks. */
+  openingParagraphs?: string[];
   url?: string;
   imageUrl?: string;
   source?: "first-party" | "external";
