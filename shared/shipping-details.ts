@@ -32,6 +32,19 @@ type ShippingJob = {
 
 export type ShippingIssue = { jobId: string; jobName: string; reasons: string[] };
 
+// Dispatch validates the physical shipment. Invoice creation separately checks
+// that its carriage is selected for this invoice or has already been billed.
+export function getDispatchIssues(selected: ShippingJob[], allJobs: ShippingJob[] = selected): ShippingIssue[] {
+  const selectedIds = new Set(selected.map(job => job.id));
+  const shipmentMembers = allJobs.filter(other => selected.some(job =>
+    other.customerId === job.customerId && (
+      other.id === job.id
+      || (!!job.dhlTrackingNumber && other.dhlTrackingNumber === job.dhlTrackingNumber)
+      || (!!job.consolidatedShipmentId && other.consolidatedShipmentId === job.consolidatedShipmentId)
+    )));
+  return getShippingIssues(shipmentMembers, allJobs).filter(issue => selectedIds.has(issue.jobId));
+}
+
 // A customer-supplied label is not our courier service, even if an older
 // dispatch screen recorded it as direct delivery with an automatic tariff.
 export function isCustomerProvidedLabel(job: {

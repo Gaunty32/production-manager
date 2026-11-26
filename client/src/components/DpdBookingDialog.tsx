@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -161,9 +161,13 @@ export function DpdBookingDialog({
       packageCount: 1,
       packageType: "box" as const,
       packageWeightGrams: DEFAULT_WEIGHT_GRAMS.box,
-      reference: prefillName || jobReference || "",
+      reference: (jobReference || `JOB-${jobId.slice(0, 8)}`).slice(0, 25),
     },
   });
+
+  useEffect(() => {
+    if (open) form.setValue("reference", (jobReference || `JOB-${jobId.slice(0, 8)}`).slice(0, 25));
+  }, [open, jobId, jobReference, form]);
 
   function toggleOtherJob(id: string) {
     setSelectedOtherIds(prev => {
@@ -453,8 +457,9 @@ export function DpdBookingDialog({
                     <FormItem>
                       <FormLabel>Reference <span className="text-muted-foreground font-normal">(shown on the label)</span></FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="e.g. customer name" data-testid="input-reference" />
+                        <Input {...field} readOnly data-testid="input-reference" />
                       </FormControl>
+                      <FormDescription>Generated from the job number and name. DPD allows 25 characters per reference.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

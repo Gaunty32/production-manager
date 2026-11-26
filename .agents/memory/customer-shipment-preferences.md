@@ -9,6 +9,12 @@ Keep the customer's shipment choice separate from final dispatch shipping detail
 
 **How to apply:** Show the original request on worksheets and staff review screens; use actual dispatch fields for booking and invoicing. Default only new submissions to DPD.
 
+Completing production must not send a job to invoicing without recorded shipping information. A job held to ship later is production-complete, not invoice-ready.
+
+**Why:** The user reported repeated missing-shipping warnings in invoicing despite unchanged staff practices and said, “It should not be possible to complete a job to send to invoicing without shipping info.”
+
+**How to apply:** Keep held work visible in Completed Orders while awaiting dispatch details. Apply the shipping check to last-line completion as well as whole-order completion; preserve collection and customer-supplied-label exemptions. Do not infer historical parcel counts or tracking from production completion.
+
 Local delivery is offered within 15 miles of LS13.
 
 **Why:** The user specified this service area for the customer portal shipment option.

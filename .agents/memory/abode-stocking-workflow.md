@@ -145,7 +145,7 @@ Missing tracking and label attachments in the live database do not mean the orig
 
 **Why:** The user pointed out that the numbers were already on labels; an original saved PDF was available outside the job's attachments.
 
-**How to apply:** Search generated assets as well as uploads, verify the order reference against the label's consignment number, and distinguish finding a number from saving it to the live portal.
+**How to apply:** Search generated assets as well as uploads, verify the order reference against the label's consignment number, and distinguish finding a number from saving it to the live portal. A staged upload or prepared correction link is not a completed live update: verify the live order before saying it was corrected. The user repeated that they had already supplied the information for updating.
 
 When the labels are already saved, staff must be able to update tracking alone, without retrieving or uploading a label again.
 

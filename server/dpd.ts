@@ -24,6 +24,7 @@ export interface DpdShipmentRequest {
   };
   parcels: Array<{ weight: number; customerReference?: string }>; // weight in grams
   reference?: string;
+  additionalReferences?: string[];
   notifyEmail?: string;
 }
 
@@ -195,8 +196,8 @@ class DpdService {
           numberOfParcels,
           totalWeight: totalWeightKg,
           shippingRef1: reference,
-          shippingRef2: "",
-          shippingRef3: "",
+          shippingRef2: (request.additionalReferences?.[0] || "").slice(0, 25),
+          shippingRef3: (request.additionalReferences?.[1] || "").slice(0, 25),
           customsValue: channelIslands ? 50 : null,
           deliveryInstructions: "",
           parcelDescription: channelIslands ? "Branded clothing / embroidered garments" : "",

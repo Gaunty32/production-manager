@@ -442,6 +442,7 @@ export default function Dashboard() {
   // Separate active and completed orders
   // Production Queue: only show jobs that have all required info (dates + embroidery approval)
   const activeJobs = filteredJobs.filter(job => {
+    if (job.completed) return false;
     // Exclude jobs pending customer approval (still in Holding Area)
     if (job.status === 'pending_customer_approval') return false;
     
@@ -463,6 +464,7 @@ export default function Dashboard() {
   
   // Pending Orders: orders that are pending but don't have all required info yet
   const pendingJobs = filteredJobs.filter(job => {
+    if (job.completed) return false;
     // Exclude jobs pending customer approval (still in Holding Area)
     if (job.status === 'pending_customer_approval') return false;
     
@@ -484,7 +486,7 @@ export default function Dashboard() {
   // Completed Orders: derive from unfiltered jobs for independent search
   // Get all completed jobs (both 'ready' for invoicing and already 'invoiced')
   const allCompletedJobs = jobsWithCustomers.filter(job => 
-    job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready'
+    job.completed || job.invoiceStatus === 'invoiced' || job.invoiceStatus === 'ready'
   );
 
   // Apply unified search filtering to completed orders (same search as production queue)
@@ -510,7 +512,8 @@ export default function Dashboard() {
   const sortedCompletedJobs = [...filteredCompletedJobs].sort(
     (a, b) => latestCompletionTime(b) - latestCompletionTime(a)
   );
-  const awaitingDespatchCount = allCompletedJobs.filter(j => !j.dhlTrackingNumber && j.invoiceStatus === 'ready').length;
+  const awaitingDespatchCount = allCompletedJobs.filter(j =>
+    j.completed && j.invoiceStatus === 'pending').length;
 
   const sortedActiveJobs = [...activeJobs].sort(
     (a, b) => new Date(a.requiredDispatchDate!).getTime() - new Date(b.requiredDispatchDate!).getTime()
@@ -2148,6 +2151,9 @@ export default function Dashboard() {
                               <span className="truncate">
                                 <DemoText>{job.jobName}</DemoText>
                                 {job.poNumber && <span className="text-muted-foreground ml-1">({job.poNumber})</span>}
+                                {job.completed && job.invoiceStatus === "pending" && (
+                                  <span className="block text-xs text-amber-700 dark:text-amber-400">Awaiting shipping information</span>
+                                )}
                               </span>
                               <Button
                                 variant="ghost"
@@ -2417,7 +2423,7 @@ export default function Dashboard() {
                 }
               }}
               jobId={dpdBookingJob.id}
-              jobReference={dpdBookingJob.poNumber || dpdBookingJob.jobName}
+              jobReference={`#${dpdBookingJob.jobNumber ?? dpdBookingJob.id.slice(0, 8)} ${dpdBookingJob.jobName}`}
               prefillName={customer?.name}
               prefillAddress={dpdBookingJob.deliveryAddress || customer?.address || undefined}
               prefillPhone={customer?.telephone ?? undefined}

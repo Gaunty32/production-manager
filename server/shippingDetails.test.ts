@@ -5,8 +5,9 @@ import vm from "node:vm";
 import ts from "typescript";
 import { z } from "zod";
 import { calculateShippingCost } from "../shared/pricing";
-import { dpdParcelSchema, getShippingIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "../shared/shipping-details";
+import { dpdParcelSchema, getShippingIssues, getDispatchIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "../shared/shipping-details";
 import { updateJobSchema } from "../shared/schema";
+import { dpdJobReference, dpdJobReferences } from "../shared/dpd-references";
 
 const base = {
   id: "job1", jobName: "Test order", customerId: "customer", invoiceStatus: "ready", completed: true,
@@ -137,12 +138,13 @@ async function patchShipping(job: any, body: any) {
   const changes: any[] = [];
   let status = 200;
   const context = vm.createContext({
-    z, updateJobSchema, calculateShippingCost, isCustomerProvidedLabel, customerLabelShippingUpdates,
+    z, updateJobSchema, calculateShippingCost, isCustomerProvidedLabel, customerLabelShippingUpdates, getShippingIssues, getDispatchIssues,
     console: { error() {} },
     stockingOrders: { jobId: "jobId" }, eq: () => true,
     db: { select: () => ({ from: () => ({ where: async () => [] }) }) },
     storage: {
       getJob: async () => job,
+      getJobs: async () => [job],
       updateJob: async (_id: string, updates: any) => { changes.push(updates); return { ...job, ...updates }; },
     },
     maybeSendDispatchNotification: async () => {},
@@ -155,6 +157,87 @@ async function patchShipping(job: any, body: any) {
   });
   return { status, changes };
 }
+
+test("the job endpoint refuses invoice readiness without shipping, before writing", async () => {
+  const result = await patchShipping({ ...base, completed: false, invoiceStatus: "pending" }, {
+    completed: true, invoiceStatus: "ready",
+  });
+  assert.equal(result.status, 400);
+  assert.equal(result.changes.length, 0);
+});
+
+test("hold completes production but keeps an unshipped job out of invoicing", async () => {
+  const result = await patchShipping({ ...base, completed: false, invoiceStatus: "pending" }, {
+    completed: true, invoiceStatus: "pending",
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.changes[0].completed, true);
+  assert.equal(result.changes[0].invoiceStatus, "pending");
+});
+
+test("four recorded boxes persist with carriage before moving to invoicing", async () => {
+  const result = await patchShipping({ ...base, invoiceStatus: "pending" }, {
+    completed: true, invoiceStatus: "ready", shippingMethod: "direct_delivery",
+    dhlTrackingNumber: "TRACKING-4-BOXES", packageCount: 4, packageType: "boxes",
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.changes[0].packageCount, 4);
+  assert.equal(result.changes[0].shippingCost, String(calculateShippingCost("boxes", 4).cost));
+  assert.equal(result.changes[0].invoiceStatus, "ready");
+});
+
+test("ready jobs cannot have their saved shipping erased", async () => {
+  const result = await patchShipping({
+    ...base, shippingMethod: "direct_delivery", dhlTrackingNumber: "TRACKING",
+    packageCount: 4, packageType: "boxes", shippingCost: "20",
+  }, { shippingMethod: null, dhlTrackingNumber: null, packageCount: null, packageType: null });
+  assert.equal(result.status, 400);
+  assert.equal(result.changes.length, 0);
+});
+
+test("collection can enter invoicing without courier tracking or parcels", async () => {
+  const result = await patchShipping({ ...base, invoiceStatus: "pending" }, {
+    completed: true, invoiceStatus: "ready", shippingMethod: "customer_collection",
+  });
+  assert.equal(result.status, 200);
+});
+
+test("last-line completion keeps missing shipping pending and admits complete shipping", async () => {
+  const source = readFileSync(new URL("./routes.ts", import.meta.url), "utf8");
+  const start = source.indexOf('const shippingIssues = getDispatchIssues([job], await storage.getJobs());');
+  assert.ok(start > 0);
+  const end = source.indexOf('// Push the job', start);
+  const branch = source.slice(start, end);
+  for (const shipping of [
+    {},
+    { shippingMethod: "direct_delivery", dhlTrackingNumber: "TRACKING", packageCount: 4, packageType: "boxes", shippingCost: "20" },
+    { shippingMethod: "customer_collection" },
+  ]) {
+    const job = { ...base, invoiceStatus: "pending", ...shipping };
+    const changes: any[] = [];
+    const script = ts.transpileModule(`(async () => { ${branch} })()`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2020 },
+    }).outputText;
+    await vm.runInNewContext(script, {
+      job, lineItem: { jobId: job.id }, getDispatchIssues, Date,
+      storage: { getJobs: async () => [job], updateJob: async (_id: string, data: any) => changes.push(data) },
+    });
+    assert.equal(changes[0].completed, true);
+    assert.equal(changes[0].invoiceStatus, shipping.shippingMethod ? "ready" : "pending");
+    assert.equal(changes[0].conversationArchivedByStaff, shipping.shippingMethod ? true : undefined);
+  }
+});
+
+test("a shared shipment can be dispatch-ready while carriage still needs selecting for invoicing", () => {
+  const secondary = {
+    ...base, shippingMethod: "consolidated", consolidatedShipmentId: "shared",
+    dhlTrackingNumber: "TRACKING", packageCount: 4, packageType: "boxes",
+  };
+  const primary = { ...secondary, id: "primary", shippingCost: "20" };
+  assert.equal(getDispatchIssues([secondary], [secondary, primary]).length, 0);
+  assert.equal(getShippingIssues([secondary], [secondary, primary]).length, 1);
+  assert.ok(getDispatchIssues([secondary], [secondary, { ...primary, customerId: "someone-else" }]).length);
+});
 
 test("the real shipping-save endpoint zeros supplied-label carriage before saving", async () => {
   const result = await patchShipping({ ...base, requestedShippingMethod: "courier_label_provided" }, {
@@ -178,15 +261,17 @@ test("unrelated edits leave issued supplied-label invoice charges unchanged", as
   assert.equal(rejected.changes.length, 0);
 });
 
-async function book(options: { jobs?: any[]; ids?: string[]; count?: number; type?: string; failProvider?: boolean; failSave?: boolean; stocking?: boolean } = {}) {
+async function book(options: { jobs?: any[]; ids?: string[]; count?: number; type?: string; reference?: string; failProvider?: boolean; failSave?: boolean; stocking?: boolean } = {}) {
   const members: any[] = options.jobs || [{ ...base }];
   const changes: { id: string; patch: any }[] = [];
   let providerCalls = 0;
   let sentParcels: any[] = [];
+  let sentReference = "";
+  let additionalReferences: string[] = [];
   let response: any;
   let status = 200;
   const context: any = vm.createContext({
-    console: { error() {} }, z, dpdParcelSchema, calculateShippingCost, isCustomerProvidedLabel,
+    console: { error() {} }, z, dpdParcelSchema, calculateShippingCost, isCustomerProvidedLabel, dpdJobReferences,
     crypto: { randomUUID: () => "shipment-group" },
     storage: { getJob: async (id: string) => members.find(member => member.id === id) },
     dpdService: {
@@ -194,6 +279,8 @@ async function book(options: { jobs?: any[]; ids?: string[]; count?: number; typ
       createShipment: async (input: any) => {
         providerCalls++;
         sentParcels = input.parcels;
+        sentReference = input.reference;
+        additionalReferences = input.additionalReferences;
         if (options.failProvider) throw new Error("Provider failed");
         return { trackingNumber: "TRACKING-TEST", labelHtml: "<p>Test label</p>", parcelNumbers: ["parcel"], trackingUrl: "https://example.invalid/tracking" };
       },
@@ -225,12 +312,36 @@ async function book(options: { jobs?: any[]; ids?: string[]; count?: number; typ
     jobIds: options.ids || members.map(member => member.id),
     recipientName: "Test recipient", recipientStreet: "Test Street", recipientCity: "Test City", recipientPostcode: "TEST",
     packageCount: options.count ?? 1, packageType: options.type || "box",
+    reference: options.reference,
   } }, {
     status(value: number) { status = value; return this; },
     json(value: any) { response = value; return this; },
   });
-  return { response, status, changes, providerCalls, sentParcels };
+  return { response, status, changes, providerCalls, sentParcels, sentReference, additionalReferences };
 }
+
+test("DPD references prioritise the job number and name over the customer or a stale client reference", async () => {
+  const job = { ...base, jobNumber: 2427, jobName: "Morningside rural beanies" };
+  const result = await book({ jobs: [job], reference: "The Logo Farm" });
+  assert.equal(result.status, 200);
+  assert.equal(result.sentReference, "#2427 Morningside rural b");
+  assert.equal(result.sentReference, dpdJobReference(job));
+  assert.deepEqual(Array.from(result.additionalReferences), []);
+});
+
+test("consolidated DPD bookings pass additional job references within the courier limits", async () => {
+  const members = [
+    { ...base, jobNumber: 2412, jobName: "Fearn Farm (FF logo)" },
+    { ...base, id: "job2", jobNumber: 2413, jobName: "Valais Blacknose Society caps" },
+  ];
+  const result = await book({ jobs: members });
+  assert.equal(result.sentReference, dpdJobReference(members[0]));
+  assert.deepEqual(Array.from(result.additionalReferences), [dpdJobReference(members[1])]);
+  const many = dpdJobReferences([...members, ...members.map((job, i) => ({ ...job, jobNumber: 2500 + i }))]);
+  assert.equal(many.length, 3);
+  assert.equal(many[2], "#2500+#2501");
+  assert.ok(many.every(reference => reference.length <= 25));
+});
 
 test("single DPD booking persists tracking, dispatch method, normalized parcels and charge", async () => {
   const result = await book({ count: 2 });
@@ -243,6 +354,18 @@ test("single DPD booking persists tracking, dispatch method, normalized parcels 
   assert.equal(result.changes[0].patch.packageType, "boxes");
   assert.equal(result.changes[0].patch.shippingCost, "10");
   assert.equal(result.changes[0].patch.invoiceStatus, undefined);
+});
+
+test("booking a held completed job releases it to invoicing only with a confirmed carriage price", async () => {
+  const held = { ...base, completed: true, invoiceStatus: "pending" };
+  const booked = await book({ jobs: [held], count: 4 });
+  assert.equal(booked.status, 200);
+  assert.equal(booked.changes[0].patch.packageCount, 4);
+  assert.equal(booked.changes[0].patch.invoiceStatus, "ready");
+  assert.equal(booked.changes[0].patch.conversationArchivedByStaff, true);
+  const needsPrice = await book({ jobs: [held], count: 5 });
+  assert.equal(needsPrice.changes[0].patch.shippingCost, "TBA");
+  assert.equal(needsPrice.changes[0].patch.invoiceStatus, undefined);
 });
 
 test("Abode bookings cannot bypass the customer-specific bag and carriage workflow", async () => {

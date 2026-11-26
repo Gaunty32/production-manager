@@ -36,6 +36,7 @@ import { calculateShippingCost, formatPrice } from "@shared/pricing";
 import type { Job } from "@shared/schema";
 import { DpdBookingDialog } from "@/components/DpdBookingDialog";
 import { isCustomerProvidedLabel } from "@shared/shipping-details";
+import { dpdJobReference } from "@shared/dpd-references";
 
 const shippingSchema = z.object({
   shippingMethod: z.enum(["customer_collection", "consolidated", "direct_delivery", "courier_label_provided"], {
@@ -578,8 +579,8 @@ export function ShippingInfoDialog({
             {onHold && (
               <p className="text-xs text-muted-foreground">
                 Waiting on another order for this customer? Use "Hold — ship later" to mark
-                this one complete without shipping details. It stays in the Completed section
-                marked as awaiting despatch, ready to consolidate when the other order is done.
+                production complete without sending it to invoicing. It stays in the Completed
+                section awaiting despatch, ready to consolidate when the other order is done.
               </p>
             )}
 
@@ -622,6 +623,7 @@ export function ShippingInfoDialog({
       open={showDpdDialog}
       onOpenChange={setShowDpdDialog}
       jobId={currentJobId}
+      jobReference={currentJob ? dpdJobReference(currentJob) : undefined}
       jobIds={selectedConsolidatedJobs.length > 0 ? [currentJobId, ...selectedConsolidatedJobs] : undefined}
       prefillName={customerName}
       prefillAddress={customerAddress}

@@ -22,12 +22,17 @@ test("DPD preserves the second address line separately rather than exceeding the
       deferLabelFetch: true,
       recipient: { name: "Test Person", street, locality, city: "Guildford", zipCode: "GU1 3PH", country: "GB" },
       parcels: [{ weight: 4000 }], reference: "TEST-ADDRESS",
+      additionalReferences: ["#2413 Valais Blacknose", "#2500 Third job"],
     });
     const address = payload.consignment[0].deliveryDetails.address;
     assert.equal(address.street, street);
     assert.equal(address.locality, locality);
     assert.equal(address.town, "Guildford");
     assert.equal(address.postcode, "GU1 3PH");
+    assert.equal(payload.consignment[0].consignmentRef, "TEST-ADDRESS");
+    assert.equal(payload.consignment[0].shippingRef1, "TEST-ADDRESS");
+    assert.equal(payload.consignment[0].shippingRef2, "#2413 Valais Blacknose");
+    assert.equal(payload.consignment[0].shippingRef3, "#2500 Third job");
   } finally {
     globalThis.fetch = originalFetch;
     service.authHeaders = originalAuth;

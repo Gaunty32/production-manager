@@ -5,7 +5,8 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { storage } from "./storage";
-import { dpdParcelSchema, getShippingIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "@shared/shipping-details";
+import { dpdJobReferences } from "@shared/dpd-references";
+import { dpdParcelSchema, getShippingIssues, getDispatchIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "@shared/shipping-details";
 import { buildBookedDpdDetails, saveBookedDpdDetails } from "./dpdShipmentDetails";
 import { addConfirmedAbodeLabels } from "./abodeInvoiceShipping";
 import { resolveSelectedStaffMentions } from "@shared/staff-mentions";
@@ -7249,6 +7250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let updates = Object.fromEntries(
         Object.entries(data).filter(([key, value]) => value !== undefined && key !== 'consolidatedJobIds')
       );
+      const consolidatedUpdates: { id: string; updates: any }[] = [];
       const saveCustomerLabel = ["pending", "ready", "draft"].includes(existingJob.invoiceStatus)
         && (data.completed === true || billingFields.some(key => data[key] !== undefined)
           || data.dhlTrackingNumber !== undefined);
@@ -7259,6 +7261,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Handle consolidated shipments
       if (updates.shippingMethod === "consolidated") {
         if (existingShipmentId) {
+          const members = (await storage.getJobs()).filter(job =>
+            job.consolidatedShipmentId === existingShipmentId);
+          if (!members.length || members.some(job => job.customerId !== existingJob.customerId)) {
+            return res.status(400).json({ error: "Select an existing shipment for this customer" });
+          }
           // Joining an existing consolidated shipment
           updates.consolidatedShipmentId = existingShipmentId;
           updates.shippingCost = null; // No cost when joining existing shipment
@@ -7285,7 +7292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Update all consolidated jobs with the same shipment details
           // (but without shipping cost - only the primary job has the cost)
           for (const consolidatedJobId of consolidatedJobIds) {
-            await storage.updateJob(consolidatedJobId, {
+            consolidatedUpdates.push({ id: consolidatedJobId, updates: {
               consolidatedShipmentId,
               shippingMethod: updates.shippingMethod as string,
               dhlTrackingNumber: (updates.dhlTrackingNumber as string | null)?.trim() ?? null,
@@ -7298,7 +7305,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ...((updates.dhlTrackingNumber as string | null)?.trim()
                 ? { dispatchEmailQueuedAt: new Date() }
                 : {}),
-            } as any);
+            } });
           }
         } else {
           // Creating a single-job consolidated shipment (for future consolidation).
@@ -7329,6 +7336,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? shippingCost.cost.toString() 
             : shippingCost.cost;
         }
+      }
+      // Production completion is not dispatch. Validate before saving ANY
+      // member, so consolidation cannot move incomplete shipments to invoicing.
+      const candidate = { ...existingJob, ...updates } as typeof existingJob;
+      const targetInvoiceStatus = updates.invoiceStatus ?? existingJob.invoiceStatus;
+      const sendsToInvoicing = updates.invoiceStatus === "ready"
+        || updates.invoiceStatus === "draft"
+        || (["ready", "draft"].includes(targetInvoiceStatus as string)
+          && (updates.completed === true || billingFields.some(key => updates[key] !== undefined)
+            || updates.dhlTrackingNumber !== undefined));
+      if (!stockingOrder && (sendsToInvoicing || consolidatedUpdates.length)) {
+        const allJobs = await storage.getJobs();
+        const selected = [candidate, ...consolidatedUpdates.map(change => ({
+          ...allJobs.find(job => job.id === change.id)!, ...change.updates,
+        }))];
+        const selectedById = new Map(selected.map(job => [job.id, job]));
+        const proposedJobs = allJobs.map(job => selectedById.get(job.id) || job);
+        const issues = getDispatchIssues(selected, proposedJobs);
+        if (issues.length) {
+          return res.status(400).json({
+            error: "Record complete shipping information before sending this job to invoicing. Use Hold — ship later to finish production without invoicing.",
+            shippingIssues: issues,
+          });
+        }
+      }
+      for (const change of consolidatedUpdates) {
+        await storage.updateJob(change.id, change.updates);
       }
       const finalCompleted = updates.completed ?? existingJob.completed;
       const finalTrackingNumber = (
@@ -7722,12 +7756,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Only update if not part of a consolidated shipment (those are handled separately)
       if (job && job.shippingMethod !== "consolidated") {
         if (allCompleted && job.invoiceStatus === "pending") {
-          // If all line items are completed and job is pending, mark as ready for invoicing
-          // Don't overwrite jobs that have already been sent/paid
+          // Finishing production must not bypass the shipping dialog. Keep
+          // completed work awaiting dispatch out of the invoicing queue.
+          const shippingIssues = getDispatchIssues([job], await storage.getJobs());
           await storage.updateJob(lineItem.jobId, {
             completed: true,
-            invoiceStatus: "ready",
-            conversationArchivedByStaff: true, // Auto-archive chat when job moves to invoicing
+            invoiceStatus: shippingIssues.length ? "pending" : "ready",
+            ...(shippingIssues.length ? {} : { conversationArchivedByStaff: true }),
             ...(job.dhlTrackingNumber && !job.dispatchEmailSentAt && !job.dispatchEmailQueuedAt
               ? { dispatchEmailQueuedAt: new Date() }
               : {}),
@@ -12384,7 +12419,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         packageCount,
         packageType,
         packageWeightGrams,
-        reference,
       } = req.body;
 
       if (!recipientName || !recipientStreet || !recipientCity || !recipientPostcode) {
@@ -12420,6 +12454,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Build parcel list
+      // Never trust a client-side customer-name default to identify a booking.
+      const references = dpdJobReferences(validJobs as NonNullable<typeof validJobs[number]>[]);
+      const reference = references[0];
       const count = parsedParcels.data.packageCount;
       const weightGrams = Math.max(100, parseInt(packageWeightGrams) || 1000);
       const parcels = Array.from({ length: count }, (_, i) => ({
@@ -12440,6 +12477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         parcels,
         reference: reference || `JOB-${allJobIds[0].slice(0, 8)}`,
+        additionalReferences: references.slice(1),
         notifyEmail: recipientEmail || undefined,
       });
 

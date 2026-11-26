@@ -137,6 +137,7 @@ interface JobEditDialogProps {
     deliveryAddressType?: string | null;
     deliveryAddress?: string | null;
     requestedShippingMethod?: string | null;
+    invoiceStatus?: string;
   } | null;
   customers: Array<{ id: string; name: string; address?: string | null; pricingTable2025?: boolean | null; pricingTable2026?: boolean | null }>;
   staff: Array<{ id: string; name: string; active?: boolean }>;
@@ -630,7 +631,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     : null;
   const isUrgent = productionTime !== null && productionTime < 3;
 
-  const handleSubmit = async (data: z.infer<typeof formSchema>) => {
+  const handleSubmit = async (data: z.infer<typeof formSchema>, dispatchAction?: "hold" | "dispatch") => {
     if (isSubmitting) return; // Prevent double submission
     
     if (job) {
@@ -679,7 +680,9 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         const totalQuantity = getTotalQuantity();
         
         // If job is being completed, set invoiceStatus to 'ready' for draft invoicing queue
-        const updateData = justCompleted 
+        const updateData = dispatchAction === "hold" || (job.completed && !data.completed)
+          ? { ...data, quantity: totalQuantity, invoiceStatus: 'pending' }
+          : justCompleted || dispatchAction === "dispatch"
           ? { ...data, quantity: totalQuantity, invoiceStatus: 'ready' }
           : { ...data, quantity: totalQuantity };
         await apiRequest("PATCH", `/api/jobs/${job.id}`, updateData);
@@ -862,7 +865,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(data => handleSubmit(data))} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Required Dispatch Date - TOP PRIORITY with color indicators */}
               <FormField
@@ -1560,6 +1563,12 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
               >
                 {isSubmitting ? "Saving..." : (form.watch('completed') ? "Unmark as Completed" : "Mark Order as Completed")}
               </Button>
+              {job.completed && job.invoiceStatus === "pending" && (
+                <Button type="button" variant="outline" disabled={isSubmitting}
+                  onClick={() => setShippingDialogOpen(true)} data-testid="button-record-shipping">
+                  Record shipping
+                </Button>
+              )}
               <Button type="submit" disabled={isSubmitting} data-testid="button-edit-submit">
                 {isSubmitting ? "Saving..." : "Save Changes"}
               </Button>
@@ -1593,7 +1602,8 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           packageCount: shippingData.packageCount || null,
           packageType: shippingData.packageType || null,
           consolidatedJobIds: shippingData.consolidatedJobIds || [],
-        } as any);
+          existingShipmentId: (shippingData as any).existingShipmentId,
+        } as any, "dispatch");
         setShippingDialogOpen(false);
       }}
       onHold={async () => {
@@ -1606,7 +1616,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
           completedById: currentUserStaff?.id || null,
           shippingMethod: null,
           dhlTrackingNumber: null,
-        } as any);
+        } as any, "hold");
         setShippingDialogOpen(false);
       }}
     />
