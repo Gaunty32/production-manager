@@ -81,3 +81,4 @@
 - [Branded dispatch confirmations](branded-dispatch-confirmations.md) — Merox permits DPD tracking after DPD's sender-branding change; keep internal details private and never infer collection.
 - [Abode stocking workflow](abode-stocking-workflow.md) — customer-only spreadsheet orders, exact personalisation, DPD bags, branded delivery notes and special pricing.
 - [Knowledge Centre Facebook sharing](knowledge-centre-facebook.md) — daily new-article posts with the image, first paragraph and direct article link; keep the connection on Facebook.
+- [DPD shipping quotes](dpd-shipping-quote-policy.md) — preserve fixed tariffs through four boxes; separate estimated courier cost from customer price and compare eligible services.
