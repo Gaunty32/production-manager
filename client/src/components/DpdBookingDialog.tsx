@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import type { BookedDpdDetails } from "@shared/shipping-details";
+import { dpdServicesForRegion, inspectDpdPostcode } from "@shared/dpd-shipping-quote";
 
 const bookingSchema = z.object({
   recipientName: z.string().min(1, "Recipient name is required"),
@@ -42,7 +43,7 @@ const bookingSchema = z.object({
   recipientEmail: z.string().email("Invalid email").optional().or(z.literal("")),
   packageCount: z.coerce.number().int().min(1).max(50).default(1),
   packageType: z.enum(["box", "bag"]).default("box"),
-  packageWeightGrams: z.coerce.number().int().min(100).max(70000).default(5000),
+  packageWeightGrams: z.coerce.number().int().min(100).max(30000).default(5000),
   reference: z.string().optional(),
 });
 
@@ -144,6 +145,7 @@ export function DpdBookingDialog({
   const [result, setResult] = useState<{ trackingNumber: string; labelHtml: string | null; warning?: string } | null>(null);
   const [isBooking, setIsBooking] = useState(false);
   const [selectedOtherIds, setSelectedOtherIds] = useState<Set<string>>(new Set());
+  const [postcodeWarningAcknowledged, setPostcodeWarningAcknowledged] = useState(false);
 
   const addressDefaults = parseAddressField(prefillAddress);
 
@@ -164,6 +166,15 @@ export function DpdBookingDialog({
       reference: (jobReference || `JOB-${jobId.slice(0, 8)}`).slice(0, 25),
     },
   });
+  const recipientPostcode = form.watch("recipientPostcode");
+  const postcodeReview = inspectDpdPostcode(recipientPostcode || "");
+  const requiresPostcodeAcknowledgement = postcodeReview.valid && Boolean(postcodeReview.warning);
+  const bookingRegion = postcodeReview.region;
+  const hasNextDayService = bookingRegion ? dpdServicesForRegion(bookingRegion).includes("next_day") : true;
+
+  useEffect(() => {
+    setPostcodeWarningAcknowledged(false);
+  }, [recipientPostcode]);
 
   useEffect(() => {
     if (open) form.setValue("reference", (jobReference || `JOB-${jobId.slice(0, 8)}`).slice(0, 25));
@@ -179,15 +190,25 @@ export function DpdBookingDialog({
   }
 
   async function handleBook(data: BookingFormData) {
+    const destination = inspectDpdPostcode(data.recipientPostcode);
+    if (!destination.valid) {
+      toast({ title: "Check the delivery postcode", description: destination.warning || "Enter a valid UK delivery postcode.", variant: "destructive" });
+      return;
+    }
+    if (destination.warning && !postcodeWarningAcknowledged) {
+      toast({ title: "Postcode check required", description: "Acknowledge the destination warning before booking.", variant: "destructive" });
+      return;
+    }
     setIsBooking(true);
     try {
       const baseIds = jobIds?.length ? jobIds : [jobId];
-      const allJobIds = [...new Set([...baseIds, ...Array.from(selectedOtherIds)])];
+      const allJobIds = Array.from(new Set([...baseIds, ...Array.from(selectedOtherIds)]));
       const response = await apiRequest("POST", "/api/dpd/book-shipment", {
         ...data,
         jobId,
         jobIds: allJobIds,
         shippingMethod,
+        acknowledgePostcodeWarning: postcodeWarningAcknowledged,
       });
 
       if (!response.ok) {
@@ -224,6 +245,7 @@ export function DpdBookingDialog({
       setResult(null);
       form.reset();
       setSelectedOtherIds(new Set());
+      setPostcodeWarningAcknowledged(false);
       onOpenChange(false);
     }
   }
@@ -358,6 +380,28 @@ export function DpdBookingDialog({
                     )}
                   />
                 </div>
+                {recipientPostcode.length > 0 && !postcodeReview.valid && (
+                  <Alert variant="destructive" data-testid="alert-invalid-dpd-postcode">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{postcodeReview.warning}</AlertDescription>
+                  </Alert>
+                )}
+                {recipientPostcode.length > 0 && postcodeReview.valid && postcodeReview.warning && (
+                  <Alert data-testid="alert-dpd-postcode-warning">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="space-y-2">
+                      <span>{postcodeReview.warning}</span>
+                      {bookingRegion && !hasNextDayService && <p>For this region, this booking uses the configured DPD service. If Two Day transit is required, check the service directly in DPD before booking.</p>}
+                      <label className="flex items-start gap-2 pt-1 text-sm">
+                        <Checkbox checked={postcodeWarningAcknowledged} onCheckedChange={value => setPostcodeWarningAcknowledged(value === true)} />
+                        <span>I have checked this postcode and acknowledge the destination warning.</span>
+                      </label>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {recipientPostcode.length > 0 && postcodeReview.valid && !postcodeReview.warning && bookingRegion && !hasNextDayService && (
+                  <p className="text-sm text-muted-foreground">This booking uses the configured DPD service. If Two Day transit is required, check the service directly in DPD before booking.</p>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <FormField
@@ -439,7 +483,7 @@ export function DpdBookingDialog({
                       <FormItem>
                         <FormLabel>Weight Each (g)</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" min="100" max="70000" placeholder="5000" data-testid="input-weight" />
+                          <Input {...field} type="number" min="100" max="30000" placeholder="5000" data-testid="input-weight" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -450,6 +494,7 @@ export function DpdBookingDialog({
                   Total weight: {(((Number(form.watch("packageCount")) || 1) * (Number(form.watch("packageWeightGrams")) || 0)) / 1000).toFixed(1)}kg
                   {" "}({form.watch("packageCount") || 1} × {((Number(form.watch("packageWeightGrams")) || 0) / 1000).toFixed(1)}kg per {form.watch("packageType") === "bag" ? "bag" : "box"})
                 </p>
+                <p className="text-xs text-muted-foreground">Enter the accurately measured weight for each packed parcel. Standard parcels must weigh between 100g and 30kg each.</p>
                 <FormField
                   control={form.control}
                   name="reference"
@@ -499,7 +544,7 @@ export function DpdBookingDialog({
                 <Button type="button" variant="outline" onClick={handleClose} disabled={isBooking} data-testid="button-cancel-dpd">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isBooking} data-testid="button-confirm-dpd-booking">
+                <Button type="submit" disabled={isBooking || !postcodeReview.valid || (requiresPostcodeAcknowledgement && !postcodeWarningAcknowledged)} data-testid="button-confirm-dpd-booking">
                   {isBooking ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />

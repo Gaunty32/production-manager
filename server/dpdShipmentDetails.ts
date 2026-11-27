@@ -25,7 +25,7 @@ export async function saveBookedDpdDetails(ids: string[], trackingNumber: string
       const canSaveBilling = editable.some(member => member.id === job.id);
       await tx.update(jobs).set({
         dhlTrackingNumber: trackingNumber.trim(),
-        ...(canSaveBilling ? { ...details, shippingCost: job.id === primaryId ? details.shippingCost : null } : {}),
+        ...(canSaveBilling ? { ...details, shippingCost: job.id === primaryId ? details.shippingCost : null, shippingQuote: null } : {}),
         ...(canSaveBilling && job.completed && job.invoiceStatus === "pending"
           && details.shippingCost !== "TBA" ? {
             invoiceStatus: "ready", conversationArchivedByStaff: true,

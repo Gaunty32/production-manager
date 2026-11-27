@@ -6,6 +6,8 @@ import { useMachines } from "@/hooks/useMachines";
 import { minutesToTime } from "@shared/scheduling";
 import { getCustomerShippingOptionLabel } from "@shared/shipping-options";
 import { getBaggingPrice, NAMES_INITIALS_UNIT_PRICE, PRINT_SIZE_CODE, CODE_TO_PRINT_SIZE } from "@shared/pricing";
+import { canViewPrices, type Job } from "@shared/schema";
+import { isCustomerProvidedLabel } from "@shared/shipping-details";
 import { calculateProductionMetrics, isPrintJobType, PRINT_MACHINE_ID } from "@shared/machines";
 import { z } from "zod";
 import {
@@ -50,6 +52,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { CelebrationDialog } from "@/components/CelebrationDialog";
 import { ShippingInfoDialog } from "@/components/ShippingInfoDialog";
 import { StaffJobFileUpload } from "@/components/StaffJobFileUpload";
+import { DpdShippingQuoteDialog } from "@/components/DpdShippingQuoteDialog";
 
 type LineItem = {
   id?: string;
@@ -81,6 +84,10 @@ type LineItem = {
 
 const JOB_TYPES = ["Embroidery", "Print", "Embroidery Initials/Name", "Print Initials/Name", "Bagging", "Other"] as const;
 const POSITION_OPTIONS = ["left chest", "right chest", "left sleeve", "right sleeve", "rear", "other"] as const;
+
+function postcodeFromAddress(address?: string | null): string {
+  return address?.match(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b/i)?.[0] || "";
+}
 
 const formSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
@@ -138,6 +145,11 @@ interface JobEditDialogProps {
     deliveryAddress?: string | null;
     requestedShippingMethod?: string | null;
     invoiceStatus?: string;
+    packageCount?: number | null;
+    packageType?: string | null;
+    shippingCost?: string | null;
+    shippingMethod?: string | null;
+    dhlTrackingNumber?: string | null;
   } | null;
   customers: Array<{ id: string; name: string; address?: string | null; pricingTable2025?: boolean | null; pricingTable2026?: boolean | null }>;
   staff: Array<{ id: string; name: string; active?: boolean }>;
@@ -155,6 +167,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   const [celebrationOnTime, setCelebrationOnTime] = useState(true);
   const [celebrationStaffNames, setCelebrationStaffNames] = useState<string[]>([]);
   const [shippingDialogOpen, setShippingDialogOpen] = useState(false);
+  const [dpdQuoteDialogOpen, setDpdQuoteDialogOpen] = useState(false);
   const [responsibleOperatorId, setResponsibleOperatorId] = useState<string | null>(null);
   const hydratedLineItemsFor = useRef<string | null>(null);
   
@@ -630,6 +643,17 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
     ? differenceInCalendarDays(new Date(requiredDispatchDate), new Date(goodsReceived))
     : null;
   const isUrgent = productionTime !== null && productionTime < 3;
+  const showHeldJobDpdEstimate = Boolean(
+    job &&
+    canViewPrices(user?.role) &&
+    job.completed &&
+    job.invoiceStatus === "pending" &&
+    job.packageType === "boxes" &&
+    Number(job.packageCount) > 4 &&
+    job.shippingCost === "TBA" &&
+    job.dhlTrackingNumber &&
+    !isCustomerProvidedLabel(job),
+  );
 
   const handleSubmit = async (data: z.infer<typeof formSchema>, dispatchAction?: "hold" | "dispatch") => {
     if (isSubmitting) return; // Prevent double submission
@@ -1533,7 +1557,7 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
             
             <input type="hidden" {...form.register('completed')} />
             
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-edit-cancel">
                 Cancel
               </Button>
@@ -1569,6 +1593,17 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                   Record shipping
                 </Button>
               )}
+              {showHeldJobDpdEstimate && job && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSubmitting}
+                  onClick={() => setDpdQuoteDialogOpen(true)}
+                  data-testid="button-held-job-dpd-estimate"
+                >
+                  Calculate DPD estimate
+                </Button>
+              )}
               <Button type="submit" disabled={isSubmitting} data-testid="button-edit-submit">
                 {isSubmitting ? "Saving..." : "Save Changes"}
               </Button>
@@ -1577,6 +1612,23 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
         </Form>
       </DialogContent>
     </Dialog>
+    {dpdQuoteDialogOpen && job && (
+      <DpdShippingQuoteDialog
+        job={job as Job}
+        initialPostcode={
+          job.deliveryAddressType === "custom"
+            ? postcodeFromAddress(job.deliveryAddress)
+            : job.deliveryAddressType === "customer"
+              ? postcodeFromAddress(customers.find(customer => customer.id === job.customerId)?.address)
+              : ""
+        }
+        onClose={() => setDpdQuoteDialogOpen(false)}
+        onSaved={() => {
+          setDpdQuoteDialogOpen(false);
+          onOpenChange(false);
+        }}
+      />
+    )}
     <CelebrationDialog
       open={celebrationOpen}
       onOpenChange={setCelebrationOpen}

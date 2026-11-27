@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { FileText, Calendar, Package, Link as LinkIcon, AlertCircle, Truck, Palette, Search, Pencil, HardDrive, ChevronDown, ChevronRight, CheckSquare, Square, EyeOff, GripVertical, CheckCircle2, Circle, Printer, X, RefreshCw } from "lucide-react";
 import { CustomerPickingSlip } from "@/components/CustomerPickingSlip";
+import { DpdShippingQuoteDialog } from "@/components/DpdShippingQuoteDialog";
 import type { JobLineItem } from "@shared/schema";
 import { applyInvoiceQuantities, invoiceQuantitySchema } from "@shared/invoice-quantities";
 import { invoiceSelectionError } from "@shared/invoice-readiness";
@@ -61,6 +62,11 @@ type ExistingInvoicePreview = {
 };
 
 type InvoicingQueueJob = Job & { confirmedExternalShippingLabel?: boolean };
+
+function postcodeFromAddress(address?: string | null): string {
+  if (!address) return "";
+  return address.match(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b/i)?.[0] || "";
+}
 
 interface EditShippingState {
   jobId: string;
@@ -886,6 +892,7 @@ export default function InvoicingQueue() {
   const [mergePackageCount, setMergePackageCount] = useState<number | undefined>(undefined);
   const [mergePackageType, setMergePackageType] = useState<"boxes" | "bags">("boxes");
   const [pickingSlipCustomerId, setPickingSlipCustomerId] = useState<string | null>(null);
+  const [dpdQuoteJob, setDpdQuoteJob] = useState<InvoicingQueueJob | null>(null);
   const drivePanelApiRef = useRef<Map<string, { hideMatchedRows: () => Promise<number> }>>(new Map());
 
   const updateLineItemMutation = useMutation({
@@ -2187,6 +2194,24 @@ export default function InvoicingQueue() {
                                               Shipping: {formatPrice(parseFloat(job.shippingCost))}
                                             </Badge>
                                           ) : null}
+                                          {job.shippingQuote?.approvedAt && (
+                                            <span className="ml-1 text-xs text-muted-foreground">
+                                              Estimate approved · estimated DPD cost {formatPrice(job.shippingQuote.estimatedDpdCost)} · {job.shippingQuote.markupPercent}% markup
+                                            </span>
+                                          )}
+                                          {!isCustomerProvidedLabel(job) && job.packageType === "boxes" && Number(job.packageCount) > 4 &&
+                                            isShippingRepresentative && (job.shippingCost === "TBA" || Boolean(job.shippingQuote)) && (
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              variant="outline"
+                                              className="ml-2 h-7"
+                                              onClick={() => setDpdQuoteJob(job)}
+                                              data-testid={`button-dpd-estimate-${job.id}`}
+                                            >
+                                              {job.shippingQuote ? "View / recalculate DPD estimate" : "Calculate DPD estimate"}
+                                            </Button>
+                                          )}
                                         </div>
                                       )}
                                       {/* TBA shipping without package info - only show input for the representative */}
@@ -3095,6 +3120,16 @@ export default function InvoicingQueue() {
           />
         );
       })()}
+      {dpdQuoteJob && (
+        <DpdShippingQuoteDialog
+          job={dpdQuoteJob}
+          initialPostcode={dpdQuoteJob.deliveryAddressType === "custom"
+            ? postcodeFromAddress(dpdQuoteJob.deliveryAddress)
+            : postcodeFromAddress(dpdQuoteJob.deliveryAddress) || postcodeFromAddress(customers.find(customer => customer.id === dpdQuoteJob.customerId)?.address)}
+          onClose={() => setDpdQuoteJob(null)}
+          onSaved={() => setDpdQuoteJob(null)}
+        />
+      )}
     </div>
   );
 }

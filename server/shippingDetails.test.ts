@@ -8,6 +8,7 @@ import { calculateShippingCost } from "../shared/pricing";
 import { dpdParcelSchema, getShippingIssues, getDispatchIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "../shared/shipping-details";
 import { updateJobSchema } from "../shared/schema";
 import { dpdJobReference, dpdJobReferences } from "../shared/dpd-references";
+import { inspectDpdPostcode } from "../shared/dpd-shipping-quote";
 
 const base = {
   id: "job1", jobName: "Test order", customerId: "customer", invoiceStatus: "ready", completed: true,
@@ -261,7 +262,22 @@ test("unrelated edits leave issued supplied-label invoice charges unchanged", as
   assert.equal(rejected.changes.length, 0);
 });
 
-async function book(options: { jobs?: any[]; ids?: string[]; count?: number; type?: string; reference?: string; failProvider?: boolean; failSave?: boolean; stocking?: boolean } = {}) {
+test("editing shipment details clears an old approved estimate; unrelated edits leave it intact", async () => {
+  const quoted = {
+    ...base, invoiceStatus: "pending", shippingMethod: "direct_delivery",
+    packageCount: 5, packageType: "boxes", dhlTrackingNumber: "TEST", shippingCost: "14.78",
+    shippingQuote: { approvedAt: "2026-11-11T12:00:00Z", customerCharge: 14.78 },
+  };
+  const edited = await patchShipping(quoted, { packageCount: 6, packageType: "boxes" });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.changes[0].shippingQuote, null);
+  assert.equal(edited.changes[0].shippingCost, "TBA");
+  const note = await patchShipping(quoted, { notes: "Internal note" });
+  assert.equal(note.status, 200);
+  assert.equal(note.changes[0].shippingQuote, undefined);
+});
+
+async function book(options: { jobs?: any[]; ids?: string[]; count?: number; type?: string; reference?: string; failProvider?: boolean; failSave?: boolean; stocking?: boolean; postcode?: string; acknowledge?: boolean; weight?: number } = {}) {
   const members: any[] = options.jobs || [{ ...base }];
   const changes: { id: string; patch: any }[] = [];
   let providerCalls = 0;
@@ -271,7 +287,7 @@ async function book(options: { jobs?: any[]; ids?: string[]; count?: number; typ
   let response: any;
   let status = 200;
   const context: any = vm.createContext({
-    console: { error() {} }, z, dpdParcelSchema, calculateShippingCost, isCustomerProvidedLabel, dpdJobReferences,
+    console: { error() {} }, z, dpdParcelSchema, calculateShippingCost, isCustomerProvidedLabel, dpdJobReferences, inspectDpdPostcode,
     crypto: { randomUUID: () => "shipment-group" },
     storage: { getJob: async (id: string) => members.find(member => member.id === id) },
     dpdService: {
@@ -310,7 +326,8 @@ async function book(options: { jobs?: any[]; ids?: string[]; count?: number; typ
   const handler = vm.runInContext(script, context);
   await handler({ body: {
     jobIds: options.ids || members.map(member => member.id),
-    recipientName: "Test recipient", recipientStreet: "Test Street", recipientCity: "Test City", recipientPostcode: "TEST",
+    recipientName: "Test recipient", recipientStreet: "Test Street", recipientCity: "Test City", recipientPostcode: options.postcode ?? "LS13 3HE",
+    acknowledgePostcodeWarning: options.acknowledge, packageWeightGrams: options.weight,
     packageCount: options.count ?? 1, packageType: options.type || "box",
     reference: options.reference,
   } }, {
@@ -327,6 +344,21 @@ test("DPD references prioritise the job number and name over the customer or a s
   assert.equal(result.sentReference, "#2427 Morningside rural b");
   assert.equal(result.sentReference, dpdJobReference(job));
   assert.deepEqual(Array.from(result.additionalReferences), []);
+});
+
+test("postcode warnings require acknowledgment before a real DPD booking", async () => {
+  for (const postcode of ["BT1 1AA", "IV1 1AA", "PO30 1AA", "EC1A 1BB"]) {
+    const blocked = await book({ postcode });
+    assert.equal(blocked.status, 400);
+    assert.equal(blocked.providerCalls, 0);
+    assert.equal((await book({ postcode, acknowledge: true })).status, 200);
+  }
+  assert.equal((await book({ postcode: "INVALID", acknowledge: true })).status, 400);
+  for (const weight of [-1, 0, 30001, NaN]) {
+    const result = await book({ weight });
+    assert.equal(result.status, 400);
+    assert.equal(result.providerCalls, 0);
+  }
 });
 
 test("consolidated DPD bookings pass additional job references within the courier limits", async () => {

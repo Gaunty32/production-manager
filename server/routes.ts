@@ -6,6 +6,8 @@ import fs from "fs";
 import path from "path";
 import { storage } from "./storage";
 import { dpdJobReferences } from "@shared/dpd-references";
+import { inspectDpdPostcode } from "@shared/dpd-shipping-quote";
+import { registerDpdShippingQuoteRoutes } from "./dpdShippingQuote";
 import { dpdParcelSchema, getShippingIssues, getDispatchIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "@shared/shipping-details";
 import { buildBookedDpdDetails, saveBookedDpdDetails } from "./dpdShipmentDetails";
 import { addConfirmedAbodeLabels } from "./abodeInvoiceShipping";
@@ -501,6 +503,7 @@ function computeBuildVersion(): string {
 const SERVER_START_VERSION = computeBuildVersion();
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerDpdShippingQuoteRoutes(app, isStaffAuthenticated);
   registerExistingInvoiceRoutes(app, isStaffAuthenticated);
   registerAbodeRoutes(app, {
     staffAuth: isStaffAuthenticated, customerAuth: isCustomerAuthenticated,
@@ -7250,6 +7253,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let updates = Object.fromEntries(
         Object.entries(data).filter(([key, value]) => value !== undefined && key !== 'consolidatedJobIds')
       );
+      if (["shippingMethod", "packageCount", "packageType", "shippingCost", "consolidatedShipmentId", "dhlTrackingNumber", "deliveryAddress", "customerId"]
+        .some(key => key in updates && updates[key] !== existingJob[key as keyof typeof existingJob])) {
+        updates.shippingQuote = null;
+      }
       const consolidatedUpdates: { id: string; updates: any }[] = [];
       const saveCustomerLabel = ["pending", "ready", "draft"].includes(existingJob.invoiceStatus)
         && (data.completed === true || billingFields.some(key => data[key] !== undefined)
@@ -7293,6 +7300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // (but without shipping cost - only the primary job has the cost)
           for (const consolidatedJobId of consolidatedJobIds) {
             consolidatedUpdates.push({ id: consolidatedJobId, updates: {
+              shippingQuote: null,
               consolidatedShipmentId,
               shippingMethod: updates.shippingMethod as string,
               dhlTrackingNumber: (updates.dhlTrackingNumber as string | null)?.trim() ?? null,
@@ -12424,6 +12432,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!recipientName || !recipientStreet || !recipientCity || !recipientPostcode) {
         return res.status(400).json({ error: "Recipient name, street, city and postcode are required" });
       }
+      const postcodeCheck = inspectDpdPostcode(recipientPostcode);
+      if (!postcodeCheck.valid || (postcodeCheck.warning && req.body.acknowledgePostcodeWarning !== true)) {
+        return res.status(400).json({ error: postcodeCheck.warning || "Review the delivery postcode before booking." });
+      }
 
       const parsedIds = z.array(z.string().min(1)).min(1).max(50).safeParse(jobIds?.length ? jobIds : [jobId].filter(Boolean));
       const parsedParcels = dpdParcelSchema.safeParse({ packageCount, packageType, shippingMethod: req.body.shippingMethod });
@@ -12458,7 +12470,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const references = dpdJobReferences(validJobs as NonNullable<typeof validJobs[number]>[]);
       const reference = references[0];
       const count = parsedParcels.data.packageCount;
-      const weightGrams = Math.max(100, parseInt(packageWeightGrams) || 1000);
+      const weightGrams = packageWeightGrams === undefined ? 1000 : Number(packageWeightGrams);
+      if (!Number.isFinite(weightGrams) || weightGrams < 100 || weightGrams > 30000) {
+        return res.status(400).json({ error: "Enter a parcel weight between 100g and 30,000g. Heavier parcels need a separate freight service." });
+      }
       const parcels = Array.from({ length: count }, (_, i) => ({
         weight: weightGrams,
         customerReference: reference || `JOB-${allJobIds[0].slice(0, 8)}${count > 1 ? `-${i + 1}` : ""}`,

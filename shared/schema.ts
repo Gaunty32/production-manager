@@ -155,6 +155,7 @@ export const jobs = pgTable("jobs", {
   packageCount: integer("package_count"),
   packageType: text("package_type"),
   shippingCost: text("shipping_cost"),
+  shippingQuote: jsonb("shipping_quote").$type<import("./dpd-shipping-quote").DpdShippingQuote>(),
   consolidatedShipmentId: varchar("consolidated_shipment_id"),
   deliveryAddressType: text("delivery_address_type").default("customer"),
   deliveryAddress: text("delivery_address"),
@@ -602,6 +603,7 @@ export const updateStaffSchema = z.object({
 export const insertJobSchema = createInsertSchema(jobs).omit({
   id: true,
   jobNumber: true,
+  shippingQuote: true,
 }).extend({
   poNumber: z.preprocess(
     (val) => val === "" ? null : val,
