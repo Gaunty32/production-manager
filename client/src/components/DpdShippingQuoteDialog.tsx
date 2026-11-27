@@ -23,6 +23,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 type QuoteJob = Job & { shippingQuote?: DpdShippingQuote | null };
+type QuoteJobMeasurements = Job & { consignmentWeightKg?: number | null; dispatchPostcode?: string | null };
 
 interface DpdShippingQuoteDialogProps {
   job: Job;
@@ -36,10 +37,11 @@ const money = (value: number) => new Intl.NumberFormat("en-GB", { style: "curren
 export function DpdShippingQuoteDialog({ job, initialPostcode, onClose, onSaved }: DpdShippingQuoteDialogProps) {
   const { toast } = useToast();
   const snapshot = (job as QuoteJob).shippingQuote || null;
-  const [postcode, setPostcode] = useState(snapshot?.input.postcode || initialPostcode || "");
+  const measuredJob = job as QuoteJobMeasurements;
+  const [postcode, setPostcode] = useState(measuredJob.dispatchPostcode || snapshot?.input.postcode || initialPostcode || "");
   const [region, setRegion] = useState<DpdRegion | "">(snapshot?.input.region || "");
   const [service, setService] = useState<"next_day" | "two_day" | "">(snapshot?.input.service || "");
-  const [weight, setWeight] = useState(snapshot ? String(snapshot.input.totalWeightKg) : "");
+  const [weight, setWeight] = useState(snapshot ? String(snapshot.input.totalWeightKg) : measuredJob.consignmentWeightKg != null ? String(measuredJob.consignmentWeightKg) : "");
   const [dispatchDate, setDispatchDate] = useState(snapshot?.input.dispatchDate || "");
   const [carriage, setCarriage] = useState(snapshot ? String(snapshot.input.carriagePerParcel) : "");
   const [extraCharges, setExtraCharges] = useState(snapshot ? String(snapshot.input.extraCharges) : "0");

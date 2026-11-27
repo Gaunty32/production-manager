@@ -5,7 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { z } from "zod";
 import { calculateShippingCost } from "../shared/pricing";
-import { dpdParcelSchema, getShippingIssues, getDispatchIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "../shared/shipping-details";
+import { dpdParcelSchema, dpdConsignmentWeight, getShippingIssues, getDispatchIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "../shared/shipping-details";
 import { updateJobSchema } from "../shared/schema";
 import { dpdJobReference, dpdJobReferences } from "../shared/dpd-references";
 import { inspectDpdPostcode } from "../shared/dpd-shipping-quote";
@@ -277,7 +277,7 @@ test("editing shipment details clears an old approved estimate; unrelated edits 
   assert.equal(note.changes[0].shippingQuote, undefined);
 });
 
-async function book(options: { jobs?: any[]; ids?: string[]; count?: number; type?: string; reference?: string; failProvider?: boolean; failSave?: boolean; stocking?: boolean; postcode?: string; acknowledge?: boolean; weight?: number } = {}) {
+async function book(options: { jobs?: any[]; ids?: string[]; count?: number; type?: string; reference?: string; failProvider?: boolean; failSave?: boolean; stocking?: boolean; postcode?: string; acknowledge?: boolean; weight?: number; totalKg?: number | null } = {}) {
   const members: any[] = options.jobs || [{ ...base }];
   const changes: { id: string; patch: any }[] = [];
   let providerCalls = 0;
@@ -287,7 +287,8 @@ async function book(options: { jobs?: any[]; ids?: string[]; count?: number; typ
   let response: any;
   let status = 200;
   const context: any = vm.createContext({
-    console: { error() {} }, z, dpdParcelSchema, calculateShippingCost, isCustomerProvidedLabel, dpdJobReferences, inspectDpdPostcode,
+    console: { error() {} }, z, dpdParcelSchema, dpdConsignmentWeight, calculateShippingCost, isCustomerProvidedLabel, dpdJobReferences, inspectDpdPostcode,
+    queueOrderPostcodeWarning: async () => {},
     crypto: { randomUUID: () => "shipment-group" },
     storage: { getJob: async (id: string) => members.find(member => member.id === id) },
     dpdService: {
@@ -328,6 +329,7 @@ async function book(options: { jobs?: any[]; ids?: string[]; count?: number; typ
     jobIds: options.ids || members.map(member => member.id),
     recipientName: "Test recipient", recipientStreet: "Test Street", recipientCity: "Test City", recipientPostcode: options.postcode ?? "LS13 3HE",
     acknowledgePostcodeWarning: options.acknowledge, packageWeightGrams: options.weight,
+    consignmentWeightKg: options.totalKg === null ? undefined : options.totalKg ?? ((options.count || 1) > 4 ? 37 : undefined),
     packageCount: options.count ?? 1, packageType: options.type || "box",
     reference: options.reference,
   } }, {
@@ -359,6 +361,43 @@ test("postcode warnings require acknowledgment before a real DPD booking", async
     assert.equal(result.status, 400);
     assert.equal(result.providerCalls, 0);
   }
+});
+
+test("large DPD bookings require and preserve the actual measured consignment weight", async () => {
+  for (const totalKg of [null, 0, -1, 151, NaN]) {
+    const result = await book({ count: 5, totalKg });
+    assert.equal(result.status, 400);
+    assert.equal(result.providerCalls, 0);
+  }
+  const result = await book({ count: 7, totalKg: 73.257, weight: 5000 });
+  assert.equal(result.status, 200);
+  assert.equal(result.sentParcels.reduce((sum, parcel) => sum + parcel.weight, 0), 73257);
+  assert.equal(result.changes[0].patch.consignmentWeightKg, 73.257);
+  assert.equal(result.changes[0].patch.dispatchPostcode, "LS13 3HE");
+  assert.equal(result.changes[0].patch.shippingCost, "TBA");
+});
+
+test("the booking form requires an explicit measured total above four boxes", () => {
+  const source = ts.createSourceFile("DpdBookingDialog.tsx",
+    readFileSync(new URL("../client/src/components/DpdBookingDialog.tsx", import.meta.url), "utf8"),
+    ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let schemaText = "";
+  function visit(node: ts.Node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(source) === "bookingSchema") schemaText = node.getText(source);
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  const schema = vm.runInNewContext(ts.transpileModule(`const ${schemaText}; bookingSchema;`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2020 },
+  }).outputText, { z });
+  const fields = {
+    recipientName: "Test", recipientStreet: "Test Street", recipientCity: "Leeds", recipientPostcode: "LS13 3HE",
+    packageType: "box", packageCount: 5, packageWeightGrams: 5000,
+  };
+  assert.equal(schema.safeParse(fields).success, false, "The default 5kg each cannot replace a measured total");
+  assert.equal(schema.safeParse({ ...fields, consignmentWeightKg: 37 }).success, true);
+  assert.equal(schema.safeParse({ ...fields, consignmentWeightKg: 151 }).success, false);
+  assert.equal(schema.safeParse({ ...fields, packageCount: 4 }).success, true);
 });
 
 test("consolidated DPD bookings pass additional job references within the courier limits", async () => {

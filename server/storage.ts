@@ -1,5 +1,6 @@
 import { completeStockingOrder, updateStockingLine, recordStockingProductionEntry } from "./abodeProduction";
-import { 
+import { queueOrderPostcodeWarning } from "./postcodeWarningQueue";
+import {
   customers, 
   jobs, 
   users, 
@@ -676,6 +677,7 @@ export class DatabaseStorage implements IStorage {
           requiredDispatchDate: insertJob.requiredDispatchDate ? new Date(insertJob.requiredDispatchDate) : null,
         })
         .returning();
+      await queueOrderPostcodeWarning(tx, job);
       return job;
     });
   }
@@ -688,14 +690,13 @@ export class DatabaseStorage implements IStorage {
         if (existing && !existing.completed) await completeStockingOrder(id, updates.completedById || null);
       }
     }
-    const [job] = await db
-      .update(jobs)
-      .set(updates)
-      .where(eq(jobs.id, id))
-      .returning();
-    
-    if (!job) throw new Error("Job not found");
-    return job;
+    return db.transaction(async tx => {
+      const [job] = await tx.update(jobs).set(updates).where(eq(jobs.id, id)).returning();
+      if (!job) throw new Error("Job not found");
+      if (["deliveryAddress", "deliveryAddressType", "customerId", "dispatchPostcode", "shippingMethod", "packageCount", "dhlTrackingNumber"]
+        .some(key => key in updates)) await queueOrderPostcodeWarning(tx, job);
+      return job;
+    });
   }
 
   async deleteJob(id: string): Promise<void> {

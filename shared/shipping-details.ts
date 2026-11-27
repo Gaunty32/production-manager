@@ -6,12 +6,37 @@ export const dpdParcelSchema = z.object({
   shippingMethod: z.enum(["direct_delivery", "consolidated"]).optional(),
 });
 
+export function dpdConsignmentWeight(
+  count: number, type: "box" | "bag" | "boxes" | "bags", totalKg: unknown, eachGrams: unknown,
+) {
+  const largeBoxes = (type === "box" || type === "boxes") && count > 4;
+  if (largeBoxes && (totalKg === undefined || totalKg === null || totalKg === "")) {
+    throw new Error("Enter the actual total consignment weight for shipments above four boxes.");
+  }
+  const usesTotal = largeBoxes;
+  const total = usesTotal ? Number(totalKg) * 1000
+    : Number(eachGrams === undefined ? 1000 : eachGrams) * count;
+  if (!Number.isFinite(total) || total < count * 100 || total > count * 30000) {
+    throw new Error("Standard parcels must weigh 100g–30kg each. Check the total consignment weight.");
+  }
+  const grams = Math.round(total);
+  const perParcel = Math.floor(grams / count);
+  return {
+    totalWeightKg: grams / 1000,
+    // DPD receives a consignment total; distribute integer grams without losing
+    // weight to rounding. This does not claim every physical box weighs equally.
+    parcelWeights: Array.from({ length: count }, (_, i) => perParcel + (i < grams % count ? 1 : 0)),
+  };
+}
+
 export type BookedDpdDetails = {
   shippingMethod: "direct_delivery" | "consolidated";
   packageCount: number;
   packageType: "boxes" | "bags";
   shippingCost: string;
   consolidatedShipmentId: string | null;
+  consignmentWeightKg?: number | null;
+  dispatchPostcode?: string | null;
 };
 
 type ShippingJob = {

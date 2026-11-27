@@ -48,6 +48,18 @@ export function normaliseDpdPostcode(value: string): string {
   return compact.length > 3 ? `${compact.slice(0, -3)} ${compact.slice(-3)}` : compact;
 }
 
+export function getOrderPostcodeReview(job: {
+  dispatchPostcode?: string | null; deliveryAddressType?: string | null; deliveryAddress?: string | null;
+  shippingMethod?: string | null; requestedShippingMethod?: string | null;
+}, customerAddress?: string | null) {
+  if (job.deliveryAddressType === "collection" ||
+    ["customer_collection", "free_local"].includes(job.shippingMethod || job.requestedShippingMethod || "")) return null;
+  const address = job.deliveryAddressType === "custom" ? job.deliveryAddress : job.deliveryAddress || customerAddress;
+  const postcode = job.dispatchPostcode?.trim() ||
+    address?.match(/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b/i)?.[0] || "";
+  return { postcode: normaliseDpdPostcode(postcode), ...inspectDpdPostcode(postcode) };
+}
+
 // The Scottish service guide describes transit times, not the account's pricing
 // boundaries. In particular, a Scottish Two Day route can still use UK pricing.
 export function inspectDpdPostcode(value: string): {

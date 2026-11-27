@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { getMinimumOrderComparison, isMinimumOrderDifference, type MinimumOrderComparison } from "@shared/drive-minimum-order";
+import { getOrderPostcodeReview } from "@shared/dpd-shipping-quote";
 
 interface LineItem {
   id: string;
@@ -1934,6 +1935,10 @@ export default function InvoicingQueue() {
                               {orderedJobs.map(job => {
                         const price = getJobPrice(job);
                         const lineItems = getJobLineItems(job.id);
+                        const postcodeReview = getOrderPostcodeReview(
+                          job,
+                          customers.find(customer => customer.id === job.customerId)?.address,
+                        );
                         
                         // Determine if this job should show the TBA shipping cost input.
                         const isShippingRepresentative = isCustomerProvidedLabel(job) || job.shippingCost !== 'TBA' ? true
@@ -1976,6 +1981,14 @@ export default function InvoicingQueue() {
                                     <p className="text-sm text-muted-foreground mt-1">
                                       PO: {job.poNumber}
                                     </p>
+                                  )}
+                                  {postcodeReview?.warning && (
+                                    <div className="mt-2 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950" data-testid={`alert-job-postcode-${job.id}`}>
+                                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                      <span>
+                                        <strong>Postcode check{postcodeReview.postcode ? ` · ${postcodeReview.postcode}` : ""}:</strong> {postcodeReview.warning}
+                                      </span>
+                                    </div>
                                   )}
                                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                                     {job.requiredDispatchDate && (

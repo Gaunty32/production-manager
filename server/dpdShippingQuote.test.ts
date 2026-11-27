@@ -113,6 +113,7 @@ function quoteTestContext(members: any[] = [base], options: { role?: string; sto
   const routes: Record<string, any> = {};
   const ctx = vm.createContext({
     z, calculateDpdShippingQuote, dpdQuoteInputSchema, isCustomerProvidedLabel, getDispatchIssues,
+    queueOrderPostcodeWarning: async () => {},
     canViewPrices: (role: string) => ["admin", "demo"].includes(role),
     jobs: { id: "id", customerId: "customerId" }, stockingOrders: { jobId: "jobId" },
     eq: (_field: any, id: any) => id, asc: (field: any) => field,
@@ -154,6 +155,8 @@ test("approval recomputes on the server and saves one charge plus an approved sn
   assert.equal(result.status, 200);
   assert.equal(result.changes.length, 2);
   assert.equal(result.changes[0].updates.shippingCost, "14.78");
+  assert.equal(result.changes[0].updates.consignmentWeightKg, 37);
+  assert.equal(result.changes[1].updates.consignmentWeightKg, 37);
   assert.equal(result.changes[1].updates.shippingCost, null);
   assert.equal(result.changes[1].updates.shippingQuote, null);
   assert.ok(result.changes[0].updates.shippingQuote.approvedAt);

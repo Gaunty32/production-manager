@@ -16,6 +16,7 @@ import { scheduleOverdueInvoiceReminders } from "./overdueInvoiceReminders";
 import { scheduleWeeklyArticleCampaign } from "./highLevelCampaign";
 import { startCustomerOrderNotificationRetryWorker } from "./customerOrderNotifications";
 import { startAbodeTrackingWorker } from "./abodeTracking";
+import { startPostcodeWarningWorker } from "./postcodeWarningQueue";
 import { scheduleAwaitingGarmentsReminders } from "./awaitingGarmentsReminders";
 import { scheduleThreadSheetSync } from "./threadSheetSync";
 import { scheduleFacebookArticleChecks } from "./facebookArticleSharing";
@@ -142,6 +143,7 @@ app.use((req, res, next) => {
   scheduleFacebookArticleChecks();
   startCustomerOrderNotificationRetryWorker();
   startAbodeTrackingWorker();
+  startPostcodeWarningWorker();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

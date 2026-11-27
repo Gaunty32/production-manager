@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { AlertCircle, ArrowDownToLine, Check, CheckCircle2, ChevronDown, Clock3, ExternalLink, FileSpreadsheet, Loader2, PackageCheck, RefreshCw, Search, Send, ShieldAlert, Truck, Upload, Printer } from "lucide-react";
 import { getDpdTrackingUrl } from "@shared/dpd-tracking";
+import { inspectDpdPostcode } from "@shared/dpd-shipping-quote";
 import { splitStockingRegister, stockingFontLabel, stockingOrderForDisplay } from "@shared/abode";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -591,6 +592,7 @@ export default function AbodeStockings() {
               const needsLabelRecovery = order.shippingRoute === "dpd" && ["review", "booking"].includes(order.shipmentState);
               const count = order.items.reduce((sum, item) => sum + item.quantity, 0);
               const estimated = order.items.reduce((sum, item) => sum + item.quantity * (item.agreedUnitPrice ?? data.currentRate), 0);
+              const postcodeWarning = inspectDpdPostcode(order.recipient.postcode || "").warning;
               return <Card key={order.id} className="overflow-hidden border-stone-200 bg-white shadow-sm">
                 <CardContent className="p-0">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-4 py-4 md:px-5">
@@ -640,7 +642,7 @@ export default function AbodeStockings() {
                       </div>)}
                     </div>
                     <div className="rounded-lg border border-stone-200 p-3">
-                       {isStaff ? <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Recipient</p><p className="mt-1 font-medium">{order.recipient.name}</p><p className="mt-1 text-sm leading-5 text-stone-600">{[order.recipient.line1, order.recipient.line2, order.recipient.town, order.recipient.county, order.recipient.postcode].filter(Boolean).join(", ")}</p></> : <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Order status</p><p className="mt-2 text-sm font-semibold text-[#344e43]">{order.deliveredAt ? "Delivered" : order.dispatchedAt ? "Despatched" : order.completed ? "Ready for despatch" : "In Production"}</p></>}
+                       {isStaff ? <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Recipient</p><p className="mt-1 font-medium">{order.recipient.name}</p><p className="mt-1 text-sm leading-5 text-stone-600">{[order.recipient.line1, order.recipient.line2, order.recipient.town, order.recipient.county, order.recipient.postcode].filter(Boolean).join(", ")}</p>{postcodeWarning && <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs leading-5 text-amber-950" data-testid={`alert-abode-postcode-${order.id}`}>{postcodeWarning}</p>}</> : <><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Order status</p><p className="mt-2 text-sm font-semibold text-[#344e43]">{order.deliveredAt ? "Delivered" : order.dispatchedAt ? "Despatched" : order.completed ? "Ready for despatch" : "In Production"}</p></>}
                        {isStaff && order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Parcel tracking</p><a href={trackingUrl(order)} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 break-all text-sm font-medium text-[#344e43] underline underline-offset-2">{order.dhlTrackingNumber}<ExternalLink className="h-3.5 w-3.5 shrink-0" /></a><p className="mt-1 text-xs text-stone-600">Despatch: {formatDate(order.dispatchedAt)} · Delivered: {formatDate(order.deliveredAt)}</p><p className="mt-1 text-xs text-stone-600">Tracking status: {order.deliveredAt ? "Delivered" : order.trackingStatus || "Awaiting carrier confirmation"}</p>{order.trackingError && <p className="mt-1 text-xs text-amber-900">Latest tracking check did not complete. Refresh to try again.</p>}</div>}
                       {isStaff && order.shippingRoute === "royal_mail" && !order.dhlTrackingNumber && <div className="mt-3 border-t border-stone-100 pt-3"><p className="text-xs text-stone-600">Royal Mail route: book externally, then save its tracking number here.</p><a className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#344e43] underline" href="https://www.parcel2go.com/" target="_blank" rel="noreferrer">Open Parcel2Go <ExternalLink className="h-3 w-3" /></a></div>}
                       {isStaff && order.shippingRoute === "royal_mail" && !order.dhlTrackingNumber && !order.labelAvailable && <AbodeInpostLabel jobId={order.id} orderNumber={order.orderNumber} onChanged={refresh} />}

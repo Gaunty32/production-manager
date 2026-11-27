@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -43,8 +43,21 @@ const bookingSchema = z.object({
   recipientEmail: z.string().email("Invalid email").optional().or(z.literal("")),
   packageCount: z.coerce.number().int().min(1).max(50).default(1),
   packageType: z.enum(["box", "bag"]).default("box"),
-  packageWeightGrams: z.coerce.number().int().min(100).max(30000).default(5000),
+  packageWeightGrams: z.coerce.number().int().min(100).max(30000).optional(),
+  consignmentWeightKg: z.coerce.number().positive("Enter the measured total weight").max(1500).optional(),
   reference: z.string().optional(),
+}).superRefine((data, context) => {
+  if (data.packageType === "box" && data.packageCount > 4) {
+    if (!data.consignmentWeightKg || data.consignmentWeightKg <= 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["consignmentWeightKg"], message: "Enter the measured total consignment weight." });
+    } else if (data.consignmentWeightKg < data.packageCount * 0.1) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["consignmentWeightKg"], message: "The measured total must allow at least 100g per parcel." });
+    } else if (data.consignmentWeightKg > data.packageCount * 30) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["consignmentWeightKg"], message: `Total weight cannot exceed ${data.packageCount * 30}kg (${data.packageCount} × 30kg).` });
+    }
+  } else if (!data.packageWeightGrams || data.packageWeightGrams < 100 || data.packageWeightGrams > 30000) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["packageWeightGrams"], message: "Enter each parcel's measured weight (100g–30kg)." });
+  }
 });
 
 const DEFAULT_WEIGHT_GRAMS: Record<"box" | "bag", number> = {
@@ -163,9 +176,21 @@ export function DpdBookingDialog({
       packageCount: 1,
       packageType: "box" as const,
       packageWeightGrams: DEFAULT_WEIGHT_GRAMS.box,
+      consignmentWeightKg: undefined,
       reference: (jobReference || `JOB-${jobId.slice(0, 8)}`).slice(0, 25),
     },
   });
+  const packageCount = form.watch("packageCount");
+  const packageType = form.watch("packageType");
+  const isLargeBoxConsignment = packageType === "box" && Number(packageCount) > 4;
+  const previousParcelSelection = useRef({ packageCount, packageType });
+  useEffect(() => {
+    const previous = previousParcelSelection.current;
+    if (previous.packageCount !== packageCount || previous.packageType !== packageType) {
+      form.setValue("consignmentWeightKg", undefined, { shouldValidate: true });
+      previousParcelSelection.current = { packageCount, packageType };
+    }
+  }, [form, packageCount, packageType]);
   const recipientPostcode = form.watch("recipientPostcode");
   const postcodeReview = inspectDpdPostcode(recipientPostcode || "");
   const requiresPostcodeAcknowledgement = postcodeReview.valid && Boolean(postcodeReview.warning);
@@ -205,6 +230,7 @@ export function DpdBookingDialog({
       const allJobIds = Array.from(new Set([...baseIds, ...Array.from(selectedOtherIds)]));
       const response = await apiRequest("POST", "/api/dpd/book-shipment", {
         ...data,
+        packageWeightGrams: isLargeBoxConsignment ? undefined : data.packageWeightGrams,
         jobId,
         jobIds: allJobIds,
         shippingMethod,
@@ -435,7 +461,7 @@ export function DpdBookingDialog({
 
               <div className="space-y-3 border-t pt-3">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Parcel Details</h3>
-                <div className="grid grid-cols-3 gap-3">
+                <div className={`grid gap-3 ${isLargeBoxConsignment ? "grid-cols-2" : "grid-cols-3"}`}>
                   <FormField
                     control={form.control}
                     name="packageType"
@@ -447,6 +473,7 @@ export function DpdBookingDialog({
                           onValueChange={(value) => {
                             field.onChange(value);
                             form.setValue("packageWeightGrams", DEFAULT_WEIGHT_GRAMS[value as "box" | "bag"]);
+                            form.setValue("consignmentWeightKg", undefined, { shouldValidate: true });
                           }}
                         >
                           <FormControl>
@@ -476,25 +503,44 @@ export function DpdBookingDialog({
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="packageWeightGrams"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Weight Each (g)</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="number" min="100" max="30000" placeholder="5000" data-testid="input-weight" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {isLargeBoxConsignment ? (
+                    <FormField
+                      control={form.control}
+                      name="consignmentWeightKg"
+                      render={({ field }) => (
+                        <FormItem className="col-span-2">
+                          <FormLabel>Total weight (kg)</FormLabel>
+                          <FormControl>
+                            <Input {...field} value={field.value ?? ""} type="number" inputMode="decimal" min="0.1" max={Number(packageCount) * 30} step="0.1" placeholder="Measured packed total" data-testid="input-consignment-weight" />
+                          </FormControl>
+                          <FormDescription>Enter the actual measured total for all boxes. Each physical parcel must still weigh 30kg or less.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <FormField
+                      control={form.control}
+                      name="packageWeightGrams"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Weight Each (g)</FormLabel>
+                          <FormControl>
+                            <Input {...field} value={field.value ?? ""} type="number" min="100" max="30000" placeholder="5000" data-testid="input-weight" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground" data-testid="text-total-weight">
-                  Total weight: {(((Number(form.watch("packageCount")) || 1) * (Number(form.watch("packageWeightGrams")) || 0)) / 1000).toFixed(1)}kg
-                  {" "}({form.watch("packageCount") || 1} × {((Number(form.watch("packageWeightGrams")) || 0) / 1000).toFixed(1)}kg per {form.watch("packageType") === "bag" ? "bag" : "box"})
-                </p>
-                <p className="text-xs text-muted-foreground">Enter the accurately measured weight for each packed parcel. Standard parcels must weigh between 100g and 30kg each.</p>
+                {!isLargeBoxConsignment && <>
+                  <p className="text-xs text-muted-foreground" data-testid="text-total-weight">
+                    Total weight: {(((Number(packageCount) || 1) * (Number(form.watch("packageWeightGrams")) || 0)) / 1000).toFixed(1)}kg
+                    {" "}({packageCount || 1} × {((Number(form.watch("packageWeightGrams")) || 0) / 1000).toFixed(1)}kg per {packageType === "bag" ? "bag" : "box"})
+                  </p>
+                  <p className="text-xs text-muted-foreground">Enter the accurately measured weight for each packed parcel. Standard parcels must weigh between 100g and 30kg each.</p>
+                </>}
                 <FormField
                   control={form.control}
                   name="reference"
@@ -536,7 +582,7 @@ export function DpdBookingDialog({
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="text-xs">
-                  Booking will generate a real DPD shipment and tracking number. The shipping label will open for printing once confirmed.
+                  Booking generates a real DPD shipment and tracking number. The label opens for printing once confirmed. Saving these details or attempting the booking queues an email alert for the two designated managers; it does not mean the email has already been sent.
                 </AlertDescription>
               </Alert>
 

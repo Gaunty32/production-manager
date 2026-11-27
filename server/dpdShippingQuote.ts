@@ -6,6 +6,7 @@ import { calculateDpdShippingQuote, dpdQuoteInputSchema, type DpdQuoteInput } fr
 import { getDispatchIssues, isCustomerProvidedLabel } from "@shared/shipping-details";
 import { storage } from "./storage";
 import { db } from "./db";
+import { queueOrderPostcodeWarning } from "./postcodeWarningQueue";
 
 export function prepareDpdQuoteApproval(target: Job, customerJobs: Job[], input: DpdQuoteInput) {
   if (input.packageType !== "boxes" || input.packageCount <= 4) {
@@ -87,8 +88,11 @@ export function registerDpdShippingQuoteRoutes(app: Express, authenticate: Reque
           await tx.update(jobs).set({
             shippingCost: job.id === current.id ? quote.customerCharge.toFixed(2) : null,
             shippingQuote: job.id === current.id ? approved : null,
+            consignmentWeightKg: input.totalWeightKg,
+            dispatchPostcode: quote.input.postcode,
             ...(job.completed && job.invoiceStatus === "pending" ? { invoiceStatus: "ready", conversationArchivedByStaff: true } : {}),
           }).where(eq(jobs.id, job.id));
+          await queueOrderPostcodeWarning(tx, { ...job, dispatchPostcode: quote.input.postcode });
         }
         return approved;
       });

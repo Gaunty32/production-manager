@@ -1,5 +1,6 @@
 import { raw, type Express, type RequestHandler } from "express";
 import { randomBytes } from "node:crypto";
+import { queueOrderPostcodeWarning } from "./postcodeWarningQueue";
 import { pipeline } from "node:stream/promises";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -158,6 +159,7 @@ export function registerAbodeRoutes(app: Express, deps: {
               deliveryAddress: [r.name, r.line1, r.line2, r.town, r.county, r.postcode].filter(Boolean).join("\n"),
               notes: "Abode stocking order. Preserve all names exactly as supplied, including capitalisation. See each stocking's colour, font and thread. No customer sample approval is required. Upload a finished-product photograph.",
             }).returning();
+            await queueOrderPostcodeWarning(tx, job);
             await tx.insert(stockingOrders).values({
               jobId: job.id, customerId: target.id, orderNumber: order.orderNumber, importHash: order.importHash,
               recipient: order.recipient, shippingRoute: order.shippingRoute,

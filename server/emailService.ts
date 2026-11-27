@@ -286,6 +286,29 @@ function muted(text: string): string {
 // Email senders
 // =============================================================================
 
+export async function sendPostcodeWarningEmail(params: {
+  jobId: string; jobNumber: number | null; jobName: string; customerName: string;
+  postcode: string; warning: string; idempotencyKey: string;
+}) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const { error } = await sendEmail(client, {
+    from: fromEmail || "info@selectbranding.co.uk",
+    to: ["chris@selectbranding.co.uk", "james@selectbranding.co.uk"],
+    subject: `Delivery postcode warning: ${params.jobNumber ? `#${params.jobNumber} ` : ""}${params.jobName.replace(/[\r\n]/g, " ")}`,
+    html: brandedEmail(`
+      <h2>Delivery postcode needs checking</h2>
+      ${infoTable([
+        { label: "Customer", value: sanitizeHtml(params.customerName) },
+        { label: "Order", value: sanitizeHtml(`${params.jobNumber ? `#${params.jobNumber} ` : ""}${params.jobName}`) },
+        { label: "Delivery postcode", value: sanitizeHtml(params.postcode || "Not recorded") },
+      ])}
+      <p>${sanitizeHtml(params.warning)}</p>
+      <p>Check the destination tariff and service before buying a label or confirming carriage. This warning applies regardless of parcel count and does not automatically add a customer charge.</p>
+    `),
+  }, { idempotencyKey: params.idempotencyKey });
+  if (error) throw new Error(`Postcode warning email failed: ${error.message}`);
+}
+
 export async function sendNewLogoSetupEmail(params: {
   customerName: string;
   jobName: string;

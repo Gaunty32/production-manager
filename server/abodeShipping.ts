@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { queueOrderPostcodeWarning } from "./postcodeWarningQueue";
 import { db } from "./db";
 import { jobs, stockingOrders } from "@shared/schema";
 import { ABODE_CARRIAGE, ABODE_DEFAULT_WEIGHT_GRAMS, ABODE_NETWORK_CODE, stockingDispatchedAt } from "@shared/abode";
@@ -45,7 +46,9 @@ export async function bookAbodeLabel(jobId: string, confirmNoExistingBooking = f
       await tx.update(jobs).set({
         dhlTrackingNumber: result.trackingNumber, shippingCost: String(ABODE_CARRIAGE),
         shippingMethod: "direct_delivery", packageType: "bags", packageCount: 1,
+        dispatchPostcode: order.recipient.postcode,
       }).where(eq(jobs.id, jobId));
+      await queueOrderPostcodeWarning(tx, { ...job, dispatchPostcode: order.recipient.postcode });
     });
   } catch (error) {
     console.error(`[Abode] Could not save booked shipment for job ${jobId}, shipment ${result.shipmentJobId}, tracking ${result.trackingNumber}:`, error instanceof Error ? error.message : "Database error");

@@ -14,3 +14,9 @@ The user is happy to use the cheapest delivery service.
 **Why:** The user explicitly stated this when asking about postcode zones and surcharges.
 
 **How to apply:** Compare eligible services for the actual destination, weight and parcel type, making delivery-speed differences visible. Do not assume a generic postcode-zone image overrides the account quotation.
+
+Shipments above four boxes must use the actual total consignment weight, not a default multiplied by the box count. Postcode warnings apply to all order sizes and should notify the designated managers by email.
+
+**Why:** The user explicitly required measured consignment weights for larger shipments and postcode warnings for all orders.
+
+**How to apply:** Carry saved measured weight through to Draft Invoicing estimates. Preserve staff confirmation and the agreed markup; queue warning emails on saved orders and shipping events, not repeated page views.

@@ -3,14 +3,16 @@ import { jobs } from "@shared/schema";
 import { calculateShippingCost } from "@shared/pricing";
 import { db } from "./db";
 import type { BookedDpdDetails } from "@shared/shipping-details";
+import { queueOrderPostcodeWarning } from "./postcodeWarningQueue";
 
 export function buildBookedDpdDetails(
   count: number, type: "box" | "bag" | "boxes" | "bags", method: "direct_delivery" | "consolidated",
   shipmentId: string | null,
+  measured?: Pick<BookedDpdDetails, "consignmentWeightKg" | "dispatchPostcode">,
 ): BookedDpdDetails {
   const packageType = type === "bag" || type === "bags" ? "bags" : "boxes";
   const cost = calculateShippingCost(packageType, count);
-  return { shippingMethod: method, packageCount: count, packageType, shippingCost: String(cost.cost), consolidatedShipmentId: shipmentId };
+  return { shippingMethod: method, packageCount: count, packageType, shippingCost: String(cost.cost), consolidatedShipmentId: shipmentId, ...measured };
 }
 
 // Persist all members together. Never rewrite issued-invoice carriage details,
@@ -32,6 +34,7 @@ export async function saveBookedDpdDetails(ids: string[], trackingNumber: string
           } : {}),
         ...(job.completed && !job.dispatchEmailSentAt && !job.dispatchEmailQueuedAt ? { dispatchEmailQueuedAt: new Date() } : {}),
       }).where(eq(jobs.id, job.id));
+      await queueOrderPostcodeWarning(tx, { ...job, ...details });
     }
     return { billingSaved: editable.length === members.length };
   });

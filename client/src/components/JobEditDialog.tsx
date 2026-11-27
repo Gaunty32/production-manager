@@ -53,6 +53,7 @@ import { CelebrationDialog } from "@/components/CelebrationDialog";
 import { ShippingInfoDialog } from "@/components/ShippingInfoDialog";
 import { StaffJobFileUpload } from "@/components/StaffJobFileUpload";
 import { DpdShippingQuoteDialog } from "@/components/DpdShippingQuoteDialog";
+import { getOrderPostcodeReview } from "@shared/dpd-shipping-quote";
 
 type LineItem = {
   id?: string;
@@ -635,6 +636,9 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
   
   const isOverdue = job && job.requiredDispatchDate && isPast(job.requiredDispatchDate) && !isToday(job.requiredDispatchDate);
   const isDueToday = job && job.requiredDispatchDate && isToday(job.requiredDispatchDate);
+  const postcodeReview = job
+    ? getOrderPostcodeReview(job, customers.find(customer => customer.id === job.customerId)?.address)
+    : null;
   
   // Calculate Production Time (days between goods received and required dispatch date)
   const requiredDispatchDate = form.watch("requiredDispatchDate");
@@ -1050,6 +1054,17 @@ export function JobEditDialog({ open, onOpenChange, job, customers, staff, onSub
                   </FormItem>
                 )}
               />
+              {postcodeReview?.warning && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm leading-5 text-amber-950" data-testid="alert-edit-job-postcode">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>
+                    <span className="font-semibold">Postcode check{postcodeReview.postcode ? ` · ${postcodeReview.postcode}` : ""}:</span> {postcodeReview.warning}
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Saving order or shipping details queues an email alert for the two designated managers; this does not mean the email has already been sent.
+              </p>
 
               {/* Show customer address or custom address field */}
               {form.watch("deliveryAddressType") === "customer" && form.watch("customerId") && (

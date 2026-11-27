@@ -8,7 +8,7 @@ import { storage } from "./storage";
 import { dpdJobReferences } from "@shared/dpd-references";
 import { inspectDpdPostcode } from "@shared/dpd-shipping-quote";
 import { registerDpdShippingQuoteRoutes } from "./dpdShippingQuote";
-import { dpdParcelSchema, getShippingIssues, getDispatchIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "@shared/shipping-details";
+import { dpdParcelSchema, dpdConsignmentWeight, getShippingIssues, getDispatchIssues, isCustomerProvidedLabel, customerLabelShippingUpdates } from "@shared/shipping-details";
 import { buildBookedDpdDetails, saveBookedDpdDetails } from "./dpdShipmentDetails";
 import { addConfirmedAbodeLabels } from "./abodeInvoiceShipping";
 import { resolveSelectedStaffMentions } from "@shared/staff-mentions";
@@ -7222,7 +7222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(409).json({ error: "Use Abode stockings for dispatch and carriage. Each order must ship separately at £5.50." });
         }
       }
-      const billingFields = ["shippingMethod", "packageCount", "packageType", "shippingCost", "consolidatedShipmentId"] as const;
+      const billingFields = ["shippingMethod", "packageCount", "packageType", "shippingCost", "consolidatedShipmentId", "consignmentWeightKg", "dispatchPostcode"] as const;
       if (!["pending", "ready", "draft"].includes(existingJob.invoiceStatus)
         && billingFields.some(key => data[key] !== undefined && data[key] !== existingJob[key])) {
         return res.status(409).json({ error: "Shipping charges on an already-issued invoice cannot be changed here" });
@@ -7253,10 +7253,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let updates = Object.fromEntries(
         Object.entries(data).filter(([key, value]) => value !== undefined && key !== 'consolidatedJobIds')
       );
-      if (["shippingMethod", "packageCount", "packageType", "shippingCost", "consolidatedShipmentId", "dhlTrackingNumber", "deliveryAddress", "customerId"]
+      if (["shippingMethod", "packageCount", "packageType", "shippingCost", "consolidatedShipmentId", "dhlTrackingNumber", "deliveryAddress", "customerId", "consignmentWeightKg", "dispatchPostcode"]
         .some(key => key in updates && updates[key] !== existingJob[key as keyof typeof existingJob])) {
         updates.shippingQuote = null;
       }
+      if (["packageCount", "packageType"].some(key => key in updates && updates[key] !== existingJob[key as keyof typeof existingJob])
+        && data.consignmentWeightKg === undefined) updates.consignmentWeightKg = null;
+      if (["deliveryAddress", "deliveryAddressType", "customerId"].some(key => key in updates && updates[key] !== existingJob[key as keyof typeof existingJob])
+        && data.dispatchPostcode === undefined) updates.dispatchPostcode = null;
       const consolidatedUpdates: { id: string; updates: any }[] = [];
       const saveCustomerLabel = ["pending", "ready", "draft"].includes(existingJob.invoiceStatus)
         && (data.completed === true || billingFields.some(key => data[key] !== undefined)
@@ -7301,6 +7305,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           for (const consolidatedJobId of consolidatedJobIds) {
             consolidatedUpdates.push({ id: consolidatedJobId, updates: {
               shippingQuote: null,
+              consignmentWeightKg: updates.consignmentWeightKg ?? null,
+              dispatchPostcode: updates.dispatchPostcode ?? null,
               consolidatedShipmentId,
               shippingMethod: updates.shippingMethod as string,
               dhlTrackingNumber: (updates.dhlTrackingNumber as string | null)?.trim() ?? null,
@@ -12470,12 +12476,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const references = dpdJobReferences(validJobs as NonNullable<typeof validJobs[number]>[]);
       const reference = references[0];
       const count = parsedParcels.data.packageCount;
-      const weightGrams = packageWeightGrams === undefined ? 1000 : Number(packageWeightGrams);
-      if (!Number.isFinite(weightGrams) || weightGrams < 100 || weightGrams > 30000) {
-        return res.status(400).json({ error: "Enter a parcel weight between 100g and 30,000g. Heavier parcels need a separate freight service." });
+      let measuredWeight;
+      try {
+        measuredWeight = dpdConsignmentWeight(count, parsedParcels.data.packageType, req.body.consignmentWeightKg, packageWeightGrams);
+      } catch (error) {
+        return res.status(400).json({ error: error instanceof Error ? error.message : "Check the parcel weights." });
       }
       const parcels = Array.from({ length: count }, (_, i) => ({
-        weight: weightGrams,
+        weight: measuredWeight.parcelWeights[i],
         customerReference: reference || `JOB-${allJobIds[0].slice(0, 8)}${count > 1 ? `-${i + 1}` : ""}`,
       }));
 
@@ -12500,6 +12508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         || validJobs[0]?.shippingMethod === "consolidated" ? "consolidated" : "direct_delivery";
       const details = buildBookedDpdDetails(
         count, parsedParcels.data.packageType, method, method === "consolidated" ? crypto.randomUUID() : null,
+        { consignmentWeightKg: measuredWeight.totalWeightKg, dispatchPostcode: recipientPostcode.trim().toUpperCase() },
       );
       let warning: string | undefined;
       try {

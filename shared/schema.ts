@@ -156,6 +156,8 @@ export const jobs = pgTable("jobs", {
   packageType: text("package_type"),
   shippingCost: text("shipping_cost"),
   shippingQuote: jsonb("shipping_quote").$type<import("./dpd-shipping-quote").DpdShippingQuote>(),
+  consignmentWeightKg: real("consignment_weight_kg"),
+  dispatchPostcode: text("dispatch_postcode"),
   consolidatedShipmentId: varchar("consolidated_shipment_id"),
   deliveryAddressType: text("delivery_address_type").default("customer"),
   deliveryAddress: text("delivery_address"),
@@ -189,6 +191,19 @@ export const jobs = pgTable("jobs", {
   productionStartedEmailSentAt: timestamp("production_started_email_sent_at"),
   dispatchEmailQueuedAt: timestamp("dispatch_email_queued_at"),
   dispatchEmailSentAt: timestamp("dispatch_email_sent_at"),
+});
+
+export const postcodeWarningEmails = pgTable("postcode_warning_emails", {
+  id: varchar("id").primaryKey(),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  postcode: text("postcode").notNull(),
+  warning: text("warning").notNull(),
+  queuedAt: timestamp("queued_at").notNull().defaultNow(),
+  sentAt: timestamp("sent_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at").notNull().defaultNow(),
+  lastError: text("last_error"),
 });
 
 export const staffShifts = pgTable("staff_shifts", {
@@ -697,6 +712,8 @@ export const updateJobSchema = z.object({
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
   ),
+  consignmentWeightKg: z.number().positive().max(1500).nullable().optional(),
+  dispatchPostcode: z.string().trim().max(12).nullable().optional(),
   consolidatedShipmentId: z.preprocess(
     (val) => val === "" ? null : val,
     z.string().nullable().optional()
